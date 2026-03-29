@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import api from '@/lib/api';
 import StatusBadge from '@/components/StatusBadge';
 
@@ -30,6 +30,7 @@ type Tab = 'documents' | 'ontology' | 'knowledge-graph';
 
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(null);
   const [tab, setTab] = useState<Tab>('documents');
   const [documents, setDocuments] = useState<Doc[]>([]);
@@ -335,6 +336,32 @@ export default function ProjectDetailPage() {
                         </div>
                       ))}
                     </div>
+                  </div>
+                </div>
+
+                {/* Next step CTA */}
+                <div className="glass rounded-2xl p-6 flex items-center justify-between mt-5">
+                  <div>
+                    <p className="text-[14px] font-medium text-saibyl-platinum">
+                      {ontology.human_approved ? 'Ontology approved — ready to simulate' : 'Approve the ontology, then run a simulation'}
+                    </p>
+                    <p className="text-[12px] text-saibyl-muted mt-0.5">
+                      {ontology.entity_types?.length || 0} entity types and {ontology.relationship_types?.length || 0} relationships extracted
+                    </p>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    {!ontology.human_approved && (
+                      <button onClick={handleApprove} className="bg-saibyl-positive text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-saibyl-positive/80">
+                        Approve
+                      </button>
+                    )}
+                    <button
+                      onClick={() => navigate('/app/simulations/new')}
+                      className="relative px-6 py-2.5 rounded-lg text-white font-medium text-sm overflow-hidden transition-all hover:scale-[1.02]"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-[#5B5FEE] to-[#00D4FF]" />
+                      <span className="relative">Run Simulation →</span>
+                    </button>
                   </div>
                 </div>
               </>
