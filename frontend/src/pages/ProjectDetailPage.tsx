@@ -105,16 +105,32 @@ export default function ProjectDetailPage() {
   async function handleGenerateOntology() {
     if (!id) return;
     setGenerating(true);
+    setUploadError('');
     try {
       await api.post('/ontologies/generate', { project_id: id });
-      // Poll for completion
-      const poll = setInterval(() => {
-        loadOntology();
+      // Poll until a new ontology appears (task runs async in Celery)
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts++;
+        try {
+          const r = await api.get('/ontologies', { params: { project_id: id } });
+          const items = Array.isArray(r.data) ? r.data : [];
+          if (items.length > 0) {
+            // Got an ontology — show it
+            setOntology(items[0]);
+            setGenerating(false);
+            clearInterval(poll);
+          }
+        } catch { /* keep polling */ }
+        if (attempts > 30) {
+          // Timeout after ~90s
+          setGenerating(false);
+          setUploadError('Ontology generation timed out. Check your Anthropic API key and try again.');
+          clearInterval(poll);
+        }
       }, 3000);
-      setTimeout(() => clearInterval(poll), 60000); // stop polling after 1 min
     } catch (err: any) {
       setUploadError(err.response?.data?.detail || 'Ontology generation failed');
-    } finally {
       setGenerating(false);
     }
   }
@@ -250,16 +266,25 @@ export default function ProjectDetailPage() {
               </div>
             ) : !ontology ? (
               <div className="glass rounded-2xl p-12 text-center">
-                <div className="text-3xl mb-3 opacity-30">🧬</div>
-                <p className="text-saibyl-platinum font-medium mb-2">No ontology generated yet</p>
-                <p className="text-saibyl-muted text-sm mb-5">Generate an ontology to extract entities and relationships from your documents.</p>
-                <button
-                  onClick={handleGenerateOntology}
-                  disabled={generating}
-                  className="bg-saibyl-indigo text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-[#4B4FDE] disabled:opacity-50"
-                >
-                  {generating ? 'Generating...' : 'Generate Ontology'}
-                </button>
+                {generating ? (
+                  <>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-saibyl-indigo mx-auto mb-4" />
+                    <p className="text-saibyl-platinum font-medium mb-2">Generating ontology...</p>
+                    <p className="text-saibyl-muted text-sm">Analyzing documents with Claude AI. This typically takes 20-30 seconds.</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-3xl mb-3 opacity-30">🧬</div>
+                    <p className="text-saibyl-platinum font-medium mb-2">No ontology generated yet</p>
+                    <p className="text-saibyl-muted text-sm mb-5">Generate an ontology to extract entities and relationships from your documents.</p>
+                    <button
+                      onClick={handleGenerateOntology}
+                      className="bg-saibyl-indigo text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-[#4B4FDE]"
+                    >
+                      Generate Ontology
+                    </button>
+                  </>
+                )}
               </div>
             ) : (
               <>
