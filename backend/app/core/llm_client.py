@@ -76,7 +76,48 @@ async def llm_structured(
         schema=schema.__name__,
         tokens=response.usage.completion_tokens,
     )
-    return schema.model_validate_json(response.choices[0].message.content)
+    raw = response.choices[0].message.content
+    # Extract clean JSON from LLM response which may include markdown
+    # fences, trailing commentary, or other non-JSON text
+    raw = _extract_json(raw)
+    return schema.model_validate_json(raw)
+
+
+def _extract_json(text: str) -> str:
+    """Extract the first complete JSON object from LLM output."""
+    text = text.strip()
+    # Strip markdown code fences
+    if text.startswith("```"):
+        lines = text.split("\n")
+        lines = [l for l in lines if not l.strip().startswith("```")]
+        text = "\n".join(lines).strip()
+    # Find the first { and match to its closing }
+    start = text.find("{")
+    if start == -1:
+        return text
+    depth = 0
+    in_string = False
+    escape = False
+    for i in range(start, len(text)):
+        c = text[i]
+        if escape:
+            escape = False
+            continue
+        if c == "\\":
+            escape = True
+            continue
+        if c == '"' and not escape:
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+    return text[start:]
 
 
 async def llm_stream(
