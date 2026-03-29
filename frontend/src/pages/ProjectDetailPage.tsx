@@ -26,7 +26,18 @@ interface OntologyData {
   human_approved: boolean;
 }
 
-type Tab = 'documents' | 'ontology' | 'knowledge-graph';
+interface Sim {
+  id: string;
+  name: string;
+  status: string;
+  platforms: string[];
+  max_rounds: number;
+  created_at: string;
+  project_id: string;
+  prediction_goal: string;
+}
+
+type Tab = 'documents' | 'ontology' | 'simulations' | 'knowledge-graph';
 
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -35,17 +46,22 @@ export default function ProjectDetailPage() {
   const [tab, setTab] = useState<Tab>('documents');
   const [documents, setDocuments] = useState<Doc[]>([]);
   const [ontology, setOntology] = useState<OntologyData | null>(null);
+  const [simulations, setSimulations] = useState<Sim[]>([]);
   const [ontologyLoading, setOntologyLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [generating, setGenerating] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
-  // Load project + documents
+  // Load project + documents + simulations
   useEffect(() => {
     if (!id) return;
     api.get(`/projects/${id}`).then((r) => setProject(r.data)).catch(() => {});
     loadDocuments();
+    api.get('/simulations').then((r) => {
+      const all = Array.isArray(r.data) ? r.data : [];
+      setSimulations(all.filter((s: Sim) => s.project_id === id));
+    }).catch(() => {});
   }, [id]);
 
   // Poll documents while any are still processing
@@ -154,6 +170,7 @@ export default function ProjectDetailPage() {
   const tabs: { key: Tab; label: string; count?: number }[] = [
     { key: 'documents', label: 'Documents', count: documents.length },
     { key: 'ontology', label: 'Ontology' },
+    { key: 'simulations', label: 'Simulations', count: simulations.length },
     { key: 'knowledge-graph', label: 'Knowledge Graph' },
   ];
 
@@ -365,6 +382,54 @@ export default function ProjectDetailPage() {
                   </div>
                 </div>
               </>
+            )}
+          </div>
+        )}
+
+        {/* ═══ Simulations Tab ═══ */}
+        {tab === 'simulations' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-[14px] text-saibyl-muted">{simulations.length} simulation{simulations.length !== 1 ? 's' : ''} for this project</p>
+              <button
+                onClick={() => navigate(`/app/simulations/new?project=${id}`)}
+                className="bg-saibyl-indigo text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-[#4B4FDE]"
+              >
+                + New Simulation
+              </button>
+            </div>
+            {simulations.length === 0 ? (
+              <div className="glass rounded-2xl p-12 text-center">
+                <p className="text-saibyl-platinum font-medium mb-2">No simulations yet</p>
+                <p className="text-saibyl-muted text-sm mb-5">Create a simulation to predict how people will react to your content.</p>
+                <button
+                  onClick={() => navigate(`/app/simulations/new?project=${id}`)}
+                  className="bg-saibyl-indigo text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-[#4B4FDE]"
+                >
+                  Create Simulation
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {simulations.map((sim) => (
+                  <button
+                    key={sim.id}
+                    onClick={() => navigate(`/app/simulations/${sim.id}`)}
+                    className="w-full text-left glass glass-hover rounded-xl p-5 transition-all"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[15px] font-medium text-saibyl-platinum">{sim.name}</span>
+                      <StatusBadge status={sim.status} />
+                    </div>
+                    <p className="text-[12px] text-saibyl-muted line-clamp-1">{sim.prediction_goal}</p>
+                    <div className="flex items-center gap-4 mt-2 text-[11px] text-saibyl-muted">
+                      <span>{(sim.platforms || []).join(', ')}</span>
+                      <span>{sim.max_rounds} rounds</span>
+                      <span>{new Date(sim.created_at).toLocaleDateString()}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
             )}
           </div>
         )}
