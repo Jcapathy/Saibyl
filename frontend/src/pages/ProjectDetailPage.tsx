@@ -161,6 +161,38 @@ export default function ProjectDetailPage() {
     } catch { /* ignore */ }
   }
 
+  // Delete document
+  async function handleDeleteDoc(docId: string) {
+    try {
+      await api.delete(`/documents/${docId}`);
+      setDocuments((prev) => prev.filter((d) => d.id !== docId));
+    } catch { /* ignore */ }
+  }
+
+  // Run simulation — creates it from the current project context and navigates
+  const [startingSim, setStartingSim] = useState(false);
+  async function handleRunSimulation() {
+    if (!id || !project) return;
+    setStartingSim(true);
+    setUploadError('');
+    try {
+      const { data: sim } = await api.post('/simulations', {
+        name: `${project.name} — Simulation`,
+        prediction_goal: `Analyze and predict social media reactions based on the documents and ontology from project "${project.name}"`,
+        project_id: id,
+        platforms: ['twitter_x', 'reddit'],
+        max_rounds: 5,
+        is_ab_test: false,
+      });
+      try { await api.post(`/simulations/${sim.id}/prepare`); } catch { /* ok */ }
+      try { await api.post(`/simulations/${sim.id}/start`); } catch { /* ok */ }
+      navigate(`/app/simulations/${sim.id}`);
+    } catch (err: any) {
+      setUploadError(err.response?.data?.detail || 'Failed to create simulation');
+      setStartingSim(false);
+    }
+  }
+
   function formatBytes(bytes: number) {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -249,7 +281,16 @@ export default function ProjectDetailPage() {
                         <p className="text-[11px] text-saibyl-muted">{formatBytes(doc.file_size_bytes || 0)}</p>
                       </div>
                     </div>
-                    <StatusBadge status={doc.processing_status} />
+                    <div className="flex items-center gap-3">
+                      <StatusBadge status={doc.processing_status} />
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteDoc(doc.id); }}
+                        className="text-saibyl-muted hover:text-saibyl-negative transition-colors"
+                        title="Delete document"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -373,11 +414,12 @@ export default function ProjectDetailPage() {
                       </button>
                     )}
                     <button
-                      onClick={() => navigate(`/app/simulations/new?project=${id}`)}
-                      className="relative px-6 py-2.5 rounded-lg text-white font-medium text-sm overflow-hidden transition-all hover:scale-[1.02]"
+                      onClick={handleRunSimulation}
+                      disabled={startingSim}
+                      className="relative px-6 py-2.5 rounded-lg text-white font-medium text-sm overflow-hidden transition-all hover:scale-[1.02] disabled:opacity-50"
                     >
                       <div className="absolute inset-0 bg-gradient-to-r from-[#5B5FEE] to-[#00D4FF]" />
-                      <span className="relative">Run Simulation →</span>
+                      <span className="relative">{startingSim ? 'Starting...' : 'Run Simulation →'}</span>
                     </button>
                   </div>
                 </div>
