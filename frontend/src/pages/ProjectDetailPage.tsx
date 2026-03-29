@@ -47,6 +47,14 @@ export default function ProjectDetailPage() {
     loadDocuments();
   }, [id]);
 
+  // Poll documents while any are still processing
+  useEffect(() => {
+    const hasProcessing = documents.some((d) => d.processing_status === 'pending' || d.processing_status === 'processing');
+    if (!hasProcessing || !id) return;
+    const interval = setInterval(loadDocuments, 3000);
+    return () => clearInterval(interval);
+  }, [documents, id]);
+
   // Load ontology when tab switches to ontology OR knowledge-graph
   useEffect(() => {
     if (tab === 'ontology' || tab === 'knowledge-graph') loadOntology();
