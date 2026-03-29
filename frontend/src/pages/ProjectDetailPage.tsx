@@ -47,9 +47,9 @@ export default function ProjectDetailPage() {
     loadDocuments();
   }, [id]);
 
-  // Load ontology when tab switches
+  // Load ontology when tab switches to ontology OR knowledge-graph
   useEffect(() => {
-    if (tab === 'ontology') loadOntology();
+    if (tab === 'ontology' || tab === 'knowledge-graph') loadOntology();
   }, [tab, id]);
 
   function loadDocuments() {
@@ -244,16 +244,14 @@ export default function ProjectDetailPage() {
               <div className="glass rounded-2xl p-12 text-center">
                 <div className="text-3xl mb-3 opacity-30">🧬</div>
                 <p className="text-saibyl-platinum font-medium mb-2">No ontology generated yet</p>
-                <p className="text-saibyl-muted text-sm mb-5">Upload documents first, then generate an ontology to extract entities and relationships.</p>
-                {documents.length > 0 && (
-                  <button
-                    onClick={handleGenerateOntology}
-                    disabled={generating}
-                    className="bg-saibyl-indigo text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-[#4B4FDE] disabled:opacity-50"
-                  >
-                    {generating ? 'Generating...' : 'Generate Ontology'}
-                  </button>
-                )}
+                <p className="text-saibyl-muted text-sm mb-5">Generate an ontology to extract entities and relationships from your documents.</p>
+                <button
+                  onClick={handleGenerateOntology}
+                  disabled={generating}
+                  className="bg-saibyl-indigo text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-[#4B4FDE] disabled:opacity-50"
+                >
+                  {generating ? 'Generating...' : 'Generate Ontology'}
+                </button>
               </div>
             ) : (
               <>
