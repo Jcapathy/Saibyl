@@ -1,4 +1,4 @@
-import { useEffect, useState, FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import api from '@/lib/api';
 
 type SettingsTab = 'billing' | 'team' | 'api-keys' | 'webhooks';

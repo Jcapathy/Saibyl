@@ -65,7 +65,6 @@ export default function MarketDetailPage() {
   if (!market) return <div className="p-8 text-saibyl-muted">Market not found</div>;
 
   const yesOutcome = market.outcomes?.find((o) => o.label?.toLowerCase() === 'yes');
-  const noOutcome = market.outcomes?.find((o) => o.label?.toLowerCase() === 'no');
   const yesProb = yesOutcome ? Math.round(yesOutcome.current_probability * 100) : null;
 
   return (
