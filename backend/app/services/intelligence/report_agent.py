@@ -1,0 +1,471 @@
+# PUBLIC INTERFACE
+# ─────────────────────────────────────────────────────────
+# generate_report(simulation_id, config) -> dict
+# generate_ab_comparison_report(simulation_id, config) -> dict
+# get_report_progress(report_id) -> ReportProgress
+# ─────────────────────────────────────────────────────────
+from __future__ import annotations
+
+import asyncio
+import json
+from datetime import UTC, datetime
+from typing import Literal
+from uuid import UUID
+
+import redis
+import structlog
+from pydantic import BaseModel
+
+from app.core.config import settings
+from app.core.database import get_supabase_admin
+from app.core.llm_client import llm_complete, llm_structured
+from app.services.intelligence.react_tools import (
+    agent_interview_tool,
+    insight_forge,
+    panorama_search,
+    quick_search,
+    simulation_analytics,
+)
+
+logger = structlog.get_logger()
+
+
+# ── Config & Models ──────────────────────────────────────
+
+DEPTH_PRESETS = {
+    "shallow": {"max_tool_calls_per_section": 2, "max_reflection_rounds": 1},
+    "standard": {"max_tool_calls_per_section": 5, "max_reflection_rounds": 2},
+    "deep": {"max_tool_calls_per_section": 10, "max_reflection_rounds": 3},
+    "exhaustive": {"max_tool_calls_per_section": 20, "max_reflection_rounds": 5},
+}
+
+
+class ReACTConfig(BaseModel):
+    max_tool_calls_per_section: int = 5
+    max_reflection_rounds: int = 2
+    temperature: float = 0.5
+    evidence_depth: Literal["shallow", "standard", "deep", "exhaustive"] = "standard"
+    section_count: int | None = None
+    include_agent_interviews: bool = True
+    ab_comparison: bool = False
+
+    def resolved(self) -> ReACTConfig:
+        """Apply depth preset overrides."""
+        preset = DEPTH_PRESETS.get(self.evidence_depth, {})
+        return self.model_copy(update=preset)
+
+
+class ReportOutline(BaseModel):
+    sections: list[SectionPlan]
+
+
+class SectionPlan(BaseModel):
+    title: str
+    research_angles: list[str]
+
+
+class ReportProgress(BaseModel):
+    report_id: str
+    status: str
+    total_sections: int
+    completed_sections: int
+    current_section: str | None = None
+
+
+# ── Prompts ──────────────────────────────────────────────
+
+OUTLINE_PROMPT = """You are a predictive intelligence analyst. Plan a report for this simulation.
+
+Prediction goal: {prediction_goal}
+Platforms simulated: {platforms}
+Agent count: {agent_count}
+Rounds completed: {rounds}
+Total events: {event_count}
+
+Generate a report outline with {section_count} sections. Each section should have a title and 2-3 research angles (questions to investigate).
+
+Return JSON: {{"sections": [{{"title": str, "research_angles": [str]}}]}}"""
+
+REACT_PROMPT = """You are a ReACT (Reasoning-Action-Observation) intelligence analyst writing section "{section_title}" of a predictive intelligence report.
+
+Prediction goal: {prediction_goal}
+Research angles for this section: {research_angles}
+
+You have access to these tools (call by name):
+1. insight_forge(query) — Deep semantic search of knowledge graph
+2. quick_search(query) — Fast keyword search for facts
+3. simulation_analytics(type) — Analyze simulation data. Types: top_posts, sentiment_over_time, viral_moments, agent_activity, platform_comparison, persona_breakdown
+4. agent_interview(prompt) — Interview simulation agents
+
+Evidence gathered so far:
+{evidence}
+
+Instructions:
+- If you need more evidence, respond with: TOOL: <tool_name>(<args>)
+- If you have enough evidence, respond with: ANSWER: <section content in markdown>
+
+Keep reasoning concise. Be analytical, not descriptive."""
+
+EXECUTIVE_SUMMARY_PROMPT = """Write a concise executive summary (3-5 paragraphs) for this predictive intelligence report.
+
+Prediction goal: {prediction_goal}
+
+Report sections:
+{sections_text}
+
+The summary should:
+1. State the key prediction/finding upfront
+2. Highlight the most significant insights
+3. Note any surprising or counterintuitive findings
+4. End with confidence level and key caveats"""
+
+AB_COMPARISON_PROMPT = """Compare the two simulation variants and determine a winner.
+
+Prediction goal: {prediction_goal}
+
+Variant A metrics: {variant_a_data}
+Variant B metrics: {variant_b_data}
+
+Provide:
+1. Key differences between variants
+2. Which variant better achieved the prediction goal
+3. Confidence in the determination
+4. Specific evidence supporting the conclusion
+
+Return JSON: {{"winner": "a" or "b", "confidence": float 0-1, "reasoning": str, "key_differences": [str]}}"""
+
+
+class _WinnerResult(BaseModel):
+    winner: str
+    confidence: float
+    reasoning: str
+    key_differences: list[str]
+
+
+# ── Core functions ───────────────────────────────────────
+
+def _get_redis() -> redis.Redis:
+    return redis.from_url(settings.redis_url, decode_responses=True)
+
+
+async def _run_react_loop(
+    section: SectionPlan,
+    simulation_id: str,
+    prediction_goal: str,
+    graph_id: str | None,
+    config: ReACTConfig,
+    variant: str = "a",
+) -> str:
+    """Run the ReACT loop for a single report section."""
+    evidence: list[str] = []
+    resolved = config.resolved()
+
+    for tool_call_num in range(resolved.max_tool_calls_per_section):
+        prompt = REACT_PROMPT.format(
+            section_title=section.title,
+            prediction_goal=prediction_goal,
+            research_angles=", ".join(section.research_angles),
+            evidence="\n".join(evidence) if evidence else "None yet.",
+        )
+
+        response = await llm_complete(
+            messages=[{"role": "user", "content": prompt}],
+            temperature=config.temperature,
+        )
+
+        if response.strip().startswith("ANSWER:"):
+            return response.split("ANSWER:", 1)[1].strip()
+
+        if response.strip().startswith("TOOL:"):
+            tool_line = response.split("TOOL:", 1)[1].strip()
+            observation = await _execute_tool(
+                tool_line, simulation_id, graph_id, variant, config
+            )
+            evidence.append(f"[Tool: {tool_line}]\n{observation}")
+        else:
+            # LLM didn't follow format — treat as final answer
+            return response.strip()
+
+    # Max tool calls reached — force answer
+    final_prompt = REACT_PROMPT.format(
+        section_title=section.title,
+        prediction_goal=prediction_goal,
+        research_angles=", ".join(section.research_angles),
+        evidence="\n".join(evidence),
+    ) + "\n\nYou have used all available tool calls. You MUST now provide your ANSWER:"
+
+    result = await llm_complete(
+        messages=[{"role": "user", "content": final_prompt}],
+        temperature=config.temperature,
+    )
+    if "ANSWER:" in result:
+        return result.split("ANSWER:", 1)[1].strip()
+    return result.strip()
+
+
+async def _execute_tool(
+    tool_line: str,
+    simulation_id: str,
+    graph_id: str | None,
+    variant: str,
+    config: ReACTConfig,
+) -> str:
+    """Parse and execute a tool call, return observation string."""
+    tool_line = tool_line.strip()
+
+    try:
+        if tool_line.startswith("insight_forge"):
+            query = _extract_arg(tool_line)
+            if graph_id:
+                result = await insight_forge(graph_id, query)
+                return f"Found {result.total_results} entities. Facts: {'; '.join(result.facts[:10])}"
+            return "No knowledge graph available."
+
+        elif tool_line.startswith("quick_search"):
+            query = _extract_arg(tool_line)
+            if graph_id:
+                results = await quick_search(graph_id, query)
+                return "\n".join(f"- {r.name}: {r.summary}" for r in results[:5])
+            return "No knowledge graph available."
+
+        elif tool_line.startswith("simulation_analytics"):
+            atype = _extract_arg(tool_line)
+            result = await simulation_analytics(
+                UUID(simulation_id), atype, variant=variant
+            )
+            return f"{result.summary}\nData: {json.dumps(result.data, default=str)[:2000]}"
+
+        elif tool_line.startswith("agent_interview"):
+            prompt = _extract_arg(tool_line)
+            if config.include_agent_interviews:
+                responses = await agent_interview_tool(
+                    UUID(simulation_id), prompt, sample_size=3, variant=variant
+                )
+                return "\n".join(
+                    f"- {r.agent_username} ({r.persona_type}): {r.response[:300]}"
+                    for r in responses
+                )
+            return "Agent interviews disabled in config."
+
+        elif tool_line.startswith("panorama_search"):
+            if graph_id:
+                result = await panorama_search(graph_id)
+                return f"Graph overview: {result.node_count} nodes, {result.edge_count} edges"
+            return "No knowledge graph available."
+
+        else:
+            return f"Unknown tool: {tool_line}"
+
+    except Exception as e:
+        logger.warning("tool_execution_error", tool=tool_line, error=str(e))
+        return f"Tool error: {e}"
+
+
+def _extract_arg(tool_call: str) -> str:
+    """Extract the argument from a tool call like tool_name(arg)."""
+    if "(" in tool_call and ")" in tool_call:
+        return tool_call.split("(", 1)[1].rsplit(")", 1)[0].strip().strip("\"'")
+    return tool_call.split(None, 1)[1] if " " in tool_call else ""
+
+
+async def generate_report(
+    simulation_id: UUID,
+    config: ReACTConfig | None = None,
+) -> dict:
+    """Generate a full intelligence report from simulation results."""
+    if config is None:
+        config = ReACTConfig()
+
+    admin = get_supabase_admin()
+    r = _get_redis()
+    sim_id = str(simulation_id)
+
+    # Load simulation
+    sim = admin.table("simulations").select("*").eq("id", sim_id).single().execute().data
+    org_id = sim["organization_id"]
+
+    # Get event count
+    events = admin.table("simulation_events").select(
+        "id", count="exact"
+    ).eq("simulation_id", sim_id).execute()
+    event_count = events.count or 0
+
+    # Get agent count
+    agents = admin.table("simulation_agents").select(
+        "id", count="exact"
+    ).eq("simulation_id", sim_id).execute()
+    agent_count = agents.count or 0
+
+    # Get knowledge graph ID
+    kg = admin.table("knowledge_graphs").select("id").eq(
+        "project_id", sim["project_id"]
+    ).eq("build_status", "complete").limit(1).execute().data
+    graph_id = kg[0]["id"] if kg else None
+
+    # Create report record
+    section_count = config.section_count or min(5, max(2, event_count // 50 + 2))
+    report = admin.table("reports").insert({
+        "simulation_id": sim_id,
+        "organization_id": org_id,
+        "title": f"Intelligence Report: {sim['name']}",
+        "status": "generating",
+        "variant": "a",
+        "react_config": config.model_dump(),
+        "section_count": section_count,
+    }).execute().data[0]
+    report_id = report["id"]
+
+    try:
+        # Phase 1: Planning
+        outline_prompt = OUTLINE_PROMPT.format(
+            prediction_goal=sim["prediction_goal"],
+            platforms=", ".join(sim.get("platforms") or ["twitter_x"]),
+            agent_count=agent_count,
+            rounds=sim.get("max_rounds", 10),
+            event_count=event_count,
+            section_count=section_count,
+        )
+        outline = await llm_structured(
+            messages=[{"role": "user", "content": outline_prompt}],
+            schema=ReportOutline,
+        )
+
+        # Create section skeletons
+        for i, section in enumerate(outline.sections):
+            admin.table("report_sections").insert({
+                "report_id": report_id,
+                "organization_id": org_id,
+                "section_index": i,
+                "title": section.title,
+                "status": "pending",
+            }).execute()
+
+        # Phase 2: Generate sections in parallel
+        async def generate_section(idx: int, section: SectionPlan):
+            r.publish(f"report:{report_id}:progress", json.dumps({
+                "section_index": idx, "status": "generating", "title": section.title,
+            }))
+
+            content = await _run_react_loop(
+                section, sim_id, sim["prediction_goal"], graph_id, config
+            )
+
+            admin.table("report_sections").update({
+                "content": content,
+                "status": "complete",
+            }).eq("report_id", report_id).eq("section_index", idx).execute()
+
+            r.publish(f"report:{report_id}:progress", json.dumps({
+                "section_index": idx, "status": "complete", "title": section.title,
+            }))
+            return content
+
+        tasks = [generate_section(i, s) for i, s in enumerate(outline.sections)]
+        section_contents = await asyncio.gather(*tasks)
+
+        # Phase 3: Assembly
+        sections_text = "\n\n---\n\n".join(
+            f"## {s.title}\n\n{c}" for s, c in zip(outline.sections, section_contents)
+        )
+
+        exec_summary = await llm_complete(
+            messages=[{"role": "user", "content": EXECUTIVE_SUMMARY_PROMPT.format(
+                prediction_goal=sim["prediction_goal"],
+                sections_text=sections_text[:10000],
+            )}],
+        )
+
+        full_markdown = f"# {sim['name']} — Intelligence Report\n\n## Executive Summary\n\n{exec_summary}\n\n{sections_text}"
+
+        admin.table("reports").update({
+            "status": "complete",
+            "markdown_content": full_markdown,
+            "completed_at": datetime.now(UTC).isoformat(),
+        }).eq("id", report_id).execute()
+
+        logger.info("report_generated", report_id=report_id, sections=len(outline.sections))
+        return admin.table("reports").select("*").eq("id", report_id).single().execute().data
+
+    except Exception as e:
+        admin.table("reports").update({
+            "status": "failed",
+        }).eq("id", report_id).execute()
+        logger.error("report_generation_failed", report_id=report_id, error=str(e))
+        raise
+
+
+async def generate_ab_comparison_report(
+    simulation_id: UUID,
+    config: ReACTConfig | None = None,
+) -> dict:
+    """Generate a comparison report for an A/B simulation."""
+    if config is None:
+        config = ReACTConfig(ab_comparison=True)
+    config.ab_comparison = True
+
+    # Generate base report for variant A
+    report = await generate_report(simulation_id, config)
+    report_id = report["id"]
+    admin = get_supabase_admin()
+    sim = admin.table("simulations").select("*").eq("id", str(simulation_id)).single().execute().data
+
+    # Get A/B comparison data
+    ab_data = await simulation_analytics(simulation_id, "ab_comparison")
+
+    # Determine winner
+    winner_result = await llm_structured(
+        messages=[{"role": "user", "content": AB_COMPARISON_PROMPT.format(
+            prediction_goal=sim["prediction_goal"],
+            variant_a_data=json.dumps(ab_data.data.get("variant_a", {})),
+            variant_b_data=json.dumps(ab_data.data.get("variant_b", {})),
+        )}],
+        schema=_WinnerResult,
+    )
+
+    # Update simulation with winner
+    admin.table("simulations").update({
+        "winner_variant": winner_result.winner,
+    }).eq("id", str(simulation_id)).execute()
+
+    # Append comparison section to report
+    comparison_md = (
+        f"\n\n## A/B Comparison Summary\n\n"
+        f"**Winner: Variant {winner_result.winner.upper()}** "
+        f"(confidence: {winner_result.confidence:.0%})\n\n"
+        f"{winner_result.reasoning}\n\n"
+        f"### Key Differences\n\n"
+        + "\n".join(f"- {d}" for d in winner_result.key_differences)
+    )
+
+    current = admin.table("reports").select("markdown_content").eq(
+        "id", report_id).single().execute().data
+    admin.table("reports").update({
+        "markdown_content": (current["markdown_content"] or "") + comparison_md,
+        "variant": "comparison",
+    }).eq("id", report_id).execute()
+
+    logger.info("ab_report_generated", report_id=report_id, winner=winner_result.winner)
+    return admin.table("reports").select("*").eq("id", report_id).single().execute().data
+
+
+def get_report_progress(report_id: UUID) -> ReportProgress:
+    """Get live report generation progress."""
+    admin = get_supabase_admin()
+    report = admin.table("reports").select(
+        "status, section_count"
+    ).eq("id", str(report_id)).single().execute().data
+
+    sections = admin.table("report_sections").select(
+        "status, title"
+    ).eq("report_id", str(report_id)).order("section_index").execute().data
+
+    completed = sum(1 for s in sections if s["status"] == "complete")
+    current = next((s["title"] for s in sections if s["status"] != "complete"), None)
+
+    return ReportProgress(
+        report_id=str(report_id),
+        status=report["status"],
+        total_sections=report.get("section_count", 0),
+        completed_sections=completed,
+        current_section=current,
+    )

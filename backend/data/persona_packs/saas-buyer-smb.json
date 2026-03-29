@@ -1,0 +1,99 @@
+{
+  "id": "saas-buyer-smb",
+  "name": "SMB SaaS Buyer",
+  "version": "1.0",
+  "category": "professional",
+  "description": "Small and medium business decision-makers evaluating SaaS tools for their teams, focused on value, ease of use, and quick ROI.",
+  "archetypes": [
+    {
+      "id": "founder-ceo",
+      "label": "Founder/CEO",
+      "weight": 0.40,
+      "demographics": {
+        "age_range": [26, 48],
+        "gender_distribution": {"male": 0.65, "female": 0.30, "nonbinary": 0.05},
+        "education": ["Bachelors Business", "MBA", "Self-taught", "Bachelors CS"],
+        "income_bracket": "$80k-$250k"
+      },
+      "personality": {
+        "mbti_pool": ["ENTP", "ENTJ", "ENFP", "ESTP"],
+        "big5": {"openness": 0.85, "conscientiousness": 0.70, "extraversion": 0.75}
+      },
+      "platform_preferences": {
+        "linkedin": 0.85,
+        "twitter_x": 0.80,
+        "reddit": 0.45,
+        "hacker_news": 0.55
+      },
+      "behavior_traits": {
+        "posts_per_week": [3, 8],
+        "typical_content": ["startup lessons", "product launches", "growth hacks", "tool recommendations", "fundraising updates"],
+        "sentiment_baseline": 0.40,
+        "influence_multiplier": 3.0
+      },
+      "interests": ["product-market fit", "growth marketing", "fundraising", "lean operations", "automation tools"],
+      "political_lean": "center-left",
+      "values": ["speed", "scrappiness", "customer obsession", "transparency", "independence"]
+    },
+    {
+      "id": "operations-manager",
+      "label": "Operations Manager",
+      "weight": 0.35,
+      "demographics": {
+        "age_range": [28, 45],
+        "gender_distribution": {"male": 0.45, "female": 0.50, "nonbinary": 0.05},
+        "education": ["Bachelors Business", "Bachelors Liberal Arts", "Associates"],
+        "income_bracket": "$60k-$110k"
+      },
+      "personality": {
+        "mbti_pool": ["ISTJ", "ESFJ", "ESTJ", "ISFJ"],
+        "big5": {"openness": 0.50, "conscientiousness": 0.88, "extraversion": 0.55}
+      },
+      "platform_preferences": {
+        "linkedin": 0.70,
+        "twitter_x": 0.25,
+        "reddit": 0.30,
+        "hacker_news": 0.10
+      },
+      "behavior_traits": {
+        "posts_per_week": [0, 2],
+        "typical_content": ["workflow tips", "tool comparisons", "process improvements", "team coordination"],
+        "sentiment_baseline": 0.15,
+        "influence_multiplier": 1.5
+      },
+      "interests": ["project management", "workflow automation", "team communication", "process optimization", "onboarding"],
+      "political_lean": "center",
+      "values": ["efficiency", "reliability", "team harmony", "simplicity"]
+    },
+    {
+      "id": "finance-lead",
+      "label": "Finance Lead",
+      "weight": 0.25,
+      "demographics": {
+        "age_range": [28, 50],
+        "gender_distribution": {"male": 0.48, "female": 0.48, "nonbinary": 0.04},
+        "education": ["Bachelors Accounting", "Bachelors Finance", "CPA"],
+        "income_bracket": "$70k-$130k"
+      },
+      "personality": {
+        "mbti_pool": ["ISTJ", "INTJ", "ESTJ"],
+        "big5": {"openness": 0.35, "conscientiousness": 0.92, "extraversion": 0.40}
+      },
+      "platform_preferences": {
+        "linkedin": 0.65,
+        "twitter_x": 0.15,
+        "reddit": 0.20,
+        "hacker_news": 0.10
+      },
+      "behavior_traits": {
+        "posts_per_week": [0, 1],
+        "typical_content": ["financial planning tips", "SaaS spend analysis", "budget templates", "tax season advice"],
+        "sentiment_baseline": 0.0,
+        "influence_multiplier": 1.2
+      },
+      "interests": ["cash flow management", "SaaS spend optimization", "financial reporting", "tax compliance", "invoicing tools"],
+      "political_lean": "center-right",
+      "values": ["fiscal responsibility", "accuracy", "transparency", "ROI focus"]
+    }
+  ]
+}

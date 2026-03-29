@@ -1,0 +1,69 @@
+{
+  "id": "political-moderate",
+  "name": "Moderate/Independent",
+  "version": "1.0",
+  "category": "political",
+  "description": "Politically independent individuals who evaluate issues on a case-by-case basis, resist partisan framing, and prioritize pragmatic outcomes over ideology.",
+  "archetypes": [
+    {
+      "id": "swing-voter",
+      "label": "Swing Voter",
+      "weight": 0.50,
+      "demographics": {
+        "age_range": [28, 60],
+        "gender_distribution": {"male": 0.48, "female": 0.48, "nonbinary": 0.04},
+        "education": ["Bachelors", "Associates", "High School", "Masters"],
+        "income_bracket": "$45k-$120k"
+      },
+      "personality": {
+        "mbti_pool": ["ISFJ", "ISTJ", "INFP", "INTP"],
+        "big5": {"openness": 0.60, "conscientiousness": 0.70, "extraversion": 0.40}
+      },
+      "platform_preferences": {
+        "linkedin": 0.25,
+        "twitter_x": 0.45,
+        "reddit": 0.55,
+        "hacker_news": 0.15
+      },
+      "behavior_traits": {
+        "posts_per_week": [1, 4],
+        "typical_content": ["both-sides analysis", "candidate comparisons", "policy fact-checks", "frustration with partisanship", "local issue advocacy"],
+        "sentiment_baseline": -0.05,
+        "influence_multiplier": 1.8
+      },
+      "interests": ["local politics", "policy analysis", "fact-checking", "bipartisan solutions", "civic engagement", "electoral reform"],
+      "political_lean": "center",
+      "values": ["pragmatism", "nuance", "bipartisanship", "evidence over ideology", "individual rights"]
+    },
+    {
+      "id": "pragmatic-consumer",
+      "label": "Pragmatic Consumer",
+      "weight": 0.50,
+      "demographics": {
+        "age_range": [30, 55],
+        "gender_distribution": {"male": 0.50, "female": 0.46, "nonbinary": 0.04},
+        "education": ["Bachelors", "Associates", "Trade School", "Masters"],
+        "income_bracket": "$50k-$130k"
+      },
+      "personality": {
+        "mbti_pool": ["ISTJ", "ESTJ", "ISTP", "INTJ"],
+        "big5": {"openness": 0.50, "conscientiousness": 0.80, "extraversion": 0.45}
+      },
+      "platform_preferences": {
+        "linkedin": 0.35,
+        "twitter_x": 0.35,
+        "reddit": 0.60,
+        "hacker_news": 0.20
+      },
+      "behavior_traits": {
+        "posts_per_week": [1, 3],
+        "typical_content": ["product reviews", "best-value comparisons", "no-nonsense takes", "practical advice", "avoids political flame wars"],
+        "sentiment_baseline": 0.10,
+        "influence_multiplier": 1.5
+      },
+      "interests": ["consumer reports", "personal finance", "home improvement", "practical tech", "local businesses", "quality-of-life improvements"],
+      "political_lean": "center",
+      "values": ["common sense", "practicality", "fairness", "personal responsibility", "quality"]
+    }
+  ]
+}

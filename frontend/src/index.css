@@ -1,0 +1,118 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 56% 5%;
+    --foreground: 214 32% 91%;
+    --card: 220 51% 10%;
+    --card-foreground: 214 32% 91%;
+    --popover: 222 31% 11%;
+    --popover-foreground: 214 32% 91%;
+    --primary: 239 83% 64%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 217 40% 18%;
+    --secondary-foreground: 214 32% 91%;
+    --muted: 217 40% 18%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 191 100% 50%;
+    --accent-foreground: 222 56% 5%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 100% / 0.06;
+    --input: 0 0% 100% / 0.06;
+    --ring: 239 83% 64%;
+    --radius: 0.625rem;
+  }
+
+  * { border-color: hsl(var(--border)); }
+
+  body {
+    background-color: #070B14;
+    color: #E2E8F0;
+    font-family: 'Geist', 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* ── Custom props ── */
+:root {
+  --grad-arc: linear-gradient(135deg, #5B5FEE 0%, #00D4FF 100%);
+  --grad-violet: linear-gradient(135deg, #A78BFA 0%, #5B5FEE 100%);
+}
+
+/* ── Gradient text ── */
+.text-gradient {
+  background: var(--grad-arc);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Typography ── */
+.text-display { font-family: 'Aktiv Grotesk', system-ui; font-weight: 800; font-size: 3rem; letter-spacing: -0.025em; }
+.text-h1 { font-family: 'Aktiv Grotesk', system-ui; font-weight: 700; font-size: 2rem; letter-spacing: -0.02em; }
+.text-h2 { font-family: 'Geist', system-ui; font-weight: 600; font-size: 1.375rem; letter-spacing: -0.01em; }
+.text-body { font-family: 'Geist', system-ui; font-weight: 400; font-size: 0.9375rem; line-height: 1.7; }
+.text-small { font-family: 'Geist', system-ui; font-weight: 400; font-size: 0.8125rem; color: #64748B; }
+.text-label { font-family: 'JetBrains Mono', monospace; font-size: 0.6875rem; letter-spacing: 0.18em; text-transform: uppercase; }
+
+/* ── Animations ── */
+@keyframes breathe {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.15); opacity: 0.6; }
+}
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes grid-fade {
+  0%, 100% { opacity: 0.03; }
+  50% { opacity: 0.07; }
+}
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(91,95,238,0.15); }
+  50% { box-shadow: 0 0 40px rgba(91,95,238,0.3); }
+}
+@keyframes border-spin {
+  0% { --angle: 0deg; }
+  100% { --angle: 360deg; }
+}
+
+/* ── Utility classes ── */
+.animate-breathe { animation: breathe 8s ease-in-out infinite; }
+.animate-float { animation: float 6s ease-in-out infinite; }
+.animate-glow-pulse { animation: glow-pulse 3s ease-in-out infinite; }
+
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 64px 64px;
+  animation: grid-fade 8s ease-in-out infinite;
+}
+
+.shimmer-border {
+  background: linear-gradient(90deg, transparent, rgba(91,95,238,0.3), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 3s linear infinite;
+}
+
+/* Glass card */
+.glass {
+  background: rgba(13, 22, 40, 0.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.glass-hover:hover {
+  background: rgba(17, 24, 39, 0.7);
+  border-color: rgba(91,95,238,0.25);
+  box-shadow: 0 0 30px rgba(91,95,238,0.06);
+}

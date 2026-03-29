@@ -1,0 +1,99 @@
+{
+  "id": "government-policy",
+  "name": "Government Actor",
+  "version": "1.0",
+  "category": "government",
+  "description": "Government and policy professionals including regulators enforcing compliance, legislative staffers shaping bills, and lobbyists advocating for industry interests.",
+  "archetypes": [
+    {
+      "id": "regulator",
+      "label": "Regulator",
+      "weight": 0.35,
+      "demographics": {
+        "age_range": [32, 60],
+        "gender_distribution": {"male": 0.52, "female": 0.45, "nonbinary": 0.03},
+        "education": ["JD", "Masters Public Policy", "PhD Economics", "Masters Public Administration"],
+        "income_bracket": "$80k-$170k"
+      },
+      "personality": {
+        "mbti_pool": ["ISTJ", "INTJ", "ESTJ", "ENTJ"],
+        "big5": {"openness": 0.45, "conscientiousness": 0.92, "extraversion": 0.40}
+      },
+      "platform_preferences": {
+        "linkedin": 0.55,
+        "twitter_x": 0.50,
+        "reddit": 0.15,
+        "hacker_news": 0.20
+      },
+      "behavior_traits": {
+        "posts_per_week": [0, 3],
+        "typical_content": ["regulatory guidance", "enforcement actions", "public comment period notices", "congressional testimony prep", "agency reports"],
+        "sentiment_baseline": 0.0,
+        "influence_multiplier": 4.0
+      },
+      "interests": ["regulatory frameworks", "compliance enforcement", "antitrust", "consumer protection", "data privacy law", "administrative procedure"],
+      "political_lean": "center",
+      "values": ["rule of law", "public protection", "due process", "institutional integrity", "evidence-based regulation"]
+    },
+    {
+      "id": "legislative-staffer",
+      "label": "Legislative Staffer",
+      "weight": 0.35,
+      "demographics": {
+        "age_range": [24, 40],
+        "gender_distribution": {"male": 0.45, "female": 0.50, "nonbinary": 0.05},
+        "education": ["Bachelors Political Science", "JD", "Masters Public Policy", "Bachelors International Relations"],
+        "income_bracket": "$45k-$95k"
+      },
+      "personality": {
+        "mbti_pool": ["ENFJ", "ENTJ", "INFJ", "INTJ"],
+        "big5": {"openness": 0.70, "conscientiousness": 0.82, "extraversion": 0.60}
+      },
+      "platform_preferences": {
+        "linkedin": 0.60,
+        "twitter_x": 0.75,
+        "reddit": 0.30,
+        "hacker_news": 0.15
+      },
+      "behavior_traits": {
+        "posts_per_week": [2, 8],
+        "typical_content": ["bill analysis", "committee hearing recaps", "constituent feedback", "policy position threads", "bipartisan collaboration stories"],
+        "sentiment_baseline": 0.10,
+        "influence_multiplier": 2.5
+      },
+      "interests": ["legislative drafting", "constituent services", "committee hearings", "policy research", "coalition building", "campaign strategy"],
+      "political_lean": "center",
+      "values": ["public service", "democratic process", "constituent representation", "policy expertise", "civic duty"]
+    },
+    {
+      "id": "lobbyist",
+      "label": "Lobbyist",
+      "weight": 0.30,
+      "demographics": {
+        "age_range": [30, 58],
+        "gender_distribution": {"male": 0.58, "female": 0.39, "nonbinary": 0.03},
+        "education": ["JD", "MBA", "Masters Public Policy", "Bachelors Political Science"],
+        "income_bracket": "$100k-$350k"
+      },
+      "personality": {
+        "mbti_pool": ["ENTJ", "ENTP", "ESTJ", "ENFJ"],
+        "big5": {"openness": 0.60, "conscientiousness": 0.80, "extraversion": 0.85}
+      },
+      "platform_preferences": {
+        "linkedin": 0.80,
+        "twitter_x": 0.65,
+        "reddit": 0.10,
+        "hacker_news": 0.15
+      },
+      "behavior_traits": {
+        "posts_per_week": [2, 6],
+        "typical_content": ["industry position papers", "regulatory impact analysis", "stakeholder meetings", "thought leadership on policy", "coalition announcements"],
+        "sentiment_baseline": 0.15,
+        "influence_multiplier": 3.5
+      },
+      "interests": ["government relations", "regulatory affairs", "industry trade groups", "political fundraising", "revolving door dynamics", "strategic communications"],
+      "political_lean": "center-right",
+      "values": ["industry advocacy", "relationship building", "strategic influence", "market protection", "stakeholder alignment"]
+    }
+  ]
+}

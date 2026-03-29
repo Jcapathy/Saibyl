@@ -1,0 +1,204 @@
+from __future__ import annotations
+
+import asyncio
+import re
+import uuid
+from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
+
+from app.core.llm_client import llm_complete
+from app.services.platforms.base_adapter import (
+    BasePlatformAdapter,
+    Comment,
+    Post,
+    ReactionType,
+    SimulationEvent,
+)
+from app.services.platforms.registry import register_adapter
+
+_STORY_TTL_HOURS = 24
+
+_ACTION_PROMPT = (
+    "You are @{username} on Instagram. Persona: {persona}\n"
+    "Feed (recent posts):\n{feed}\n\n"
+    "Round {round}. Pick ONE action (exact format). Posts are visual-first.\n"
+    "POST: <caption> | <image_description>\n"
+    "STORY: <caption> | <image_description>\n"
+    "COMMENT <post_id>: <comment text>\n"
+    "LIKE <post_id>\n"
+    "NOTHING"
+)
+
+
+def _explore_score(post: Post) -> float:
+    likes = post.metadata.get("likes", 0)
+    comments = post.metadata.get("comments_count", 0)
+    return likes + comments * 3
+
+
+@register_adapter
+class InstagramAdapter(BasePlatformAdapter):
+    platform_id = "instagram"
+    platform_name = "Instagram"
+    supports_reactions = True
+    supports_dms = False
+    max_post_length = 2200
+    max_comment_length = 2200
+
+    async def initialize(self, config: dict, agents: list) -> None:
+        self._config = config
+        self._agents = agents
+        self._posts: list[Post] = []
+        self._stories: list[Post] = []
+        self._comments: list[Comment] = []
+        self._reactions: dict[str, dict[str, ReactionType]] = {}
+
+    async def run_round(self, round_number: int) -> AsyncGenerator[SimulationEvent, None]:
+        self._expire_stories()
+        for agent in self._agents:
+            action = await self._decide_action(agent, round_number)
+            if action:
+                yield action
+
+    async def get_feed(self, agent_username: str) -> list[Post]:
+        combined = sorted(self._posts, key=lambda p: _explore_score(p), reverse=True)
+        return combined[:20]
+
+    async def post(self, agent_username: str, content: str, metadata: dict | None = None) -> Post:
+        meta = metadata or {}
+        meta.setdefault("likes", 0)
+        meta.setdefault("comments_count", 0)
+        parts = content.split("|", 1)
+        caption = parts[0].strip()
+        image_desc = parts[1].strip() if len(parts) > 1 else "photo"
+        meta["caption"] = caption
+        meta["image_description"] = image_desc
+        p = Post(
+            id=uuid.uuid4().hex[:12],
+            platform=self.platform_id,
+            author_username=agent_username,
+            content=caption[: self.max_post_length],
+            created_at=datetime.now(tz=UTC),
+            metadata=meta,
+        )
+        self._posts.append(p)
+        return p
+
+    async def comment(self, agent_username: str, post_id: str, content: str) -> Comment:
+        c = Comment(
+            id=uuid.uuid4().hex[:12],
+            post_id=post_id,
+            platform=self.platform_id,
+            author_username=agent_username,
+            content=content[: self.max_comment_length],
+            created_at=datetime.now(tz=UTC),
+        )
+        self._comments.append(c)
+        for p in self._posts:
+            if p.id == post_id:
+                p.metadata["comments_count"] = p.metadata.get("comments_count", 0) + 1
+                break
+        return c
+
+    async def react(self, agent_username: str, post_id: str, reaction: ReactionType) -> None:
+        self._reactions.setdefault(post_id, {})[agent_username] = reaction
+        for p in self._posts:
+            if p.id == post_id:
+                p.metadata["likes"] = p.metadata.get("likes", 0) + 1
+                break
+
+    def get_state_snapshot(self) -> dict:
+        return {
+            "platform": self.platform_id,
+            "total_posts": len(self._posts),
+            "active_stories": len(self._stories),
+            "total_comments": len(self._comments),
+        }
+
+    # ------------------------------------------------------------------
+    def _expire_stories(self) -> None:
+        now = datetime.now(tz=UTC)
+        self._stories = [
+            s for s in self._stories
+            if (now - s.created_at).total_seconds() < _STORY_TTL_HOURS * 3600
+        ]
+
+    def _post_story(self, agent_username: str, content: str, image_desc: str) -> Post:
+        meta = {"type": "story", "image_description": image_desc}
+        s = Post(
+            id=uuid.uuid4().hex[:12],
+            platform=self.platform_id,
+            author_username=agent_username,
+            content=content[: self.max_post_length],
+            created_at=datetime.now(tz=UTC),
+            metadata=meta,
+        )
+        self._stories.append(s)
+        return s
+
+    async def _decide_action(self, agent: dict, round_number: int) -> SimulationEvent | None:
+        feed = await self.get_feed(agent["username"])
+        feed_text = "\n".join(
+            f"[{p.id}] @{p.author_username}: {p.metadata.get('caption', '')[:80]} ({p.metadata.get('likes', 0)} likes)"
+            for p in feed[:6]
+        ) or "(empty)"
+        prompt = _ACTION_PROMPT.format(
+            username=agent["username"],
+            persona=agent.get("persona", "average user"),
+            feed=feed_text,
+            round=round_number,
+        )
+        raw = await llm_complete([{"role": "user", "content": prompt}], max_tokens=200)
+        await asyncio.sleep(0)
+
+        now = datetime.now(tz=UTC)
+        variant = agent.get("variant", "control")
+        line = raw.strip().split("\n")[0].strip()
+
+        if line.upper().startswith("POST:"):
+            text = line[5:].strip()
+            p = await self.post(agent["username"], text)
+            return SimulationEvent(
+                event_type="post", agent_username=agent["username"],
+                platform=self.platform_id, round_number=round_number,
+                variant=variant, content=p.content, target_id=p.id,
+                metadata={"image_description": p.metadata.get("image_description", "")},
+                timestamp=now,
+            )
+
+        if line.upper().startswith("STORY:"):
+            text = line[6:].strip()
+            parts = text.split("|", 1)
+            caption = parts[0].strip()
+            img = parts[1].strip() if len(parts) > 1 else "photo"
+            s = self._post_story(agent["username"], caption, img)
+            return SimulationEvent(
+                event_type="post", agent_username=agent["username"],
+                platform=self.platform_id, round_number=round_number,
+                variant=variant, content=s.content, target_id=s.id,
+                metadata={"type": "story", "image_description": img}, timestamp=now,
+            )
+
+        if line.upper().startswith("COMMENT"):
+            match = re.match(r"COMMENT\s+(\S+):\s*(.+)", line, re.IGNORECASE)
+            if match:
+                pid, text = match.group(1), match.group(2)
+                c = await self.comment(agent["username"], pid, text)
+                return SimulationEvent(
+                    event_type="comment", agent_username=agent["username"],
+                    platform=self.platform_id, round_number=round_number,
+                    variant=variant, content=c.content, target_id=pid, timestamp=now,
+                )
+
+        if line.upper().startswith("LIKE"):
+            pid = line.split(maxsplit=1)[1].strip() if len(line.split()) > 1 else ""
+            if pid:
+                await self.react(agent["username"], pid, ReactionType.LIKE)
+                return SimulationEvent(
+                    event_type="react", agent_username=agent["username"],
+                    platform=self.platform_id, round_number=round_number,
+                    variant=variant, target_id=pid, metadata={"reaction": "like"},
+                    timestamp=now,
+                )
+
+        return None

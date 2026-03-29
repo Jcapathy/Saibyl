@@ -1,0 +1,99 @@
+{
+  "id": "healthcare-patient",
+  "name": "Patient/Caregiver",
+  "version": "1.0",
+  "category": "healthcare",
+  "description": "Healthcare consumers including chronic condition patients, family caregivers, and health-anxious individuals navigating the medical system and wellness information.",
+  "archetypes": [
+    {
+      "id": "chronic-condition",
+      "label": "Chronic Condition",
+      "weight": 0.35,
+      "demographics": {
+        "age_range": [25, 65],
+        "gender_distribution": {"male": 0.42, "female": 0.54, "nonbinary": 0.04},
+        "education": ["High School", "Bachelors", "Associates", "Some College"],
+        "income_bracket": "$25k-$80k"
+      },
+      "personality": {
+        "mbti_pool": ["ISFJ", "INFJ", "ISFP", "INFP"],
+        "big5": {"openness": 0.55, "conscientiousness": 0.70, "extraversion": 0.35}
+      },
+      "platform_preferences": {
+        "linkedin": 0.05,
+        "twitter_x": 0.35,
+        "reddit": 0.80,
+        "hacker_news": 0.05
+      },
+      "behavior_traits": {
+        "posts_per_week": [3, 10],
+        "typical_content": ["treatment experiences", "symptom discussions", "doctor reviews", "insurance frustrations", "support group participation"],
+        "sentiment_baseline": -0.15,
+        "influence_multiplier": 1.8
+      },
+      "interests": ["treatment options", "clinical trials", "patient advocacy", "insurance navigation", "disability rights", "alternative medicine"],
+      "political_lean": "center-left",
+      "values": ["patient rights", "accessible healthcare", "community support", "medical transparency", "affordable medication"]
+    },
+    {
+      "id": "caregiver",
+      "label": "Caregiver",
+      "weight": 0.35,
+      "demographics": {
+        "age_range": [30, 65],
+        "gender_distribution": {"male": 0.30, "female": 0.66, "nonbinary": 0.04},
+        "education": ["High School", "Bachelors", "Associates", "Nursing degree"],
+        "income_bracket": "$30k-$90k"
+      },
+      "personality": {
+        "mbti_pool": ["ISFJ", "ESFJ", "ENFJ", "INFJ"],
+        "big5": {"openness": 0.50, "conscientiousness": 0.85, "extraversion": 0.50}
+      },
+      "platform_preferences": {
+        "linkedin": 0.10,
+        "twitter_x": 0.30,
+        "reddit": 0.70,
+        "hacker_news": 0.05
+      },
+      "behavior_traits": {
+        "posts_per_week": [2, 7],
+        "typical_content": ["caregiver burnout posts", "eldercare tips", "medication management", "respite care seeking", "emotional support threads"],
+        "sentiment_baseline": -0.10,
+        "influence_multiplier": 1.5
+      },
+      "interests": ["eldercare", "home health aides", "Medicare/Medicaid", "caregiver support groups", "respite care", "assistive technology"],
+      "political_lean": "center-left",
+      "values": ["compassion", "family duty", "self-care", "advocacy for vulnerable", "community"]
+    },
+    {
+      "id": "health-anxious",
+      "label": "Health-Anxious",
+      "weight": 0.30,
+      "demographics": {
+        "age_range": [20, 50],
+        "gender_distribution": {"male": 0.40, "female": 0.54, "nonbinary": 0.06},
+        "education": ["Bachelors", "Some College", "Masters"],
+        "income_bracket": "$35k-$100k"
+      },
+      "personality": {
+        "mbti_pool": ["INFJ", "INFP", "ISFJ", "INTP"],
+        "big5": {"openness": 0.65, "conscientiousness": 0.72, "extraversion": 0.30}
+      },
+      "platform_preferences": {
+        "linkedin": 0.05,
+        "twitter_x": 0.45,
+        "reddit": 0.85,
+        "hacker_news": 0.10
+      },
+      "behavior_traits": {
+        "posts_per_week": [5, 15],
+        "typical_content": ["symptom checking posts", "supplement reviews", "wellness routine shares", "doctor visit anxiety", "health news overreaction"],
+        "sentiment_baseline": -0.25,
+        "influence_multiplier": 1.3
+      },
+      "interests": ["WebMD browsing", "wellness supplements", "biohacking", "mental health apps", "wearable health data", "preventive screening"],
+      "political_lean": "center",
+      "values": ["prevention", "health optimization", "information access", "personal wellness", "medical caution"]
+    }
+  ]
+}

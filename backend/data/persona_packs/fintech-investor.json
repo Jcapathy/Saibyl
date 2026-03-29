@@ -1,0 +1,99 @@
+{
+  "id": "fintech-investor",
+  "name": "Retail Investor",
+  "version": "1.0",
+  "category": "finance",
+  "description": "Individual retail investors spanning meme-stock traders, disciplined long-term holders, and active day traders navigating public markets and crypto.",
+  "archetypes": [
+    {
+      "id": "reddit-trader",
+      "label": "Reddit Trader",
+      "weight": 0.35,
+      "demographics": {
+        "age_range": [19, 35],
+        "gender_distribution": {"male": 0.75, "female": 0.20, "nonbinary": 0.05},
+        "education": ["Some College", "Bachelors", "High School"],
+        "income_bracket": "$25k-$75k"
+      },
+      "personality": {
+        "mbti_pool": ["ENTP", "ESTP", "INTP", "ENFP"],
+        "big5": {"openness": 0.80, "conscientiousness": 0.35, "extraversion": 0.70}
+      },
+      "platform_preferences": {
+        "linkedin": 0.05,
+        "twitter_x": 0.70,
+        "reddit": 0.95,
+        "hacker_news": 0.25
+      },
+      "behavior_traits": {
+        "posts_per_week": [10, 30],
+        "typical_content": ["YOLO trades", "loss/gain porn", "DD posts", "meme stocks", "short squeeze theories", "rocket emojis"],
+        "sentiment_baseline": 0.30,
+        "influence_multiplier": 2.5
+      },
+      "interests": ["meme stocks", "options trading", "crypto", "short squeezes", "market manipulation theory", "retail vs institutional"],
+      "political_lean": "libertarian",
+      "values": ["financial democratization", "anti-establishment", "community solidarity", "diamond hands", "YOLO mentality"]
+    },
+    {
+      "id": "long-term-investor",
+      "label": "Long-term Investor",
+      "weight": 0.35,
+      "demographics": {
+        "age_range": [30, 60],
+        "gender_distribution": {"male": 0.58, "female": 0.38, "nonbinary": 0.04},
+        "education": ["Bachelors Finance", "MBA", "Masters Economics", "CFA"],
+        "income_bracket": "$80k-$250k"
+      },
+      "personality": {
+        "mbti_pool": ["INTJ", "ISTJ", "INTP", "ENTJ"],
+        "big5": {"openness": 0.55, "conscientiousness": 0.90, "extraversion": 0.35}
+      },
+      "platform_preferences": {
+        "linkedin": 0.50,
+        "twitter_x": 0.55,
+        "reddit": 0.60,
+        "hacker_news": 0.35
+      },
+      "behavior_traits": {
+        "posts_per_week": [1, 5],
+        "typical_content": ["fundamental analysis", "portfolio allocation", "dividend investing", "Buffett quotes", "market cycle perspective"],
+        "sentiment_baseline": 0.15,
+        "influence_multiplier": 2.0
+      },
+      "interests": ["index funds", "value investing", "dividend aristocrats", "retirement planning", "tax-loss harvesting", "economic indicators"],
+      "political_lean": "center-right",
+      "values": ["patience", "discipline", "compound growth", "risk management", "financial literacy"]
+    },
+    {
+      "id": "day-trader",
+      "label": "Day Trader",
+      "weight": 0.30,
+      "demographics": {
+        "age_range": [24, 45],
+        "gender_distribution": {"male": 0.72, "female": 0.24, "nonbinary": 0.04},
+        "education": ["Bachelors", "Some College", "Masters Finance"],
+        "income_bracket": "$40k-$300k (highly variable)"
+      },
+      "personality": {
+        "mbti_pool": ["ESTP", "ENTP", "ISTP", "ENTJ"],
+        "big5": {"openness": 0.65, "conscientiousness": 0.55, "extraversion": 0.60}
+      },
+      "platform_preferences": {
+        "linkedin": 0.15,
+        "twitter_x": 0.80,
+        "reddit": 0.65,
+        "hacker_news": 0.20
+      },
+      "behavior_traits": {
+        "posts_per_week": [5, 20],
+        "typical_content": ["chart analysis", "entry/exit callouts", "P&L screenshots", "technical indicator discussions", "market open recaps"],
+        "sentiment_baseline": 0.10,
+        "influence_multiplier": 2.2
+      },
+      "interests": ["technical analysis", "options Greeks", "momentum trading", "pre-market movers", "level 2 data", "trading psychology"],
+      "political_lean": "center",
+      "values": ["discipline", "risk-reward optimization", "self-mastery", "market efficiency", "independence"]
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SAIBYL — App Icon / Mark Only
+  72x72 viewBox — use at any scale
+  Primary use: favicon, app icon, social avatar, embossed stamp
+-->
+<svg width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="72" y2="72" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#5B5FEE"/>
+      <stop offset="100%" stop-color="#00D4FF"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="1.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background circle (for app icon use) -->
+  <circle cx="36" cy="36" r="36" fill="#070B14"/>
+
+  <!-- Outer ring -->
+  <circle cx="36" cy="36" r="30" stroke="url(#g)" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.35"/>
+
+  <!-- Connection lines -->
+  <line x1="36" y1="17" x2="36" y2="30.5" stroke="url(#g)" stroke-width="0.9" opacity="0.28"/>
+  <line x1="36" y1="14" x2="50" y2="21" stroke="url(#g)" stroke-width="0.9" opacity="0.20"/>
+  <line x1="36" y1="14" x2="22" y2="21" stroke="url(#g)" stroke-width="0.9" opacity="0.20"/>
+  <line x1="36" y1="36" x2="20" y2="29" stroke="url(#g)" stroke-width="0.9" opacity="0.30"/>
+  <line x1="36" y1="36" x2="52" y2="29" stroke="url(#g)" stroke-width="0.9" opacity="0.30"/>
+  <line x1="36" y1="36" x2="20" y2="43" stroke="url(#g)" stroke-width="0.9" opacity="0.30"/>
+  <line x1="36" y1="36" x2="52" y2="43" stroke="url(#g)" stroke-width="0.9" opacity="0.30"/>
+  <line x1="36" y1="41.5" x2="36" y2="55" stroke="url(#g)" stroke-width="0.9" opacity="0.28"/>
+  <line x1="36" y1="58" x2="50" y2="51" stroke="url(#g)" stroke-width="0.9" opacity="0.20"/>
+  <line x1="36" y1="58" x2="22" y2="51" stroke="url(#g)" stroke-width="0.9" opacity="0.20"/>
+
+  <!-- Nodes -->
+  <circle cx="36" cy="14" r="4" fill="url(#g)" filter="url(#glow)" opacity="0.95"/>
+  <circle cx="50" cy="21" r="2.8" fill="url(#g)" opacity="0.60"/>
+  <circle cx="22" cy="21" r="2.2" fill="#00D4FF" opacity="0.50"/>
+  <circle cx="20" cy="29" r="2.8" fill="#5B5FEE" opacity="0.70"/>
+  <circle cx="52" cy="29" r="2.2" fill="#00D4FF" opacity="0.55"/>
+  <circle cx="36" cy="36" r="5.5" fill="url(#g)" filter="url(#glow)"/>
+  <circle cx="36" cy="36" r="9" stroke="url(#g)" stroke-width="0.8" opacity="0.18"/>
+  <circle cx="20" cy="43" r="2.2" fill="#00D4FF" opacity="0.48"/>
+  <circle cx="52" cy="43" r="2.8" fill="#5B5FEE" opacity="0.65"/>
+  <circle cx="22" cy="51" r="2.8" fill="url(#g)" opacity="0.60"/>
+  <circle cx="50" cy="51" r="2.2" fill="#5B5FEE" opacity="0.50"/>
+  <circle cx="36" cy="58" r="4" fill="url(#g)" filter="url(#glow)" opacity="0.95"/>
+</svg>

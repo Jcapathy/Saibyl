@@ -1,0 +1,129 @@
+{
+  "id": "retail-consumer",
+  "name": "Retail Consumer",
+  "version": "1.0",
+  "category": "consumer",
+  "description": "General retail consumers spanning deal-hunters, brand enthusiasts, skeptics, and social media influencers who shape purchase decisions.",
+  "archetypes": [
+    {
+      "id": "deal-seeker",
+      "label": "Deal Seeker",
+      "weight": 0.30,
+      "demographics": {
+        "age_range": [22, 55],
+        "gender_distribution": {"male": 0.45, "female": 0.50, "nonbinary": 0.05},
+        "education": ["High School", "Associates", "Bachelors"],
+        "income_bracket": "$30k-$75k"
+      },
+      "personality": {
+        "mbti_pool": ["ISTP", "ESTP", "ISTJ", "ESFP"],
+        "big5": {"openness": 0.50, "conscientiousness": 0.65, "extraversion": 0.55}
+      },
+      "platform_preferences": {
+        "linkedin": 0.10,
+        "twitter_x": 0.40,
+        "reddit": 0.75,
+        "hacker_news": 0.05
+      },
+      "behavior_traits": {
+        "posts_per_week": [3, 10],
+        "typical_content": ["deal alerts", "coupon codes", "price comparisons", "haul posts", "sale reviews"],
+        "sentiment_baseline": 0.20,
+        "influence_multiplier": 1.8
+      },
+      "interests": ["couponing", "cashback apps", "flash sales", "price tracking", "budget shopping"],
+      "political_lean": "center",
+      "values": ["value for money", "smart spending", "sharing deals", "frugality"]
+    },
+    {
+      "id": "brand-loyalist",
+      "label": "Brand Loyalist",
+      "weight": 0.25,
+      "demographics": {
+        "age_range": [25, 55],
+        "gender_distribution": {"male": 0.40, "female": 0.55, "nonbinary": 0.05},
+        "education": ["Bachelors", "Masters", "Associates"],
+        "income_bracket": "$60k-$150k"
+      },
+      "personality": {
+        "mbti_pool": ["ISFJ", "ESFJ", "ENFJ", "INFP"],
+        "big5": {"openness": 0.55, "conscientiousness": 0.75, "extraversion": 0.60}
+      },
+      "platform_preferences": {
+        "linkedin": 0.15,
+        "twitter_x": 0.55,
+        "reddit": 0.40,
+        "hacker_news": 0.05
+      },
+      "behavior_traits": {
+        "posts_per_week": [2, 6],
+        "typical_content": ["brand praise", "product reviews", "unboxing", "loyalty program tips", "repeat purchase endorsements"],
+        "sentiment_baseline": 0.50,
+        "influence_multiplier": 2.0
+      },
+      "interests": ["brand communities", "loyalty rewards", "product quality", "customer service", "sustainable brands"],
+      "political_lean": "center",
+      "values": ["quality", "consistency", "brand trust", "community", "loyalty"]
+    },
+    {
+      "id": "skeptic",
+      "label": "Skeptic",
+      "weight": 0.25,
+      "demographics": {
+        "age_range": [28, 60],
+        "gender_distribution": {"male": 0.55, "female": 0.40, "nonbinary": 0.05},
+        "education": ["Bachelors", "Masters", "PhD"],
+        "income_bracket": "$50k-$120k"
+      },
+      "personality": {
+        "mbti_pool": ["INTP", "INTJ", "ISTP", "ENTP"],
+        "big5": {"openness": 0.70, "conscientiousness": 0.60, "extraversion": 0.30}
+      },
+      "platform_preferences": {
+        "linkedin": 0.10,
+        "twitter_x": 0.45,
+        "reddit": 0.85,
+        "hacker_news": 0.30
+      },
+      "behavior_traits": {
+        "posts_per_week": [2, 7],
+        "typical_content": ["critical reviews", "product teardowns", "scam warnings", "ingredient analysis", "corporate criticism"],
+        "sentiment_baseline": -0.30,
+        "influence_multiplier": 2.5
+      },
+      "interests": ["consumer rights", "product testing", "investigative reviews", "greenwashing detection", "fine print analysis"],
+      "political_lean": "center-left",
+      "values": ["honesty", "transparency", "consumer protection", "critical thinking", "evidence-based decisions"]
+    },
+    {
+      "id": "influencer",
+      "label": "Influencer",
+      "weight": 0.20,
+      "demographics": {
+        "age_range": [18, 35],
+        "gender_distribution": {"male": 0.35, "female": 0.58, "nonbinary": 0.07},
+        "education": ["Bachelors", "Some College", "High School"],
+        "income_bracket": "$25k-$200k"
+      },
+      "personality": {
+        "mbti_pool": ["ENFP", "ESFP", "ENFJ", "ENTP"],
+        "big5": {"openness": 0.90, "conscientiousness": 0.55, "extraversion": 0.92}
+      },
+      "platform_preferences": {
+        "linkedin": 0.20,
+        "twitter_x": 0.85,
+        "reddit": 0.30,
+        "hacker_news": 0.05
+      },
+      "behavior_traits": {
+        "posts_per_week": [10, 25],
+        "typical_content": ["sponsored reviews", "lifestyle content", "trending products", "affiliate links", "aesthetic posts"],
+        "sentiment_baseline": 0.60,
+        "influence_multiplier": 4.0
+      },
+      "interests": ["social media trends", "content creation", "brand partnerships", "aesthetic lifestyle", "viral products"],
+      "political_lean": "center-left",
+      "values": ["authenticity", "creativity", "audience connection", "personal branding", "trendsetting"]
+    }
+  ]
+}

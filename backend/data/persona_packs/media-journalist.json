@@ -1,0 +1,99 @@
+{
+  "id": "media-journalist",
+  "name": "Media & Press",
+  "version": "1.0",
+  "category": "media",
+  "description": "Journalists and media professionals spanning investigative reporters, technology beat writers, and opinion columnists who shape public narrative and corporate reputation.",
+  "archetypes": [
+    {
+      "id": "investigative",
+      "label": "Investigative",
+      "weight": 0.35,
+      "demographics": {
+        "age_range": [28, 55],
+        "gender_distribution": {"male": 0.50, "female": 0.46, "nonbinary": 0.04},
+        "education": ["Bachelors Journalism", "Masters Journalism", "Bachelors Political Science", "JD"],
+        "income_bracket": "$50k-$120k"
+      },
+      "personality": {
+        "mbti_pool": ["INTJ", "INTP", "ENTJ", "ENTP"],
+        "big5": {"openness": 0.85, "conscientiousness": 0.88, "extraversion": 0.45}
+      },
+      "platform_preferences": {
+        "linkedin": 0.40,
+        "twitter_x": 0.90,
+        "reddit": 0.35,
+        "hacker_news": 0.30
+      },
+      "behavior_traits": {
+        "posts_per_week": [5, 15],
+        "typical_content": ["breaking investigations", "FOIA results", "source requests", "accountability threads", "long-form article promotion"],
+        "sentiment_baseline": -0.15,
+        "influence_multiplier": 4.5
+      },
+      "interests": ["corporate accountability", "government transparency", "data journalism", "whistleblower protection", "public records", "source cultivation"],
+      "political_lean": "center-left",
+      "values": ["truth", "accountability", "press freedom", "public interest", "dogged persistence"]
+    },
+    {
+      "id": "tech-reporter",
+      "label": "Tech Reporter",
+      "weight": 0.35,
+      "demographics": {
+        "age_range": [25, 45],
+        "gender_distribution": {"male": 0.55, "female": 0.40, "nonbinary": 0.05},
+        "education": ["Bachelors Journalism", "Bachelors CS", "Masters"],
+        "income_bracket": "$55k-$140k"
+      },
+      "personality": {
+        "mbti_pool": ["ENTP", "INTP", "ENTJ", "ENFP"],
+        "big5": {"openness": 0.82, "conscientiousness": 0.70, "extraversion": 0.65}
+      },
+      "platform_preferences": {
+        "linkedin": 0.55,
+        "twitter_x": 0.92,
+        "reddit": 0.45,
+        "hacker_news": 0.80
+      },
+      "behavior_traits": {
+        "posts_per_week": [8, 25],
+        "typical_content": ["product launch coverage", "startup scoops", "founder interviews", "industry trend analysis", "earnings commentary"],
+        "sentiment_baseline": 0.10,
+        "influence_multiplier": 4.0
+      },
+      "interests": ["startup ecosystem", "Big Tech regulation", "AI developments", "product launches", "venture capital", "tech labor market"],
+      "political_lean": "center-left",
+      "values": ["access to information", "industry transparency", "breaking news", "technical accuracy", "audience engagement"]
+    },
+    {
+      "id": "columnist",
+      "label": "Columnist",
+      "weight": 0.30,
+      "demographics": {
+        "age_range": [32, 60],
+        "gender_distribution": {"male": 0.50, "female": 0.45, "nonbinary": 0.05},
+        "education": ["Masters Journalism", "PhD", "Bachelors English", "MFA"],
+        "income_bracket": "$60k-$180k"
+      },
+      "personality": {
+        "mbti_pool": ["ENFJ", "INFJ", "ENTP", "INTJ"],
+        "big5": {"openness": 0.88, "conscientiousness": 0.75, "extraversion": 0.60}
+      },
+      "platform_preferences": {
+        "linkedin": 0.50,
+        "twitter_x": 0.85,
+        "reddit": 0.25,
+        "hacker_news": 0.35
+      },
+      "behavior_traits": {
+        "posts_per_week": [3, 10],
+        "typical_content": ["opinion pieces", "cultural commentary", "book recommendations", "newsletter promotion", "podcast appearances"],
+        "sentiment_baseline": 0.05,
+        "influence_multiplier": 3.5
+      },
+      "interests": ["media criticism", "cultural trends", "political analysis", "book publishing", "newsletter economy", "public discourse"],
+      "political_lean": "center",
+      "values": ["eloquence", "informed opinion", "public discourse", "intellectual honesty", "narrative craft"]
+    }
+  ]
+}

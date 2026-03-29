@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SAIBYL — Primary Logo Lockup
+  Mark + Wordmark | Aktiv Grotesk 800
+  Use on dark backgrounds (#070B14, #0D1628)
+  Saido Labs LLC · saibyl.com · 2026
+-->
+<svg width="360" height="80" viewBox="0 0 360 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="brand" x1="0" y1="0" x2="360" y2="80" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#5B5FEE"/>
+      <stop offset="100%" stop-color="#00D4FF"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="0" y1="0" x2="72" y2="72" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#5B5FEE"/>
+      <stop offset="100%" stop-color="#00D4FF"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="1.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Mark (72x72 centered vertically in 80px height) -->
+  <g transform="translate(4, 4)">
+    <!-- Outer ring -->
+    <circle cx="36" cy="36" r="32" stroke="url(#mark)" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.40"/>
+    <!-- Connection lines -->
+    <line x1="36" y1="14" x2="36" y2="30" stroke="url(#mark)" stroke-width="0.9" opacity="0.28"/>
+    <line x1="36" y1="14" x2="50" y2="21" stroke="url(#mark)" stroke-width="0.9" opacity="0.18"/>
+    <line x1="36" y1="14" x2="22" y2="21" stroke="url(#mark)" stroke-width="0.9" opacity="0.18"/>
+    <line x1="36" y1="36" x2="20" y2="29" stroke="url(#mark)" stroke-width="0.9" opacity="0.30"/>
+    <line x1="36" y1="36" x2="52" y2="29" stroke="url(#mark)" stroke-width="0.9" opacity="0.30"/>
+    <line x1="36" y1="36" x2="20" y2="43" stroke="url(#mark)" stroke-width="0.9" opacity="0.30"/>
+    <line x1="36" y1="36" x2="52" y2="43" stroke="url(#mark)" stroke-width="0.9" opacity="0.30"/>
+    <line x1="36" y1="42" x2="36" y2="58" stroke="url(#mark)" stroke-width="0.9" opacity="0.28"/>
+    <line x1="36" y1="58" x2="50" y2="51" stroke="url(#mark)" stroke-width="0.9" opacity="0.18"/>
+    <line x1="36" y1="58" x2="22" y2="51" stroke="url(#mark)" stroke-width="0.9" opacity="0.18"/>
+    <!-- Nodes -->
+    <circle cx="36" cy="14" r="4" fill="url(#mark)" filter="url(#glow)" opacity="0.95"/>
+    <circle cx="50" cy="21" r="2.6" fill="url(#mark)" opacity="0.58"/>
+    <circle cx="22" cy="21" r="2.1" fill="#00D4FF" opacity="0.48"/>
+    <circle cx="20" cy="29" r="2.7" fill="#5B5FEE" opacity="0.70"/>
+    <circle cx="52" cy="29" r="2.1" fill="#00D4FF" opacity="0.52"/>
+    <circle cx="36" cy="36" r="5.5" fill="url(#mark)" filter="url(#glow)"/>
+    <circle cx="36" cy="36" r="9" stroke="url(#mark)" stroke-width="0.8" opacity="0.18"/>
+    <circle cx="20" cy="43" r="2.1" fill="#00D4FF" opacity="0.45"/>
+    <circle cx="52" cy="43" r="2.7" fill="#5B5FEE" opacity="0.62"/>
+    <circle cx="22" cy="51" r="2.6" fill="url(#mark)" opacity="0.58"/>
+    <circle cx="50" cy="51" r="2.1" fill="#5B5FEE" opacity="0.48"/>
+    <circle cx="36" cy="58" r="4" fill="url(#mark)" filter="url(#glow)" opacity="0.95"/>
+  </g>
+
+  <!-- Wordmark: SAIBYL in Aktiv Grotesk 800 -->
+  <!-- Font: Aktiv Grotesk 800 — Dalton Maag / Fontshare: https://api.fontshare.com/v2/css?f[]=aktiv-grotesk@800 -->
+  <text
+    x="100"
+    y="57"
+    font-family="'Aktiv Grotesk', 'Unbounded', system-ui, sans-serif"
+    font-weight="800"
+    font-size="44"
+    letter-spacing="-0.9"
+    fill="url(#brand)"
+    text-anchor="start"
+  >SAIBYL</text>
+</svg>

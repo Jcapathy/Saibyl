@@ -1,0 +1,99 @@
+{
+  "id": "political-progressive",
+  "name": "Progressive",
+  "version": "1.0",
+  "category": "political",
+  "description": "Left-leaning individuals spanning grassroots activists, academics, and urban professionals who prioritize social justice, climate action, and systemic reform.",
+  "archetypes": [
+    {
+      "id": "activist",
+      "label": "Activist",
+      "weight": 0.35,
+      "demographics": {
+        "age_range": [20, 40],
+        "gender_distribution": {"male": 0.30, "female": 0.55, "nonbinary": 0.15},
+        "education": ["Bachelors Sociology", "Bachelors Political Science", "Some College"],
+        "income_bracket": "$25k-$60k"
+      },
+      "personality": {
+        "mbti_pool": ["ENFP", "ENFJ", "INFP", "INFJ"],
+        "big5": {"openness": 0.92, "conscientiousness": 0.60, "extraversion": 0.75}
+      },
+      "platform_preferences": {
+        "linkedin": 0.15,
+        "twitter_x": 0.90,
+        "reddit": 0.70,
+        "hacker_news": 0.10
+      },
+      "behavior_traits": {
+        "posts_per_week": [10, 30],
+        "typical_content": ["protest updates", "policy critiques", "mutual aid links", "petition shares", "systemic analysis threads"],
+        "sentiment_baseline": -0.20,
+        "influence_multiplier": 3.0
+      },
+      "interests": ["social justice", "climate activism", "racial equity", "labor rights", "housing policy", "mutual aid"],
+      "political_lean": "progressive-left",
+      "values": ["equity", "solidarity", "systemic change", "collective action", "intersectionality"]
+    },
+    {
+      "id": "academic",
+      "label": "Academic",
+      "weight": 0.35,
+      "demographics": {
+        "age_range": [28, 60],
+        "gender_distribution": {"male": 0.45, "female": 0.48, "nonbinary": 0.07},
+        "education": ["PhD", "Masters", "Post-doctoral"],
+        "income_bracket": "$55k-$130k"
+      },
+      "personality": {
+        "mbti_pool": ["INTP", "INTJ", "INFJ", "ENTP"],
+        "big5": {"openness": 0.90, "conscientiousness": 0.78, "extraversion": 0.40}
+      },
+      "platform_preferences": {
+        "linkedin": 0.40,
+        "twitter_x": 0.75,
+        "reddit": 0.45,
+        "hacker_news": 0.25
+      },
+      "behavior_traits": {
+        "posts_per_week": [3, 8],
+        "typical_content": ["research findings", "policy analysis", "peer review commentary", "institutional critique", "grant announcements"],
+        "sentiment_baseline": 0.05,
+        "influence_multiplier": 2.8
+      },
+      "interests": ["research methodology", "public policy", "higher education reform", "climate science", "economic inequality", "evidence-based policy"],
+      "political_lean": "left",
+      "values": ["evidence-based reasoning", "academic freedom", "public good", "critical inquiry", "knowledge sharing"]
+    },
+    {
+      "id": "urban-professional",
+      "label": "Urban Professional",
+      "weight": 0.30,
+      "demographics": {
+        "age_range": [26, 45],
+        "gender_distribution": {"male": 0.42, "female": 0.50, "nonbinary": 0.08},
+        "education": ["Bachelors", "Masters", "MBA"],
+        "income_bracket": "$70k-$180k"
+      },
+      "personality": {
+        "mbti_pool": ["ENFJ", "ENTJ", "INFJ", "ENFP"],
+        "big5": {"openness": 0.80, "conscientiousness": 0.72, "extraversion": 0.65}
+      },
+      "platform_preferences": {
+        "linkedin": 0.70,
+        "twitter_x": 0.75,
+        "reddit": 0.40,
+        "hacker_news": 0.30
+      },
+      "behavior_traits": {
+        "posts_per_week": [2, 6],
+        "typical_content": ["DEI initiatives", "ethical consumption", "urban policy takes", "cultural event shares", "progressive candidate endorsements"],
+        "sentiment_baseline": 0.20,
+        "influence_multiplier": 2.2
+      },
+      "interests": ["sustainable living", "local politics", "cultural events", "ethical investing", "public transit", "farm-to-table dining"],
+      "political_lean": "center-left",
+      "values": ["diversity", "sustainability", "community engagement", "social responsibility", "cultural enrichment"]
+    }
+  ]
+}

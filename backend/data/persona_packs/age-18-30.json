@@ -1,0 +1,129 @@
+{
+  "id": "age-18-30",
+  "name": "Gen Z + Young Millennial",
+  "version": "1.0",
+  "category": "demographic",
+  "description": "Digital natives aged 18-30 spanning students, early career professionals, and entrepreneurial side hustlers shaped by social media and economic uncertainty.",
+  "archetypes": [
+    {
+      "id": "early-adopter",
+      "label": "Early Adopter",
+      "weight": 0.25,
+      "demographics": {
+        "age_range": [20, 30],
+        "gender_distribution": {"male": 0.55, "female": 0.38, "nonbinary": 0.07},
+        "education": ["Bachelors CS", "Bachelors Engineering", "Self-taught"],
+        "income_bracket": "$45k-$110k"
+      },
+      "personality": {
+        "mbti_pool": ["ENTP", "INTP", "ENFP", "INTJ"],
+        "big5": {"openness": 0.92, "conscientiousness": 0.50, "extraversion": 0.65}
+      },
+      "platform_preferences": {
+        "linkedin": 0.30,
+        "twitter_x": 0.85,
+        "reddit": 0.80,
+        "hacker_news": 0.75
+      },
+      "behavior_traits": {
+        "posts_per_week": [5, 15],
+        "typical_content": ["new app reviews", "beta testing feedback", "tech hot takes", "gadget unboxings", "AI tool threads"],
+        "sentiment_baseline": 0.35,
+        "influence_multiplier": 3.0
+      },
+      "interests": ["AI tools", "crypto", "wearable tech", "open source", "indie games", "new social platforms"],
+      "political_lean": "left-libertarian",
+      "values": ["innovation", "open access", "experimentation", "digital freedom", "meritocracy"]
+    },
+    {
+      "id": "student",
+      "label": "Student",
+      "weight": 0.30,
+      "demographics": {
+        "age_range": [18, 25],
+        "gender_distribution": {"male": 0.48, "female": 0.45, "nonbinary": 0.07},
+        "education": ["Some College", "Bachelors in progress", "Community College"],
+        "income_bracket": "$0-$25k"
+      },
+      "personality": {
+        "mbti_pool": ["ENFP", "INFP", "ISFP", "ESFP"],
+        "big5": {"openness": 0.80, "conscientiousness": 0.45, "extraversion": 0.65}
+      },
+      "platform_preferences": {
+        "linkedin": 0.15,
+        "twitter_x": 0.70,
+        "reddit": 0.80,
+        "hacker_news": 0.15
+      },
+      "behavior_traits": {
+        "posts_per_week": [5, 20],
+        "typical_content": ["memes", "study tips", "campus life", "hot takes", "financial stress", "career anxiety"],
+        "sentiment_baseline": 0.10,
+        "influence_multiplier": 1.2
+      },
+      "interests": ["student discounts", "mental health", "social justice", "streaming", "gaming", "student loans"],
+      "political_lean": "left",
+      "values": ["affordability", "social equity", "self-expression", "community", "mental wellness"]
+    },
+    {
+      "id": "first-job",
+      "label": "First Job",
+      "weight": 0.25,
+      "demographics": {
+        "age_range": [22, 28],
+        "gender_distribution": {"male": 0.48, "female": 0.46, "nonbinary": 0.06},
+        "education": ["Bachelors", "Associates", "Bootcamp"],
+        "income_bracket": "$35k-$70k"
+      },
+      "personality": {
+        "mbti_pool": ["ISFJ", "ESFJ", "ISTJ", "ENFJ"],
+        "big5": {"openness": 0.60, "conscientiousness": 0.65, "extraversion": 0.55}
+      },
+      "platform_preferences": {
+        "linkedin": 0.65,
+        "twitter_x": 0.55,
+        "reddit": 0.60,
+        "hacker_news": 0.20
+      },
+      "behavior_traits": {
+        "posts_per_week": [1, 5],
+        "typical_content": ["career advice seeking", "workplace rants", "salary transparency", "adulting struggles", "professional milestones"],
+        "sentiment_baseline": 0.15,
+        "influence_multiplier": 1.0
+      },
+      "interests": ["career growth", "budgeting apps", "apartment hunting", "professional networking", "work-life balance"],
+      "political_lean": "center-left",
+      "values": ["financial independence", "career growth", "work-life balance", "fairness", "stability"]
+    },
+    {
+      "id": "side-hustler",
+      "label": "Side Hustler",
+      "weight": 0.20,
+      "demographics": {
+        "age_range": [20, 30],
+        "gender_distribution": {"male": 0.50, "female": 0.42, "nonbinary": 0.08},
+        "education": ["Bachelors", "Some College", "Self-taught"],
+        "income_bracket": "$20k-$80k"
+      },
+      "personality": {
+        "mbti_pool": ["ENTP", "ESTP", "ENFP", "ENTJ"],
+        "big5": {"openness": 0.85, "conscientiousness": 0.60, "extraversion": 0.75}
+      },
+      "platform_preferences": {
+        "linkedin": 0.40,
+        "twitter_x": 0.80,
+        "reddit": 0.70,
+        "hacker_news": 0.35
+      },
+      "behavior_traits": {
+        "posts_per_week": [5, 15],
+        "typical_content": ["income reports", "hustle tips", "freelance advice", "dropshipping updates", "passive income ideas"],
+        "sentiment_baseline": 0.35,
+        "influence_multiplier": 2.0
+      },
+      "interests": ["freelancing", "e-commerce", "content monetization", "dropshipping", "crypto trading", "gig economy"],
+      "political_lean": "libertarian",
+      "values": ["hustle", "financial freedom", "self-reliance", "flexibility", "entrepreneurship"]
+    }
+  ]
+}

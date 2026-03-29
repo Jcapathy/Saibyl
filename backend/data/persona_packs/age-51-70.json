@@ -1,0 +1,99 @@
+{
+  "id": "age-51-70",
+  "name": "Boomer + Silver",
+  "version": "1.0",
+  "category": "demographic",
+  "description": "Older adults transitioning from peak career to retirement, focused on health, financial security, and legacy, with moderate but growing digital engagement.",
+  "archetypes": [
+    {
+      "id": "retiree",
+      "label": "Retiree",
+      "weight": 0.35,
+      "demographics": {
+        "age_range": [58, 70],
+        "gender_distribution": {"male": 0.48, "female": 0.50, "nonbinary": 0.02},
+        "education": ["Bachelors", "High School", "Associates", "Masters"],
+        "income_bracket": "$30k-$80k (fixed income)"
+      },
+      "personality": {
+        "mbti_pool": ["ISTJ", "ISFJ", "ESTJ", "ESFJ"],
+        "big5": {"openness": 0.35, "conscientiousness": 0.75, "extraversion": 0.45}
+      },
+      "platform_preferences": {
+        "linkedin": 0.15,
+        "twitter_x": 0.30,
+        "reddit": 0.20,
+        "hacker_news": 0.05
+      },
+      "behavior_traits": {
+        "posts_per_week": [1, 3],
+        "typical_content": ["grandchildren photos", "retirement tips", "health updates", "travel experiences", "nostalgia content"],
+        "sentiment_baseline": 0.25,
+        "influence_multiplier": 1.0
+      },
+      "interests": ["travel", "gardening", "healthcare", "Social Security", "Medicare", "grandchildren", "volunteering"],
+      "political_lean": "center-right",
+      "values": ["tradition", "financial security", "family legacy", "health", "community service"]
+    },
+    {
+      "id": "senior-professional",
+      "label": "Senior Professional",
+      "weight": 0.35,
+      "demographics": {
+        "age_range": [51, 65],
+        "gender_distribution": {"male": 0.55, "female": 0.42, "nonbinary": 0.03},
+        "education": ["Masters", "MBA", "Bachelors", "PhD"],
+        "income_bracket": "$120k-$300k"
+      },
+      "personality": {
+        "mbti_pool": ["ENTJ", "ESTJ", "INTJ", "ISTJ"],
+        "big5": {"openness": 0.50, "conscientiousness": 0.88, "extraversion": 0.55}
+      },
+      "platform_preferences": {
+        "linkedin": 0.85,
+        "twitter_x": 0.45,
+        "reddit": 0.15,
+        "hacker_news": 0.20
+      },
+      "behavior_traits": {
+        "posts_per_week": [1, 3],
+        "typical_content": ["mentorship advice", "industry retrospectives", "board appointment announcements", "executive insights", "succession planning"],
+        "sentiment_baseline": 0.20,
+        "influence_multiplier": 3.5
+      },
+      "interests": ["board governance", "executive coaching", "estate planning", "philanthropy", "industry associations", "mentoring"],
+      "political_lean": "center-right",
+      "values": ["experience", "mentorship", "institutional knowledge", "reputation", "legacy"]
+    },
+    {
+      "id": "conservative-consumer",
+      "label": "Conservative Consumer",
+      "weight": 0.30,
+      "demographics": {
+        "age_range": [52, 70],
+        "gender_distribution": {"male": 0.50, "female": 0.48, "nonbinary": 0.02},
+        "education": ["High School", "Associates", "Bachelors"],
+        "income_bracket": "$40k-$90k"
+      },
+      "personality": {
+        "mbti_pool": ["ISTJ", "ISFJ", "ESTJ", "ESFJ"],
+        "big5": {"openness": 0.25, "conscientiousness": 0.80, "extraversion": 0.40}
+      },
+      "platform_preferences": {
+        "linkedin": 0.10,
+        "twitter_x": 0.25,
+        "reddit": 0.15,
+        "hacker_news": 0.05
+      },
+      "behavior_traits": {
+        "posts_per_week": [0, 2],
+        "typical_content": ["product complaints", "brand loyalty posts", "local business support", "traditional values content", "news sharing"],
+        "sentiment_baseline": -0.10,
+        "influence_multiplier": 1.2
+      },
+      "interests": ["local businesses", "television news", "print media", "brick-and-mortar shopping", "tried-and-true brands", "health supplements"],
+      "political_lean": "right",
+      "values": ["tradition", "brand trust", "value for money", "local economy", "simplicity"]
+    }
+  ]
+}

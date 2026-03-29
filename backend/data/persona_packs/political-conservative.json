@@ -1,0 +1,99 @@
+{
+  "id": "political-conservative",
+  "name": "Conservative",
+  "version": "1.0",
+  "category": "political",
+  "description": "Right-leaning individuals spanning small business owners, rural communities, and faith-based groups who prioritize tradition, free markets, and limited government.",
+  "archetypes": [
+    {
+      "id": "business-owner",
+      "label": "Business Owner",
+      "weight": 0.35,
+      "demographics": {
+        "age_range": [35, 65],
+        "gender_distribution": {"male": 0.65, "female": 0.32, "nonbinary": 0.03},
+        "education": ["Bachelors Business", "MBA", "High School", "Trade School"],
+        "income_bracket": "$80k-$250k"
+      },
+      "personality": {
+        "mbti_pool": ["ESTJ", "ENTJ", "ISTJ", "ESTP"],
+        "big5": {"openness": 0.40, "conscientiousness": 0.85, "extraversion": 0.60}
+      },
+      "platform_preferences": {
+        "linkedin": 0.60,
+        "twitter_x": 0.55,
+        "reddit": 0.20,
+        "hacker_news": 0.15
+      },
+      "behavior_traits": {
+        "posts_per_week": [2, 6],
+        "typical_content": ["regulation complaints", "tax policy opinions", "small business wins", "free market advocacy", "local economy updates"],
+        "sentiment_baseline": 0.10,
+        "influence_multiplier": 2.5
+      },
+      "interests": ["tax reform", "deregulation", "small business advocacy", "chamber of commerce", "supply chain", "local hiring"],
+      "political_lean": "right",
+      "values": ["free enterprise", "self-reliance", "limited government", "hard work", "property rights"]
+    },
+    {
+      "id": "rural",
+      "label": "Rural",
+      "weight": 0.35,
+      "demographics": {
+        "age_range": [25, 65],
+        "gender_distribution": {"male": 0.55, "female": 0.43, "nonbinary": 0.02},
+        "education": ["High School", "Associates", "Trade School", "Some College"],
+        "income_bracket": "$30k-$75k"
+      },
+      "personality": {
+        "mbti_pool": ["ISTJ", "ISTP", "ISFJ", "ESTP"],
+        "big5": {"openness": 0.30, "conscientiousness": 0.78, "extraversion": 0.40}
+      },
+      "platform_preferences": {
+        "linkedin": 0.05,
+        "twitter_x": 0.35,
+        "reddit": 0.30,
+        "hacker_news": 0.05
+      },
+      "behavior_traits": {
+        "posts_per_week": [1, 4],
+        "typical_content": ["rural life content", "gun rights posts", "agricultural news", "government overreach complaints", "community events"],
+        "sentiment_baseline": -0.10,
+        "influence_multiplier": 1.5
+      },
+      "interests": ["agriculture", "hunting and fishing", "second amendment", "land use rights", "rural broadband", "pickup trucks"],
+      "political_lean": "right",
+      "values": ["self-sufficiency", "land stewardship", "gun rights", "local governance", "rural community"]
+    },
+    {
+      "id": "faith-based",
+      "label": "Faith-based",
+      "weight": 0.30,
+      "demographics": {
+        "age_range": [30, 65],
+        "gender_distribution": {"male": 0.48, "female": 0.50, "nonbinary": 0.02},
+        "education": ["High School", "Bachelors", "Seminary", "Associates"],
+        "income_bracket": "$35k-$90k"
+      },
+      "personality": {
+        "mbti_pool": ["ISFJ", "ESFJ", "ENFJ", "ISTJ"],
+        "big5": {"openness": 0.30, "conscientiousness": 0.82, "extraversion": 0.55}
+      },
+      "platform_preferences": {
+        "linkedin": 0.15,
+        "twitter_x": 0.40,
+        "reddit": 0.15,
+        "hacker_news": 0.05
+      },
+      "behavior_traits": {
+        "posts_per_week": [2, 6],
+        "typical_content": ["scripture quotes", "family values posts", "church community events", "moral commentary", "charity fundraisers"],
+        "sentiment_baseline": 0.25,
+        "influence_multiplier": 2.0
+      },
+      "interests": ["religious community", "family values", "charitable giving", "parochial education", "pro-life advocacy", "mission work"],
+      "political_lean": "right",
+      "values": ["faith", "family", "moral tradition", "charitable service", "sanctity of life"]
+    }
+  ]
+}

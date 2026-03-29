@@ -1,0 +1,70 @@
+services:
+  - type: web
+    name: saibyl-backend
+    runtime: python
+    plan: starter
+    buildCommand: cd backend && pip install uv && uv sync --no-dev
+    startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ZEP_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: FRONTEND_URL
+        value: https://saibyl-frontend.onrender.com
+      - key: CORS_ORIGINS
+        value: https://saibyl-frontend.onrender.com
+      - key: REDIS_URL
+        fromService:
+          name: saibyl-redis
+          type: redis
+          property: connectionString
+
+  - type: worker
+    name: saibyl-worker
+    runtime: python
+    plan: starter
+    buildCommand: cd backend && pip install uv && uv sync --no-dev
+    startCommand: cd backend && celery -A app.workers.celery_app worker --loglevel=info --concurrency=4
+    envVars:
+      - fromGroup: saibyl-env
+
+  - type: static
+    name: saibyl-frontend
+    buildCommand: cd frontend && npm ci && npm run build
+    staticPublishPath: frontend/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+    envVars:
+      - key: VITE_API_URL
+        value: https://saibyl-backend.onrender.com
+
+  - type: redis
+    name: saibyl-redis
+    plan: starter
+    maxmemoryPolicy: allkeys-lru
