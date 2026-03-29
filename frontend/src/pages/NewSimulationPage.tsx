@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import api from '@/lib/api';
 
@@ -37,6 +37,7 @@ const inputBg = 'bg-[#0B1120] border border-white/[0.08]';
 
 export default function NewSimulationPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -61,8 +62,16 @@ export default function NewSimulationPage() {
   const [reactDepth, setReactDepth] = useState(2);
 
   useEffect(() => {
-    api.get('/projects/').then((r) => setProjects(Array.isArray(r.data) ? r.data : r.data.items || [])).catch(() => {});
-  }, []);
+    api.get('/projects/').then((r) => {
+      const items = Array.isArray(r.data) ? r.data : r.data.items || [];
+      setProjects(items);
+      // Pre-select project from URL query param
+      const preselect = searchParams.get('project');
+      if (preselect && items.some((p: Project) => p.id === preselect)) {
+        setProjectId(preselect);
+      }
+    }).catch(() => {});
+  }, [searchParams]);
 
   useEffect(() => {
     if (step === 2 && packs.length === 0) {

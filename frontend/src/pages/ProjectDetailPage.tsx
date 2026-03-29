@@ -356,7 +356,7 @@ export default function ProjectDetailPage() {
                       </button>
                     )}
                     <button
-                      onClick={() => navigate('/app/simulations/new')}
+                      onClick={() => navigate(`/app/simulations/new?project=${id}`)}
                       className="relative px-6 py-2.5 rounded-lg text-white font-medium text-sm overflow-hidden transition-all hover:scale-[1.02]"
                     >
                       <div className="absolute inset-0 bg-gradient-to-r from-[#5B5FEE] to-[#00D4FF]" />
