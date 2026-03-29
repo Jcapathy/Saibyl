@@ -26,14 +26,16 @@ export default function SimulationDetailPage() {
   const [runStatus, setRunStatus] = useState('');
   const [error, setError] = useState('');
   const [eventCount, setEventCount] = useState(0);
+  const [events, setEvents] = useState<Record<string, unknown>[]>([]);
 
   const loadSim = useCallback(() => {
     api.get(`/simulations/${id}`).then((r) => {
       setSim(r.data);
-      // Get event count
-      api.get(`/simulations/${id}/events`, { params: { limit: 1 } }).then((r2) => {
-        const data = r2.data;
-        setEventCount(Array.isArray(data) ? data.length : 0);
+      // Load latest events
+      api.get(`/simulations/${id}/events`, { params: { limit: 50, offset: 0 } }).then((r2) => {
+        const data = Array.isArray(r2.data) ? r2.data : [];
+        setEvents(data);
+        setEventCount(data.length);
       }).catch(() => {});
     }).catch(() => {}).finally(() => setLoading(false));
   }, [id]);
@@ -205,6 +207,42 @@ export default function SimulationDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Live Event Feed */}
+      {events.length > 0 && (
+        <div className="glass rounded-2xl p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-[11px] font-mono text-saibyl-muted uppercase tracking-widest">
+              Live Feed — {events.length} events
+            </h2>
+            {(isRunning || running) && (
+              <span className="flex items-center gap-1.5 text-[11px] text-saibyl-positive">
+                <span className="w-1.5 h-1.5 rounded-full bg-saibyl-positive animate-pulse" />
+                Updating...
+              </span>
+            )}
+          </div>
+          <div className="space-y-2 max-h-[500px] overflow-y-auto">
+            {events.slice().reverse().map((evt, i) => {
+              const content = String(evt.content || '');
+              const sentiment = Number((evt.metadata as Record<string, unknown>)?.sentiment || 0);
+              const sentColor = sentiment > 0.2 ? 'border-saibyl-positive/30' : sentiment < -0.2 ? 'border-saibyl-negative/30' : 'border-white/[0.04]';
+              return (
+                <div key={i} className={`p-3 rounded-lg bg-white/[0.02] border-l-2 ${sentColor}`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-saibyl-indigo/15 text-saibyl-indigo">{String(evt.platform)}</span>
+                    <span className="text-[10px] font-mono text-saibyl-muted">R{String(evt.round_number)}</span>
+                    <span className="text-[11px] text-saibyl-muted ml-auto">
+                      sentiment: <span className={sentiment > 0.2 ? 'text-saibyl-positive' : sentiment < -0.2 ? 'text-saibyl-negative' : 'text-saibyl-muted'}>{sentiment.toFixed(2)}</span>
+                    </span>
+                  </div>
+                  <p className="text-[13px] text-saibyl-platinum leading-relaxed">{content}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Details */}
       <div className="glass rounded-2xl p-6">
