@@ -25,7 +25,7 @@ class UpdateWebhookRequest(BaseModel):
     custom_headers: dict | None = None
 
 
-@router.get("/")
+@router.get("")
 async def list_webhooks(auth: dict = Depends(get_current_org)):
     """List org's webhooks."""
     admin = get_supabase_admin()
@@ -38,7 +38,7 @@ async def list_webhooks(auth: dict = Depends(get_current_org)):
     return result.data
 
 
-@router.post("/")
+@router.post("")
 async def create_webhook(body: CreateWebhookRequest, auth: dict = Depends(get_current_org)):
     """Create a new webhook endpoint."""
     validate_external_url(body.url)

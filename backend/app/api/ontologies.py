@@ -52,7 +52,7 @@ async def generate_ontology(body: GenerateOntologyBody, auth: dict = Depends(get
     return {"task_id": task.id}
 
 
-@router.get("/")
+@router.get("")
 async def list_ontologies(project_id: str = Query(...), auth: dict = Depends(get_current_org)):
     """List ontologies for a project."""
     log.info("list_ontologies", project_id=project_id, org_id=auth["org_id"])

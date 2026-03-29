@@ -36,7 +36,7 @@ class InviteMemberBody(BaseModel):
 # Endpoints
 # ---------------------------------------------------------------------------
 
-@router.get("/")
+@router.get("")
 async def list_organizations(user: dict = Depends(get_current_user)):
     """List all organizations the current user belongs to."""
     log.info("list_organizations", user_id=user["id"])
@@ -50,7 +50,7 @@ async def list_organizations(user: dict = Depends(get_current_user)):
     return result.data
 
 
-@router.post("/")
+@router.post("")
 async def create_organization(body: CreateOrgBody, user: dict = Depends(get_current_user)):
     """Create a new organization and add the current user as owner."""
     log.info("create_organization", name=body.name, slug=body.slug, user_id=user["id"])

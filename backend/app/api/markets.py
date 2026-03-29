@@ -50,7 +50,7 @@ async def search(query: str, platform: str = "polymarket", limit: int = 20, auth
         raise HTTPException(400, str(e))
 
 
-@router.get("/")
+@router.get("")
 async def list_markets(auth: dict = Depends(get_current_org)):
     """List org's imported markets."""
     admin = get_supabase_admin()

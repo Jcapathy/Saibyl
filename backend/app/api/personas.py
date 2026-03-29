@@ -15,7 +15,7 @@ router = APIRouter(tags=["persona-packs"])
 # Endpoints
 # ---------------------------------------------------------------------------
 
-@router.get("/")
+@router.get("")
 async def list_packs(auth: dict = Depends(get_current_org)):
     """List all available persona packs."""
     log.info("list_persona_packs", org_id=auth["org_id"])

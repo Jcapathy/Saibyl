@@ -35,7 +35,7 @@ class UploadResponse(BaseModel):
     message: str
 
 
-@router.post("/", response_model=UploadResponse)
+@router.post("", response_model=UploadResponse)
 async def upload_asset(
     project_id: str,
     media_type: str,
@@ -113,7 +113,7 @@ async def upload_asset(
     )
 
 
-@router.get("/")
+@router.get("")
 async def list_assets(project_id: str, auth: dict = Depends(get_current_org)):
     """List all assets for a project."""
     admin = get_supabase_admin()

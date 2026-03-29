@@ -71,7 +71,7 @@ async def upload_document(
     return doc
 
 
-@router.get("/")
+@router.get("")
 async def list_documents(project_id: str = Query(...), auth: dict = Depends(get_current_org)):
     """List documents for a project."""
     log.info("list_documents", project_id=project_id, org_id=auth["org_id"])

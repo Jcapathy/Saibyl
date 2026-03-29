@@ -14,30 +14,12 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Follow 307 redirects for POST/PATCH/DELETE by retrying with the redirect URL
+// Handle 401 — clear token silently
 api.interceptors.response.use(
   (res) => res,
-  async (error) => {
-    const { config, response } = error;
-    if (response?.status === 307 && config && !config._retried) {
-      const location = response.headers?.location;
-      if (location) {
-        config._retried = true;
-        // Use the redirect location — could be relative or absolute
-        if (location.startsWith('http')) {
-          config.url = location;
-          config.baseURL = '';
-        } else {
-          config.url = location;
-          config.baseURL = '';
-          // Prepend origin for absolute path
-          config.url = window.location.origin + location;
-        }
-        return api.request(config);
-      }
-    }
-    if (response?.status === 401) {
-      const hadToken = config?.headers?.Authorization;
+  (error) => {
+    if (error.response?.status === 401) {
+      const hadToken = error.config?.headers?.Authorization;
       if (hadToken) {
         localStorage.removeItem('saibyl_access_token');
       }

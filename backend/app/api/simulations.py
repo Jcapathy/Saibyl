@@ -60,7 +60,7 @@ class PersonaInterviewBody(BaseModel):
 # Endpoints
 # ---------------------------------------------------------------------------
 
-@router.post("/")
+@router.post("")
 async def create_simulation(body: CreateSimulationBody, auth: dict = Depends(get_current_org)):
     """Create a new simulation."""
     log.info("create_simulation", name=body.name, project_id=body.project_id, org_id=auth["org_id"])
@@ -100,7 +100,7 @@ async def create_simulation(body: CreateSimulationBody, auth: dict = Depends(get
     return result.data[0]
 
 
-@router.get("/")
+@router.get("")
 async def list_simulations(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),

@@ -32,7 +32,7 @@ class UpdateProjectBody(BaseModel):
 # Endpoints
 # ---------------------------------------------------------------------------
 
-@router.get("/")
+@router.get("")
 async def list_projects(auth: dict = Depends(get_current_org)):
     """List all projects for the current organization."""
     log.info("list_projects", org_id=auth["org_id"])
@@ -48,7 +48,7 @@ async def list_projects(auth: dict = Depends(get_current_org)):
     return result.data
 
 
-@router.post("/")
+@router.post("")
 async def create_project(body: CreateProjectBody, auth: dict = Depends(get_current_org)):
     """Create a new project."""
     log.info("create_project", name=body.name, org_id=auth["org_id"])

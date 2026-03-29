@@ -15,7 +15,7 @@ router = APIRouter(tags=["platforms"])
 # Endpoints
 # ---------------------------------------------------------------------------
 
-@router.get("/")
+@router.get("")
 async def list_platforms(auth: dict = Depends(get_current_org)):
     """List all available simulation platforms."""
     log.info("list_platforms", org_id=auth["org_id"])

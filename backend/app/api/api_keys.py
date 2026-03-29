@@ -31,7 +31,7 @@ def _generate_api_key(environment: str = "live") -> tuple[str, str, str]:
     return full_key, key_hash, key_prefix
 
 
-@router.get("/")
+@router.get("")
 async def list_keys(auth: dict = Depends(get_current_org)):
     """List org's API keys (prefix only, never full key)."""
     admin = get_supabase_admin()
@@ -41,7 +41,7 @@ async def list_keys(auth: dict = Depends(get_current_org)):
     return keys.data
 
 
-@router.post("/")
+@router.post("")
 async def create_key(body: CreateKeyRequest, auth: dict = Depends(get_current_org)):
     """Create a new API key. Returns the full key ONCE."""
     if auth["role"] not in ("owner", "admin"):
