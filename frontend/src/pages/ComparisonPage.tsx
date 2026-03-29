@@ -34,10 +34,33 @@ export default function ComparisonPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get(`/simulations/${id}/comparison`)
-      .then((res) => setData(res.data))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    const fetchComparison = async () => {
+      try {
+        const [simRes, reportRes] = await Promise.all([
+          api.get(`/simulations/${id}`),
+          api.get(`/reports/by-simulation/${id}`),
+        ]);
+        const sim = simRes.data;
+        const report = reportRes.data;
+
+        // Build comparison data from simulation and report
+        const comparison: ComparisonData = {
+          simulation_id: sim.id,
+          simulation_name: sim.name,
+          variant_a: report.variant_a || { variant: 'A', total_events: 0, avg_sentiment: 0, engagement_rate: 0, viral_posts: 0, top_platform: 'N/A' },
+          variant_b: report.variant_b || { variant: 'B', total_events: 0, avg_sentiment: 0, engagement_rate: 0, viral_posts: 0, top_platform: 'N/A' },
+          metrics: report.metrics || [],
+          overall_winner: report.overall_winner || 'tie',
+          winner_explanation: report.winner_explanation || '',
+        };
+        setData(comparison);
+      } catch {
+        // handle error
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchComparison();
   }, [id]);
 
   if (loading) return <div className="p-8 text-center text-saibyl-muted">Loading comparison...</div>;

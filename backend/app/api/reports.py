@@ -125,7 +125,7 @@ async def list_report_sections(id: str, auth: dict = Depends(get_current_org)):
         admin.table("report_sections")
         .select("*")
         .eq("report_id", id)
-        .order("position")
+        .order("section_index")
         .execute()
     )
     return result.data

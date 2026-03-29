@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import api from '@/lib/api';
+import StatusBadge from '@/components/StatusBadge';
 
 interface Simulation {
   id: string;
@@ -8,23 +10,14 @@ interface Simulation {
   status: string;
   prediction_goal: string;
   platforms: string[];
-  rounds: number;
-  ab_enabled: boolean;
+  max_rounds: number;
+  is_ab_test: boolean;
   agent_count: number;
   event_count: number;
   created_at: string;
   project_id: string;
   project_name?: string;
 }
-
-const statusColor: Record<string, string> = {
-  draft: 'bg-gray-200 text-saibyl-platinum',
-  preparing: 'bg-yellow-100 text-yellow-800',
-  ready: 'bg-blue-100 text-blue-800',
-  running: 'bg-green-100 text-green-800',
-  completed: 'bg-emerald-100 text-emerald-800',
-  failed: 'bg-red-100 text-red-800',
-};
 
 export default function SimulationDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -52,39 +45,52 @@ export default function SimulationDetailPage() {
     }
   };
 
-  if (loading) return <div className="p-8 text-center text-saibyl-muted">Loading simulation...</div>;
-  if (!sim) return <div className="p-8 text-center text-red-500">Simulation not found.</div>;
+  if (loading) {
+    return (
+      <div className="p-6 max-w-4xl mx-auto space-y-4">
+        <div className="h-8 w-64 rounded-xl bg-saibyl-deep animate-pulse" />
+        <div className="grid grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => <div key={i} className="h-24 rounded-2xl bg-saibyl-deep animate-pulse" />)}
+        </div>
+      </div>
+    );
+  }
+  if (!sim) return <div className="p-8 text-center text-saibyl-negative">Simulation not found.</div>;
+
+  const stats = [
+    { value: sim.agent_count ?? 0, label: 'Agents',    color: '#5B5FEE' },
+    { value: sim.event_count ?? 0, label: 'Events',    color: '#00D4FF' },
+    { value: sim.max_rounds,       label: 'Rounds',    color: '#A78BFA' },
+    { value: sim.platforms?.length ?? 0, label: 'Platforms', color: '#10B981' },
+  ];
 
   return (
-    <div className="p-6 max-w-4xl mx-auto bg-saibyl-void">
+    <div className="p-6 max-w-4xl mx-auto">
+      {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-saibyl-platinum">{sim.name}</h1>
-          <p className="text-saibyl-muted mt-1">{sim.prediction_goal}</p>
+          {sim.prediction_goal && (
+            <p className="text-saibyl-muted mt-1 text-sm max-w-lg">{sim.prediction_goal}</p>
+          )}
         </div>
-        <span className={`text-sm px-3 py-1 rounded-full ${statusColor[sim.status] || 'bg-saibyl-deep'}`}>
-          {sim.status}
-        </span>
+        <StatusBadge status={sim.status} />
       </div>
 
-      {/* Info Grid */}
+      {/* Stat Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-        <div className="bg-saibyl-deep rounded-2xl p-4 text-center border border-saibyl-border">
-          <div className="text-2xl font-bold text-saibyl-indigo">{sim.agent_count ?? 0}</div>
-          <div className="text-xs text-saibyl-muted mt-1">Agents</div>
-        </div>
-        <div className="bg-saibyl-deep rounded-2xl p-4 text-center border border-saibyl-border">
-          <div className="text-2xl font-bold text-saibyl-indigo">{sim.event_count ?? 0}</div>
-          <div className="text-xs text-saibyl-muted mt-1">Events</div>
-        </div>
-        <div className="bg-saibyl-deep rounded-2xl p-4 text-center border border-saibyl-border">
-          <div className="text-2xl font-bold text-saibyl-indigo">{sim.rounds}</div>
-          <div className="text-xs text-saibyl-muted mt-1">Rounds</div>
-        </div>
-        <div className="bg-saibyl-deep rounded-2xl p-4 text-center border border-saibyl-border">
-          <div className="text-2xl font-bold text-saibyl-indigo">{sim.platforms?.length ?? 0}</div>
-          <div className="text-xs text-saibyl-muted mt-1">Platforms</div>
-        </div>
+        {stats.map((s, i) => (
+          <motion.div
+            key={s.label}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: i * 0.06 }}
+            className="bg-saibyl-deep rounded-2xl p-4 text-center border border-white/[0.05] hover:border-white/[0.1] transition-colors"
+          >
+            <div className="text-2xl font-bold" style={{ color: s.color }}>{s.value}</div>
+            <div className="text-xs text-saibyl-muted mt-1">{s.label}</div>
+          </motion.div>
+        ))}
       </div>
 
       {/* Actions */}
@@ -93,7 +99,7 @@ export default function SimulationDetailPage() {
           <button
             onClick={() => doAction('prepare')}
             disabled={!!actionLoading}
-            className="bg-yellow-500 text-white px-4 py-2 rounded-lg hover:bg-yellow-600 disabled:opacity-50 transition"
+            className="bg-saibyl-indigo/20 border border-saibyl-indigo/30 text-saibyl-indigo px-4 py-2 rounded-xl text-sm font-medium hover:bg-saibyl-indigo/30 disabled:opacity-50 transition"
           >
             {actionLoading === 'prepare' ? 'Preparing...' : 'Prepare'}
           </button>
@@ -102,9 +108,9 @@ export default function SimulationDetailPage() {
           <button
             onClick={() => doAction('start')}
             disabled={!!actionLoading}
-            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 transition"
+            className="bg-saibyl-positive/20 border border-saibyl-positive/30 text-saibyl-positive px-4 py-2 rounded-xl text-sm font-medium hover:bg-saibyl-positive/30 disabled:opacity-50 transition"
           >
-            {actionLoading === 'start' ? 'Starting...' : 'Start'}
+            {actionLoading === 'start' ? 'Starting...' : '▶ Start'}
           </button>
         )}
         {sim.status === 'running' && (
@@ -112,30 +118,30 @@ export default function SimulationDetailPage() {
             <button
               onClick={() => doAction('stop')}
               disabled={!!actionLoading}
-              className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50 transition"
+              className="bg-saibyl-negative/20 border border-saibyl-negative/30 text-saibyl-negative px-4 py-2 rounded-xl text-sm font-medium hover:bg-saibyl-negative/30 disabled:opacity-50 transition"
             >
-              {actionLoading === 'stop' ? 'Stopping...' : 'Stop'}
+              {actionLoading === 'stop' ? 'Stopping...' : '■ Stop'}
             </button>
             <Link
               to={`/app/simulations/${id}/run`}
-              className="bg-saibyl-indigo text-white px-4 py-2 rounded-lg hover:bg-[#4B4FDE] transition"
+              className="bg-saibyl-indigo text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#4B4FDE] hover:shadow-[0_0_20px_rgba(91,95,238,0.3)] transition-all"
             >
-              Live View
+              Live View →
             </Link>
           </>
         )}
         {sim.status === 'completed' && (
           <Link
             to={`/app/simulations/${id}/report`}
-            className="bg-saibyl-indigo text-white px-4 py-2 rounded-lg hover:bg-[#4B4FDE] transition"
+            className="bg-saibyl-indigo text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#4B4FDE] hover:shadow-[0_0_20px_rgba(91,95,238,0.3)] transition-all"
           >
-            View Report
+            View Report →
           </Link>
         )}
-        {sim.ab_enabled && sim.status === 'completed' && (
+        {sim.is_ab_test && sim.status === 'completed' && (
           <Link
             to={`/app/simulations/${id}/compare`}
-            className="border border-saibyl-border-active text-saibyl-indigo px-4 py-2 rounded-lg hover:bg-saibyl-elevated transition"
+            className="border border-saibyl-indigo/30 text-saibyl-indigo px-4 py-2 rounded-xl text-sm font-medium hover:bg-saibyl-elevated transition"
           >
             A/B Comparison
           </Link>
@@ -143,12 +149,27 @@ export default function SimulationDetailPage() {
       </div>
 
       {/* Details */}
-      <div className="bg-saibyl-deep rounded-2xl p-6 border border-saibyl-border">
-        <h2 className="text-lg font-semibold text-saibyl-platinum mb-3">Details</h2>
-        <dl className="text-sm space-y-2">
-          <div className="flex"><dt className="w-32 text-saibyl-muted">Created:</dt><dd className="text-saibyl-platinum">{new Date(sim.created_at).toLocaleString()}</dd></div>
-          <div className="flex"><dt className="w-32 text-saibyl-muted">Platforms:</dt><dd className="text-saibyl-platinum">{sim.platforms?.join(', ') || 'N/A'}</dd></div>
-          <div className="flex"><dt className="w-32 text-saibyl-muted">A/B Testing:</dt><dd className="text-saibyl-platinum">{sim.ab_enabled ? 'Enabled' : 'Disabled'}</dd></div>
+      <div className="bg-saibyl-deep rounded-2xl p-6 border border-white/[0.05]">
+        <h2 className="text-[11px] font-semibold text-saibyl-muted uppercase tracking-widest mb-4">Details</h2>
+        <dl className="space-y-3">
+          <div className="flex">
+            <dt className="w-32 text-saibyl-muted text-[12px]">Created</dt>
+            <dd className="text-saibyl-platinum font-mono text-[12px]">{new Date(sim.created_at).toLocaleString()}</dd>
+          </div>
+          <div className="flex items-start">
+            <dt className="w-32 text-saibyl-muted text-[12px] pt-0.5">Platforms</dt>
+            <dd className="flex flex-wrap gap-1.5">
+              {sim.platforms?.length ? sim.platforms.map((p) => (
+                <span key={p} className="px-2 py-0.5 rounded-md bg-saibyl-indigo/10 text-saibyl-indigo border border-saibyl-indigo/15 font-mono text-[10px]">{p}</span>
+              )) : <span className="text-saibyl-muted text-[12px]">N/A</span>}
+            </dd>
+          </div>
+          <div className="flex">
+            <dt className="w-32 text-saibyl-muted text-[12px]">A/B Testing</dt>
+            <dd className={`text-[12px] font-medium ${sim.is_ab_test ? 'text-saibyl-positive' : 'text-saibyl-muted'}`}>
+              {sim.is_ab_test ? 'Enabled' : 'Disabled'}
+            </dd>
+          </div>
         </dl>
       </div>
     </div>

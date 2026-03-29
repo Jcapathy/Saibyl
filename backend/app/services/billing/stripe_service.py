@@ -40,6 +40,8 @@ class SubscriptionStatus(BaseModel):
     status: str
     simulations_used: int
     simulations_limit: int
+    agents_used: int = 0
+    agents_limit: int = 0
     team_members: int
     team_members_limit: int
     current_period_end: str | None = None

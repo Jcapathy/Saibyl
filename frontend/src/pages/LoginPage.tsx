@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { useAuthStore } from '@/store/auth';
 
 export default function LoginPage() {
@@ -25,51 +26,83 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-saibyl-void">
-      <div className="w-full max-w-md bg-saibyl-deep rounded-2xl p-8 border border-saibyl-border">
-        <h1 className="text-2xl font-bold text-saibyl-platinum mb-6 text-center">Sign in to Saibyl</h1>
-
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 text-red-700 rounded text-sm">{error}</div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-saibyl-platinum mb-1">Email</label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-saibyl-surface border border-saibyl-border rounded-lg px-3 py-2 text-saibyl-platinum placeholder-saibyl-muted focus:outline-none focus:ring-2 focus:ring-saibyl-indigo"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-saibyl-platinum mb-1">Password</label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-saibyl-surface border border-saibyl-border rounded-lg px-3 py-2 text-saibyl-platinum placeholder-saibyl-muted focus:outline-none focus:ring-2 focus:ring-saibyl-indigo"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-saibyl-indigo text-white py-2 rounded-lg hover:bg-[#4B4FDE] disabled:opacity-50 transition"
-          >
-            {loading ? 'Signing in...' : 'Sign In'}
-          </button>
-        </form>
-
-        <p className="mt-4 text-center text-sm text-saibyl-muted">
-          Don't have an account?{' '}
-          <Link to="/signup" className="text-saibyl-indigo hover:underline">
-            Sign up
-          </Link>
-        </p>
+    <div className="min-h-screen flex items-center justify-center bg-saibyl-void relative overflow-hidden">
+      {/* Ambient background orbs */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-[-30%] left-[-15%] w-[60%] h-[60%] rounded-full bg-[radial-gradient(ellipse,rgba(91,95,238,0.1)_0%,transparent_65%)] animate-breathe" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-[radial-gradient(ellipse,rgba(0,212,255,0.06)_0%,transparent_65%)] animate-breathe" style={{ animationDelay: '-4s' }} />
+        <div className="absolute inset-0 bg-grid opacity-50" />
       </div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 24, scale: 0.97 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.45, ease: [0.25, 0.46, 0.45, 0.94] }}
+        className="relative w-full max-w-md z-10"
+      >
+        {/* Logo */}
+        <div className="flex items-center justify-center gap-3 mb-8">
+          <img src="/logo-mark.svg" alt="" className="w-9 h-9 drop-shadow-[0_0_20px_rgba(91,95,238,0.4)]" />
+          <span className="font-display font-extrabold text-[22px] text-gradient" style={{ letterSpacing: '-0.025em' }}>SAIBYL</span>
+        </div>
+
+        {/* Card */}
+        <div className="glass rounded-2xl p-8 border border-white/[0.07] shadow-[0_0_60px_rgba(0,0,0,0.4)]">
+          <h1 className="text-xl font-bold text-saibyl-platinum mb-1 text-center">Welcome back</h1>
+          <p className="text-sm text-saibyl-muted text-center mb-7">Sign in to your account</p>
+
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-5 px-4 py-3 rounded-xl bg-saibyl-negative/10 border border-saibyl-negative/20 text-saibyl-negative text-sm"
+            >
+              {error}
+            </motion.div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-1.5">Email</label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@company.com"
+                className="w-full bg-white/[0.04] border border-white/[0.07] rounded-xl px-4 py-2.5 text-saibyl-platinum placeholder-saibyl-muted/40 focus:outline-none focus:ring-2 focus:ring-saibyl-indigo/50 focus:border-saibyl-indigo/40 transition text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-1.5">Password</label>
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full bg-white/[0.04] border border-white/[0.07] rounded-xl px-4 py-2.5 text-saibyl-platinum placeholder-saibyl-muted/40 focus:outline-none focus:ring-2 focus:ring-saibyl-indigo/50 focus:border-saibyl-indigo/40 transition text-sm"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="relative w-full py-2.5 rounded-xl text-white font-semibold text-sm overflow-hidden transition-all hover:scale-[1.01] disabled:opacity-60 disabled:scale-100 mt-2"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-[#5B5FEE] to-[#00D4FF]" />
+              <div className="absolute inset-0 animate-glow-pulse rounded-xl" />
+              <span className="relative">{loading ? 'Signing in...' : 'Sign In'}</span>
+            </button>
+          </form>
+
+          <p className="mt-5 text-center text-sm text-saibyl-muted">
+            Don't have an account?{' '}
+            <Link to="/signup" className="text-saibyl-indigo hover:text-saibyl-cyan transition-colors font-medium">
+              Sign up
+            </Link>
+          </p>
+        </div>
+      </motion.div>
     </div>
   );
 }

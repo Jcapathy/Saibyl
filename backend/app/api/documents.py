@@ -45,6 +45,9 @@ async def upload_document(
     storage_path = f"{auth['org_id']}/{project_id}/{file.filename}"
     admin.storage.from_("project-media").upload(storage_path, file_bytes)
 
+    # Derive file_type from extension (documents table requires file_type NOT NULL)
+    ext = (file.filename or "").rsplit(".", 1)[-1].lower() if file.filename else "txt"
+
     # Create document record
     doc = (
         admin.table("documents")
@@ -52,11 +55,10 @@ async def upload_document(
             "project_id": project_id,
             "organization_id": auth["org_id"],
             "filename": file.filename,
+            "file_type": ext,
             "storage_path": storage_path,
-            "content_type": file.content_type,
-            "size_bytes": len(file_bytes),
-            "status": "pending",
-            "uploaded_by": auth["user"]["id"],
+            "file_size_bytes": len(file_bytes),
+            "processing_status": "pending",
             "created_at": datetime.now(UTC).isoformat(),
         })
         .execute()

@@ -25,7 +25,7 @@ interface AuthState {
   loadSession: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   org: null,
   role: null,
@@ -34,27 +34,31 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   login: async (email, password) => {
     const { data } = await api.post('/auth/login', { email, password });
-    localStorage.setItem('saibyl_access_token', data.access_token);
-    set({ token: data.access_token });
-    // Load user info
-    const me = await api.get('/auth/me');
-    set({ user: me.data.user, org: me.data.organization, role: me.data.role, isLoading: false });
+    const token = data.access_token;
+    localStorage.setItem('saibyl_access_token', token);
+    set({ token });
+
+    // Fetch user info with the new token
+    const me = await api.get('/auth/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    set({
+      user: me.data.user,
+      org: me.data.organization,
+      role: me.data.role,
+      isLoading: false,
+    });
   },
 
   signup: async (email, password, orgName) => {
     await api.post('/auth/signup', { email, password, org_name: orgName });
     // Auto-login after signup
-    const { data } = await api.post('/auth/login', { email, password });
-    localStorage.setItem('saibyl_access_token', data.access_token);
-    set({ token: data.access_token });
-    const me = await api.get('/auth/me');
-    set({ user: me.data.user, org: me.data.organization, role: me.data.role, isLoading: false });
+    await get().login(email, password);
   },
 
   logout: () => {
     localStorage.removeItem('saibyl_access_token');
-    set({ user: null, org: null, role: null, token: null });
-    window.location.href = '/login';
+    set({ user: null, org: null, role: null, token: null, isLoading: false });
   },
 
   loadSession: async () => {
@@ -64,9 +68,18 @@ export const useAuthStore = create<AuthState>((set) => ({
       return;
     }
     try {
-      const me = await api.get('/auth/me');
-      set({ user: me.data.user, org: me.data.organization, role: me.data.role, isLoading: false });
+      const me = await api.get('/auth/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      set({
+        user: me.data.user,
+        org: me.data.organization,
+        role: me.data.role,
+        token,
+        isLoading: false,
+      });
     } catch {
+      // Token invalid/expired — clear it silently
       localStorage.removeItem('saibyl_access_token');
       set({ user: null, org: null, role: null, token: null, isLoading: false });
     }

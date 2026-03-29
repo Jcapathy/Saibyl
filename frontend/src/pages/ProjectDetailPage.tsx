@@ -16,6 +16,7 @@ interface Document {
 }
 
 interface OntologyData {
+  id: string;
   entities: { name: string; type: string }[];
   relationships: { source: string; target: string; label: string }[];
   status: string;
@@ -34,12 +35,16 @@ export default function ProjectDetailPage() {
 
   useEffect(() => {
     api.get(`/projects/${id}`).then((res) => setProject(res.data)).catch(() => {});
-    api.get(`/projects/${id}/documents`).then((res) => setDocuments(res.data.items || res.data)).catch(() => {});
+    api.get('/documents/', { params: { project_id: id } }).then((res) => setDocuments(res.data.items || res.data)).catch(() => {});
   }, [id]);
 
   useEffect(() => {
     if (tab === 'ontology' && !ontology) {
-      api.get(`/projects/${id}/ontology`).then((res) => setOntology(res.data)).catch(() => {});
+      api.get('/ontologies/', { params: { project_id: id } }).then((res) => {
+        const items = res.data.items || res.data;
+        const ont = Array.isArray(items) ? items[0] || null : items;
+        setOntology(ont);
+      }).catch(() => {});
     }
   }, [tab, id, ontology]);
 
@@ -52,11 +57,11 @@ export default function ProjectDetailPage() {
         const form = new FormData();
         form.append('file', file);
         form.append('project_id', id!);
-        await api.post('/documents/upload', form, {
+        await api.post('/uploads/', form, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
       }
-      const res = await api.get(`/projects/${id}/documents`);
+      const res = await api.get('/documents/', { params: { project_id: id } });
       setDocuments(res.data.items || res.data);
     } catch {
       // handle error
@@ -67,8 +72,9 @@ export default function ProjectDetailPage() {
   };
 
   const approveOntology = async () => {
+    if (!ontology?.id) return;
     try {
-      await api.post(`/projects/${id}/ontology/approve`);
+      await api.post(`/ontologies/${ontology.id}/approve`);
       setOntology((prev) => (prev ? { ...prev, status: 'approved' } : prev));
     } catch {
       // handle error

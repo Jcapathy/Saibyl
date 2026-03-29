@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from app.core.auth import get_current_org
 from app.core.database import get_supabase_admin
+from app.core.security import validate_external_url
 from app.services.markets.encryption import encrypt_key
 from app.services.markets.market_importer import import_from_url, refresh_market, search_markets
 
@@ -31,6 +32,7 @@ class SaveKeyRequest(BaseModel):
 @router.post("/import")
 async def import_market(body: ImportRequest, auth: dict = Depends(get_current_org)):
     """Import a market from URL (auto-detects Kalshi/Polymarket)."""
+    validate_external_url(body.url)
     try:
         result = await import_from_url(body.url, auth["org_id"])
         return result

@@ -14,7 +14,7 @@ const proofNames = ['Meridian Capital', 'Apex Strategies', 'NovaBridge AI', 'Pol
 const steps = [
   { n: '01', t: 'Upload source material', d: 'PDFs, videos, images, news articles — any content about the topic you want to predict.' },
   { n: '02', t: 'Configure the swarm', d: 'Choose platforms, persona packs, and agent count. Describe your prediction goal in plain language.' },
-  { n: '03', t: 'Get predictive intelligence', d: 'Watch agents simulate in real time. Receive a full ReACT-powered report with evidence chains.' },
+  { n: '03', t: 'Get predictive intelligence', d: 'Watch thousands of agents debate, react, and form consensus. Receive a structured report with full evidence chains, probability estimates, and interactive Q&A.' },
 ];
 
 const features = [
@@ -164,7 +164,7 @@ export default function LandingPage() {
           </motion.h1>
 
           <motion.p {...stagger(3)} className="text-[16px] sm:text-[17px] text-saibyl-muted max-w-xl mx-auto leading-[1.75] mb-12">
-            Deploy swarms of AI personas to simulate social media reactions and predict outcomes — before the world catches up.
+            Run thousands of synthetic AI personas across 8 social platforms. Know exactly how the internet reacts — before you publish a word.
           </motion.p>
 
           <motion.div {...stagger(4)} className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -174,7 +174,7 @@ export default function LandingPage() {
               <div className="absolute inset-0 animate-glow-pulse rounded-xl" />
               <span className="relative flex items-center gap-2">Request early access<svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg></span>
             </Link>
-            <Link to="/login" className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-4 rounded-xl text-saibyl-platinum font-medium text-[15px] glass glass-hover transition-all">Watch demo</Link>
+            <a href="#how" className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-4 rounded-xl text-saibyl-platinum font-medium text-[15px] glass glass-hover transition-all">See how it works →</a>
           </motion.div>
         </div>
 
@@ -189,7 +189,7 @@ export default function LandingPage() {
       {/* ═══ SOCIAL PROOF ═══ */}
       <section className="py-14 px-6">
         <motion.div {...fadeUp} className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-10">
-          <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-saibyl-muted/50 shrink-0">Trusted by teams building the future</span>
+          <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-saibyl-muted/50 shrink-0">Used by early access teams across research &amp; strategy</span>
           <div className="flex flex-wrap items-center justify-center gap-8">
             {proofNames.map((n) => (<span key={n} className="text-[14px] font-medium text-saibyl-muted/30 tracking-wide">{n}</span>))}
           </div>
@@ -322,7 +322,7 @@ export default function LandingPage() {
                   ))}
                 </ul>
                 <Link to="/signup" className={`block text-center py-3 rounded-xl font-medium text-[14px] transition-all ${p.pop ? 'text-white hover:shadow-[0_0_30px_rgba(91,95,238,0.3)] hover:scale-[1.02]' : 'glass glass-hover text-saibyl-platinum'}`} style={p.pop ? { background: 'var(--grad-arc)' } : undefined}>
-                  Get started
+                  {p.pop ? 'Start free trial' : 'Get started'}
                 </Link>
               </motion.div>
             ))}
@@ -353,7 +353,7 @@ export default function LandingPage() {
       <footer className="border-t border-white/[0.04] py-10 px-6">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <img src="/logo-primary.svg" alt="Saibyl" className="h-5 opacity-50" />
-          <p className="text-[12px] text-saibyl-muted/50">&copy; 2024–2026 Saido Labs LLC</p>
+          <p className="text-[12px] text-saibyl-muted/50">&copy; 2026 Saido Labs LLC</p>
           <div className="flex gap-5"><Link to="/login" className="text-[12px] text-saibyl-muted/50 hover:text-saibyl-platinum transition-colors">Sign in</Link><Link to="/signup" className="text-[12px] text-saibyl-muted/50 hover:text-saibyl-platinum transition-colors">Get access</Link></div>
         </div>
       </footer>

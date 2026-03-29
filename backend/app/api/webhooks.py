@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from app.core.auth import get_current_org
 from app.core.database import get_supabase_admin
+from app.core.security import validate_external_url
 
 router = APIRouter(tags=["webhooks"])
 
@@ -40,6 +41,7 @@ async def list_webhooks(auth: dict = Depends(get_current_org)):
 @router.post("/")
 async def create_webhook(body: CreateWebhookRequest, auth: dict = Depends(get_current_org)):
     """Create a new webhook endpoint."""
+    validate_external_url(body.url)
     admin = get_supabase_admin()
     wh_secret = secrets.token_hex(32)
 
@@ -66,6 +68,8 @@ async def update_webhook(
     updates = body.model_dump(exclude_none=True)
     if not updates:
         raise HTTPException(400, "Nothing to update")
+    if body.url is not None:
+        validate_external_url(body.url)
 
     result = admin.table("webhooks").update(updates).eq(
         "id", webhook_id

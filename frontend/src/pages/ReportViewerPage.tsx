@@ -50,9 +50,37 @@ export default function ReportViewerPage() {
     }
   };
 
-  const exportReport = (format: string) => {
-    if (!report) return;
-    window.open(`${api.defaults.baseURL}/reports/${report.id}/export?format=${format}`, '_blank');
+  const [exporting, setExporting] = useState(false);
+
+  const exportReport = async (format: string) => {
+    if (!report || exporting) return;
+    setExporting(true);
+    try {
+      const { data } = await api.post(`/reports/${report.id}/export`, { format });
+      // The backend returns an export task; poll for the download URL
+      if (data.task_id) {
+        const poll = async () => {
+          const { data: task } = await api.get(`/export-tasks/${data.task_id}`);
+          if (task.status === 'completed' && task.download_url) {
+            window.open(task.download_url, '_blank');
+          } else if (task.status === 'failed') {
+            // export failed silently
+          } else {
+            setTimeout(poll, 1500);
+            return;
+          }
+          setExporting(false);
+        };
+        poll();
+      } else if (data.download_url) {
+        window.open(data.download_url, '_blank');
+        setExporting(false);
+      } else {
+        setExporting(false);
+      }
+    } catch {
+      setExporting(false);
+    }
   };
 
   if (loading) return <div className="p-8 text-center text-saibyl-muted">Loading report...</div>;

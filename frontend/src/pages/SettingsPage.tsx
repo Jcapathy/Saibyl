@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import api from '@/lib/api';
+import { useAuthStore } from '@/store/auth';
 
 type SettingsTab = 'billing' | 'team' | 'api-keys' | 'webhooks';
 
@@ -24,8 +25,8 @@ function BillingTab() {
   const handleUpgrade = async () => {
     setUpgrading(true);
     try {
-      const { data } = await api.post('/billing/checkout');
-      if (data.url) window.location.href = data.url;
+      const { data } = await api.post('/billing/checkout', { plan: 'pro' });
+      if (data.checkout_url) window.location.href = data.checkout_url;
     } catch {
       // handle error
     } finally {
@@ -46,14 +47,14 @@ function BillingTab() {
       </div>
       <div>
         <div className="text-sm text-saibyl-muted mb-1">Simulations: {billing.simulations_used} / {billing.simulations_limit}</div>
-        <div className="w-full bg-saibyl-surface rounded-full h-2.5">
-          <div className="bg-saibyl-indigo h-2.5 rounded-full" style={{ width: `${Math.min(simPct, 100)}%` }} />
+        <div className="w-full bg-saibyl-surface rounded-full h-2.5 overflow-hidden">
+          <div className="h-2.5 rounded-full" style={{ width: `${Math.min(simPct, 100)}%`, background: 'linear-gradient(90deg, #5B5FEE, #00D4FF)' }} />
         </div>
       </div>
       <div>
         <div className="text-sm text-saibyl-muted mb-1">Agents: {billing.agents_used} / {billing.agents_limit}</div>
-        <div className="w-full bg-saibyl-surface rounded-full h-2.5">
-          <div className="bg-saibyl-indigo h-2.5 rounded-full" style={{ width: `${Math.min(agentPct, 100)}%` }} />
+        <div className="w-full bg-saibyl-surface rounded-full h-2.5 overflow-hidden">
+          <div className="h-2.5 rounded-full" style={{ width: `${Math.min(agentPct, 100)}%`, background: 'linear-gradient(90deg, #A78BFA, #5B5FEE)' }} />
         </div>
       </div>
       <button
@@ -75,21 +76,24 @@ interface Member {
 }
 
 function TeamTab() {
+  const org = useAuthStore((s) => s.org);
   const [members, setMembers] = useState<Member[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviting, setInviting] = useState(false);
 
   useEffect(() => {
-    api.get('/team/members').then((res) => setMembers(res.data.items || res.data)).catch(() => {});
-  }, []);
+    if (!org?.id) return;
+    api.get(`/organizations/${org.id}/members`).then((res) => setMembers(res.data.items || res.data)).catch(() => {});
+  }, [org?.id]);
 
   const handleInvite = async (e: FormEvent) => {
     e.preventDefault();
+    if (!org?.id) return;
     setInviting(true);
     try {
-      await api.post('/team/invite', { email: inviteEmail });
+      await api.post(`/organizations/${org.id}/invite`, { email: inviteEmail, role: 'member' });
       setInviteEmail('');
-      const res = await api.get('/team/members');
+      const res = await api.get(`/organizations/${org.id}/members`);
       setMembers(res.data.items || res.data);
     } catch {
       // handle error
@@ -190,7 +194,7 @@ function ApiKeysTab() {
               <span className="text-sm font-medium text-saibyl-platinum">{k.name}</span>
               <span className="text-xs text-saibyl-muted ml-2">{k.prefix}...</span>
             </div>
-            <button onClick={() => handleRevoke(k.id)} className="text-xs text-red-600 hover:underline">
+            <button onClick={() => handleRevoke(k.id)} className="text-xs text-saibyl-negative hover:text-red-400 transition-colors">
               Revoke
             </button>
           </li>
@@ -343,7 +347,7 @@ function WebhooksTab() {
               <div className="text-sm font-medium text-saibyl-platinum">{h.url}</div>
               <div className="text-xs text-saibyl-muted mt-0.5">{h.events.join(', ')}</div>
             </div>
-            <button onClick={() => handleDelete(h.id)} className="text-xs text-red-600 hover:underline">
+            <button onClick={() => handleDelete(h.id)} className="text-xs text-saibyl-negative hover:text-red-400 transition-colors">
               Delete
             </button>
           </li>

@@ -26,11 +26,12 @@ async def signup(body: SignupRequest):
     supabase = get_supabase()
     admin = get_supabase_admin()
 
-    # Create user via Supabase Auth
+    # Create user via Supabase Admin Auth (auto-confirms email)
     try:
-        auth_result = supabase.auth.sign_up({
+        auth_result = admin.auth.admin.create_user({
             "email": body.email,
             "password": body.password,
+            "email_confirm": True,
         })
         user = auth_result.user
         if not user:
