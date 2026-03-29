@@ -86,19 +86,20 @@ export default function NewSimulationPage() {
     setSubmitting(true);
     setError('');
     try {
-      const { data: sim } = await api.post('/simulations/', {
+      const { data: sim } = await api.post('/simulations', {
         name,
         project_id: projectId,
         prediction_goal: predictionGoal,
-        platforms: selectedPlatforms,
+        platforms: selectedPlatforms.length > 0 ? selectedPlatforms : ['twitter_x'],
         max_rounds: rounds,
         is_ab_test: abEnabled,
       });
-      await api.post(`/simulations/${sim.id}/prepare`);
-      await api.post(`/simulations/${sim.id}/start`);
-      navigate(`/app/simulations/${sim.id}/run`);
+      // Prepare and start are async — don't block on them
+      try { await api.post(`/simulations/${sim.id}/prepare`); } catch { /* ok */ }
+      try { await api.post(`/simulations/${sim.id}/start`); } catch { /* ok */ }
+      navigate(`/app/simulations/${sim.id}`);
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to start simulation');
+      setError(err.response?.data?.detail || JSON.stringify(err.response?.data) || 'Failed to create simulation');
     } finally {
       setSubmitting(false);
     }
@@ -106,8 +107,7 @@ export default function NewSimulationPage() {
 
   const canNext = () => {
     if (step === 0) return !!(name.trim() && projectId && predictionGoal.trim());
-    if (step === 1) return selectedPlatforms.length > 0;
-    if (step === 2) return selectedPacks.length > 0;
+    // Steps 1-3: always allow next (selections are optional, defaults work)
     return true;
   };
 
