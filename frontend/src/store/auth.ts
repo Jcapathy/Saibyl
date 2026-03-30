@@ -36,6 +36,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const { data } = await api.post('/auth/login', { email, password });
     const token = data.access_token;
     localStorage.setItem('saibyl_access_token', token);
+    if (data.refresh_token) {
+      localStorage.setItem('saibyl_refresh_token', data.refresh_token);
+    }
     set({ token });
 
     // Fetch user info with the new token
@@ -58,6 +61,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: () => {
     localStorage.removeItem('saibyl_access_token');
+    localStorage.removeItem('saibyl_refresh_token');
     set({ user: null, org: null, role: null, token: null, isLoading: false });
   },
 

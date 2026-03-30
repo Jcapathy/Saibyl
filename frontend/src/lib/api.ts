@@ -14,14 +14,37 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle 401 — clear token silently
+// Handle 401 — try refresh, then redirect to login
+let isRefreshing = false;
 api.interceptors.response.use(
   (res) => res,
-  (error) => {
-    if (error.response?.status === 401) {
-      const hadToken = error.config?.headers?.Authorization;
-      if (hadToken) {
+  async (error) => {
+    if (error.response?.status === 401 && !error.config._retry) {
+      const refreshToken = localStorage.getItem('saibyl_refresh_token');
+      if (refreshToken && !isRefreshing) {
+        isRefreshing = true;
+        error.config._retry = true;
+        try {
+          const { data } = await axios.post(
+            `${api.defaults.baseURL}/auth/refresh`,
+            null,
+            { params: { refresh_token: refreshToken } },
+          );
+          localStorage.setItem('saibyl_access_token', data.access_token);
+          localStorage.setItem('saibyl_refresh_token', data.refresh_token);
+          error.config.headers.Authorization = `Bearer ${data.access_token}`;
+          return api(error.config);
+        } catch {
+          // Refresh failed — force login
+          localStorage.removeItem('saibyl_access_token');
+          localStorage.removeItem('saibyl_refresh_token');
+          window.location.href = '/login';
+        } finally {
+          isRefreshing = false;
+        }
+      } else if (!refreshToken) {
         localStorage.removeItem('saibyl_access_token');
+        window.location.href = '/login';
       }
     }
     return Promise.reject(error);
