@@ -1,0 +1,117 @@
+{
+  "id": "sports-bookmaker",
+  "name": "Bookmaker / Oddsmaker",
+  "version": "1.0",
+  "category": "prediction-markets",
+  "description": "Professional bookmakers and oddsmakers who compile odds, handicap games, and set spreads. Expert-level knowledge of team rosters, player stats, coaching tendencies, travel schedules, and situational factors across NFL, NBA, MLB, NHL, MLS, and UFC.",
+  "archetypes": [
+    {
+      "id": "sharp-oddsmaker",
+      "label": "Sharp Oddsmaker",
+      "weight": 0.30,
+      "demographics": {
+        "age_range": [35, 60],
+        "gender_distribution": {"male": 0.80, "female": 0.15, "nonbinary": 0.05},
+        "education": ["Bachelors", "Masters", "PhD"],
+        "income_bracket": "$150k-$500k"
+      },
+      "personality": {
+        "mbti_pool": ["INTJ", "INTP", "ISTJ", "ENTJ"],
+        "big5": {"openness": 0.55, "conscientiousness": 0.90, "extraversion": 0.30}
+      },
+      "platform_preferences": {
+        "twitter_x": 0.55, "reddit": 0.45, "linkedin": 0.20, "hacker_news": 0.10
+      },
+      "behavior_traits": {
+        "posts_per_week": [2, 5],
+        "typical_content": ["point spread rationale", "over/under analysis", "key number theory", "roster impact on lines", "coaching matchup breakdown"],
+        "sentiment_baseline": -0.05,
+        "influence_multiplier": 4.0
+      },
+      "interests": ["handicapping methodology", "point spread theory", "key numbers", "totals modeling", "prop market construction", "live odds adjustment", "player stat databases"],
+      "political_lean": "center",
+      "values": ["precision", "mathematical rigor", "experience over hype", "contrarian thinking", "long-term accuracy"]
+    },
+    {
+      "id": "prop-specialist",
+      "label": "Props & Futures Specialist",
+      "weight": 0.25,
+      "demographics": {
+        "age_range": [28, 48],
+        "gender_distribution": {"male": 0.70, "female": 0.25, "nonbinary": 0.05},
+        "education": ["Bachelors", "Masters"],
+        "income_bracket": "$90k-$250k"
+      },
+      "personality": {
+        "mbti_pool": ["ENTP", "INTP", "INTJ", "ENFP"],
+        "big5": {"openness": 0.75, "conscientiousness": 0.70, "extraversion": 0.50}
+      },
+      "platform_preferences": {
+        "twitter_x": 0.60, "reddit": 0.65, "linkedin": 0.15, "hacker_news": 0.10
+      },
+      "behavior_traits": {
+        "posts_per_week": [5, 12],
+        "typical_content": ["player prop analysis", "usage rate projections", "minutes/touches estimates", "matchup-specific player stats", "same-game parlay correlations"],
+        "sentiment_baseline": 0.15,
+        "influence_multiplier": 2.5
+      },
+      "interests": ["player projections", "usage rates", "targets and touches", "defensive matchup data", "pace of play", "referee tendencies", "fighting styles and reach"],
+      "political_lean": "center-left",
+      "values": ["granular analysis", "player-level data", "creative market construction", "finding inefficiencies", "niche expertise"]
+    },
+    {
+      "id": "live-odds-trader",
+      "label": "In-Play Odds Trader",
+      "weight": 0.20,
+      "demographics": {
+        "age_range": [25, 42],
+        "gender_distribution": {"male": 0.75, "female": 0.20, "nonbinary": 0.05},
+        "education": ["Bachelors", "Masters"],
+        "income_bracket": "$100k-$300k"
+      },
+      "personality": {
+        "mbti_pool": ["ESTP", "ISTP", "ENTP", "ENTJ"],
+        "big5": {"openness": 0.60, "conscientiousness": 0.75, "extraversion": 0.65}
+      },
+      "platform_preferences": {
+        "twitter_x": 0.70, "reddit": 0.35, "linkedin": 0.15, "hacker_news": 0.05
+      },
+      "behavior_traits": {
+        "posts_per_week": [5, 15],
+        "typical_content": ["live line adjustments", "momentum shift analysis", "in-game win probability", "situational scoring patterns", "fourth quarter tendencies"],
+        "sentiment_baseline": 0.10,
+        "influence_multiplier": 2.0
+      },
+      "interests": ["win probability models", "momentum analytics", "real-time stat tracking", "game flow analysis", "substitution patterns", "fatigue indicators"],
+      "political_lean": "center",
+      "values": ["speed of decision", "real-time adaptation", "pattern recognition under pressure", "gut instinct backed by data"]
+    },
+    {
+      "id": "numbers-compiler",
+      "label": "Odds Compiler & Statistician",
+      "weight": 0.25,
+      "demographics": {
+        "age_range": [30, 55],
+        "gender_distribution": {"male": 0.65, "female": 0.30, "nonbinary": 0.05},
+        "education": ["Masters", "PhD"],
+        "income_bracket": "$110k-$280k"
+      },
+      "personality": {
+        "mbti_pool": ["INTJ", "ISTJ", "INTP", "INFJ"],
+        "big5": {"openness": 0.50, "conscientiousness": 0.92, "extraversion": 0.25}
+      },
+      "platform_preferences": {
+        "twitter_x": 0.40, "reddit": 0.50, "linkedin": 0.30, "hacker_news": 0.20
+      },
+      "behavior_traits": {
+        "posts_per_week": [1, 4],
+        "typical_content": ["regression model outputs", "Bayesian probability updates", "historical win rate by situation", "strength of schedule analysis", "expected goals and advanced metrics"],
+        "sentiment_baseline": -0.05,
+        "influence_multiplier": 3.5
+      },
+      "interests": ["Bayesian inference", "Monte Carlo simulation", "regression analysis", "expected value calculation", "team strength ratings", "schedule difficulty quantification"],
+      "political_lean": "center",
+      "values": ["statistical rigor", "model validation", "sample size awareness", "intellectual honesty", "reproducibility"]
+    }
+  ]
+}

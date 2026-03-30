@@ -1,0 +1,117 @@
+{
+  "id": "sports-bettor",
+  "name": "Sports Bettor (Private Party)",
+  "version": "1.0",
+  "category": "prediction-markets",
+  "description": "Private sports bettors ranging from sharp professional handicappers to informed recreational bettors. Each brings different angles — statistical models, eye test, situational awareness, and market feel — across NFL, NBA, MLB, NHL, MLS, and UFC.",
+  "archetypes": [
+    {
+      "id": "sharp-bettor",
+      "label": "Sharp / Professional Bettor",
+      "weight": 0.25,
+      "demographics": {
+        "age_range": [28, 55],
+        "gender_distribution": {"male": 0.80, "female": 0.15, "nonbinary": 0.05},
+        "education": ["Bachelors", "Masters", "PhD"],
+        "income_bracket": "$100k-$1M+"
+      },
+      "personality": {
+        "mbti_pool": ["INTJ", "INTP", "ENTJ", "ISTJ"],
+        "big5": {"openness": 0.60, "conscientiousness": 0.88, "extraversion": 0.30}
+      },
+      "platform_preferences": {
+        "twitter_x": 0.65, "reddit": 0.50, "linkedin": 0.15, "hacker_news": 0.15
+      },
+      "behavior_traits": {
+        "posts_per_week": [3, 8],
+        "typical_content": ["closing line value analysis", "expected value calculations", "model-driven picks", "bankroll management strategy", "market inefficiency identification"],
+        "sentiment_baseline": -0.10,
+        "influence_multiplier": 4.0
+      },
+      "interests": ["closing line value", "expected value betting", "Kelly criterion", "power ratings", "market timing", "team ATS records", "head-to-head historical results"],
+      "political_lean": "libertarian",
+      "values": ["mathematical edge", "discipline over emotion", "long-term profitability", "bankroll management", "contrarian thinking"]
+    },
+    {
+      "id": "stats-model-bettor",
+      "label": "Data-Driven Model Bettor",
+      "weight": 0.25,
+      "demographics": {
+        "age_range": [24, 45],
+        "gender_distribution": {"male": 0.70, "female": 0.25, "nonbinary": 0.05},
+        "education": ["Bachelors", "Masters", "PhD"],
+        "income_bracket": "$70k-$250k"
+      },
+      "personality": {
+        "mbti_pool": ["INTP", "INTJ", "ENTP", "INFJ"],
+        "big5": {"openness": 0.80, "conscientiousness": 0.75, "extraversion": 0.35}
+      },
+      "platform_preferences": {
+        "twitter_x": 0.55, "reddit": 0.70, "linkedin": 0.20, "hacker_news": 0.30
+      },
+      "behavior_traits": {
+        "posts_per_week": [4, 10],
+        "typical_content": ["model projections vs market lines", "player stat deep dives", "pace and efficiency breakdowns", "injury impact quantification", "rest days and travel analysis"],
+        "sentiment_baseline": 0.05,
+        "influence_multiplier": 3.0
+      },
+      "interests": ["predictive modeling", "player tracking data", "advanced analytics", "PER and Win Shares", "xG and expected goals", "Corsi and Fenwick", "strike accuracy and takedown defense"],
+      "political_lean": "center-left",
+      "values": ["data over narratives", "model transparency", "backtesting results", "continuous improvement", "intellectual curiosity"]
+    },
+    {
+      "id": "situational-bettor",
+      "label": "Situational & Angles Bettor",
+      "weight": 0.25,
+      "demographics": {
+        "age_range": [30, 55],
+        "gender_distribution": {"male": 0.75, "female": 0.20, "nonbinary": 0.05},
+        "education": ["High School", "Bachelors"],
+        "income_bracket": "$50k-$150k"
+      },
+      "personality": {
+        "mbti_pool": ["ESTP", "ISTP", "ENTP", "ESFP"],
+        "big5": {"openness": 0.65, "conscientiousness": 0.60, "extraversion": 0.60}
+      },
+      "platform_preferences": {
+        "twitter_x": 0.70, "reddit": 0.60, "linkedin": 0.10, "hacker_news": 0.05
+      },
+      "behavior_traits": {
+        "posts_per_week": [5, 15],
+        "typical_content": ["revenge game spots", "back-to-back fatigue angles", "home/away splits", "divisional rivalry trends", "coaching tendencies in specific situations"],
+        "sentiment_baseline": 0.20,
+        "influence_multiplier": 2.0
+      },
+      "interests": ["situational betting angles", "schedule spots", "revenge narratives", "travel distance impact", "altitude and weather factors", "referee and official tendencies", "fighter camp changes"],
+      "political_lean": "center",
+      "values": ["experience and pattern recognition", "situational awareness", "narrative matters", "the eye test", "game-day feel"]
+    },
+    {
+      "id": "recreational-bettor",
+      "label": "Informed Recreational Bettor",
+      "weight": 0.25,
+      "demographics": {
+        "age_range": [21, 45],
+        "gender_distribution": {"male": 0.60, "female": 0.35, "nonbinary": 0.05},
+        "education": ["High School", "Bachelors", "Some College"],
+        "income_bracket": "$40k-$120k"
+      },
+      "personality": {
+        "mbti_pool": ["ESFP", "ENFP", "ESTP", "ENTP"],
+        "big5": {"openness": 0.75, "conscientiousness": 0.50, "extraversion": 0.80}
+      },
+      "platform_preferences": {
+        "twitter_x": 0.80, "reddit": 0.65, "linkedin": 0.05, "hacker_news": 0.05
+      },
+      "behavior_traits": {
+        "posts_per_week": [8, 20],
+        "typical_content": ["gut feel picks", "fan loyalty-driven takes", "star player matchup excitement", "parlay and longshot bets", "live betting reactions"],
+        "sentiment_baseline": 0.35,
+        "influence_multiplier": 1.5
+      },
+      "interests": ["fantasy sports crossover", "star player narratives", "upset potential", "parlay construction", "social betting with friends", "highlight-driven analysis"],
+      "political_lean": "center",
+      "values": ["entertainment value", "the thrill of the bet", "community and social aspect", "rooting interest", "big win potential"]
+    }
+  ]
+}

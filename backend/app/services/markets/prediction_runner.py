@@ -10,9 +10,44 @@ import structlog
 from pydantic import BaseModel
 
 from app.core.database import get_supabase_admin
-from app.core.llm_client import llm_structured
+from app.core.llm_client import llm_complete, llm_structured
 from app.services.intelligence.report_agent import ReACTConfig, generate_report
 from app.workers.simulation_tasks import run_prepare_agents, run_simulation
+
+# Persona packs by market category
+SPORTS_PACKS = ["sports-book-manager", "sports-bookmaker", "sports-bettor"]
+FINANCE_PACKS = ["fintech-investor", "media-journalist", "political-moderate"]
+POLITICS_PACKS = ["government-policy", "political-moderate", "media-journalist"]
+DEFAULT_PACKS = ["retail-consumer", "media-journalist", "political-moderate"]
+
+SPORTS_KEYWORDS = [
+    "nba", "nfl", "mlb", "nhl", "mls", "ufc", "mma", "boxing",
+    "basketball", "football", "baseball", "hockey", "soccer",
+    "game", "match", "fight", "bout", "series", "playoff",
+    "win", "beat", "vs", "versus", "spread", "over/under",
+    "76ers", "lakers", "celtics", "warriors", "heat", "knicks",
+    "chiefs", "eagles", "cowboys", "bills", "ravens",
+    "yankees", "dodgers", "mets", "braves", "astros",
+]
+
+POLITICS_KEYWORDS = [
+    "president", "election", "congress", "senate", "governor",
+    "democrat", "republican", "vote", "poll", "legislation",
+    "policy", "cabinet", "supreme court", "impeach",
+]
+
+
+def _select_packs(market_title: str) -> list[str]:
+    """Select persona packs based on market topic."""
+    title_lower = market_title.lower()
+    if any(kw in title_lower for kw in SPORTS_KEYWORDS):
+        return SPORTS_PACKS
+    if any(kw in title_lower for kw in POLITICS_KEYWORDS):
+        return POLITICS_PACKS
+    # Check for finance/crypto keywords
+    if any(kw in title_lower for kw in ["stock", "crypto", "bitcoin", "fed", "rate", "gdp", "inflation", "earnings"]):
+        return FINANCE_PACKS
+    return DEFAULT_PACKS
 
 logger = structlog.get_logger()
 
@@ -97,8 +132,23 @@ async def run_prediction(market_id: UUID, org_id: UUID) -> dict:
     ).limit(1).execute().data
     creator = members[0]["user_id"] if members else str(org_id)
 
-    # Default persona packs for market predictions
-    default_packs = ["fintech-investor", "media-journalist", "political-moderate"]
+    # Select persona packs based on market topic
+    selected_packs = _select_packs(market.get("title", ""))
+    logger.info("prediction_packs_selected", packs=selected_packs, title=market.get("title", ""))
+
+    # Build enriched prediction goal with market context
+    outcomes_desc = ", ".join(
+        f"{o.get('label', '?')}: {o.get('current_probability', 0):.0%}"
+        for o in (market.get("outcomes") or [])
+    )
+    prediction_goal = (
+        f"Predict the outcome of: {market['title']}. "
+        f"Current market odds: {outcomes_desc}. "
+        f"Resolution rules: {market.get('resolution_rules', 'N/A')}. "
+        f"Closes: {market.get('closes_at', 'N/A')}. "
+        f"Analyze from the perspective of sports professionals, oddsmakers, and informed bettors. "
+        f"Consider team records, player stats, head-to-head history, injuries, and situational factors."
+    )
 
     # Create simulation
     sim = admin.table("simulations").insert({
@@ -106,11 +156,11 @@ async def run_prediction(market_id: UUID, org_id: UUID) -> dict:
         "organization_id": str(org_id),
         "created_by": creator,
         "name": f"Prediction: {market['title'][:80]}",
-        "prediction_goal": f"Determine the TRUE probability of: {market['title']}. Resolution: {market.get('resolution_rules', 'N/A')}. Current market: {market_prob:.0%}.",
+        "prediction_goal": prediction_goal,
         "platforms": ["twitter_x", "reddit"],
         "max_rounds": 3,
         "agent_count": 20,
-        "persona_pack_ids": default_packs,
+        "persona_pack_ids": selected_packs,
         "status": "draft",
     }).execute().data[0]
 

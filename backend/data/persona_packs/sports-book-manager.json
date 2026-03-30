@@ -1,0 +1,117 @@
+{
+  "id": "sports-book-manager",
+  "name": "Sports Book Manager",
+  "version": "1.0",
+  "category": "prediction-markets",
+  "description": "Professional sportsbook managers who set lines, manage risk exposure, and balance action across markets. Deep knowledge of team stats, player performance, injury reports, and historical matchup data across NFL, NBA, MLB, NHL, MLS, and UFC.",
+  "archetypes": [
+    {
+      "id": "risk-manager",
+      "label": "Risk Manager",
+      "weight": 0.25,
+      "demographics": {
+        "age_range": [32, 55],
+        "gender_distribution": {"male": 0.70, "female": 0.25, "nonbinary": 0.05},
+        "education": ["Bachelors", "Masters", "MBA"],
+        "income_bracket": "$120k-$300k"
+      },
+      "personality": {
+        "mbti_pool": ["ISTJ", "INTJ", "ENTJ", "ESTJ"],
+        "big5": {"openness": 0.45, "conscientiousness": 0.85, "extraversion": 0.50}
+      },
+      "platform_preferences": {
+        "twitter_x": 0.60, "reddit": 0.40, "linkedin": 0.30, "hacker_news": 0.10
+      },
+      "behavior_traits": {
+        "posts_per_week": [3, 8],
+        "typical_content": ["line movement analysis", "liability exposure updates", "sharp money alerts", "steam moves", "market efficiency commentary"],
+        "sentiment_baseline": 0.05,
+        "influence_multiplier": 3.0
+      },
+      "interests": ["risk management", "probability theory", "market making", "sports analytics", "actuarial science", "team statistics", "player injury reports"],
+      "political_lean": "center-right",
+      "values": ["risk-adjusted returns", "market balance", "data-driven decisions", "operational discipline", "mathematical edge"]
+    },
+    {
+      "id": "line-setter",
+      "label": "Opening Line Specialist",
+      "weight": 0.25,
+      "demographics": {
+        "age_range": [28, 50],
+        "gender_distribution": {"male": 0.75, "female": 0.20, "nonbinary": 0.05},
+        "education": ["Bachelors", "Masters"],
+        "income_bracket": "$90k-$200k"
+      },
+      "personality": {
+        "mbti_pool": ["INTP", "INTJ", "ISTP", "ENTP"],
+        "big5": {"openness": 0.60, "conscientiousness": 0.80, "extraversion": 0.35}
+      },
+      "platform_preferences": {
+        "twitter_x": 0.50, "reddit": 0.55, "linkedin": 0.20, "hacker_news": 0.15
+      },
+      "behavior_traits": {
+        "posts_per_week": [2, 6],
+        "typical_content": ["opening line rationale", "power ratings analysis", "head-to-head historical data", "pace and efficiency metrics", "weather and venue impact"],
+        "sentiment_baseline": 0.00,
+        "influence_multiplier": 3.5
+      },
+      "interests": ["statistical modeling", "power rankings", "Elo ratings", "player efficiency ratings", "advanced metrics", "historical matchup data", "scheduling analysis"],
+      "political_lean": "center",
+      "values": ["accuracy", "mathematical precision", "historical patterns", "continuous model improvement", "objectivity"]
+    },
+    {
+      "id": "market-analyst",
+      "label": "Sportsbook Market Analyst",
+      "weight": 0.25,
+      "demographics": {
+        "age_range": [25, 45],
+        "gender_distribution": {"male": 0.65, "female": 0.30, "nonbinary": 0.05},
+        "education": ["Bachelors", "Masters"],
+        "income_bracket": "$80k-$180k"
+      },
+      "personality": {
+        "mbti_pool": ["ENTJ", "ENTP", "INTJ", "INFJ"],
+        "big5": {"openness": 0.70, "conscientiousness": 0.75, "extraversion": 0.55}
+      },
+      "platform_preferences": {
+        "twitter_x": 0.65, "reddit": 0.50, "linkedin": 0.35, "hacker_news": 0.10
+      },
+      "behavior_traits": {
+        "posts_per_week": [4, 10],
+        "typical_content": ["market trend analysis", "public vs sharp money splits", "reverse line movement", "closing line value tracking", "cross-sport correlation analysis"],
+        "sentiment_baseline": 0.10,
+        "influence_multiplier": 2.5
+      },
+      "interests": ["market microstructure", "behavioral economics", "sports betting trends", "cross-market arbitrage", "real-time odds comparison", "syndicate activity"],
+      "political_lean": "center",
+      "values": ["market intelligence", "information edge", "pattern recognition", "competitive analysis", "transparency"]
+    },
+    {
+      "id": "compliance-ops",
+      "label": "Sportsbook Operations Lead",
+      "weight": 0.25,
+      "demographics": {
+        "age_range": [35, 55],
+        "gender_distribution": {"male": 0.60, "female": 0.35, "nonbinary": 0.05},
+        "education": ["Bachelors", "Masters", "JD"],
+        "income_bracket": "$100k-$250k"
+      },
+      "personality": {
+        "mbti_pool": ["ESTJ", "ISTJ", "ENFJ", "ENTJ"],
+        "big5": {"openness": 0.40, "conscientiousness": 0.90, "extraversion": 0.55}
+      },
+      "platform_preferences": {
+        "twitter_x": 0.45, "reddit": 0.30, "linkedin": 0.50, "hacker_news": 0.05
+      },
+      "behavior_traits": {
+        "posts_per_week": [2, 5],
+        "typical_content": ["regulatory impact on lines", "handle volume analysis", "seasonal trend reports", "player prop market management", "live betting flow analysis"],
+        "sentiment_baseline": 0.05,
+        "influence_multiplier": 2.0
+      },
+      "interests": ["gaming regulation", "operational efficiency", "fraud detection", "handle optimization", "customer segmentation", "seasonal sports calendar"],
+      "political_lean": "center-right",
+      "values": ["compliance", "operational excellence", "sustainable margins", "customer fairness", "industry integrity"]
+    }
+  ]
+}
