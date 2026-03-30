@@ -13,10 +13,22 @@ interface Simulation {
   max_rounds: number;
   is_ab_test: boolean;
   agent_count: number;
+  persona_pack_ids: string[];
   created_at: string;
   completed_at: string | null;
   project_id: string;
 }
+
+const PLATFORM_NAMES: Record<string, string> = {
+  twitter_x: 'Twitter / X',
+  reddit: 'Reddit',
+  linkedin: 'LinkedIn',
+  instagram: 'Instagram',
+  hacker_news: 'Hacker News',
+  discord: 'Discord',
+  news_comments: 'News Comments',
+  custom: 'Custom',
+};
 
 export default function SimulationDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -151,7 +163,7 @@ export default function SimulationDetailPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-[15px] font-medium text-saibyl-platinum">Ready to run</p>
-              <p className="text-[12px] text-saibyl-muted mt-0.5">This will prepare agents and start the simulation on {sim.platforms?.join(' + ')}.</p>
+              <p className="text-[12px] text-saibyl-muted mt-0.5">This will prepare agents and start the simulation on {(sim.platforms || []).map((p) => PLATFORM_NAMES[p] || p).join(' + ')}.</p>
             </div>
             <button
               onClick={handleRunNow}
@@ -250,7 +262,9 @@ export default function SimulationDetailPage() {
         <dl className="space-y-3">
           {[
             ['Created', new Date(sim.created_at).toLocaleString()],
-            ['Platforms', (sim.platforms || []).join(', ') || 'N/A'],
+            ['Platforms', (sim.platforms || []).map((p) => PLATFORM_NAMES[p] || p).join(', ') || 'N/A'],
+            ['Persona Packs', (sim.persona_pack_ids || []).length > 0 ? sim.persona_pack_ids.join(', ') : 'None (ontology-based)'],
+            ['Agents', String(sim.agent_count ?? 0)],
             ['Max Rounds', String(sim.max_rounds)],
             ['A/B Testing', sim.is_ab_test ? 'Enabled' : 'Disabled'],
           ].map(([label, value]) => (
