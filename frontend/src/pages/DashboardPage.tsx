@@ -50,11 +50,11 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-saibyl-platinum">Dashboard</h1>
         <Link
-          to="/app/simulations/new"
+          to="/app/projects"
           className="relative inline-flex items-center gap-2 px-4 py-2 rounded-xl text-white font-medium text-sm overflow-hidden transition-all hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(91,95,238,0.25)]"
         >
           <div className="absolute inset-0 bg-gradient-to-r from-saibyl-indigo to-[#4B8BEE]" />
-          <span className="relative">+ New Simulation</span>
+          <span className="relative">+ New Project</span>
         </Link>
       </div>
 
@@ -151,8 +151,8 @@ export default function DashboardPage() {
             {sims.length === 0 ? (
               <div className="py-12 text-center">
                 <p className="text-saibyl-muted text-sm mb-4">No simulations yet</p>
-                <Link to="/app/simulations/new" className="text-sm text-saibyl-indigo hover:text-saibyl-cyan transition-colors">
-                  Create your first →
+                <Link to="/app/projects" className="text-sm text-saibyl-indigo hover:text-saibyl-cyan transition-colors">
+                  Create a project to get started →
                 </Link>
               </div>
             ) : (
