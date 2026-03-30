@@ -38,27 +38,61 @@ async def fetch_market(condition_id_or_slug: str) -> dict:
             else:
                 raise ValueError(f"Market not found: {condition_id_or_slug}")
 
+        # Build outcomes — handle both token-based and list-based response formats
         outcomes = []
-        for token in market.get("tokens", []):
-            prob = await _get_token_probability(token.get("token_id", ""))
-            outcomes.append({
-                "label": token.get("outcome", ""),
-                "current_probability": prob,
-                "token_id": token.get("token_id"),
-            })
+        tokens = market.get("tokens", [])
+        if tokens:
+            # Full market detail response (has tokens with token_ids)
+            for token in tokens:
+                prob = await _get_token_probability(token.get("token_id", ""))
+                outcomes.append({
+                    "label": token.get("outcome", ""),
+                    "current_probability": prob,
+                    "token_id": token.get("token_id"),
+                })
+        else:
+            # Slug/search response (outcomes as string list, outcomePrices as string list)
+            outcome_labels = market.get("outcomes", [])
+            outcome_prices = market.get("outcomePrices", [])
+            if isinstance(outcome_labels, str):
+                import json as _json
+                try:
+                    outcome_labels = _json.loads(outcome_labels)
+                except Exception:
+                    outcome_labels = []
+            if isinstance(outcome_prices, str):
+                import json as _json
+                try:
+                    outcome_prices = _json.loads(outcome_prices)
+                except Exception:
+                    outcome_prices = []
+            for i, label in enumerate(outcome_labels):
+                prob = float(outcome_prices[i]) if i < len(outcome_prices) else 0.5
+                outcomes.append({
+                    "label": label,
+                    "current_probability": prob,
+                })
+
+        # Handle field name variations between response formats
+        condition_id = market.get("condition_id") or market.get("conditionId") or condition_id_or_slug
+        slug = market.get("slug", condition_id_or_slug)
+        volume = market.get("volume_num") or market.get("volume") or 0
+        liquidity = market.get("liquidity_num") or market.get("liquidity") or 0
+        end_date = market.get("end_date_iso") or market.get("endDate")
+        num_outcomes = len(tokens) if tokens else len(outcomes)
 
         return {
             "platform": "polymarket",
-            "external_id": market.get("condition_id", condition_id),
-            "external_url": f"https://polymarket.com/event/{market.get('slug', condition_id)}",
+            "external_id": condition_id,
+            "external_url": f"https://polymarket.com/event/{slug}",
             "title": market.get("question", ""),
             "description": market.get("description", ""),
-            "resolution_rules": market.get("resolution_source", ""),
-            "closes_at": market.get("end_date_iso"),
-            "market_type": "binary" if len(market.get("tokens", [])) == 2 else "multi",
+            "resolution_rules": market.get("resolution_source") or market.get("resolutionSource", ""),
+            "closes_at": end_date,
+            "market_type": "binary" if num_outcomes == 2 else "multi",
             "outcomes": outcomes,
-            "volume_usd": market.get("volume_num", 0),
-            "open_interest_usd": market.get("liquidity_num", 0),
+            "volume_usd": float(volume) if volume else 0,
+            "open_interest_usd": float(liquidity) if liquidity else 0,
             "status": "open" if market.get("active") else "closed",
         }
 
