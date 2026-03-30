@@ -41,6 +41,13 @@ export default function SimulationDetailPage() {
   const [eventCount, setEventCount] = useState(0);
   const [events, setEvents] = useState<Record<string, unknown>[]>([]);
 
+  // Interview panel state
+  const [agents, setAgents] = useState<Record<string, unknown>[]>([]);
+  const [selectedAgentId, setSelectedAgentId] = useState('');
+  const [interviewPrompt, setInterviewPrompt] = useState('');
+  const [interviewLoading, setInterviewLoading] = useState(false);
+  const [interviewResponses, setInterviewResponses] = useState<{ agent: string; persona: string; response: string; sentiment: number }[]>([]);
+
   const loadSim = useCallback(() => {
     api.get(`/simulations/${id}`).then((r) => {
       setSim(r.data);
@@ -54,6 +61,47 @@ export default function SimulationDetailPage() {
   }, [id]);
 
   useEffect(() => { loadSim(); }, [loadSim]);
+
+  // Load agents for interview panel
+  useEffect(() => {
+    if (!id) return;
+    api.get(`/simulations/${id}/agents`).then((r) => {
+      setAgents(Array.isArray(r.data) ? r.data : []);
+    }).catch(() => {});
+  }, [id]);
+
+  const handleInterview = async () => {
+    if (!id || !interviewPrompt.trim()) return;
+    setInterviewLoading(true);
+    try {
+      if (selectedAgentId) {
+        const { data } = await api.post(`/simulations/${id}/interview`, { agent_id: selectedAgentId, prompt: interviewPrompt });
+        setInterviewResponses((prev) => [...prev, {
+          agent: data.agent_username,
+          persona: data.persona_type,
+          response: data.response,
+          sentiment: data.sentiment_score,
+        }]);
+      } else {
+        // Interview all agents
+        const { data } = await api.post(`/simulations/${id}/interview/batch`, {
+          agent_ids: agents.slice(0, 5).map((a: any) => a.id),
+          prompt: interviewPrompt,
+        });
+        for (const r of data) {
+          setInterviewResponses((prev) => [...prev, {
+            agent: r.agent_username,
+            persona: r.persona_type,
+            response: r.response,
+            sentiment: r.sentiment_score,
+          }]);
+        }
+      }
+      setInterviewPrompt('');
+    } catch { /* ignore */ } finally {
+      setInterviewLoading(false);
+    }
+  };
 
   // Poll while running or preparing
   useEffect(() => {
@@ -309,6 +357,61 @@ export default function SimulationDetailPage() {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* Agent Interview Panel */}
+      {agents.length > 0 && (
+        <div className="glass rounded-2xl p-6 mb-6">
+          <h2 className="text-[11px] font-mono text-saibyl-muted uppercase tracking-widest mb-4">
+            Agent Interviews {isRunning && <span className="text-saibyl-positive ml-2">Live</span>}
+          </h2>
+          <div className="flex gap-3 mb-4">
+            <select
+              value={selectedAgentId}
+              onChange={(e) => setSelectedAgentId(e.target.value)}
+              className="flex-shrink-0 w-48 rounded-lg px-3 py-2 text-[13px] bg-[#0B1120] border border-white/[0.08] text-saibyl-platinum focus:outline-none focus:ring-2 focus:ring-saibyl-indigo/50"
+              style={{ colorScheme: 'dark' }}
+            >
+              <option value="">All agents (top 5)</option>
+              {agents.map((a: any) => (
+                <option key={a.id} value={a.id}>
+                  {a.profile?.display_name || a.username} — {a.profile?.persona_type || 'agent'}
+                </option>
+              ))}
+            </select>
+            <input
+              type="text"
+              value={interviewPrompt}
+              onChange={(e) => setInterviewPrompt(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleInterview()}
+              placeholder="Ask agents a question..."
+              className="flex-1 rounded-lg px-4 py-2 text-[13px] bg-[#0B1120] border border-white/[0.08] text-saibyl-platinum placeholder-saibyl-muted/50 focus:outline-none focus:ring-2 focus:ring-saibyl-indigo/50"
+            />
+            <button
+              onClick={handleInterview}
+              disabled={interviewLoading || !interviewPrompt.trim()}
+              className="px-5 py-2 rounded-lg bg-saibyl-indigo text-white text-[13px] font-medium hover:bg-[#4B4FDE] disabled:opacity-50 transition-all"
+            >
+              {interviewLoading ? 'Asking...' : 'Ask'}
+            </button>
+          </div>
+          {interviewResponses.length > 0 && (
+            <div className="space-y-3 max-h-[400px] overflow-y-auto">
+              {interviewResponses.map((r, i) => (
+                <div key={i} className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-[12px] font-medium text-saibyl-platinum">{r.agent}</span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-saibyl-indigo/15 text-saibyl-indigo">{r.persona}</span>
+                    <span className="text-[10px] font-mono text-saibyl-muted ml-auto">
+                      sentiment: <span className={r.sentiment > 0.2 ? 'text-saibyl-positive' : r.sentiment < -0.2 ? 'text-saibyl-negative' : 'text-saibyl-muted'}>{r.sentiment.toFixed(2)}</span>
+                    </span>
+                  </div>
+                  <p className="text-[13px] text-saibyl-platinum/80 leading-relaxed">{r.response}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
