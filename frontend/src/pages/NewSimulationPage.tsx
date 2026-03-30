@@ -56,6 +56,7 @@ export default function NewSimulationPage() {
   const [selectedPacks, setSelectedPacks] = useState<string[]>([]);
 
   // Step 4
+  const [agentCount, setAgentCount] = useState(20);
   const [rounds, setRounds] = useState(5);
   const [timezone, setTimezone] = useState('America/New_York');
   const [abEnabled, setAbEnabled] = useState(false);
@@ -93,6 +94,8 @@ export default function NewSimulationPage() {
         platforms: selectedPlatforms.length > 0 ? selectedPlatforms : ['twitter_x'],
         max_rounds: rounds,
         is_ab_test: abEnabled,
+        persona_pack_ids: selectedPacks,
+        agent_count: agentCount,
       });
       // Prepare and start are async — don't block on them
       try { await api.post(`/simulations/${sim.id}/prepare`); } catch { /* ok */ }
@@ -268,6 +271,13 @@ export default function NewSimulationPage() {
             <div className="space-y-6">
               <div>
                 <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-3">
+                  Agent Count: <span className="text-saibyl-indigo font-bold">{agentCount}</span>
+                </label>
+                <input type="range" min={5} max={100} value={agentCount} onChange={(e) => setAgentCount(Number(e.target.value))} className="w-full accent-saibyl-indigo" />
+                <div className="flex justify-between text-[10px] text-saibyl-muted/50 mt-1"><span>5</span><span>50</span><span>100</span></div>
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-3">
                   Simulation Rounds: <span className="text-saibyl-indigo font-bold">{rounds}</span>
                 </label>
                 <input type="range" min={1} max={20} value={rounds} onChange={(e) => setRounds(Number(e.target.value))} className="w-full accent-saibyl-indigo" />
@@ -314,6 +324,7 @@ export default function NewSimulationPage() {
                   ['Prediction Goal', predictionGoal || '—'],
                   ['Platforms', selectedPlatforms.map((id) => PLATFORMS.find((p) => p.id === id)?.name || id).join(', ')],
                   ['Persona Packs', `${selectedPacks.length} selected`],
+                  ['Agent Count', String(agentCount)],
                   ['Rounds', String(rounds)],
                   ['Timezone', timezone],
                   ['A/B Testing', abEnabled ? 'Enabled' : 'Disabled'],

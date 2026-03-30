@@ -44,7 +44,7 @@ class CreateSimulationBody(BaseModel):
     platforms: list[str]
     max_rounds: int = 10
     is_ab_test: bool = False
-    persona_pack_id: str | None = None
+    persona_pack_ids: list[str] = []
     agent_count: int | None = None
     description: str | None = None
 
@@ -96,7 +96,7 @@ async def create_simulation(body: CreateSimulationBody, auth: dict = Depends(get
             "platforms": body.platforms,
             "max_rounds": body.max_rounds,
             "is_ab_test": body.is_ab_test,
-            "persona_pack_id": body.persona_pack_id,
+            "persona_pack_ids": body.persona_pack_ids,
             "agent_count": body.agent_count,
             "description": body.description,
             "status": "draft",
