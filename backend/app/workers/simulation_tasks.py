@@ -260,6 +260,17 @@ async def run_simulation(simulation_id: str):
 
     admin.table("simulations").update({"status": "running"}).eq("id", simulation_id).execute()
 
+    # Dispatch webhook: simulation started
+    try:
+        from app.services.billing.webhook_dispatcher import dispatch_webhook
+        await dispatch_webhook(sim["organization_id"], "simulation.started", {
+            "simulation_id": simulation_id,
+            "name": sim.get("name", ""),
+            "status": "running",
+        })
+    except Exception:
+        pass  # Webhooks are best-effort
+
     agents = admin.table("simulation_agents").select("*").eq("simulation_id", simulation_id).execute().data
     if not agents:
         admin.table("simulations").update({"status": "failed"}).eq("id", simulation_id).execute()
@@ -359,10 +370,18 @@ async def run_simulation(simulation_id: str):
             logger.info("round_complete", simulation_id=simulation_id, round=round_num, events=len(round_events))
     except Exception as e:
         logger.exception("simulation_run_error", simulation_id=simulation_id, error=str(e))
+        error_msg = f"[run_simulation] {type(e).__name__}: {e}"
         admin.table("simulations").update({
             "status": "failed",
-            "error_message": f"[run_simulation] {type(e).__name__}: {e}",
+            "error_message": error_msg,
         }).eq("id", simulation_id).execute()
+        try:
+            from app.services.billing.webhook_dispatcher import dispatch_webhook
+            await dispatch_webhook(org_id, "simulation.failed", {
+                "simulation_id": simulation_id, "error": error_msg,
+            })
+        except Exception:
+            pass
         return {"simulation_id": simulation_id, "status": "failed", "total_events": total_events}
 
     if total_events == 0:
@@ -375,12 +394,34 @@ async def run_simulation(simulation_id: str):
         logger.error("simulation_zero_events", simulation_id=simulation_id)
         return {"simulation_id": simulation_id, "status": "failed", "total_events": 0}
 
+    # Track usage: agent-rounds consumed
+    agent_rounds = len(agents) * max_rounds
+    try:
+        admin.table("simulations").update({
+            "agent_rounds_consumed": agent_rounds,
+        }).eq("id", simulation_id).execute()
+    except Exception:
+        pass
+
     admin.table("simulations").update({
         "status": "complete",
         "completed_at": datetime.now(UTC).isoformat(),
     }).eq("id", simulation_id).execute()
 
     logger.info("simulation_complete", simulation_id=simulation_id, total_events=total_events)
+
+    # Dispatch webhook: simulation complete
+    try:
+        from app.services.billing.webhook_dispatcher import dispatch_webhook
+        await dispatch_webhook(org_id, "simulation.complete", {
+            "simulation_id": simulation_id,
+            "name": sim.get("name", ""),
+            "status": "complete",
+            "total_events": total_events,
+            "agent_rounds": agent_rounds,
+        })
+    except Exception:
+        pass
 
     # Auto-trigger report generation after simulation completes
     from app.workers.report_tasks import run_generate_report
