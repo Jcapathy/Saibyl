@@ -20,30 +20,22 @@ async def fetch_market(condition_id_or_slug: str) -> dict:
     async with httpx.AsyncClient(timeout=15) as client:
         market = None
 
-        # If it looks like a hex condition ID (0x...), use CLOB API to get the slug first
+        # If it looks like a hex condition ID (0x...), use CLOB API to get the slug
         if condition_id_or_slug.startswith("0x"):
             try:
                 clob_resp = await client.get(f"{CLOB_URL}/markets/{condition_id_or_slug}")
                 clob_resp.raise_for_status()
                 clob_data = clob_resp.json()
-                # CLOB has the question but not full market data — search Gamma by question
-                question = clob_data.get("question", "")
-                if question:
+                slug = clob_data.get("market_slug", "")
+                if slug:
                     gamma_resp = await client.get(
                         f"{GAMMA_URL}/markets",
-                        params={"_q": question, "_limit": 5},
+                        params={"slug": slug, "_limit": 1},
                     )
                     gamma_resp.raise_for_status()
                     results = gamma_resp.json()
-                    if isinstance(results, list):
-                        # Match by condition_id
-                        for r in results:
-                            cid = r.get("conditionId") or r.get("condition_id") or ""
-                            if cid == condition_id_or_slug:
-                                market = r
-                                break
-                        if not market and results:
-                            market = results[0]
+                    if isinstance(results, list) and results:
+                        market = results[0]
             except Exception:
                 pass
 
