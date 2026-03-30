@@ -152,28 +152,44 @@ async def handle_webhook(payload: bytes, signature: str) -> None:
 
 
 async def get_subscription_status(org_id: UUID) -> SubscriptionStatus:
-    """Get current subscription status and usage."""
+    """Get current subscription status and usage from actual data."""
     admin = get_supabase_admin()
     org = admin.table("organizations").select("*").eq("id", str(org_id)).single().execute().data
 
-    month = datetime.now().strftime("%Y-%m")
-    usage = admin.table("usage_records").select("*").eq(
-        "organization_id", str(org_id)
-    ).eq("month", month).execute().data
+    # Count actual simulations run this month (any status except draft)
+    month_start = datetime.now().strftime("%Y-%m-01T00:00:00")
+    sims = admin.table("simulations").select(
+        "id", count="exact"
+    ).eq("organization_id", str(org_id)).neq(
+        "status", "draft"
+    ).gte("created_at", month_start).execute()
+    sims_used = sims.count or 0
+
+    # Count total agents created this month
+    agents = admin.table("simulation_agents").select(
+        "id", count="exact"
+    ).eq("organization_id", str(org_id)).gte(
+        "created_at", month_start
+    ).execute()
+    agents_used = agents.count or 0
 
     members = admin.table("organization_members").select(
         "id", count="exact"
     ).eq("organization_id", str(org_id)).execute()
 
-    sims_used = usage[0]["simulations_run"] if usage else 0
+    plan = org.get("plan", "starter")
+    limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["starter"])
+    agent_limits = {"starter": 50_000, "pro": 2_500_000, "enterprise": 50_000_000}
 
     return SubscriptionStatus(
-        plan=org.get("plan", "starter"),
+        plan=plan,
         status=org.get("subscription_status", "trialing"),
         simulations_used=sims_used,
-        simulations_limit=org.get("max_simulations_per_month", 10),
+        simulations_limit=limits["max_simulations_per_month"],
+        agents_used=agents_used,
+        agents_limit=agent_limits.get(plan, 50_000),
         team_members=members.count or 0,
-        team_members_limit=org.get("max_team_members", 3),
+        team_members_limit=limits["max_team_members"],
     )
 
 
