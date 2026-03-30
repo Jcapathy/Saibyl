@@ -321,7 +321,11 @@ async def run_simulation(simulation_id: str):
                     async for event in adapter.run_round(round_num):
                         agent_info = agent_lookup.get(event.agent_username, {})
                         agent_id = agent_info.get("id")
-                        sentiment_score = agent_info.get("sentiment_baseline", 0.0)
+                        sentiment = agent_info.get("sentiment_baseline", 0.0)
+
+                        # Merge sentiment into metadata (column doesn't exist on table)
+                        meta = event.metadata or {}
+                        meta["sentiment"] = sentiment
 
                         round_events.append({
                             "simulation_id": simulation_id,
@@ -332,8 +336,7 @@ async def run_simulation(simulation_id: str):
                             "variant": event.variant,
                             "round_number": event.round_number,
                             "content": event.content[:1000] if event.content else None,
-                            "metadata": event.metadata,
-                            "sentiment_score": sentiment_score,
+                            "metadata": meta,
                         })
                 except Exception as e:
                     logger.warning("round_failed", platform=platform_id, round=round_num, error=str(e))

@@ -68,7 +68,7 @@ async def generate_report(body: GenerateReportBody, auth: dict = Depends(get_cur
 
 @router.get("/by-simulation/{sim_id}")
 async def get_reports_by_simulation(sim_id: str, auth: dict = Depends(get_current_org)):
-    """Get all reports for a simulation."""
+    """Get the latest report for a simulation, with sections embedded."""
     log.info("get_reports_by_simulation", simulation_id=sim_id, org_id=auth["org_id"])
     admin = get_supabase_admin()
 
@@ -89,9 +89,34 @@ async def get_reports_by_simulation(sim_id: str, auth: dict = Depends(get_curren
         .select("*")
         .eq("simulation_id", sim_id)
         .order("created_at", desc=True)
+        .limit(1)
         .execute()
     )
-    return result.data
+    if not result.data:
+        raise HTTPException(status_code=404, detail="No report found for this simulation")
+
+    report = result.data[0]
+
+    # Load sections from report_sections table
+    sections_result = (
+        admin.table("report_sections")
+        .select("title, content")
+        .eq("report_id", report["id"])
+        .order("section_index")
+        .execute()
+    )
+
+    # Return shape the frontend expects
+    return {
+        "id": report["id"],
+        "simulation_id": report["simulation_id"],
+        "status": report.get("status"),
+        "sections": [
+            {"title": s["title"], "content": s.get("content") or ""}
+            for s in (sections_result.data or [])
+        ],
+        "full_markdown": report.get("markdown_content") or "",
+    }
 
 
 @router.get("/{id}")
