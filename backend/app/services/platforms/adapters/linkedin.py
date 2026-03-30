@@ -21,6 +21,7 @@ _LINKEDIN_REACTIONS = {"like", "celebrate", "support", "insightful", "curious"}
 _ACTION_PROMPT = (
     "You are {username} on LinkedIn. Persona: {persona}\n"
     "Professional feed:\n{feed}\n\n"
+    "{memory}"
     "Round {round}. Pick ONE action (exact format). Keep a professional tone.\n"
     "POST: <professional post text>\n"
     "COMMENT <post_id>: <comment text>\n"
@@ -48,6 +49,7 @@ class LinkedInAdapter(BasePlatformAdapter):
     max_comment_length = 1250
 
     async def initialize(self, config: dict, agents: list) -> None:
+        self._init_history()
         self._config = config
         self._agents = agents
         self._posts: list[Post] = []
@@ -125,6 +127,7 @@ class LinkedInAdapter(BasePlatformAdapter):
             username=agent["username"],
             persona=agent.get("persona", "professional"),
             feed=feed_text,
+            memory=self.get_agent_memory(agent["username"]),
             round=round_number,
         )
         raw = await llm_complete([{"role": "user", "content": prompt}], max_tokens=256)
@@ -137,6 +140,7 @@ class LinkedInAdapter(BasePlatformAdapter):
         if line.upper().startswith("POST:"):
             text = line[5:].strip()
             p = await self.post(agent["username"], text)
+            self.record_action(agent["username"], round_number, f"Posted: {text[:80]}")
             return SimulationEvent(
                 event_type="post", agent_username=agent["username"],
                 platform=self.platform_id, round_number=round_number,
@@ -148,6 +152,7 @@ class LinkedInAdapter(BasePlatformAdapter):
             if match:
                 pid, text = match.group(1), match.group(2)
                 c = await self.comment(agent["username"], pid, text)
+                self.record_action(agent["username"], round_number, f"Commented on {pid}: {text[:80]}")
                 return SimulationEvent(
                     event_type="comment", agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,
@@ -161,6 +166,7 @@ class LinkedInAdapter(BasePlatformAdapter):
                 if rtype not in _LINKEDIN_REACTIONS:
                     rtype = "like"
                 await self.react(agent["username"], pid, ReactionType.LIKE)
+                self.record_action(agent["username"], round_number, f"Reacted {rtype} on {pid}")
                 return SimulationEvent(
                     event_type="react", agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,

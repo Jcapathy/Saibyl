@@ -21,6 +21,7 @@ _STORY_TTL_HOURS = 24
 _ACTION_PROMPT = (
     "You are @{username} on Instagram. Persona: {persona}\n"
     "Feed (recent posts):\n{feed}\n\n"
+    "{memory}"
     "Round {round}. Pick ONE action (exact format). Posts are visual-first.\n"
     "POST: <caption> | <image_description>\n"
     "STORY: <caption> | <image_description>\n"
@@ -46,6 +47,7 @@ class InstagramAdapter(BasePlatformAdapter):
     max_comment_length = 2200
 
     async def initialize(self, config: dict, agents: list) -> None:
+        self._init_history()
         self._config = config
         self._agents = agents
         self._posts: list[Post] = []
@@ -146,6 +148,7 @@ class InstagramAdapter(BasePlatformAdapter):
             username=agent["username"],
             persona=agent.get("persona", "average user"),
             feed=feed_text,
+            memory=self.get_agent_memory(agent["username"]),
             round=round_number,
         )
         raw = await llm_complete([{"role": "user", "content": prompt}], max_tokens=200)
@@ -158,6 +161,7 @@ class InstagramAdapter(BasePlatformAdapter):
         if line.upper().startswith("POST:"):
             text = line[5:].strip()
             p = await self.post(agent["username"], text)
+            self.record_action(agent["username"], round_number, f"Posted: {text[:80]}")
             return SimulationEvent(
                 event_type="post", agent_username=agent["username"],
                 platform=self.platform_id, round_number=round_number,
@@ -172,6 +176,7 @@ class InstagramAdapter(BasePlatformAdapter):
             caption = parts[0].strip()
             img = parts[1].strip() if len(parts) > 1 else "photo"
             s = self._post_story(agent["username"], caption, img)
+            self.record_action(agent["username"], round_number, f"Posted story: {caption[:80]}")
             return SimulationEvent(
                 event_type="post", agent_username=agent["username"],
                 platform=self.platform_id, round_number=round_number,
@@ -184,6 +189,7 @@ class InstagramAdapter(BasePlatformAdapter):
             if match:
                 pid, text = match.group(1), match.group(2)
                 c = await self.comment(agent["username"], pid, text)
+                self.record_action(agent["username"], round_number, f"Commented on {pid}: {text[:80]}")
                 return SimulationEvent(
                     event_type="comment", agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,
@@ -194,6 +200,7 @@ class InstagramAdapter(BasePlatformAdapter):
             pid = line.split(maxsplit=1)[1].strip() if len(line.split()) > 1 else ""
             if pid:
                 await self.react(agent["username"], pid, ReactionType.LIKE)
+                self.record_action(agent["username"], round_number, f"Liked post {pid}")
                 return SimulationEvent(
                     event_type="react", agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,

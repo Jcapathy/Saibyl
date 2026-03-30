@@ -22,6 +22,7 @@ _MAX_COMMENT_DEPTH = 5
 _ACTION_PROMPT = (
     "You are u/{username} on Reddit. Persona: {persona}\n"
     "Subreddit: r/{subreddit}. Hot posts:\n{feed}\n\n"
+    "{memory}"
     "Round {round}. Pick ONE action (exact format):\n"
     "POST: <title> | <body>\n"
     "COMMENT <post_id>: <comment text>\n"
@@ -50,6 +51,7 @@ class RedditAdapter(BasePlatformAdapter):
     max_comment_length = 10000
 
     async def initialize(self, config: dict, agents: list) -> None:
+        self._init_history()
         self._config = config
         self._agents = agents
         self._subreddit = config.get("subreddit", "general")
@@ -139,6 +141,7 @@ class RedditAdapter(BasePlatformAdapter):
             persona=agent.get("persona", "average redditor"),
             subreddit=self._subreddit,
             feed=feed_text,
+            memory=self.get_agent_memory(agent["username"]),
             round=round_number,
         )
         raw = await llm_complete([{"role": "user", "content": prompt}], max_tokens=256)
@@ -151,6 +154,7 @@ class RedditAdapter(BasePlatformAdapter):
         if line.upper().startswith("POST:"):
             text = line[5:].strip()
             p = await self.post(agent["username"], text)
+            self.record_action(agent["username"], round_number, f"Posted: {text[:80]}")
             return SimulationEvent(
                 event_type="post", agent_username=agent["username"],
                 platform=self.platform_id, round_number=round_number,
@@ -163,6 +167,7 @@ class RedditAdapter(BasePlatformAdapter):
             if match:
                 pid, text = match.group(1), match.group(2)
                 c = await self.comment(agent["username"], pid, text)
+                self.record_action(agent["username"], round_number, f"Commented on {pid}: {text[:80]}")
                 return SimulationEvent(
                     event_type="comment", agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,
@@ -173,6 +178,7 @@ class RedditAdapter(BasePlatformAdapter):
             pid = line.split(maxsplit=1)[1].strip() if len(line.split()) > 1 else ""
             if pid:
                 await self.react(agent["username"], pid, ReactionType.UPVOTE)
+                self.record_action(agent["username"], round_number, f"Upvoted post {pid}")
                 return SimulationEvent(
                     event_type="react", agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,
@@ -184,6 +190,7 @@ class RedditAdapter(BasePlatformAdapter):
             pid = line.split(maxsplit=1)[1].strip() if len(line.split()) > 1 else ""
             if pid:
                 await self.react(agent["username"], pid, ReactionType.DOWNVOTE)
+                self.record_action(agent["username"], round_number, f"Downvoted post {pid}")
                 return SimulationEvent(
                     event_type="react", agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,

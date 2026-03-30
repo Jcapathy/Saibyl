@@ -57,6 +57,24 @@ class BasePlatformAdapter(ABC):
     max_post_length: int = 1000
     max_comment_length: int = 500
 
+    # Agent memory: tracks each agent's actions across rounds
+    _agent_history: dict[str, list[str]]
+
+    def _init_history(self) -> None:
+        self._agent_history = {}
+
+    def record_action(self, username: str, round_num: int, summary: str) -> None:
+        """Record an agent's action for memory across rounds."""
+        self._agent_history.setdefault(username, []).append(f"[R{round_num}] {summary}")
+
+    def get_agent_memory(self, username: str, max_items: int = 10) -> str:
+        """Get formatted history of an agent's previous actions."""
+        history = self._agent_history.get(username, [])
+        if not history:
+            return ""
+        recent = history[-max_items:]
+        return "Your previous actions:\n" + "\n".join(recent) + "\n\n"
+
     @abstractmethod
     async def initialize(self, config: dict, agents: list) -> None:
         """Set up platform state, assign agents."""

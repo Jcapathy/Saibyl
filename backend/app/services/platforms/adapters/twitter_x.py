@@ -19,6 +19,7 @@ from app.services.platforms.registry import register_adapter
 _ACTION_PROMPT = (
     "You are {username} on Twitter/X. Persona: {persona}\n"
     "Current feed (recent tweets):\n{feed}\n\n"
+    "{memory}"
     "Round {round}. Pick ONE action and reply in the EXACT format:\n"
     "POST: <tweet text>\n"
     "REPLY <post_id>: <reply text>\n"
@@ -49,6 +50,7 @@ class TwitterXAdapter(BasePlatformAdapter):
     max_comment_length = 280
 
     async def initialize(self, config: dict, agents: list) -> None:
+        self._init_history()
         self._config = config
         self._agents = agents
         self._posts: list[Post] = []
@@ -129,6 +131,7 @@ class TwitterXAdapter(BasePlatformAdapter):
             username=agent["username"],
             persona=agent.get("persona", "average user"),
             feed=feed_text,
+            memory=self.get_agent_memory(agent["username"]),
             round=round_number,
         )
         raw = await llm_complete([{"role": "user", "content": prompt}], max_tokens=160)
@@ -141,6 +144,7 @@ class TwitterXAdapter(BasePlatformAdapter):
         if line.upper().startswith("POST:"):
             text = line[5:].strip()
             p = await self.post(agent["username"], text)
+            self.record_action(agent["username"], round_number, f"Posted: {text[:80]}")
             return SimulationEvent(
                 event_type="post", agent_username=agent["username"],
                 platform=self.platform_id, round_number=round_number,
@@ -153,6 +157,7 @@ class TwitterXAdapter(BasePlatformAdapter):
             if match:
                 pid, text = match.group(1), match.group(2)
                 c = await self.comment(agent["username"], pid, text)
+                self.record_action(agent["username"], round_number, f"Replied to {pid}: {text[:80]}")
                 return SimulationEvent(
                     event_type="comment", agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,
@@ -164,6 +169,7 @@ class TwitterXAdapter(BasePlatformAdapter):
             pid = line.split(maxsplit=1)[1].strip() if len(line.split()) > 1 else ""
             if pid:
                 await self.react(agent["username"], pid, ReactionType.LIKE)
+                self.record_action(agent["username"], round_number, f"Liked post {pid}")
                 return SimulationEvent(
                     event_type="react", agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,
@@ -175,6 +181,7 @@ class TwitterXAdapter(BasePlatformAdapter):
             pid = line.split(maxsplit=1)[1].strip() if len(line.split()) > 1 else ""
             if pid:
                 await self.react(agent["username"], pid, ReactionType.REPOST)
+                self.record_action(agent["username"], round_number, f"Reposted {pid}")
                 return SimulationEvent(
                     event_type="react", agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,

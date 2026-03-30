@@ -22,6 +22,7 @@ _ACTION_PROMPT = (
     "You are commenter '{username}' on a news site. Persona: {persona}\n"
     "Article: {article_title}\n"
     "Comments:\n{feed}\n\n"
+    "{memory}"
     "Round {round}. Pick ONE action (exact format). Be concise, opinionated.\n"
     "COMMENT: <your comment on the article>\n"
     "REPLY <comment_id>: <reply text>\n"
@@ -40,6 +41,7 @@ class NewsCommentsAdapter(BasePlatformAdapter):
     max_comment_length = 2000
 
     async def initialize(self, config: dict, agents: list) -> None:
+        self._init_history()
         self._config = config
         self._agents = agents
         self._posts: list[Post] = []
@@ -161,6 +163,7 @@ class NewsCommentsAdapter(BasePlatformAdapter):
             persona=agent.get("persona", "news reader"),
             article_title=article_title,
             feed=comments_text,
+            memory=self.get_agent_memory(agent["username"]),
             round=round_number,
         )
         raw = await llm_complete([{"role": "user", "content": prompt}], max_tokens=200)
@@ -173,6 +176,7 @@ class NewsCommentsAdapter(BasePlatformAdapter):
         if line.upper().startswith("COMMENT:"):
             text = line[8:].strip()
             c = await self.comment(agent["username"], article.id, text)
+            self.record_action(agent["username"], round_number, f"Commented: {text[:80]}")
             return SimulationEvent(
                 event_type="comment", agent_username=agent["username"],
                 platform=self.platform_id, round_number=round_number,
@@ -185,6 +189,7 @@ class NewsCommentsAdapter(BasePlatformAdapter):
             if match:
                 cid, text = match.group(1), match.group(2)
                 c = await self.comment(agent["username"], cid, text)
+                self.record_action(agent["username"], round_number, f"Replied to {cid}: {text[:80]}")
                 return SimulationEvent(
                     event_type="comment", agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,
@@ -196,6 +201,7 @@ class NewsCommentsAdapter(BasePlatformAdapter):
             cid = line.split(maxsplit=1)[1].strip() if len(line.split()) > 1 else ""
             if cid:
                 await self.react(agent["username"], cid, ReactionType.UPVOTE)
+                self.record_action(agent["username"], round_number, f"Upvoted comment {cid}")
                 return SimulationEvent(
                     event_type="react", agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,

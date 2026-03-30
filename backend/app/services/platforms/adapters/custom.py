@@ -43,6 +43,7 @@ _ACTION_PROMPT = (
     "You are {username} on {platform_name}. Persona: {persona}\n"
     "{tone}"
     "Feed:\n{feed}\n\n"
+    "{memory}"
     "Round {round}. Pick ONE action (exact format):\n"
     "POST: <content>\n"
     "COMMENT <post_id>: <comment text>\n"
@@ -71,6 +72,7 @@ class CustomAdapter(BasePlatformAdapter):
     max_comment_length = 1000
 
     async def initialize(self, config: dict, agents: list) -> None:
+        self._init_history()
         self._platform_config = CustomPlatformConfig(**config.get("platform_config", {}))
         self._agents = agents
         self._posts: list[Post] = []
@@ -176,6 +178,7 @@ class CustomAdapter(BasePlatformAdapter):
             persona=agent.get("persona", "user"),
             tone=tone,
             feed=feed_text,
+            memory=self.get_agent_memory(agent["username"]),
             round=round_number,
         )
         raw = await llm_complete([{"role": "user", "content": prompt}], max_tokens=200)
@@ -188,6 +191,7 @@ class CustomAdapter(BasePlatformAdapter):
         if line.upper().startswith("POST:"):
             text = line[5:].strip()
             p = await self.post(agent["username"], text)
+            self.record_action(agent["username"], round_number, f"Posted: {text[:80]}")
             return SimulationEvent(
                 event_type="post", agent_username=agent["username"],
                 platform=self.platform_id, round_number=round_number,
@@ -199,6 +203,7 @@ class CustomAdapter(BasePlatformAdapter):
             if match:
                 pid, text = match.group(1), match.group(2)
                 c = await self.comment(agent["username"], pid, text)
+                self.record_action(agent["username"], round_number, f"Commented on {pid}: {text[:80]}")
                 return SimulationEvent(
                     event_type="comment", agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,
@@ -209,6 +214,7 @@ class CustomAdapter(BasePlatformAdapter):
             pid = line.split(maxsplit=1)[1].strip() if len(line.split()) > 1 else ""
             if pid:
                 await self.react(agent["username"], pid, ReactionType.LIKE)
+                self.record_action(agent["username"], round_number, f"Reacted on {pid}")
                 return SimulationEvent(
                     event_type="react", agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,

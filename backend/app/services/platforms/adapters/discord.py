@@ -21,6 +21,7 @@ _ROLES = {"member", "moderator", "admin"}
 _ACTION_PROMPT = (
     "You are {username} ({role}) in a Discord server. Persona: {persona}\n"
     "Channel: #{channel}. Recent messages:\n{feed}\n\n"
+    "{memory}"
     "Round {round}. Pick ONE action (exact format):\n"
     "MSG: <message text>\n"
     "REPLY <msg_id>: <reply text>\n"
@@ -40,6 +41,7 @@ class DiscordAdapter(BasePlatformAdapter):
     max_comment_length = 2000
 
     async def initialize(self, config: dict, agents: list) -> None:
+        self._init_history()
         self._config = config
         self._agents = agents
         self._channels: list[str] = config.get("channels", ["general"])
@@ -132,6 +134,7 @@ class DiscordAdapter(BasePlatformAdapter):
             persona=agent.get("persona", "server member"),
             channel=self._active_channel,
             feed=feed_text,
+            memory=self.get_agent_memory(agent["username"]),
             round=round_number,
         )
         raw = await llm_complete([{"role": "user", "content": prompt}], max_tokens=200)
@@ -144,6 +147,7 @@ class DiscordAdapter(BasePlatformAdapter):
         if line.upper().startswith("MSG:"):
             text = line[4:].strip()
             p = await self.post(agent["username"], text)
+            self.record_action(agent["username"], round_number, f"Posted: {text[:80]}")
             return SimulationEvent(
                 event_type="post", agent_username=agent["username"],
                 platform=self.platform_id, round_number=round_number,
@@ -156,6 +160,7 @@ class DiscordAdapter(BasePlatformAdapter):
             if match:
                 pid, text = match.group(1), match.group(2)
                 c = await self.comment(agent["username"], pid, text)
+                self.record_action(agent["username"], round_number, f"Replied to {pid}: {text[:80]}")
                 return SimulationEvent(
                     event_type="comment", agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,
@@ -167,6 +172,7 @@ class DiscordAdapter(BasePlatformAdapter):
             if match:
                 pid = match.group(1)
                 await self.react(agent["username"], pid, ReactionType.LIKE)
+                self.record_action(agent["username"], round_number, f"Reacted {match.group(2)} on {pid}")
                 return SimulationEvent(
                     event_type="react", agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,
@@ -179,6 +185,7 @@ class DiscordAdapter(BasePlatformAdapter):
             if match:
                 target, text = match.group(1), match.group(2)
                 dm = self._send_dm(agent["username"], target, text)
+                self.record_action(agent["username"], round_number, f"DM to {target}: {text[:80]}")
                 return SimulationEvent(
                     event_type="dm", agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,
