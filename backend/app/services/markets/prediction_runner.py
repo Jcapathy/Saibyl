@@ -179,12 +179,15 @@ async def run_prediction(market_id: UUID, org_id: UUID) -> dict:
     selected_packs = _select_packs(market.get("title", ""))
     logger.info("prediction_packs_selected", packs=selected_packs, title=market.get("title", ""))
 
-    # Research current data for the market
+    # Use Polymarket's live context if available, supplement with LLM research
+    market_context = market.get("market_context") or ""
     research = await _research_market(
         market.get("title", ""),
         market.get("resolution_rules", ""),
         market.get("closes_at", ""),
     )
+    if market_context:
+        research = f"=== LIVE MARKET CONTEXT ===\n{market_context}\n\n=== ADDITIONAL RESEARCH ===\n{research}"
 
     # Build enriched prediction goal with market context + research
     outcomes_desc = ", ".join(

@@ -202,6 +202,14 @@ export default function MarketDetailPage() {
           </div>
         </div>
 
+        {/* Market Context */}
+        {(market as any).market_context && (
+          <div className="glass rounded-2xl p-6 mb-6">
+            <h3 className="font-mono text-[11px] tracking-[0.18em] uppercase text-saibyl-muted mb-3">Market Context</h3>
+            <p className="text-[14px] text-saibyl-platinum leading-relaxed">{(market as any).market_context}</p>
+          </div>
+        )}
+
         {/* Resolution rules */}
         {market.resolution_rules && (
           <div className="glass rounded-2xl p-6 mb-6">

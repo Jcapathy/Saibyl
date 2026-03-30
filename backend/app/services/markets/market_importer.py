@@ -114,13 +114,16 @@ async def refresh_market(market_id: UUID) -> dict:
         raise ValueError(f"Unsupported platform: {platform}")
 
     from datetime import UTC, datetime
-    admin.table("prediction_markets").update({
+    update_data = {
         "outcomes": updated["outcomes"],
         "volume_usd": updated["volume_usd"],
         "open_interest_usd": updated["open_interest_usd"],
         "status": updated["status"],
         "last_fetched_at": datetime.now(UTC).isoformat(),
-    }).eq("id", str(market_id)).execute()
+    }
+    if updated.get("market_context"):
+        update_data["market_context"] = updated["market_context"]
+    admin.table("prediction_markets").update(update_data).eq("id", str(market_id)).execute()
 
     logger.info("market_refreshed", market_id=str(market_id))
     return admin.table("prediction_markets").select("*").eq("id", str(market_id)).single().execute().data

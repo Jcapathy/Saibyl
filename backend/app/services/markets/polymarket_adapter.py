@@ -81,6 +81,13 @@ async def fetch_market(condition_id_or_slug: str) -> dict:
         end_date = market.get("end_date_iso") or market.get("endDate")
         num_outcomes = len(tokens) if tokens else len(outcomes)
 
+        # Extract market context from event metadata (Polymarket AI-generated context)
+        market_context = ""
+        events = market.get("events") or []
+        if events and isinstance(events, list):
+            event_meta = events[0].get("eventMetadata") or {}
+            market_context = event_meta.get("context_description", "")
+
         return {
             "platform": "polymarket",
             "external_id": condition_id,
@@ -88,6 +95,7 @@ async def fetch_market(condition_id_or_slug: str) -> dict:
             "title": market.get("question", ""),
             "description": market.get("description", ""),
             "resolution_rules": market.get("resolution_source") or market.get("resolutionSource", ""),
+            "market_context": market_context,
             "closes_at": end_date,
             "market_type": "binary" if num_outcomes == 2 else "multi",
             "outcomes": outcomes,
