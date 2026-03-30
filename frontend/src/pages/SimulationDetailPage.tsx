@@ -173,7 +173,7 @@ export default function SimulationDetailPage() {
         setSim(r.data);
         if (r.data.status === 'ready') { ready = true; break; }
         if (r.data.status === 'failed') {
-          setError('Agent preparation failed. Make sure you have documents uploaded and an ontology generated, or select persona packs.');
+          setError('Agent preparation failed. Make sure you have at least one persona pack selected.');
           setRunning(false);
           setRunStatus('');
           return;
@@ -509,7 +509,7 @@ export default function SimulationDetailPage() {
           {[
             ['Created', new Date(sim.created_at).toLocaleString()],
             ['Platforms', (sim.platforms || []).map((p) => PLATFORM_NAMES[p] || p).join(', ') || 'N/A'],
-            ['Persona Packs', (sim.persona_pack_ids || []).length > 0 ? sim.persona_pack_ids.join(', ') : 'None (ontology-based)'],
+            ['Persona Packs', (sim.persona_pack_ids || []).length > 0 ? sim.persona_pack_ids.join(', ') : 'None'],
             ['Agents', String(sim.agent_count ?? 0)],
             ['Max Rounds', String(sim.max_rounds)],
             ['A/B Testing', sim.is_ab_test ? 'Enabled' : 'Disabled'],

@@ -169,28 +169,9 @@ export default function ProjectDetailPage() {
     } catch { /* ignore */ }
   }
 
-  // Run simulation — creates it from the current project context and navigates
-  const [startingSim, setStartingSim] = useState(false);
-  async function handleRunSimulation() {
-    if (!id || !project) return;
-    setStartingSim(true);
-    setUploadError('');
-    try {
-      const { data: sim } = await api.post('/simulations', {
-        name: `${project.name} — Simulation`,
-        prediction_goal: `Analyze and predict social media reactions based on the documents and ontology from project "${project.name}"`,
-        project_id: id,
-        platforms: ['twitter_x', 'reddit'],
-        max_rounds: 5,
-        is_ab_test: false,
-      });
-      try { await api.post(`/simulations/${sim.id}/prepare`); } catch { /* ok */ }
-      try { await api.post(`/simulations/${sim.id}/start`); } catch { /* ok */ }
-      navigate(`/app/simulations/${sim.id}`);
-    } catch (err: any) {
-      setUploadError(err.response?.data?.detail || 'Failed to create simulation');
-      setStartingSim(false);
-    }
+  // Run simulation — navigate to wizard with project pre-selected
+  function handleRunSimulation() {
+    navigate(`/app/simulations/new?project=${id}`);
   }
 
   function formatBytes(bytes: number) {
@@ -201,9 +182,7 @@ export default function ProjectDetailPage() {
 
   const tabs: { key: Tab; label: string; count?: number }[] = [
     { key: 'documents', label: 'Documents', count: documents.length },
-    { key: 'ontology', label: 'Ontology' },
     { key: 'simulations', label: 'Simulations', count: simulations.length },
-    { key: 'knowledge-graph', label: 'Knowledge Graph' },
   ];
 
   return (
@@ -415,11 +394,10 @@ export default function ProjectDetailPage() {
                     )}
                     <button
                       onClick={handleRunSimulation}
-                      disabled={startingSim}
-                      className="relative px-6 py-2.5 rounded-lg text-white font-medium text-sm overflow-hidden transition-all hover:scale-[1.02] disabled:opacity-50"
+                      className="relative px-6 py-2.5 rounded-lg text-white font-medium text-sm overflow-hidden transition-all hover:scale-[1.02]"
                     >
                       <div className="absolute inset-0 bg-gradient-to-r from-[#5B5FEE] to-[#00D4FF]" />
-                      <span className="relative">{startingSim ? 'Starting...' : 'Run Simulation →'}</span>
+                      <span className="relative">New Simulation →</span>
                     </button>
                   </div>
                 </div>
