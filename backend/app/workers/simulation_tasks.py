@@ -258,11 +258,18 @@ Return a JSON object with these fields:
 
 async def run_simulation(simulation_id: str):
     """Run simulation using platform adapters."""
+    import asyncio
+
     admin = get_supabase_admin()
     sim = admin.table("simulations").select("*").eq("id", simulation_id).single().execute().data
 
     if sim["status"] not in ("ready", "running"):
-        logger.warning("sim_not_ready", status=sim["status"])
+        logger.error(
+            "sim_not_ready_for_run",
+            simulation_id=simulation_id,
+            status=sim["status"],
+            detail="start called on sim that is not ready — status check should have caught this",
+        )
         return {"simulation_id": simulation_id, "status": sim["status"], "events": 0}
 
     admin.table("simulations").update({"status": "running"}).eq("id", simulation_id).execute()
@@ -277,6 +284,12 @@ async def run_simulation(simulation_id: str):
     prediction_goal = sim.get("prediction_goal", "")
     platforms_list = sim.get("platforms") or ["twitter_x"]
     total_events = 0
+
+    # Build username -> (agent_id, sentiment_baseline) lookup for event enrichment
+    agent_lookup: dict[str, dict] = {
+        a["username"]: {"id": a["id"], "sentiment_baseline": a.get("profile", {}).get("sentiment_baseline", 0.0)}
+        for a in agents
+    }
 
     # Initialize platform adapters
     from app.services.platforms.registry import get_adapter, load_all_adapters
@@ -313,12 +326,9 @@ async def run_simulation(simulation_id: str):
         for platform_id, adapter in adapters.items():
             try:
                 async for event in adapter.run_round(round_num):
-                    # Find agent_id from username
-                    agent_id = None
-                    for a in agents:
-                        if a["username"] == event.agent_username:
-                            agent_id = a["id"]
-                            break
+                    agent_info = agent_lookup.get(event.agent_username, {})
+                    agent_id = agent_info.get("id")
+                    sentiment_score = agent_info.get("sentiment_baseline", 0.0)
 
                     round_events.append({
                         "simulation_id": simulation_id,
@@ -330,6 +340,7 @@ async def run_simulation(simulation_id: str):
                         "round_number": event.round_number,
                         "content": event.content[:1000] if event.content else None,
                         "metadata": event.metadata,
+                        "sentiment_score": sentiment_score,
                     })
             except Exception as e:
                 logger.warning("round_failed", platform=platform_id, round=round_num, error=str(e))
@@ -348,6 +359,12 @@ async def run_simulation(simulation_id: str):
     }).eq("id", simulation_id).execute()
 
     logger.info("simulation_complete", simulation_id=simulation_id, total_events=total_events)
+
+    # Auto-trigger report generation after simulation completes
+    from app.workers.report_tasks import run_generate_report
+    asyncio.create_task(run_generate_report(simulation_id))
+    logger.info("report_generation_triggered", simulation_id=simulation_id)
+
     return {"simulation_id": simulation_id, "status": "complete", "total_events": total_events}
 
 

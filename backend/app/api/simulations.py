@@ -179,7 +179,7 @@ async def start_simulation(id: str, auth: dict = Depends(get_current_org)):
     admin = get_supabase_admin()
     sim = (
         admin.table("simulations")
-        .select("id, is_ab_test")
+        .select("id, is_ab_test, status")
         .eq("id", id)
         .eq("organization_id", auth["org_id"])
         .single()
@@ -187,6 +187,20 @@ async def start_simulation(id: str, auth: dict = Depends(get_current_org)):
     )
     if not sim.data:
         raise HTTPException(status_code=404, detail="Simulation not found")
+
+    current_status = sim.data.get("status")
+    if current_status == "preparing":
+        raise HTTPException(
+            status_code=409,
+            detail="Simulation is still being prepared. Wait for status 'ready' before starting.",
+        )
+    if current_status == "draft":
+        raise HTTPException(
+            status_code=409,
+            detail="Simulation must be prepared first. Call /prepare and wait for status 'ready'.",
+        )
+    if current_status == "running":
+        raise HTTPException(status_code=409, detail="Simulation is already running.")
 
     if sim.data.get("is_ab_test"):
         asyncio.create_task(_safe_task(run_simulation_ab(id), "run_simulation_ab", simulation_id=id))

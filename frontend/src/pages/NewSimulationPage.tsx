@@ -63,7 +63,7 @@ export default function NewSimulationPage() {
   const [reactDepth, setReactDepth] = useState(2);
 
   useEffect(() => {
-    api.get('/projects/').then((r) => {
+    api.get('/projects').then((r) => {
       const items = Array.isArray(r.data) ? r.data : r.data.items || [];
       setProjects(items);
       // Pre-select project from URL query param
@@ -76,7 +76,7 @@ export default function NewSimulationPage() {
 
   useEffect(() => {
     if (step === 2 && packs.length === 0) {
-      api.get('/persona-packs/').then((r) => setPacks(Array.isArray(r.data) ? r.data : r.data.items || [])).catch(() => {});
+      api.get('/persona-packs').then((r) => setPacks(Array.isArray(r.data) ? r.data : r.data.items || [])).catch(() => {});
     }
   }, [step, packs.length]);
 
