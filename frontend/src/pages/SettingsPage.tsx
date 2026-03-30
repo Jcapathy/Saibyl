@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 
-type SettingsTab = 'billing' | 'team' | 'api-keys' | 'webhooks';
+type SettingsTab = 'billing' | 'team' | 'api-keys' | 'integrations' | 'webhooks';
 
 // --- Billing ---
 interface BillingInfo {
@@ -358,6 +358,102 @@ function WebhooksTab() {
   );
 }
 
+// --- Integrations (Market API Keys) ---
+function IntegrationsTab() {
+  const [keys, setKeys] = useState<{ platform: string; key_preview: string }[]>([]);
+  const [platform] = useState('kalshi');
+  const [apiKey, setApiKey] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api.get('/markets/keys').then((r) => setKeys(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+  }, []);
+
+  const handleSave = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!apiKey.trim()) return;
+    setSaving(true);
+    setError('');
+    try {
+      await api.post('/markets/keys', { platform, api_key: apiKey });
+      setApiKey('');
+      const r = await api.get('/markets/keys');
+      setKeys(Array.isArray(r.data) ? r.data : []);
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to save key');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (p: string) => {
+    try {
+      await api.delete(`/markets/keys/${p}`);
+      setKeys((prev) => prev.filter((k) => k.platform !== p));
+    } catch { /* ignore */ }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold text-saibyl-platinum mb-1">Market Integrations</h2>
+        <p className="text-sm text-saibyl-muted">Connect prediction market platforms to run AI-powered predictions.</p>
+      </div>
+
+      {error && <div className="text-sm text-saibyl-negative bg-saibyl-negative/10 px-4 py-2 rounded-lg">{error}</div>}
+
+      <div className="bg-saibyl-deep rounded-2xl p-5 border border-saibyl-border space-y-4">
+        <div className="flex items-start gap-4">
+          <div className="flex-1">
+            <p className="text-sm font-medium text-saibyl-platinum">Polymarket</p>
+            <p className="text-xs text-saibyl-muted mt-0.5">No API key required — uses public APIs. Import markets and run predictions immediately.</p>
+          </div>
+          <span className="text-xs px-2 py-1 rounded bg-saibyl-positive/15 text-saibyl-positive">Connected</span>
+        </div>
+
+        <div className="border-t border-saibyl-border pt-4">
+          <div className="flex items-start gap-4 mb-3">
+            <div className="flex-1">
+              <p className="text-sm font-medium text-saibyl-platinum">Kalshi</p>
+              <p className="text-xs text-saibyl-muted mt-0.5">Requires API key for market data access. Get yours at kalshi.com/account/api.</p>
+            </div>
+            {keys.some((k) => k.platform === 'kalshi') ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs px-2 py-1 rounded bg-saibyl-positive/15 text-saibyl-positive">
+                  Connected (•••{keys.find((k) => k.platform === 'kalshi')?.key_preview})
+                </span>
+                <button onClick={() => handleDelete('kalshi')} className="text-xs text-saibyl-negative hover:text-red-400">Remove</button>
+              </div>
+            ) : (
+              <span className="text-xs px-2 py-1 rounded bg-saibyl-elevated text-saibyl-muted">Not connected</span>
+            )}
+          </div>
+
+          {!keys.some((k) => k.platform === 'kalshi') && (
+            <form onSubmit={handleSave} className="flex gap-2">
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="Kalshi API key"
+                className="flex-1 bg-saibyl-surface border border-saibyl-border rounded-lg px-3 py-2 text-sm text-saibyl-platinum placeholder-saibyl-muted focus:outline-none focus:ring-2 focus:ring-saibyl-indigo"
+              />
+              <button
+                type="submit"
+                disabled={saving || !apiKey.trim()}
+                className="bg-saibyl-indigo text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#4B4FDE] disabled:opacity-50"
+              >
+                {saving ? 'Saving...' : 'Connect'}
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // --- Main Settings Page ---
 export default function SettingsPage() {
   const [tab, setTab] = useState<SettingsTab>('billing');
@@ -366,6 +462,7 @@ export default function SettingsPage() {
     { key: 'billing', label: 'Billing' },
     { key: 'team', label: 'Team' },
     { key: 'api-keys', label: 'API Keys' },
+    { key: 'integrations', label: 'Integrations' },
     { key: 'webhooks', label: 'Webhooks' },
   ];
 
@@ -392,6 +489,7 @@ export default function SettingsPage() {
       {tab === 'billing' && <BillingTab />}
       {tab === 'team' && <TeamTab />}
       {tab === 'api-keys' && <ApiKeysTab />}
+      {tab === 'integrations' && <IntegrationsTab />}
       {tab === 'webhooks' && <WebhooksTab />}
     </div>
   );

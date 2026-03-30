@@ -30,25 +30,33 @@ export default function MarketsPage() {
     api.get('/markets').then((r) => { setMarkets(r.data); setLoading(false); }).catch(() => setLoading(false));
   }, []);
 
+  const [error, setError] = useState('');
+
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
     setSearching(true);
+    setError('');
     try {
       const r = await api.get('/markets/search', { params: { query: searchQuery, platform: searchPlatform, limit: 12 } });
       setSearchResults(r.data);
-    } catch { /* ignore */ }
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Search failed');
+    }
     setSearching(false);
   };
 
   const handleImport = async () => {
     if (!importUrl.trim()) return;
     setImporting(true);
+    setError('');
     try {
       await api.post('/markets/import', { url: importUrl });
       setImportUrl('');
       const r = await api.get('/markets');
       setMarkets(r.data);
-    } catch { /* ignore */ }
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Import failed');
+    }
     setImporting(false);
   };
 
@@ -67,6 +75,13 @@ export default function MarketsPage() {
             <p className="text-small mt-1">Import markets from Kalshi and Polymarket. Run AI-powered predictions.</p>
           </div>
         </div>
+
+        {error && (
+          <div className="mb-4 px-4 py-3 rounded-xl bg-saibyl-negative/10 border border-saibyl-negative/20 text-saibyl-negative text-sm">
+            {error}
+            <button onClick={() => setError('')} className="ml-3 underline">dismiss</button>
+          </div>
+        )}
 
         {/* Import bar */}
         <div className="glass rounded-2xl p-5 mb-6">
