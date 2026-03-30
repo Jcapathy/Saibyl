@@ -1,13 +1,18 @@
+import asyncio
+import json
 import random
 
 import structlog
 
 from app.core.database import get_supabase_admin
-from app.core.llm_client import llm_complete
+from app.core.llm_client import llm_complete, _extract_json
 from app.services.engine.document_processor import process_document
 from app.services.engine.ontology_generator import generate_ontology
 
 logger = structlog.get_logger()
+
+# Limit concurrent LLM calls during agent generation to avoid rate limits
+_AGENT_GEN_SEMAPHORE = asyncio.Semaphore(8)
 
 
 async def run_process_document(document_id: str):
@@ -42,17 +47,22 @@ async def run_prepare_agents(simulation_id: str):
     admin.table("simulations").update({"status": "preparing"}).eq("id", simulation_id).execute()
     logger.info("prepare_agents_start", simulation_id=simulation_id, packs=len(persona_pack_ids))
 
-    # Get document context for grounding
+    # Get document context for grounding (parallel downloads)
     docs = admin.table("documents").select("filename, storage_path").eq(
         "project_id", project_id
     ).eq("processing_status", "complete").execute().data
-    doc_context = ""
-    for doc in docs[:3]:
+
+    async def _download_doc(storage_path: str) -> str:
         try:
-            file_bytes = admin.storage.from_("project-media").download(doc["storage_path"])
-            doc_context += file_bytes.decode("utf-8", errors="replace")[:5000] + "\n\n"
+            file_bytes = await asyncio.to_thread(
+                admin.storage.from_("project-media").download, storage_path
+            )
+            return file_bytes.decode("utf-8", errors="replace")[:5000] + "\n\n"
         except Exception:
-            pass
+            return ""
+
+    doc_chunks = await asyncio.gather(*[_download_doc(d["storage_path"]) for d in docs[:3]])
+    doc_context = "".join(doc_chunks)
 
     prediction_goal = sim.get("prediction_goal", "")
     agents_to_create = []
@@ -79,19 +89,23 @@ async def run_prepare_agents(simulation_id: str):
         total_weight = sum(a.weight for _, a in all_archetypes)
         agents_per_platform = max(1, target_agent_count // len(platforms))
 
+        # Build agent specs first, then generate all profiles concurrently
+        agent_specs = []
         for platform in platforms:
             remaining = agents_per_platform
             for pack, archetype in all_archetypes:
-                # How many agents for this archetype on this platform
                 count = max(1, round(archetype.weight / total_weight * agents_per_platform))
                 if remaining <= 0:
                     break
                 count = min(count, remaining)
                 remaining -= count
-
                 for i in range(count):
-                    try:
-                        prompt = f"""Create a realistic social media persona for a {platform} simulation.
+                    agent_specs.append((pack, archetype, platform, i))
+
+        async def _gen_pack_agent(pack, archetype, platform, i):
+            async with _AGENT_GEN_SEMAPHORE:
+                try:
+                    prompt = f"""Create a realistic social media persona for a {platform} simulation.
 
 Archetype: {archetype.label}
 Pack: {pack.name}
@@ -115,55 +129,56 @@ Return a JSON object:
 - "sentiment_baseline": float (use {archetype.behavior_traits.sentiment_baseline} as center, vary +/-0.15)
 - "backstory": 2 sentences about their perspective on the topic"""
 
-                        raw = await llm_complete(
-                            messages=[{"role": "user", "content": prompt}],
-                            max_tokens=300,
-                        )
-                        from app.core.llm_client import _extract_json
-                        import json
-                        profile_data = json.loads(_extract_json(raw))
+                    raw = await llm_complete(
+                        messages=[{"role": "user", "content": prompt}],
+                        max_tokens=300,
+                    )
+                    profile_data = json.loads(_extract_json(raw))
 
-                        agents_to_create.append({
-                            "simulation_id": simulation_id,
-                            "organization_id": org_id,
-                            "entity_id": f"{archetype.id}_{platform}_{i}",
-                            "entity_name": profile_data.get("display_name", archetype.label),
-                            "persona_pack_id": pack.id,
-                            "variant": "a",
+                    logger.info("agent_created", archetype=archetype.label, platform=platform)
+                    return {
+                        "simulation_id": simulation_id,
+                        "organization_id": org_id,
+                        "entity_id": f"{archetype.id}_{platform}_{i}",
+                        "entity_name": profile_data.get("display_name", archetype.label),
+                        "persona_pack_id": pack.id,
+                        "variant": "a",
+                        "platform": platform,
+                        "profile": {
+                            **profile_data,
+                            "archetype": archetype.label,
+                            "pack": pack.name,
+                            "persona_type": archetype.label,
+                            "entity_type": archetype.label,
                             "platform": platform,
-                            "profile": {
-                                **profile_data,
-                                "archetype": archetype.label,
-                                "pack": pack.name,
-                                "persona_type": archetype.label,
-                                "entity_type": archetype.label,
-                                "platform": platform,
-                                "influence_multiplier": archetype.behavior_traits.influence_multiplier,
-                            },
-                            "username": profile_data.get("username", f"{archetype.id}_{i}"),
-                        })
-                        logger.info("agent_created", archetype=archetype.label, platform=platform)
-                    except Exception as e:
-                        logger.warning("agent_creation_failed", archetype=archetype.label, error=str(e))
-                        # Fallback agent
-                        agents_to_create.append({
-                            "simulation_id": simulation_id,
-                            "organization_id": org_id,
-                            "entity_id": f"{archetype.id}_{platform}_{i}",
-                            "entity_name": f"{archetype.label} #{i+1}",
-                            "persona_pack_id": pack.id,
-                            "variant": "a",
+                            "influence_multiplier": archetype.behavior_traits.influence_multiplier,
+                        },
+                        "username": profile_data.get("username", f"{archetype.id}_{i}"),
+                    }
+                except Exception as e:
+                    logger.warning("agent_creation_failed", archetype=archetype.label, error=str(e))
+                    return {
+                        "simulation_id": simulation_id,
+                        "organization_id": org_id,
+                        "entity_id": f"{archetype.id}_{platform}_{i}",
+                        "entity_name": f"{archetype.label} #{i+1}",
+                        "persona_pack_id": pack.id,
+                        "variant": "a",
+                        "platform": platform,
+                        "profile": {
+                            "display_name": f"{archetype.label} #{i+1}",
+                            "persona_type": archetype.label,
                             "platform": platform,
-                            "profile": {
-                                "display_name": f"{archetype.label} #{i+1}",
-                                "persona_type": archetype.label,
-                                "platform": platform,
-                                "bio": f"A {archetype.label.lower()} active on {platform}",
-                                "sentiment_baseline": archetype.behavior_traits.sentiment_baseline,
-                                "influence_multiplier": archetype.behavior_traits.influence_multiplier,
-                            },
-                            "username": f"{archetype.id}_{platform}_{i}",
-                        })
+                            "bio": f"A {archetype.label.lower()} active on {platform}",
+                            "sentiment_baseline": archetype.behavior_traits.sentiment_baseline,
+                            "influence_multiplier": archetype.behavior_traits.influence_multiplier,
+                        },
+                        "username": f"{archetype.id}_{platform}_{i}",
+                    }
+
+        agents_to_create = list(await asyncio.gather(
+            *[_gen_pack_agent(p, a, plat, idx) for p, a, plat, idx in agent_specs]
+        ))
     else:
         # -- Fallback: generate from ontology entities (original behavior) --
         ontologies = admin.table("ontologies").select("*").eq(
@@ -177,13 +192,19 @@ Return a JSON object:
         entity_types = ontologies[0].get("entity_types") or []
         agents_per_entity = max(1, target_agent_count // (len(entity_types) * len(platforms))) if entity_types else 2
 
+        # Build specs then generate concurrently
+        ontology_specs = []
         for entity_type in entity_types:
             if not entity_type.get("social_media_suitable", True):
                 continue
             for platform in platforms:
                 for i in range(agents_per_entity):
-                    try:
-                        prompt = f"""Create a realistic social media persona for simulation.
+                    ontology_specs.append((entity_type, platform, i))
+
+        async def _gen_ontology_agent(entity_type, platform, i):
+            async with _AGENT_GEN_SEMAPHORE:
+                try:
+                    prompt = f"""Create a realistic social media persona for simulation.
 
 Entity type: {entity_type['name']}
 Description: {entity_type.get('description', '')}
@@ -199,46 +220,48 @@ Return a JSON object with these fields:
 - "sentiment_baseline": float -1.0 to 1.0
 - "backstory": 2 sentences about their perspective"""
 
-                        raw = await llm_complete(messages=[{"role": "user", "content": prompt}], max_tokens=300)
-                        from app.core.llm_client import _extract_json
-                        import json
-                        profile_data = json.loads(_extract_json(raw))
+                    raw = await llm_complete(messages=[{"role": "user", "content": prompt}], max_tokens=300)
+                    profile_data = json.loads(_extract_json(raw))
 
-                        agents_to_create.append({
-                            "simulation_id": simulation_id,
-                            "organization_id": org_id,
-                            "entity_id": f"{entity_type['name']}_{platform}_{i}",
-                            "entity_name": profile_data.get("display_name", entity_type["name"]),
-                            "persona_pack_id": None,
-                            "variant": "a",
+                    return {
+                        "simulation_id": simulation_id,
+                        "organization_id": org_id,
+                        "entity_id": f"{entity_type['name']}_{platform}_{i}",
+                        "entity_name": profile_data.get("display_name", entity_type["name"]),
+                        "persona_pack_id": None,
+                        "variant": "a",
+                        "platform": platform,
+                        "profile": {
+                            **profile_data,
+                            "persona_type": entity_type["name"],
+                            "entity_type": entity_type["name"],
                             "platform": platform,
-                            "profile": {
-                                **profile_data,
-                                "persona_type": entity_type["name"],
-                                "entity_type": entity_type["name"],
-                                "platform": platform,
-                            },
-                            "username": profile_data.get("username", f"{entity_type['name'].lower().replace(' ', '_')}_{i}"),
-                        })
-                    except Exception as e:
-                        logger.warning("agent_creation_failed", entity=entity_type["name"], error=str(e))
-                        agents_to_create.append({
-                            "simulation_id": simulation_id,
-                            "organization_id": org_id,
-                            "entity_id": f"{entity_type['name']}_{platform}_{i}",
-                            "entity_name": f"{entity_type['name']} Agent {i+1}",
-                            "persona_pack_id": None,
-                            "variant": "a",
+                        },
+                        "username": profile_data.get("username", f"{entity_type['name'].lower().replace(' ', '_')}_{i}"),
+                    }
+                except Exception as e:
+                    logger.warning("agent_creation_failed", entity=entity_type["name"], error=str(e))
+                    return {
+                        "simulation_id": simulation_id,
+                        "organization_id": org_id,
+                        "entity_id": f"{entity_type['name']}_{platform}_{i}",
+                        "entity_name": f"{entity_type['name']} Agent {i+1}",
+                        "persona_pack_id": None,
+                        "variant": "a",
+                        "platform": platform,
+                        "profile": {
+                            "display_name": f"{entity_type['name']} Agent {i+1}",
+                            "persona_type": entity_type["name"],
                             "platform": platform,
-                            "profile": {
-                                "display_name": f"{entity_type['name']} Agent {i+1}",
-                                "persona_type": entity_type["name"],
-                                "platform": platform,
-                                "bio": f"A {entity_type['name'].lower()} active on {platform}",
-                                "sentiment_baseline": random.uniform(-0.3, 0.5),
-                            },
-                            "username": f"{entity_type['name'].lower().replace(' ', '_')}_{platform}_{i}",
-                        })
+                            "bio": f"A {entity_type['name'].lower()} active on {platform}",
+                            "sentiment_baseline": random.uniform(-0.3, 0.5),
+                        },
+                        "username": f"{entity_type['name'].lower().replace(' ', '_')}_{platform}_{i}",
+                    }
+
+        agents_to_create = list(await asyncio.gather(
+            *[_gen_ontology_agent(et, p, idx) for et, p, idx in ontology_specs]
+        ))
 
     # Insert agents in batch
     if agents_to_create:
@@ -258,7 +281,6 @@ Return a JSON object with these fields:
 
 async def run_simulation(simulation_id: str):
     """Run simulation using platform adapters."""
-    import asyncio
 
     admin = get_supabase_admin()
     sim = admin.table("simulations").select("*").eq("id", simulation_id).single().execute().data
