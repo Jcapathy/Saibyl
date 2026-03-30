@@ -314,20 +314,19 @@ async def run_simulation(simulation_id: str):
                 admin.table("simulations").update({"status": "stopped"}).eq("id", simulation_id).execute()
                 return {"simulation_id": simulation_id, "status": "stopped", "total_events": total_events}
 
-            round_events = []
-
-            for platform_id, adapter in adapters.items():
+            # Run all platforms concurrently within each round
+            async def _run_platform_round(platform_id, adapter):
+                events = []
                 try:
                     async for event in adapter.run_round(round_num):
                         agent_info = agent_lookup.get(event.agent_username, {})
                         agent_id = agent_info.get("id")
                         sentiment = agent_info.get("sentiment_baseline", 0.0)
 
-                        # Merge sentiment into metadata (column doesn't exist on table)
                         meta = event.metadata or {}
                         meta["sentiment"] = sentiment
 
-                        round_events.append({
+                        events.append({
                             "simulation_id": simulation_id,
                             "organization_id": org_id,
                             "event_type": event.event_type,
@@ -340,6 +339,17 @@ async def run_simulation(simulation_id: str):
                         })
                 except Exception as e:
                     logger.warning("round_failed", platform=platform_id, round=round_num, error=str(e))
+                return events
+
+            platform_results = await asyncio.gather(
+                *[_run_platform_round(pid, adp) for pid, adp in adapters.items()],
+                return_exceptions=True,
+            )
+
+            round_events = []
+            for result in platform_results:
+                if isinstance(result, list):
+                    round_events.extend(result)
 
             if round_events:
                 for i in range(0, len(round_events), 20):
