@@ -61,7 +61,7 @@ export default function SimulationDetailPage() {
     return () => clearInterval(interval);
   }, [sim?.status, loadSim]);
 
-  // One-click: prepare + start + poll
+  // One-click: prepare + wait for ready + start + poll
   async function handleRunNow() {
     if (!id) return;
     setRunning(true);
@@ -69,6 +69,28 @@ export default function SimulationDetailPage() {
     setRunStatus('Preparing agents...');
     try {
       await api.post(`/simulations/${id}/prepare`);
+
+      // Wait for prepare to finish (poll for ready/failed)
+      let ready = false;
+      for (let i = 0; i < 60; i++) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const r = await api.get(`/simulations/${id}`);
+        setSim(r.data);
+        if (r.data.status === 'ready') { ready = true; break; }
+        if (r.data.status === 'failed') {
+          setError('Agent preparation failed. Make sure you have documents uploaded and an ontology generated, or select persona packs.');
+          setRunning(false);
+          setRunStatus('');
+          return;
+        }
+      }
+      if (!ready) {
+        setError('Agent preparation timed out.');
+        setRunning(false);
+        setRunStatus('');
+        return;
+      }
+
       setRunStatus('Starting simulation...');
       await api.post(`/simulations/${id}/start`);
       setRunStatus('Simulation running — polling for updates...');

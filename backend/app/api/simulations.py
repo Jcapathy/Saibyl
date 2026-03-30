@@ -24,11 +24,17 @@ from app.workers.simulation_tasks import (
 log = structlog.get_logger()
 
 
-async def _safe_task(coro, name: str):
+async def _safe_task(coro, name: str, simulation_id: str | None = None):
     try:
         await coro
     except Exception:
         log.exception("background_task_failed", task=name)
+        if simulation_id:
+            try:
+                admin = get_supabase_admin()
+                admin.table("simulations").update({"status": "failed"}).eq("id", simulation_id).execute()
+            except Exception:
+                pass
 
 router = APIRouter(tags=["simulations"])
 
@@ -162,7 +168,7 @@ async def prepare_simulation(id: str, auth: dict = Depends(get_current_org)):
     if not sim.data:
         raise HTTPException(status_code=404, detail="Simulation not found")
 
-    asyncio.create_task(_safe_task(run_prepare_agents(id), "prepare_agents"))
+    asyncio.create_task(_safe_task(run_prepare_agents(id), "prepare_agents", simulation_id=id))
     return {"status": "started"}
 
 
@@ -183,9 +189,9 @@ async def start_simulation(id: str, auth: dict = Depends(get_current_org)):
         raise HTTPException(status_code=404, detail="Simulation not found")
 
     if sim.data.get("is_ab_test"):
-        asyncio.create_task(_safe_task(run_simulation_ab(id), "run_simulation_ab"))
+        asyncio.create_task(_safe_task(run_simulation_ab(id), "run_simulation_ab", simulation_id=id))
     else:
-        asyncio.create_task(_safe_task(run_simulation(id), "run_simulation"))
+        asyncio.create_task(_safe_task(run_simulation(id), "run_simulation", simulation_id=id))
     return {"status": "started"}
 
 

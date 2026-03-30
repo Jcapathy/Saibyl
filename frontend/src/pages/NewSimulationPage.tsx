@@ -97,9 +97,7 @@ export default function NewSimulationPage() {
         persona_pack_ids: selectedPacks,
         agent_count: agentCount,
       });
-      // Prepare and start are async — don't block on them
-      try { await api.post(`/simulations/${sim.id}/prepare`); } catch { /* ok */ }
-      try { await api.post(`/simulations/${sim.id}/start`); } catch { /* ok */ }
+      // Navigate immediately — the detail page handles prepare + start
       navigate(`/app/simulations/${sim.id}`);
     } catch (err: any) {
       setError(err.response?.data?.detail || JSON.stringify(err.response?.data) || 'Failed to create simulation');
