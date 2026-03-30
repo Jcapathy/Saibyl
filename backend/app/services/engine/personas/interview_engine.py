@@ -55,7 +55,7 @@ Return ONLY a single number.
 Text: {text}"""
 
 
-async def _get_agent_context(agent: dict, simulation_id: UUID) -> str:
+async def _get_agent_context(agent: dict, simulation_id: UUID | str) -> str:
     """Build context string from agent's recent simulation events."""
     admin = get_supabase_admin()
     events = (
@@ -79,13 +79,19 @@ async def _get_agent_context(agent: dict, simulation_id: UUID) -> str:
 
 async def _run_interview(
     agent: dict,
-    simulation_id: UUID,
+    simulation_id: UUID | str,
     user_prompt: str,
     semaphore: asyncio.Semaphore,
 ) -> InterviewResponse:
     """Run a single agent interview."""
     profile = agent.get("profile", {})
     context = await _get_agent_context(agent, simulation_id)
+
+    interests = profile.get("interests", [])
+    if isinstance(interests, list):
+        interests_str = ", ".join(str(i) for i in interests)
+    else:
+        interests_str = str(interests) if interests else ""
 
     prompt = INTERVIEW_PROMPT.format(
         display_name=profile.get("display_name", agent.get("entity_name", "")),
@@ -98,7 +104,7 @@ async def _run_interview(
         political_lean=profile.get("political_lean", "moderate"),
         bio=profile.get("bio", ""),
         backstory=profile.get("backstory", ""),
-        interests=", ".join(profile.get("interests", [])),
+        interests=interests_str,
         recent_events=context,
         user_prompt=user_prompt,
     )
@@ -133,7 +139,7 @@ async def _run_interview(
 
 
 async def interview_agent(
-    simulation_id: UUID, agent_id: UUID, prompt: str
+    simulation_id: UUID | str, agent_id: UUID | str, prompt: str
 ) -> InterviewResponse:
     """Interview a single agent."""
     admin = get_supabase_admin()
@@ -150,7 +156,7 @@ async def interview_agent(
 
 
 async def interview_batch(
-    simulation_id: UUID, agent_ids: list[UUID], prompt: str
+    simulation_id: UUID | str, agent_ids: list[UUID | str], prompt: str
 ) -> list[InterviewResponse]:
     """Interview multiple specific agents in parallel."""
     admin = get_supabase_admin()
@@ -167,7 +173,7 @@ async def interview_batch(
 
 
 async def interview_all(
-    simulation_id: UUID, prompt: str
+    simulation_id: UUID | str, prompt: str
 ) -> list[InterviewResponse]:
     """Interview all agents in a simulation."""
     admin = get_supabase_admin()
@@ -184,7 +190,7 @@ async def interview_all(
 
 
 async def interview_by_persona_type(
-    simulation_id: UUID, persona_type: str, prompt: str
+    simulation_id: UUID | str, persona_type: str, prompt: str
 ) -> list[InterviewResponse]:
     """Interview all agents of a specific persona type."""
     admin = get_supabase_admin()

@@ -94,7 +94,10 @@ export default function SimulationDetailPage() {
         }
       }
       setInterviewPrompt('');
-    } catch { /* ignore */ } finally {
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || 'Interview failed';
+      setInterviewResponses((prev) => [...prev, { agent: 'System', persona: 'error', response: msg, sentiment: 0 }]);
+    } finally {
       setInterviewLoading(false);
     }
   };
