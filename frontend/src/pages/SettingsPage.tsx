@@ -361,8 +361,8 @@ function WebhooksTab() {
 // --- Integrations (Market API Keys) ---
 function IntegrationsTab() {
   const [keys, setKeys] = useState<{ platform: string; key_preview: string }[]>([]);
-  const [platform] = useState('kalshi');
-  const [apiKey, setApiKey] = useState('');
+  const [kalshiKeyId, setKalshiKeyId] = useState('');
+  const [kalshiPem, setKalshiPem] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -372,12 +372,15 @@ function IntegrationsTab() {
 
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();
-    if (!apiKey.trim()) return;
+    if (!kalshiKeyId.trim() || !kalshiPem.trim()) return;
     setSaving(true);
     setError('');
     try {
-      await api.post('/markets/keys', { platform, api_key: apiKey });
-      setApiKey('');
+      // Combine key ID and PEM with separator for backend parsing
+      const combined = `${kalshiKeyId.trim()}|||${kalshiPem.trim()}`;
+      await api.post('/markets/keys', { platform: 'kalshi', api_key: combined });
+      setKalshiKeyId('');
+      setKalshiPem('');
       const r = await api.get('/markets/keys');
       setKeys(Array.isArray(r.data) ? r.data : []);
     } catch (err: any) {
@@ -431,20 +434,33 @@ function IntegrationsTab() {
           </div>
 
           {!keys.some((k) => k.platform === 'kalshi') && (
-            <form onSubmit={handleSave} className="flex gap-2">
-              <input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="Kalshi API key"
-                className="flex-1 bg-saibyl-surface border border-saibyl-border rounded-lg px-3 py-2 text-sm text-saibyl-platinum placeholder-saibyl-muted focus:outline-none focus:ring-2 focus:ring-saibyl-indigo"
-              />
+            <form onSubmit={handleSave} className="space-y-3">
+              <div>
+                <label className="block text-xs text-saibyl-muted mb-1">Key ID</label>
+                <input
+                  type="text"
+                  value={kalshiKeyId}
+                  onChange={(e) => setKalshiKeyId(e.target.value)}
+                  placeholder="e.g. 385c289d-a6b9-48e3-..."
+                  className="w-full bg-saibyl-surface border border-saibyl-border rounded-lg px-3 py-2 text-sm text-saibyl-platinum placeholder-saibyl-muted focus:outline-none focus:ring-2 focus:ring-saibyl-indigo"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-saibyl-muted mb-1">RSA Private Key (PEM)</label>
+                <textarea
+                  value={kalshiPem}
+                  onChange={(e) => setKalshiPem(e.target.value)}
+                  placeholder="-----BEGIN RSA PRIVATE KEY-----&#10;..."
+                  rows={4}
+                  className="w-full bg-saibyl-surface border border-saibyl-border rounded-lg px-3 py-2 text-sm text-saibyl-platinum placeholder-saibyl-muted focus:outline-none focus:ring-2 focus:ring-saibyl-indigo font-mono text-xs resize-none"
+                />
+              </div>
               <button
                 type="submit"
-                disabled={saving || !apiKey.trim()}
+                disabled={saving || !kalshiKeyId.trim() || !kalshiPem.trim()}
                 className="bg-saibyl-indigo text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#4B4FDE] disabled:opacity-50"
               >
-                {saving ? 'Saving...' : 'Connect'}
+                {saving ? 'Saving...' : 'Connect Kalshi'}
               </button>
             </form>
           )}

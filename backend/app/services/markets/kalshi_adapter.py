@@ -6,21 +6,54 @@
 # ─────────────────────────────────────────────────────────
 from __future__ import annotations
 
+import base64
+import time
+from datetime import datetime, UTC
+
 import httpx
 import structlog
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding
 
 logger = structlog.get_logger()
 
 BASE_URL = "https://trading-api.kalshi.com/trade-api/v2"
 
 
+def _parse_key_data(api_key: str) -> tuple[str, str]:
+    """Parse combined key data: 'KEY_ID|||PEM_KEY' format."""
+    if "|||" in api_key:
+        key_id, pem = api_key.split("|||", 1)
+        return key_id.strip(), pem.strip()
+    raise ValueError("Kalshi credentials must include both Key ID and RSA private key")
+
+
+def _sign_request(private_key_pem: str, timestamp: int, method: str, path: str) -> str:
+    """RSA-sign a Kalshi API request."""
+    message = f"{timestamp}{method}{path}".encode()
+    private_key = serialization.load_pem_private_key(private_key_pem.encode(), password=None)
+    signature = private_key.sign(message, padding.PKCS1v15(), hashes.SHA256())
+    return base64.b64encode(signature).decode()
+
+
+def _auth_headers(api_key: str, method: str, path: str) -> dict:
+    """Build Kalshi RSA auth headers."""
+    key_id, pem = _parse_key_data(api_key)
+    ts = int(time.time())
+    sig = _sign_request(pem, ts, method, path)
+    return {
+        "KALSHI-ACCESS-KEY": key_id,
+        "KALSHI-ACCESS-SIGNATURE": sig,
+        "KALSHI-ACCESS-TIMESTAMP": str(ts),
+    }
+
+
 async def fetch_market(ticker: str, api_key: str) -> dict:
     """Fetch Kalshi market details by ticker."""
+    path = f"/trade-api/v2/markets/{ticker}"
+    headers = _auth_headers(api_key, "GET", path)
     async with httpx.AsyncClient(timeout=15) as client:
-        response = await client.get(
-            f"{BASE_URL}/markets/{ticker}",
-            headers={"Authorization": f"Bearer {api_key}"},
-        )
+        response = await client.get(f"{BASE_URL}/markets/{ticker}", headers=headers)
         response.raise_for_status()
         market = response.json().get("market", {})
 
@@ -42,16 +75,17 @@ async def fetch_market(ticker: str, api_key: str) -> dict:
 
 async def search_markets(query: str, api_key: str, limit: int = 20) -> list[dict]:
     """Search Kalshi markets by keyword."""
+    path = "/trade-api/v2/markets"
+    headers = _auth_headers(api_key, "GET", path)
     async with httpx.AsyncClient(timeout=15) as client:
         response = await client.get(
             f"{BASE_URL}/markets",
             params={"status": "open", "limit": limit},
-            headers={"Authorization": f"Bearer {api_key}"},
+            headers=headers,
         )
         response.raise_for_status()
         markets = response.json().get("markets", [])
 
-        # Client-side filter by query
         query_lower = query.lower()
         filtered = [m for m in markets if query_lower in (m.get("title", "") + m.get("subtitle", "")).lower()]
 
@@ -70,11 +104,10 @@ async def search_markets(query: str, api_key: str, limit: int = 20) -> list[dict
 
 async def get_orderbook(ticker: str, api_key: str) -> dict:
     """Fetch current orderbook for price data."""
+    path = f"/trade-api/v2/markets/{ticker}/orderbook"
+    headers = _auth_headers(api_key, "GET", path)
     async with httpx.AsyncClient(timeout=15) as client:
-        response = await client.get(
-            f"{BASE_URL}/markets/{ticker}/orderbook",
-            headers={"Authorization": f"Bearer {api_key}"},
-        )
+        response = await client.get(f"{BASE_URL}/markets/{ticker}/orderbook", headers=headers)
         response.raise_for_status()
         return response.json().get("orderbook", {})
 
