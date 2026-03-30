@@ -41,6 +41,12 @@ export default function SimulationDetailPage() {
   const [eventCount, setEventCount] = useState(0);
   const [events, setEvents] = useState<Record<string, unknown>[]>([]);
 
+  // Accuracy scoring state
+  const [actualSentiment, setActualSentiment] = useState('');
+  const [actualNotes, setActualNotes] = useState('');
+  const [scoringLoading, setScoringLoading] = useState(false);
+  const [accuracyResult, setAccuracyResult] = useState<{ accuracy_score: number; predicted_sentiment: number; actual_sentiment: number; analysis: string } | null>(null);
+
   // Interview panel state
   const [agents, setAgents] = useState<Record<string, unknown>[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState('');
@@ -100,6 +106,21 @@ export default function SimulationDetailPage() {
       setInterviewPrompt('');
     } catch { /* ignore */ } finally {
       setInterviewLoading(false);
+    }
+  };
+
+  const handleScoreAccuracy = async () => {
+    if (!id) return;
+    setScoringLoading(true);
+    try {
+      const { data } = await api.post('/accuracy/score', {
+        simulation_id: id,
+        actual_sentiment: actualSentiment ? parseFloat(actualSentiment) : null,
+        notes: actualNotes || null,
+      });
+      setAccuracyResult(data);
+    } catch { /* ignore */ } finally {
+      setScoringLoading(false);
     }
   };
 
@@ -410,6 +431,72 @@ export default function SimulationDetailPage() {
                   <p className="text-[13px] text-saibyl-platinum/80 leading-relaxed">{r.response}</p>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Prediction Accuracy Scoring */}
+      {isDone && (
+        <div className="glass rounded-2xl p-6 mb-6">
+          <h2 className="text-[11px] font-mono text-saibyl-muted uppercase tracking-widest mb-4">Prediction Accuracy</h2>
+          {!accuracyResult ? (
+            <div className="space-y-4">
+              <p className="text-[13px] text-saibyl-muted">Compare the simulation's predictions against actual real-world outcomes.</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[12px] text-saibyl-muted mb-1">Actual Sentiment (-1 to 1)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="-1"
+                    max="1"
+                    value={actualSentiment}
+                    onChange={(e) => setActualSentiment(e.target.value)}
+                    placeholder="e.g. -0.3"
+                    className="w-full rounded-lg px-3 py-2 text-[13px] bg-[#0B1120] border border-white/[0.08] text-saibyl-platinum focus:outline-none focus:ring-2 focus:ring-saibyl-indigo/50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[12px] text-saibyl-muted mb-1">Notes on actual outcome</label>
+                  <input
+                    type="text"
+                    value={actualNotes}
+                    onChange={(e) => setActualNotes(e.target.value)}
+                    placeholder="What actually happened?"
+                    className="w-full rounded-lg px-3 py-2 text-[13px] bg-[#0B1120] border border-white/[0.08] text-saibyl-platinum placeholder-saibyl-muted/50 focus:outline-none focus:ring-2 focus:ring-saibyl-indigo/50"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={handleScoreAccuracy}
+                disabled={scoringLoading}
+                className="px-6 py-2.5 rounded-xl bg-saibyl-indigo text-white text-[13px] font-medium hover:bg-[#4B4FDE] disabled:opacity-50 transition-all"
+              >
+                {scoringLoading ? 'Analyzing...' : 'Score Accuracy'}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="text-center p-4 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                  <div className="text-2xl font-display font-bold text-saibyl-indigo">{(accuracyResult.accuracy_score * 100).toFixed(1)}%</div>
+                  <div className="text-[11px] text-saibyl-muted mt-1">Accuracy Score</div>
+                </div>
+                <div className="text-center p-4 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                  <div className="text-2xl font-display font-bold text-saibyl-cyan">{accuracyResult.predicted_sentiment.toFixed(3)}</div>
+                  <div className="text-[11px] text-saibyl-muted mt-1">Predicted Sentiment</div>
+                </div>
+                <div className="text-center p-4 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                  <div className="text-2xl font-display font-bold text-saibyl-positive">{accuracyResult.actual_sentiment.toFixed(3)}</div>
+                  <div className="text-[11px] text-saibyl-muted mt-1">Actual Sentiment</div>
+                </div>
+              </div>
+              <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                <h3 className="text-[12px] font-medium text-saibyl-platinum mb-2">Analysis</h3>
+                <p className="text-[13px] text-saibyl-muted leading-relaxed whitespace-pre-wrap">{accuracyResult.analysis}</p>
+              </div>
+              <button onClick={() => setAccuracyResult(null)} className="text-[12px] text-saibyl-indigo hover:underline">Re-score with different data</button>
             </div>
           )}
         </div>

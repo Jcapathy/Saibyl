@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
+    accuracy,
     api_keys,
     auth,
     billing,
@@ -77,6 +78,7 @@ def create_app() -> FastAPI:
     app.include_router(exports.router, prefix="/api")
     app.include_router(uploads.router, prefix="/api/uploads")
     app.include_router(markets.router, prefix="/api/markets")
+    app.include_router(accuracy.router, prefix="/api/accuracy")
 
     # WebSocket + SSE streaming
     app.include_router(ws.router)
