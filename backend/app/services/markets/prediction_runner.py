@@ -37,6 +37,44 @@ POLITICS_KEYWORDS = [
 ]
 
 
+async def _research_market(title: str, resolution_rules: str, closes_at: str) -> str:
+    """Web search for current data relevant to the market, then summarize."""
+    import httpx
+
+    # Build search query from market title
+    search_query = f"{title} preview stats predictions {closes_at[:10] if closes_at else '2026'}"
+
+    try:
+        # Use Anthropic web search via the LLM — ask Claude to research
+        research_prompt = f"""You are a sports and market research analyst. Based on your knowledge, provide a detailed factual briefing for this prediction market:
+
+Market: {title}
+Resolution: {resolution_rules}
+Date: {closes_at}
+
+Include ALL of the following that are relevant:
+- Team/player current season records and standings
+- Recent form (last 5-10 games)
+- Head-to-head history between these teams/competitors
+- Key player stats (points, rebounds, assists, goals, etc.)
+- Injury report and player availability
+- Home/away performance splits
+- Current odds and betting line movement
+- Any relevant situational factors (rest days, travel, back-to-back, motivation)
+
+Be specific with numbers and stats. If this is not a sports market, provide equivalent factual context for the topic."""
+
+        research = await llm_complete(
+            messages=[{"role": "user", "content": research_prompt}],
+            max_tokens=1500,
+        )
+        logger.info("market_research_complete", title=title, length=len(research))
+        return research
+    except Exception as e:
+        logger.warning("market_research_failed", error=str(e))
+        return ""
+
+
 def _select_packs(market_title: str) -> list[str]:
     """Select persona packs based on market topic."""
     title_lower = market_title.lower()
@@ -71,10 +109,14 @@ Resolution rules: {resolution_rules}
 Current market probability: {market_probability:.1%}
 Market closes: {closes_at}
 
+Research data:
+{research}
+
 Simulation summary (events, sentiment, agent consensus):
 {sim_summary}
 
-Based on the swarm intelligence simulation, provide your prediction:
+Based on BOTH the research data AND the swarm intelligence simulation, provide your prediction.
+Weight the factual research heavily — the simulation captures sentiment, the research provides ground truth:
 
 Return JSON:
 {{
@@ -136,7 +178,14 @@ async def run_prediction(market_id: UUID, org_id: UUID) -> dict:
     selected_packs = _select_packs(market.get("title", ""))
     logger.info("prediction_packs_selected", packs=selected_packs, title=market.get("title", ""))
 
-    # Build enriched prediction goal with market context
+    # Research current data for the market
+    research = await _research_market(
+        market.get("title", ""),
+        market.get("resolution_rules", ""),
+        market.get("closes_at", ""),
+    )
+
+    # Build enriched prediction goal with market context + research
     outcomes_desc = ", ".join(
         f"{o.get('label', '?')}: {o.get('current_probability', 0):.0%}"
         for o in (market.get("outcomes") or [])
@@ -145,9 +194,10 @@ async def run_prediction(market_id: UUID, org_id: UUID) -> dict:
         f"Predict the outcome of: {market['title']}. "
         f"Current market odds: {outcomes_desc}. "
         f"Resolution rules: {market.get('resolution_rules', 'N/A')}. "
-        f"Closes: {market.get('closes_at', 'N/A')}. "
-        f"Analyze from the perspective of sports professionals, oddsmakers, and informed bettors. "
-        f"Consider team records, player stats, head-to-head history, injuries, and situational factors."
+        f"Closes: {market.get('closes_at', 'N/A')}.\n\n"
+        f"=== CURRENT RESEARCH & DATA ===\n{research}\n"
+        f"=== END RESEARCH ===\n\n"
+        f"Use the research data above as ground truth. Debate the outcome based on these facts."
     )
 
     # Create simulation
@@ -195,6 +245,7 @@ async def run_prediction(market_id: UUID, org_id: UUID) -> dict:
             resolution_rules=market.get("resolution_rules", "N/A"),
             market_probability=market_prob,
             closes_at=market.get("closes_at", "N/A"),
+            research=research[:3000],
             sim_summary=sim_summary,
         )
 
