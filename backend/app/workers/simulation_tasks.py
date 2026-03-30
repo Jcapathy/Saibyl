@@ -176,9 +176,15 @@ Return a JSON object:
                         "username": f"{archetype.id}_{platform}_{i}",
                     }
 
-        agents_to_create = list(await asyncio.gather(
-            *[_gen_pack_agent(p, a, plat, idx) for p, a, plat, idx in agent_specs]
-        ))
+        if not agent_specs:
+            admin.table("simulations").update({"status": "failed"}).eq("id", simulation_id).execute()
+            raise ValueError("No agents to generate — check persona pack archetypes and platform selection")
+
+        results = await asyncio.gather(
+            *[_gen_pack_agent(p, a, plat, idx) for p, a, plat, idx in agent_specs],
+            return_exceptions=True,
+        )
+        agents_to_create = [r for r in results if isinstance(r, dict)]
     else:
         # -- Fallback: generate from ontology entities (original behavior) --
         ontologies = admin.table("ontologies").select("*").eq(
@@ -259,9 +265,21 @@ Return a JSON object with these fields:
                         "username": f"{entity_type['name'].lower().replace(' ', '_')}_{platform}_{i}",
                     }
 
-        agents_to_create = list(await asyncio.gather(
-            *[_gen_ontology_agent(et, p, idx) for et, p, idx in ontology_specs]
-        ))
+        if not ontology_specs:
+            admin.table("simulations").update({"status": "failed"}).eq("id", simulation_id).execute()
+            raise ValueError("No suitable entity types found in ontology for simulation")
+
+        results = await asyncio.gather(
+            *[_gen_ontology_agent(et, p, idx) for et, p, idx in ontology_specs],
+            return_exceptions=True,
+        )
+        agents_to_create = [r for r in results if isinstance(r, dict)]
+
+    # Guard: if zero agents were created, fail explicitly
+    if not agents_to_create:
+        admin.table("simulations").update({"status": "failed"}).eq("id", simulation_id).execute()
+        logger.error("prepare_agents_zero", simulation_id=simulation_id)
+        raise ValueError("Agent generation produced 0 agents — all LLM calls failed")
 
     # Insert agents in batch
     if agents_to_create:
@@ -279,8 +297,20 @@ Return a JSON object with these fields:
     return {"simulation_id": simulation_id, "agents": agent_count, "status": "ready"}
 
 
+def _check_stop_signal(simulation_id: str) -> bool:
+    """Check Redis for a stop signal."""
+    try:
+        import redis
+        from app.core.config import settings
+        r = redis.from_url(settings.redis_url, decode_responses=True)
+        return bool(r.get(f"simulation:{simulation_id}:stop"))
+    except Exception:
+        return False
+
+
 async def run_simulation(simulation_id: str):
     """Run simulation using platform adapters."""
+    from datetime import datetime, UTC
 
     admin = get_supabase_admin()
     sim = admin.table("simulations").select("*").eq("id", simulation_id).single().execute().data
@@ -342,39 +372,49 @@ async def run_simulation(simulation_id: str):
 
     logger.info("simulation_start", simulation_id=simulation_id, agents=len(agents), rounds=max_rounds, platforms=list(adapters.keys()))
 
-    for round_num in range(1, max_rounds + 1):
-        round_events = []
+    try:
+        for round_num in range(1, max_rounds + 1):
+            # Check stop signal before each round
+            if _check_stop_signal(simulation_id):
+                logger.info("simulation_stopped", simulation_id=simulation_id, round=round_num)
+                admin.table("simulations").update({"status": "stopped"}).eq("id", simulation_id).execute()
+                return {"simulation_id": simulation_id, "status": "stopped", "total_events": total_events}
 
-        for platform_id, adapter in adapters.items():
-            try:
-                async for event in adapter.run_round(round_num):
-                    agent_info = agent_lookup.get(event.agent_username, {})
-                    agent_id = agent_info.get("id")
-                    sentiment_score = agent_info.get("sentiment_baseline", 0.0)
+            round_events = []
 
-                    round_events.append({
-                        "simulation_id": simulation_id,
-                        "organization_id": org_id,
-                        "event_type": event.event_type,
-                        "agent_id": agent_id,
-                        "platform": event.platform,
-                        "variant": event.variant,
-                        "round_number": event.round_number,
-                        "content": event.content[:1000] if event.content else None,
-                        "metadata": event.metadata,
-                        "sentiment_score": sentiment_score,
-                    })
-            except Exception as e:
-                logger.warning("round_failed", platform=platform_id, round=round_num, error=str(e))
+            for platform_id, adapter in adapters.items():
+                try:
+                    async for event in adapter.run_round(round_num):
+                        agent_info = agent_lookup.get(event.agent_username, {})
+                        agent_id = agent_info.get("id")
+                        sentiment_score = agent_info.get("sentiment_baseline", 0.0)
 
-        if round_events:
-            for i in range(0, len(round_events), 20):
-                admin.table("simulation_events").insert(round_events[i:i+20]).execute()
-            total_events += len(round_events)
+                        round_events.append({
+                            "simulation_id": simulation_id,
+                            "organization_id": org_id,
+                            "event_type": event.event_type,
+                            "agent_id": agent_id,
+                            "platform": event.platform,
+                            "variant": event.variant,
+                            "round_number": event.round_number,
+                            "content": event.content[:1000] if event.content else None,
+                            "metadata": event.metadata,
+                            "sentiment_score": sentiment_score,
+                        })
+                except Exception as e:
+                    logger.warning("round_failed", platform=platform_id, round=round_num, error=str(e))
 
-        logger.info("round_complete", simulation_id=simulation_id, round=round_num, events=len(round_events))
+            if round_events:
+                for i in range(0, len(round_events), 20):
+                    admin.table("simulation_events").insert(round_events[i:i+20]).execute()
+                total_events += len(round_events)
 
-    from datetime import datetime, UTC
+            logger.info("round_complete", simulation_id=simulation_id, round=round_num, events=len(round_events))
+    except Exception as e:
+        logger.exception("simulation_run_error", simulation_id=simulation_id, error=str(e))
+        admin.table("simulations").update({"status": "failed"}).eq("id", simulation_id).execute()
+        return {"simulation_id": simulation_id, "status": "failed", "total_events": total_events}
+
     admin.table("simulations").update({
         "status": "complete",
         "completed_at": datetime.now(UTC).isoformat(),

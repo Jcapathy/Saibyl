@@ -226,7 +226,9 @@ async def stop_simulation_endpoint(id: str, auth: dict = Depends(get_current_org
         raise HTTPException(status_code=404, detail="Simulation not found")
 
     await stop_simulation(id)
-    return {"detail": "Stop signal sent"}
+    # Also directly update DB status so frontend sees it immediately
+    admin.table("simulations").update({"status": "stopped"}).eq("id", id).execute()
+    return {"detail": "Simulation stopped"}
 
 
 @router.get("/{id}/status")
