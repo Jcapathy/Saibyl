@@ -46,20 +46,28 @@ export default function MarketDetailPage() {
   const runPrediction = async () => {
     setPredicting(true);
     setError('');
+    const existingCount = market?.predictions?.length || 0;
     try {
       await api.post(`/markets/${id}/predict`);
-      // Poll for completion — prediction runs as background task
+      // Poll for new prediction to appear
       const poll = setInterval(() => {
         api.get(`/markets/${id}`).then((r) => {
           setMarket(r.data);
-          if (r.data.predictions && r.data.predictions.length > 0) {
+          const newCount = r.data.predictions?.length || 0;
+          if (newCount > existingCount) {
             clearInterval(poll);
             setPredicting(false);
           }
         }).catch(() => {});
-      }, 8000);
-      // Stop polling after 5 minutes
-      setTimeout(() => { clearInterval(poll); setPredicting(false); }, 300000);
+      }, 10000);
+      // Stop polling after 10 minutes — prediction includes sim + report
+      setTimeout(() => {
+        clearInterval(poll);
+        if (predicting) {
+          setError('Prediction is taking longer than expected. Check back shortly.');
+          setPredicting(false);
+        }
+      }, 600000);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Prediction failed to start');
       setPredicting(false);

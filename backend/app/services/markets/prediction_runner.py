@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from app.core.database import get_supabase_admin
 from app.core.llm_client import llm_structured
 from app.services.intelligence.report_agent import ReACTConfig, generate_report
-from app.services.platforms.simulation_runner import run_simulation
+from app.workers.simulation_tasks import run_prepare_agents, run_simulation
 
 logger = structlog.get_logger()
 
@@ -77,32 +77,49 @@ async def run_prediction(market_id: UUID, org_id: UUID) -> dict:
     ).eq("name", "Prediction Markets").execute().data
 
     if not project:
+        # Get any user in the org for created_by
+        members = admin.table("organization_members").select("user_id").eq(
+            "organization_id", str(org_id)
+        ).limit(1).execute().data
+        creator = members[0]["user_id"] if members else str(org_id)
         project = admin.table("projects").insert({
             "organization_id": str(org_id),
-            "created_by": str(org_id),  # system-created
+            "created_by": creator,
             "name": "Prediction Markets",
             "description": "Auto-created project for prediction market simulations",
         }).execute().data
 
     project_id = project[0]["id"]
 
+    # Get org member for created_by
+    members = admin.table("organization_members").select("user_id").eq(
+        "organization_id", str(org_id)
+    ).limit(1).execute().data
+    creator = members[0]["user_id"] if members else str(org_id)
+
+    # Default persona packs for market predictions
+    default_packs = ["fintech-investor", "media-journalist", "political-moderate"]
+
     # Create simulation
     sim = admin.table("simulations").insert({
         "project_id": project_id,
         "organization_id": str(org_id),
-        "created_by": str(org_id),
+        "created_by": creator,
         "name": f"Prediction: {market['title'][:80]}",
         "prediction_goal": f"Determine the TRUE probability of: {market['title']}. Resolution: {market.get('resolution_rules', 'N/A')}. Current market: {market_prob:.0%}.",
         "platforms": ["twitter_x", "reddit"],
-        "max_rounds": 5,
-        "agent_count": 500,
+        "max_rounds": 3,
+        "agent_count": 20,
+        "persona_pack_ids": default_packs,
+        "status": "draft",
     }).execute().data[0]
 
     sim_id = sim["id"]
 
-    # Run simulation
+    # Prepare agents then run simulation
     try:
-        await run_simulation(UUID(sim_id))
+        await run_prepare_agents(sim_id)
+        await run_simulation(sim_id)
 
         # Get simulation events summary
         events = admin.table("simulation_events").select(
