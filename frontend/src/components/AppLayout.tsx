@@ -8,11 +8,13 @@ import {
   Settings,
   LogOut,
   Zap,
+  BookOpen,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 
 const navItems = [
   { path: '/app/dashboard',   label: 'Dashboard',   Icon: LayoutDashboard },
+  { path: '/app/guide',       label: 'Guide',       Icon: BookOpen },
   { path: '/app/projects',    label: 'Projects',    Icon: FolderOpen },
   { path: '/app/simulations', label: 'Simulations', Icon: FlaskConical },
   { path: '/app/markets',     label: 'Markets',     Icon: TrendingUp },

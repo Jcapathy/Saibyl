@@ -74,7 +74,7 @@ class ReportProgress(BaseModel):
 
 # ── Prompts ──────────────────────────────────────────────
 
-OUTLINE_PROMPT = """You are a predictive intelligence analyst. Plan a report for this simulation.
+OUTLINE_PROMPT = """You are a predictive intelligence analyst producing a comprehensive, evidence-rich report.
 
 Prediction goal: {prediction_goal}
 Platforms simulated: {platforms}
@@ -82,20 +82,29 @@ Agent count: {agent_count}
 Rounds completed: {rounds}
 Total events: {event_count}
 
-Generate a report outline with {section_count} sections. Each section should have a title and 2-3 research angles (questions to investigate).
+Generate a report outline with {section_count} sections. Each section must have a title and 3-5 research angles (specific questions to investigate with data).
+
+REQUIRED: Every report must include sections covering:
+- Sentiment trajectories over time (round-by-round arc, inflection points, polarization)
+- Platform-specific dynamics (how each platform shaped discourse differently)
+- Agent/persona archetype analysis (cluster agents by behavior patterns, emotional signatures)
+- Key trigger events and viral moments (what caused sentiment spikes/shifts)
+- Predictive implications and forecast (what the trajectories suggest going forward)
+
+Each research angle should be specific enough to require multiple tool calls. Prefer quantitative angles (sentiment scores, engagement metrics, platform comparisons) over vague qualitative ones.
 
 Return JSON: {{"sections": [{{"title": str, "research_angles": [str]}}]}}"""
 
-REACT_PROMPT = """You are a ReACT (Reasoning-Action-Observation) intelligence analyst writing section "{section_title}" of a predictive intelligence report.
+REACT_PROMPT = """You are a ReACT (Reasoning-Action-Observation) intelligence analyst writing section "{section_title}" of a comprehensive predictive intelligence report.
 
 Prediction goal: {prediction_goal}
 Research angles for this section: {research_angles}
 
 You have access to these tools (call by name):
-1. insight_forge(query) — Deep semantic search of knowledge graph
-2. quick_search(query) — Fast keyword search for facts
+1. insight_forge(query) — Deep semantic search of knowledge graph for entities, relationships, facts
+2. quick_search(query) — Fast keyword search for specific facts and data points
 3. simulation_analytics(type) — Analyze simulation data. Types: top_posts, sentiment_over_time, viral_moments, agent_activity, platform_comparison, persona_breakdown
-4. agent_interview(prompt) — Interview simulation agents
+4. agent_interview(prompt) — Interview simulation agents in-character about their experiences and reactions
 
 Evidence gathered so far:
 {evidence}
@@ -103,10 +112,24 @@ Evidence gathered so far:
 Instructions:
 - If you need more evidence, respond with: TOOL: <tool_name>(<args>)
 - If you have enough evidence, respond with: ANSWER: <section content in markdown>
+- Use MULTIPLE different tools before writing your answer — do not answer after just 1-2 tool calls
+- Call simulation_analytics with DIFFERENT types to get varied data dimensions
+- Use agent_interview to get qualitative quotes and persona-specific reactions
+- Use insight_forge or quick_search for contextual knowledge beyond the simulation data
 
-Keep reasoning concise. Be analytical, not descriptive."""
+QUALITY REQUIREMENTS for your ANSWER:
+- Include specific numbers: sentiment scores, engagement counts, round-by-round metrics
+- Build markdown tables for platform comparisons, agent archetype breakdowns, or timeline data
+- Identify 3-4 distinct clusters/archetypes when analyzing agent behavior
+- Describe trajectory arcs with specific inflection points (e.g., "Round 3 saw a -0.25 drop")
+- Include cross-cutting dynamics: contagion effects, narrative fatigue, archetype migration
+- End with predictive implications: what do the patterns forecast if trends continue?
+- Write 800-1500 words per section — comprehensive analysis, not summaries
+- Use direct quotes from agent interviews as supporting evidence
 
-EXECUTIVE_SUMMARY_PROMPT = """Write a concise executive summary (3-5 paragraphs) for this predictive intelligence report.
+Be analytical and data-driven. Synthesize across multiple data sources. Do NOT produce thin, surface-level summaries."""
+
+EXECUTIVE_SUMMARY_PROMPT = """Write a comprehensive executive summary (4-6 paragraphs) for this predictive intelligence report.
 
 Prediction goal: {prediction_goal}
 
@@ -114,10 +137,12 @@ Report sections:
 {sections_text}
 
 The summary should:
-1. State the key prediction/finding upfront
-2. Highlight the most significant insights
-3. Note any surprising or counterintuitive findings
-4. End with confidence level and key caveats"""
+1. State the key prediction/finding upfront with specific metrics
+2. Highlight the most significant insights with data points (sentiment scores, engagement numbers)
+3. Describe the overall sentiment trajectory arc and where it ended
+4. Identify the most important agent archetypes/clusters and their behavior
+5. Note any surprising or counterintuitive findings
+6. End with a forecast: what these patterns predict if trends continue, with confidence level and key caveats"""
 
 AB_COMPARISON_PROMPT = """Compare the two simulation variants and determine a winner.
 
@@ -192,7 +217,7 @@ async def _run_react_loop(
         prediction_goal=prediction_goal,
         research_angles=", ".join(section.research_angles),
         evidence="\n".join(evidence),
-    ) + "\n\nYou have used all available tool calls. You MUST now provide your ANSWER:"
+    ) + "\n\nYou have used all available tool calls. You MUST now provide your ANSWER. Synthesize ALL evidence gathered into a comprehensive, data-rich section (800-1500 words) with specific metrics, tables, archetype analysis, and predictive implications:"
 
     result = await llm_complete(
         messages=[{"role": "user", "content": final_prompt}],
@@ -233,16 +258,16 @@ async def _execute_tool(
             result = await simulation_analytics(
                 UUID(simulation_id), atype, variant=variant
             )
-            return f"{result.summary}\nData: {json.dumps(result.data, default=str)[:2000]}"
+            return f"{result.summary}\nData: {json.dumps(result.data, default=str)[:5000]}"
 
         elif tool_line.startswith("agent_interview"):
             prompt = _extract_arg(tool_line)
             if config.include_agent_interviews:
                 responses = await agent_interview_tool(
-                    UUID(simulation_id), prompt, sample_size=3, variant=variant
+                    UUID(simulation_id), prompt, sample_size=5, variant=variant
                 )
                 return "\n".join(
-                    f"- {r.agent_username} ({r.persona_type}): {r.response[:300]}"
+                    f"- {r.agent_username} ({r.persona_type}, sentiment: {r.sentiment_score:.2f}): {r.response[:500]}"
                     for r in responses
                 )
             return "Agent interviews disabled in config."
@@ -303,7 +328,7 @@ async def generate_report(
     graph_id = kg[0]["id"] if kg else None
 
     # Create report record
-    section_count = config.section_count or min(5, max(2, event_count // 50 + 2))
+    section_count = config.section_count or min(7, max(4, event_count // 30 + 2))
     report = admin.table("reports").insert({
         "simulation_id": sim_id,
         "organization_id": org_id,
@@ -371,7 +396,7 @@ async def generate_report(
         exec_summary = await llm_complete(
             messages=[{"role": "user", "content": EXECUTIVE_SUMMARY_PROMPT.format(
                 prediction_goal=sim["prediction_goal"],
-                sections_text=sections_text[:10000],
+                sections_text=sections_text[:20000],
             )}],
         )
 

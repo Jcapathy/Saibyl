@@ -8,6 +8,7 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import ComparisonPage from '@/pages/ComparisonPage';
 import LandingPage from '@/pages/LandingPage';
 import DashboardPage from '@/pages/DashboardPage';
+import GuidePage from '@/pages/GuidePage';
 import LoginPage from '@/pages/LoginPage';
 import MarketDetailPage from '@/pages/MarketDetailPage';
 import MarketsPage from '@/pages/MarketsPage';
@@ -43,6 +44,7 @@ function AnimatedRoutes() {
         >
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<PageTransition><DashboardPage /></PageTransition>} />
+          <Route path="guide" element={<PageTransition><GuidePage /></PageTransition>} />
           <Route path="projects" element={<PageTransition><ProjectsPage /></PageTransition>} />
           <Route path="projects/:id" element={<PageTransition><ProjectDetailPage /></PageTransition>} />
           <Route path="simulations" element={<PageTransition><SimulationsPage /></PageTransition>} />

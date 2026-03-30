@@ -35,7 +35,7 @@ router = APIRouter(tags=["reports"])
 class GenerateReportBody(BaseModel):
     simulation_id: str
     variant: str = "a"
-    max_react_steps: int | None = None
+    evidence_depth: str = "deep"  # shallow, standard, deep, exhaustive
     max_sections: int | None = None
 
 
@@ -70,7 +70,10 @@ async def generate_report(body: GenerateReportBody, auth: dict = Depends(get_cur
     if not sim.data:
         raise HTTPException(status_code=404, detail="Simulation not found")
 
-    asyncio.create_task(_safe_task(run_generate_report(body.simulation_id, body.variant), "generate_report"))
+    asyncio.create_task(_safe_task(
+        run_generate_report(body.simulation_id, body.variant, body.evidence_depth, body.max_sections),
+        "generate_report",
+    ))
     return {"status": "started"}
 
 

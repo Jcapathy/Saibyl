@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { Lightbulb, Clock } from 'lucide-react';
 import api from '@/lib/api';
 
 interface Project {
@@ -34,6 +35,30 @@ const DEPTH_LABELS: Record<number, string> = { 1: 'Shallow', 2: 'Standard', 3: '
 
 const inputClass = 'w-full rounded-xl px-4 py-3 text-[14px] text-saibyl-platinum placeholder-saibyl-muted/50 focus:outline-none focus:ring-2 focus:ring-saibyl-indigo/50 focus:border-transparent transition';
 const inputBg = 'bg-[#0B1120] border border-white/[0.08]';
+
+function Hint({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-saibyl-indigo/5 border border-saibyl-indigo/15 mb-5">
+      <Lightbulb className="w-3.5 h-3.5 text-saibyl-indigo mt-0.5 shrink-0" />
+      <p className="text-[12px] text-saibyl-muted leading-relaxed">{children}</p>
+    </div>
+  );
+}
+
+function EstimatedTime({ agents, rounds, platforms }: { agents: number; rounds: number; platforms: number }) {
+  const platformCount = Math.max(platforms, 1);
+  const minutes = Math.max(1, Math.round((agents * rounds * platformCount) / 200));
+  const label = minutes <= 3 ? 'text-saibyl-positive' : minutes <= 10 ? 'text-saibyl-cyan' : 'text-saibyl-muted';
+  return (
+    <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-white/[0.02] border border-white/[0.06] mt-5">
+      <Clock className="w-3.5 h-3.5 text-saibyl-muted shrink-0" />
+      <p className="text-[12px] text-saibyl-muted">
+        Estimated run time: <span className={`font-medium ${label}`}>~{minutes} minute{minutes !== 1 ? 's' : ''}</span>
+        <span className="text-saibyl-muted/50 ml-1">— still a fraction of what focus groups cost</span>
+      </p>
+    </div>
+  );
+}
 
 export default function NewSimulationPage() {
   const navigate = useNavigate();
@@ -170,6 +195,10 @@ export default function NewSimulationPage() {
           {/* ── Step 1: Setup ── */}
           {step === 0 && (
             <div className="space-y-5">
+              <Hint>
+                Write your prediction goal as a specific question. The more precise the scenario, the sharper the simulation results.
+                Instead of "How will people react?" try "How will mid-career engineers on Reddit react to X?"
+              </Hint>
               <div>
                 <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-2">Simulation Name</label>
                 <input
@@ -222,6 +251,10 @@ export default function NewSimulationPage() {
           {/* ── Step 2: Platforms ── */}
           {step === 1 && (
             <div>
+              <Hint>
+                Each platform has its own algorithmic behavior — Twitter amplifies hot takes, Reddit rewards depth, LinkedIn suppresses negativity.
+                More platforms = richer cross-platform insights, but adds to run time.
+              </Hint>
               <p className="text-[14px] text-saibyl-muted mb-5">Select the platforms to simulate. Each uses real algorithmic behavior.</p>
               <div className="grid grid-cols-2 gap-3">
                 {PLATFORMS.map((p) => {
@@ -252,6 +285,10 @@ export default function NewSimulationPage() {
           {/* ── Step 3: Persona Packs ── */}
           {step === 2 && (
             <div>
+              <Hint>
+                Mixing different persona packs (e.g. "Tech Workers" + "Policy Analysts") creates realistic cross-demographic debates.
+                The friction between groups is where the best insights live. You can also create fully custom personas.
+              </Hint>
               <p className="text-[14px] text-saibyl-muted mb-5">Choose persona packs to populate your simulation agents, or create a custom persona.</p>
               {packs.length === 0 ? (
                 <div className="text-center py-8 text-saibyl-muted">Loading persona packs...</div>
@@ -357,6 +394,10 @@ export default function NewSimulationPage() {
           {/* ── Step 4: Settings ── */}
           {step === 3 && (
             <div className="space-y-6">
+              <Hint>
+                More agents and rounds produce richer analysis but take longer. Start with 20 agents and 5 rounds for fast iteration (~3 min).
+                Scale up to 50-100 agents with 10+ rounds when you find an interesting signal and want the full picture.
+              </Hint>
               <div>
                 <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-3">
                   Agent Count: <span className="text-saibyl-indigo font-bold">{agentCount}</span>
@@ -398,6 +439,7 @@ export default function NewSimulationPage() {
                 <input type="range" min={1} max={5} value={reactDepth} onChange={(e) => setReactDepth(Number(e.target.value))} className="w-full accent-saibyl-indigo" />
                 <div className="flex justify-between text-[10px] text-saibyl-muted/50 mt-1"><span>Shallow</span><span>Standard</span><span>Exhaustive</span></div>
               </div>
+              <EstimatedTime agents={agentCount} rounds={rounds} platforms={selectedPlatforms.length} />
             </div>
           )}
 
