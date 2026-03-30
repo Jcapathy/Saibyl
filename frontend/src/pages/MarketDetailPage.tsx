@@ -35,6 +35,7 @@ export default function MarketDetailPage() {
   const [loading, setLoading] = useState(true);
   const [predicting, setPredicting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState('');
 
   const load = () => {
     api.get(`/markets/${id}`).then((r) => { setMarket(r.data); setLoading(false); }).catch(() => setLoading(false));
@@ -44,20 +45,36 @@ export default function MarketDetailPage() {
 
   const runPrediction = async () => {
     setPredicting(true);
+    setError('');
     try {
       await api.post(`/markets/${id}/predict`);
-      // Poll for completion
-      setTimeout(load, 5000);
-    } catch { /* ignore */ }
-    setPredicting(false);
+      // Poll for completion — prediction runs as background task
+      const poll = setInterval(() => {
+        api.get(`/markets/${id}`).then((r) => {
+          setMarket(r.data);
+          if (r.data.predictions && r.data.predictions.length > 0) {
+            clearInterval(poll);
+            setPredicting(false);
+          }
+        }).catch(() => {});
+      }, 8000);
+      // Stop polling after 5 minutes
+      setTimeout(() => { clearInterval(poll); setPredicting(false); }, 300000);
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Prediction failed to start');
+      setPredicting(false);
+    }
   };
 
   const refresh = async () => {
     setRefreshing(true);
+    setError('');
     try {
       await api.post(`/markets/${id}/refresh`);
       load();
-    } catch { /* ignore */ }
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Refresh failed');
+    }
     setRefreshing(false);
   };
 
@@ -76,6 +93,13 @@ export default function MarketDetailPage() {
           <span>/</span>
           <span className="text-saibyl-platinum truncate max-w-xs">{market.title}</span>
         </div>
+
+        {error && (
+          <div className="mb-4 px-4 py-3 rounded-xl bg-saibyl-negative/10 border border-saibyl-negative/20 text-saibyl-negative text-sm">
+            {error}
+            <button onClick={() => setError('')} className="ml-3 underline">dismiss</button>
+          </div>
+        )}
 
         {/* Header card */}
         <div className="glass rounded-2xl p-8 mb-6">
@@ -155,10 +179,10 @@ export default function MarketDetailPage() {
             <button
               onClick={runPrediction}
               disabled={predicting}
-              className="flex-1 py-3 rounded-xl text-white font-medium text-[14px] transition-all hover:scale-[1.01] disabled:opacity-40"
-              style={{ background: 'var(--grad-arc)' }}
+              className="relative flex-1 py-3 rounded-xl text-white font-medium text-[14px] transition-all hover:scale-[1.01] disabled:opacity-40 overflow-hidden"
             >
-              {predicting ? '⏳ Running prediction...' : '🔮 Run Saibyl Prediction'}
+              <div className="absolute inset-0 bg-gradient-to-r from-[#5B5FEE] to-[#00D4FF]" />
+              <span className="relative">{predicting ? 'Running prediction...' : 'Run Saibyl Prediction'}</span>
             </button>
             <button
               onClick={refresh}
