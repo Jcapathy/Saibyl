@@ -27,12 +27,15 @@ log = structlog.get_logger()
 async def _safe_task(coro, name: str, simulation_id: str | None = None):
     try:
         await coro
-    except Exception:
+    except Exception as exc:
         log.exception("background_task_failed", task=name)
         if simulation_id:
             try:
                 admin = get_supabase_admin()
-                admin.table("simulations").update({"status": "failed"}).eq("id", simulation_id).execute()
+                admin.table("simulations").update({
+                    "status": "failed",
+                    "error_message": f"[{name}] {type(exc).__name__}: {exc}",
+                }).eq("id", simulation_id).execute()
             except Exception:
                 pass
 

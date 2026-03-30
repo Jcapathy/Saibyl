@@ -17,6 +17,7 @@ interface Simulation {
   created_at: string;
   completed_at: string | null;
   project_id: string;
+  error_message: string | null;
 }
 
 const PLATFORM_NAMES: Record<string, string> = {
@@ -177,6 +178,14 @@ export default function SimulationDetailPage() {
         <div className="mb-4 px-4 py-3 rounded-xl bg-saibyl-negative/10 border border-saibyl-negative/20 text-saibyl-negative text-sm">
           {error}
           <button onClick={() => setError('')} className="ml-3 underline">dismiss</button>
+        </div>
+      )}
+
+      {/* Server error from failed simulation */}
+      {sim.status === 'failed' && sim.error_message && (
+        <div className="mb-4 px-4 py-3 rounded-xl bg-saibyl-negative/10 border border-saibyl-negative/20 text-sm">
+          <p className="text-saibyl-negative font-medium mb-1">Simulation failed</p>
+          <p className="text-saibyl-muted font-mono text-[12px]">{sim.error_message}</p>
         </div>
       )}
 

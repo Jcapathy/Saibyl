@@ -346,7 +346,10 @@ async def run_simulation(simulation_id: str):
             logger.info("round_complete", simulation_id=simulation_id, round=round_num, events=len(round_events))
     except Exception as e:
         logger.exception("simulation_run_error", simulation_id=simulation_id, error=str(e))
-        admin.table("simulations").update({"status": "failed"}).eq("id", simulation_id).execute()
+        admin.table("simulations").update({
+            "status": "failed",
+            "error_message": f"[run_simulation] {type(e).__name__}: {e}",
+        }).eq("id", simulation_id).execute()
         return {"simulation_id": simulation_id, "status": "failed", "total_events": total_events}
 
     admin.table("simulations").update({
