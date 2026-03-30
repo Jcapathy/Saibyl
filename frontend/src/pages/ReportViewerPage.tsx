@@ -56,29 +56,20 @@ export default function ReportViewerPage() {
     if (!report || exporting) return;
     setExporting(true);
     try {
-      const { data } = await api.post(`/reports/${report.id}/export`, { format });
-      // The backend returns an export task; poll for the download URL
-      if (data.task_id) {
-        const poll = async () => {
-          const { data: task } = await api.get(`/export-tasks/${data.task_id}`);
-          if (task.status === 'completed' && task.download_url) {
-            window.open(task.download_url, '_blank');
-          } else if (task.status === 'failed') {
-            // export failed silently
-          } else {
-            setTimeout(poll, 1500);
-            return;
-          }
-          setExporting(false);
-        };
-        poll();
-      } else if (data.download_url) {
-        window.open(data.download_url, '_blank');
-        setExporting(false);
-      } else {
-        setExporting(false);
-      }
+      const response = await api.post(`/reports/${report.id}/export`, { format }, { responseType: 'blob' });
+      const blob = new Blob([response.data]);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const ext = format === 'pptx' ? 'pptx' : format === 'pdf' ? 'pdf' : 'json';
+      a.download = `report.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
     } catch {
+      // silently fail
+    } finally {
       setExporting(false);
     }
   };
