@@ -260,16 +260,11 @@ async def run_prediction(market_id: UUID, org_id: UUID) -> dict:
             schema=PredictionResult,
         )
 
-        # Generate full report
-        config = ReACTConfig(evidence_depth="deep", section_count=5)
-        report = await generate_report(UUID(sim_id), config)
-
-        # Store prediction
+        # Store prediction (skip full report generation for speed)
         pred_record = admin.table("market_predictions").insert({
             "organization_id": str(org_id),
             "market_id": str(market_id),
             "simulation_id": sim_id,
-            "report_id": report["id"],
             "predicted_outcome": prediction.predicted_outcome,
             "predicted_probability": prediction.predicted_probability,
             "confidence_interval": f"[{prediction.confidence_low},{prediction.confidence_high}]",

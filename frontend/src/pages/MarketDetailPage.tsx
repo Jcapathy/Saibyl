@@ -36,6 +36,8 @@ export default function MarketDetailPage() {
   const [predicting, setPredicting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [predictionStatus, setPredictionStatus] = useState('');
+  const [predictionStart, setPredictionStart] = useState<Date | null>(null);
 
   const load = () => {
     api.get(`/markets/${id}`).then((r) => { setMarket(r.data); setLoading(false); }).catch(() => setLoading(false));
@@ -46,31 +48,50 @@ export default function MarketDetailPage() {
   const runPrediction = async () => {
     setPredicting(true);
     setError('');
+    setPredictionStatus('Starting prediction...');
+    setPredictionStart(new Date());
     const existingCount = market?.predictions?.length || 0;
     try {
       await api.post(`/markets/${id}/predict`);
-      // Poll for new prediction to appear
+      setPredictionStatus('Researching market data...');
+
+      // Update status based on elapsed time
+      const statusUpdates = [
+        { at: 10000, msg: 'Generating agent personas...' },
+        { at: 30000, msg: 'Running simulation rounds...' },
+        { at: 60000, msg: 'Analyzing simulation results...' },
+        { at: 90000, msg: 'Generating prediction...' },
+        { at: 150000, msg: 'Still working — this is a complex prediction...' },
+      ];
+      const timers = statusUpdates.map((u) => setTimeout(() => setPredictionStatus(u.msg), u.at));
+
       const poll = setInterval(() => {
         api.get(`/markets/${id}`).then((r) => {
           setMarket(r.data);
           const newCount = r.data.predictions?.length || 0;
           if (newCount > existingCount) {
             clearInterval(poll);
+            timers.forEach(clearTimeout);
             setPredicting(false);
+            setPredictionStatus('');
+            setPredictionStart(null);
           }
         }).catch(() => {});
-      }, 10000);
-      // Stop polling after 10 minutes — prediction includes sim + report
+      }, 8000);
+
       setTimeout(() => {
         clearInterval(poll);
-        if (predicting) {
-          setError('Prediction is taking longer than expected. Check back shortly.');
-          setPredicting(false);
-        }
-      }, 600000);
+        timers.forEach(clearTimeout);
+        setPredicting(false);
+        setPredictionStatus('');
+        setPredictionStart(null);
+        setError('Prediction timed out. The result may still appear — refresh the page in a minute.');
+      }, 300000);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Prediction failed to start');
       setPredicting(false);
+      setPredictionStatus('');
+      setPredictionStart(null);
     }
   };
 
@@ -183,22 +204,35 @@ export default function MarketDetailPage() {
           )}
 
           {/* Actions */}
-          <div className="flex gap-3 mt-6">
-            <button
-              onClick={runPrediction}
-              disabled={predicting}
-              className="relative flex-1 py-3 rounded-xl text-white font-medium text-[14px] transition-all hover:scale-[1.01] disabled:opacity-40 overflow-hidden"
-            >
-              <div className="absolute inset-0 bg-gradient-to-r from-[#5B5FEE] to-[#00D4FF]" />
-              <span className="relative">{predicting ? 'Running prediction...' : 'Run Saibyl Prediction'}</span>
-            </button>
-            <button
-              onClick={refresh}
-              disabled={refreshing}
-              className="glass glass-hover px-5 py-3 rounded-xl text-saibyl-platinum text-[14px] font-medium transition-all disabled:opacity-40"
-            >
-              {refreshing ? '↻' : '↻ Refresh prices'}
-            </button>
+          <div className="mt-6 space-y-3">
+            <div className="flex gap-3">
+              <button
+                onClick={runPrediction}
+                disabled={predicting}
+                className="relative flex-1 py-3 rounded-xl text-white font-medium text-[14px] transition-all hover:scale-[1.01] disabled:opacity-40 overflow-hidden"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-[#5B5FEE] to-[#00D4FF]" />
+                <span className="relative">{predicting ? 'Running prediction...' : 'Run Saibyl Prediction'}</span>
+              </button>
+              <button
+                onClick={refresh}
+                disabled={refreshing}
+                className="glass glass-hover px-5 py-3 rounded-xl text-saibyl-platinum text-[14px] font-medium transition-all disabled:opacity-40"
+              >
+                {refreshing ? '↻' : '↻ Refresh prices'}
+              </button>
+            </div>
+            {predicting && predictionStatus && (
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-saibyl-indigo/10 border border-saibyl-indigo/20">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-saibyl-indigo shrink-0" />
+                <span className="text-[13px] text-saibyl-platinum">{predictionStatus}</span>
+                {predictionStart && (
+                  <span className="text-[11px] font-mono text-saibyl-muted ml-auto">
+                    {Math.floor((Date.now() - predictionStart.getTime()) / 1000)}s
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
