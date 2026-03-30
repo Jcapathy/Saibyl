@@ -103,8 +103,17 @@ async def upload_asset(
     update_org_storage_usage(org_id, file_size)
 
     # Dispatch processing task
-    from app.workers.simulation_tasks import celery_app
-    celery_app.send_task("process_asset", args=[asset_id])
+    import asyncio
+    from app.workers.asset_tasks import run_process_asset
+
+    async def _safe_task(coro, name: str):
+        try:
+            await coro
+        except Exception:
+            import structlog
+            structlog.get_logger().exception("background_task_failed", task=name)
+
+    asyncio.create_task(_safe_task(run_process_asset(asset_id), "process_asset"))
 
     return UploadResponse(
         asset_id=asset_id,

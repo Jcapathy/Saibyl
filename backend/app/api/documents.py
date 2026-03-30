@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 
 import structlog
@@ -7,9 +8,16 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 
 from app.core.auth import get_current_org
 from app.core.database import get_supabase_admin
-from app.workers.simulation_tasks import task_process_document
+from app.workers.simulation_tasks import run_process_document
 
 log = structlog.get_logger()
+
+
+async def _safe_task(coro, name: str):
+    try:
+        await coro
+    except Exception:
+        log.exception("background_task_failed", task=name)
 
 router = APIRouter(tags=["documents"])
 
@@ -65,7 +73,7 @@ async def upload_document(
     ).data[0]
 
     # Trigger async processing
-    task_process_document.delay(doc["id"])
+    asyncio.create_task(_safe_task(run_process_document(doc["id"]), "process_document"))
     log.info("document_processing_queued", document_id=doc["id"])
 
     return doc

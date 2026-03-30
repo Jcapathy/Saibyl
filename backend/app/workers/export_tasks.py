@@ -1,23 +1,11 @@
-import asyncio
-
 import structlog
 
 from app.core.database import get_supabase_admin
-from app.workers.celery_app import celery_app
 
 logger = structlog.get_logger()
 
 
-def _run_async(coro):
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
-
-
-@celery_app.task(name="export_report")
-def task_export_report(report_id: str, format: str = "pdf"):
+async def run_export_report(report_id: str, format: str = "pdf"):
     """Export report to PDF/PPTX/JSON and upload to Supabase Storage."""
     admin = get_supabase_admin()
 
@@ -30,19 +18,19 @@ def task_export_report(report_id: str, format: str = "pdf"):
 
     if format == "pdf":
         from app.services.export.pdf_exporter import export_report_pdf
-        file_bytes = _run_async(export_report_pdf(report_id))
+        file_bytes = await export_report_pdf(report_id)
         content_type = "application/pdf"
         ext = "pdf"
 
     elif format == "pptx":
         from app.services.export.pptx_exporter import export_report_pptx
-        file_bytes = _run_async(export_report_pptx(report_id))
+        file_bytes = await export_report_pptx(report_id)
         content_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
         ext = "pptx"
 
     elif format == "json":
         from app.services.export.json_exporter import export_report_json
-        file_bytes = _run_async(export_report_json(report_id))
+        file_bytes = await export_report_json(report_id)
         content_type = "application/gzip"
         ext = "json.gz"
 
@@ -73,8 +61,7 @@ def task_export_report(report_id: str, format: str = "pdf"):
     }
 
 
-@celery_app.task(name="export_simulation")
-def task_export_simulation(simulation_id: str):
+async def run_export_simulation(simulation_id: str):
     """Export full simulation data as gzipped JSON."""
     from app.services.export.json_exporter import export_simulation_json
 
@@ -84,7 +71,7 @@ def task_export_simulation(simulation_id: str):
     ).eq("id", simulation_id).single().execute().data
     org_id = sim["organization_id"]
 
-    file_bytes = _run_async(export_simulation_json(simulation_id))
+    file_bytes = await export_simulation_json(simulation_id)
 
     storage_path = f"exports/{org_id}/{simulation_id}/simulation.json.gz"
     admin.storage.from_("exports").upload(

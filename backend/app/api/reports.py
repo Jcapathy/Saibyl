@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -8,9 +10,16 @@ from app.core.auth import get_current_org
 from app.core.database import get_supabase_admin
 from app.services.intelligence.report_agent import get_report_progress
 from app.services.intelligence.report_chat import chat_with_report
-from app.workers.report_tasks import task_generate_report
+from app.workers.report_tasks import run_generate_report
 
 log = structlog.get_logger()
+
+
+async def _safe_task(coro, name: str):
+    try:
+        await coro
+    except Exception:
+        log.exception("background_task_failed", task=name)
 
 router = APIRouter(tags=["reports"])
 
@@ -53,8 +62,8 @@ async def generate_report(body: GenerateReportBody, auth: dict = Depends(get_cur
     if not sim.data:
         raise HTTPException(status_code=404, detail="Simulation not found")
 
-    task = task_generate_report.delay(body.simulation_id, body.variant)
-    return {"task_id": task.id}
+    asyncio.create_task(_safe_task(run_generate_report(body.simulation_id, body.variant), "generate_report"))
+    return {"status": "started"}
 
 
 @router.get("/by-simulation/{sim_id}")

@@ -63,59 +63,6 @@ services:
           type: redis
           property: connectionString
 
-  # ── Celery Worker (async tasks: simulations, exports, etc.) ─────
-  - type: worker
-    name: saibyl-worker
-    runtime: docker
-    plan: starter
-    region: oregon
-    dockerfilePath: ./backend/Dockerfile.worker
-    dockerContext: ./backend
-    envVars:
-      - key: ENVIRONMENT
-        value: production
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: ZEP_API_KEY
-        sync: false
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_ANON_KEY
-        sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false
-      - key: DATABASE_URL
-        sync: false
-      - key: SECRET_KEY
-        sync: false
-      - key: STRIPE_SECRET_KEY
-        sync: false
-      - key: STRIPE_WEBHOOK_SECRET
-        sync: false
-      - key: SENTRY_DSN
-        sync: false
-      - key: LLM_PROVIDER
-        value: anthropic
-      - key: LLM_MODEL
-        value: claude-opus-4-6
-      - key: LLM_FAST_MODEL
-        value: claude-haiku-4-5-20251001
-      - key: SUPABASE_STORAGE_BUCKET
-        value: saibyl-uploads
-      - key: SIMULATION_MAX_ROUNDS
-        value: "10"
-      - key: SIMULATION_WORKER_CONCURRENCY
-        value: "4"
-      - key: FRONTEND_URL
-        value: https://saibyl-frontend.onrender.com
-      - key: BACKEND_URL
-        value: https://saibyl-backend.onrender.com
-      - key: REDIS_URL
-        fromService:
-          name: saibyl-redis
-          type: redis
-          property: connectionString
-
   # ── Frontend (React SPA on Render Static) ───────────────────────
   - type: web
     name: saibyl-frontend
@@ -139,7 +86,7 @@ services:
       - key: VITE_WS_URL
         value: wss://saibyl-backend.onrender.com
 
-  # ── Redis (Celery broker + pub/sub for real-time) ───────────────
+  # ── Redis (pub/sub for real-time WebSocket updates) ─────────────
   - type: redis
     name: saibyl-redis
     plan: starter

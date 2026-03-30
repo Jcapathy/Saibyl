@@ -1,4 +1,3 @@
-import asyncio
 import random
 
 import structlog
@@ -7,48 +6,31 @@ from app.core.database import get_supabase_admin
 from app.core.llm_client import llm_complete
 from app.services.engine.document_processor import process_document
 from app.services.engine.ontology_generator import generate_ontology
-from app.workers.celery_app import celery_app
 
 logger = structlog.get_logger()
 
 
-def _run_async(coro):
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
+async def run_process_document(document_id: str):
+    result = await process_document(document_id)
+    logger.info("task_process_document_complete", document_id=document_id, chunks=len(result.chunks))
+    return {"document_id": document_id, "chunks": len(result.chunks)}
 
 
-@celery_app.task(name="process_document", bind=True, max_retries=3)
-def task_process_document(self, document_id: str):
-    try:
-        result = _run_async(process_document(document_id))
-        logger.info("task_process_document_complete", document_id=document_id, chunks=len(result.chunks))
-        return {"document_id": document_id, "chunks": len(result.chunks)}
-    except Exception as exc:
-        logger.error("task_process_document_failed", document_id=document_id, error=str(exc))
-        raise self.retry(exc=exc, countdown=30)
-
-
-@celery_app.task(name="generate_ontology")
-def task_generate_ontology(project_id: str):
-    result = _run_async(generate_ontology(project_id))
+async def run_generate_ontology(project_id: str):
+    result = await generate_ontology(project_id)
     logger.info("task_generate_ontology_complete", project_id=project_id)
     return {"ontology_id": result["id"]}
 
 
-@celery_app.task(name="build_knowledge_graph")
-def task_build_knowledge_graph(project_id: str, ontology_id: str):
+async def run_build_knowledge_graph(project_id: str, ontology_id: str):
     from app.services.engine.knowledge_graph_builder import build_graph
-    result = _run_async(build_graph(project_id, ontology_id))
+    result = await build_graph(project_id, ontology_id)
     logger.info("task_build_knowledge_graph_complete", project_id=project_id)
     return {"knowledge_graph_id": result["id"]}
 
 
-@celery_app.task(name="prepare_agents")
-def task_prepare_agents(simulation_id: str):
-    """Full pipeline: ensure ontology → generate agents from documents → mark ready."""
+async def run_prepare_agents(simulation_id: str):
+    """Full pipeline: ensure ontology -> generate agents from documents -> mark ready."""
     admin = get_supabase_admin()
 
     sim = admin.table("simulations").select("*").eq("id", simulation_id).single().execute().data
@@ -59,7 +41,7 @@ def task_prepare_agents(simulation_id: str):
     admin.table("simulations").update({"status": "preparing"}).eq("id", simulation_id).execute()
     logger.info("prepare_agents_start", simulation_id=simulation_id, project_id=project_id)
 
-    # 1. Get ontology — must exist
+    # 1. Get ontology -- must exist
     ontologies = admin.table("ontologies").select("*").eq(
         "project_id", project_id
     ).order("created_at", desc=True).limit(1).execute().data
@@ -112,10 +94,10 @@ Return a JSON object with these fields:
 - "sentiment_baseline": float -1.0 to 1.0 (their general outlook)
 - "backstory": 2 sentences about their perspective"""
 
-                    raw = _run_async(llm_complete(
+                    raw = await llm_complete(
                         messages=[{"role": "user", "content": prompt}],
                         max_tokens=300,
-                    ))
+                    )
 
                     # Parse the response
                     from app.core.llm_client import _extract_json
@@ -178,9 +160,8 @@ Return a JSON object with these fields:
     return {"simulation_id": simulation_id, "agents": agent_count, "status": "ready"}
 
 
-@celery_app.task(name="run_simulation")
-def task_run_simulation(simulation_id: str):
-    """Run simulation — generate events from agents using LLM."""
+async def run_simulation(simulation_id: str):
+    """Run simulation -- generate events from agents using LLM."""
     admin = get_supabase_admin()
     sim = admin.table("simulations").select("*").eq("id", simulation_id).single().execute().data
 
@@ -224,10 +205,10 @@ Also rate your sentiment from -1.0 (very negative) to 1.0 (very positive).
 Format: POST: <your post content>
 SENTIMENT: <number>"""
 
-                response = _run_async(llm_complete(
+                response = await llm_complete(
                     messages=[{"role": "user", "content": prompt}],
                     max_tokens=200,
-                ))
+                )
 
                 # Parse post and sentiment
                 content = response.strip()
@@ -276,6 +257,5 @@ SENTIMENT: <number>"""
     return {"simulation_id": simulation_id, "status": "complete", "total_events": total_events}
 
 
-@celery_app.task(name="run_simulation_ab")
-def task_run_simulation_ab(simulation_id: str):
-    return task_run_simulation(simulation_id)
+async def run_simulation_ab(simulation_id: str):
+    return await run_simulation(simulation_id)

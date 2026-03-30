@@ -1,7 +1,7 @@
 # PUBLIC INTERFACE
 # ─────────────────────────────────────────────────────────
 # get_benchmark_context(vertical, metric) -> BenchmarkContext | None
-# update_benchmarks() -> None  (nightly Celery task)
+# update_benchmarks() -> None  (nightly scheduled task)
 # ─────────────────────────────────────────────────────────
 from __future__ import annotations
 

@@ -102,10 +102,18 @@ async def refresh(market_id: str, auth: dict = Depends(get_current_org)):
 @router.post("/{market_id}/predict")
 async def run_prediction(market_id: str, auth: dict = Depends(get_current_org)):
     """Run a new prediction simulation for a market."""
-    from app.workers.simulation_tasks import celery_app
+    import asyncio
+    from app.workers.market_tasks import run_market_prediction
 
-    task = celery_app.send_task("run_market_prediction", args=[market_id, auth["org_id"]])
-    return {"task_id": task.id, "status": "queued"}
+    async def _safe_task(coro, name: str):
+        try:
+            await coro
+        except Exception:
+            import structlog
+            structlog.get_logger().exception("background_task_failed", task=name)
+
+    asyncio.create_task(_safe_task(run_market_prediction(market_id, auth["org_id"]), "market_prediction"))
+    return {"status": "started"}
 
 
 @router.get("/{market_id}/predictions")

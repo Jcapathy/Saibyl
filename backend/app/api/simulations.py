@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 
 import structlog
@@ -15,12 +16,19 @@ from app.services.engine.personas.interview_engine import (
 )
 from app.services.platforms.simulation_runner import get_simulation_status, stop_simulation
 from app.workers.simulation_tasks import (
-    task_prepare_agents,
-    task_run_simulation,
-    task_run_simulation_ab,
+    run_prepare_agents,
+    run_simulation,
+    run_simulation_ab,
 )
 
 log = structlog.get_logger()
+
+
+async def _safe_task(coro, name: str):
+    try:
+        await coro
+    except Exception:
+        log.exception("background_task_failed", task=name)
 
 router = APIRouter(tags=["simulations"])
 
@@ -154,8 +162,8 @@ async def prepare_simulation(id: str, auth: dict = Depends(get_current_org)):
     if not sim.data:
         raise HTTPException(status_code=404, detail="Simulation not found")
 
-    task = task_prepare_agents.delay(id)
-    return {"task_id": task.id}
+    asyncio.create_task(_safe_task(run_prepare_agents(id), "prepare_agents"))
+    return {"status": "started"}
 
 
 @router.post("/{id}/start")
@@ -175,10 +183,10 @@ async def start_simulation(id: str, auth: dict = Depends(get_current_org)):
         raise HTTPException(status_code=404, detail="Simulation not found")
 
     if sim.data.get("is_ab_test"):
-        task = task_run_simulation_ab.delay(id)
+        asyncio.create_task(_safe_task(run_simulation_ab(id), "run_simulation_ab"))
     else:
-        task = task_run_simulation.delay(id)
-    return {"task_id": task.id}
+        asyncio.create_task(_safe_task(run_simulation(id), "run_simulation"))
+    return {"status": "started"}
 
 
 @router.post("/{id}/stop")
