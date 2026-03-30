@@ -1,8 +1,9 @@
-import { useEffect, useRef, useMemo } from 'react';
-import { useParams } from 'react-router-dom';
+import { useEffect, useRef, useMemo, useState } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SimulationSocket } from '@/lib/websocket';
 import { useSimulationLiveStore } from '@/store/simulation';
+import api from '@/lib/api';
 
 const PLATFORM_STYLES: Record<string, { bg: string; text: string; dot: string }> = {
   Twitter:   { bg: 'bg-[#5B5FEE]/15', text: 'text-[#5B5FEE]',  dot: '#5B5FEE' },
@@ -136,6 +137,7 @@ export default function SimulationRunPage() {
   const socketRef = useRef<SimulationSocket | null>(null);
   const feedRef = useRef<HTMLDivElement>(null);
 
+  const [simStatus, setSimStatus] = useState<string>('running');
   const { events, roundNumber, totalEvents, isRunning, addEvent, updateSnapshot, setRunning, reset } =
     useSimulationLiveStore();
 
@@ -161,6 +163,22 @@ export default function SimulationRunPage() {
       socket.disconnect();
       socketRef.current = null;
     };
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fallback: poll API for simulation status since WebSocket may not fire terminal events
+  useEffect(() => {
+    if (!id) return;
+    const poll = setInterval(async () => {
+      try {
+        const { data } = await api.get(`/simulations/${id}`);
+        setSimStatus(data.status);
+        if (['complete', 'completed', 'failed', 'stopped'].includes(data.status)) {
+          setRunning(false);
+          clearInterval(poll);
+        }
+      } catch { /* ignore */ }
+    }, 5000);
+    return () => clearInterval(poll);
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -223,13 +241,29 @@ export default function SimulationRunPage() {
           <div className="flex-1 p-5 overflow-auto">
             {recentEvents.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center gap-3 text-center">
-                <div className="w-12 h-12 rounded-2xl bg-saibyl-indigo/10 flex items-center justify-center">
-                  <svg className="w-6 h-6 text-saibyl-indigo animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
-                  </svg>
-                </div>
-                <p className="text-saibyl-muted text-sm">Connecting to simulation...</p>
-                <p className="text-saibyl-muted/50 text-[12px] font-mono">Events will appear here in real time</p>
+                {isRunning ? (
+                  <>
+                    <div className="w-12 h-12 rounded-2xl bg-saibyl-indigo/10 flex items-center justify-center">
+                      <svg className="w-6 h-6 text-saibyl-indigo animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+                      </svg>
+                    </div>
+                    <p className="text-saibyl-muted text-sm">Waiting for events...</p>
+                    <p className="text-saibyl-muted/50 text-[12px] font-mono">Events will appear here in real time</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-saibyl-muted text-sm">
+                      Simulation {simStatus === 'failed' ? 'failed' : simStatus === 'stopped' ? 'stopped' : 'finished'} with no events.
+                    </p>
+                    <Link
+                      to={`/app/simulations/${id}`}
+                      className="text-saibyl-indigo text-sm hover:underline"
+                    >
+                      ← Back to simulation details
+                    </Link>
+                  </>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 auto-rows-max">

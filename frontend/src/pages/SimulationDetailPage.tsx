@@ -62,6 +62,14 @@ export default function SimulationDetailPage() {
     return () => clearInterval(interval);
   }, [sim?.status, loadSim]);
 
+  // Clear local running state when sim reaches a terminal status
+  useEffect(() => {
+    if (sim && ['complete', 'completed', 'failed', 'stopped'].includes(sim.status)) {
+      setRunning(false);
+      setRunStatus('');
+    }
+  }, [sim?.status]);
+
   // Auto-start simulation when prepare finishes (from wizard flow)
   useEffect(() => {
     if (!sim || !id || sim.status !== 'ready') return;

@@ -352,6 +352,16 @@ async def run_simulation(simulation_id: str):
         }).eq("id", simulation_id).execute()
         return {"simulation_id": simulation_id, "status": "failed", "total_events": total_events}
 
+    if total_events == 0:
+        admin.table("simulations").update({
+            "status": "failed",
+            "error_message": "Simulation completed all rounds but generated 0 events. "
+                "This usually means the LLM failed to produce valid actions for any agent. "
+                "Check that your Anthropic API key is valid and has available credits.",
+        }).eq("id", simulation_id).execute()
+        logger.error("simulation_zero_events", simulation_id=simulation_id)
+        return {"simulation_id": simulation_id, "status": "failed", "total_events": 0}
+
     admin.table("simulations").update({
         "status": "complete",
         "completed_at": datetime.now(UTC).isoformat(),
