@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SimulationSocket } from '@/lib/websocket';
 import { useSimulationLiveStore } from '@/store/simulation';
+import { TERMINAL_STATUSES } from '@/lib/constants';
 import api from '@/lib/api';
 
 const PLATFORM_STYLES: Record<string, { bg: string; text: string; dot: string }> = {
@@ -172,7 +173,7 @@ export default function SimulationRunPage() {
       try {
         const { data } = await api.get(`/simulations/${id}`);
         setSimStatus(data.status);
-        if (['complete', 'completed', 'failed', 'stopped'].includes(data.status)) {
+        if (TERMINAL_STATUSES.includes(data.status)) {
           setRunning(false);
           clearInterval(poll);
         }

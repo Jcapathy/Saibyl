@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import api from '@/lib/api';
+import { PLATFORM_NAMES, formatPlatforms, TERMINAL_STATUSES, ACTIVE_STATUSES, IDLE_STATUSES } from '@/lib/constants';
 import StatusBadge from '@/components/StatusBadge';
 
 interface Simulation {
@@ -19,17 +20,6 @@ interface Simulation {
   project_id: string;
   error_message: string | null;
 }
-
-const PLATFORM_NAMES: Record<string, string> = {
-  twitter_x: 'Twitter / X',
-  reddit: 'Reddit',
-  linkedin: 'LinkedIn',
-  instagram: 'Instagram',
-  hacker_news: 'Hacker News',
-  discord: 'Discord',
-  news_comments: 'News Comments',
-  custom: 'Custom',
-};
 
 export default function SimulationDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -133,7 +123,7 @@ export default function SimulationDetailPage() {
 
   // Clear local running state when sim reaches a terminal status
   useEffect(() => {
-    if (sim && ['complete', 'completed', 'failed', 'stopped'].includes(sim.status)) {
+    if (sim && TERMINAL_STATUSES.includes(sim.status)) {
       setRunning(false);
       setRunStatus('');
     }
@@ -194,7 +184,7 @@ export default function SimulationDetailPage() {
         try {
           const r = await api.get(`/simulations/${id}`);
           setSim(r.data);
-          if (['complete', 'completed', 'failed', 'stopped'].includes(r.data.status)) {
+          if (TERMINAL_STATUSES.includes(r.data.status)) {
             clearInterval(poll);
             setRunning(false);
             setRunStatus('');
@@ -235,8 +225,8 @@ export default function SimulationDetailPage() {
     { value: sim.platforms?.length ?? 0, label: 'Platforms', color: '#10B981' },
   ];
 
-  const isIdle = ['draft', 'ready', 'failed'].includes(sim.status);
-  const isRunning = ['preparing', 'running'].includes(sim.status);
+  const isIdle = IDLE_STATUSES.includes(sim.status);
+  const isRunning = ACTIVE_STATUSES.includes(sim.status);
   const isDone = ['complete', 'completed', 'stopped'].includes(sim.status);
 
   return (

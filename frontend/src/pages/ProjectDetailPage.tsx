@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '@/lib/api';
+import { formatPlatforms } from '@/lib/constants';
 import StatusBadge from '@/components/StatusBadge';
 
 interface Project {
@@ -58,9 +59,8 @@ export default function ProjectDetailPage() {
     if (!id) return;
     api.get(`/projects/${id}`).then((r) => setProject(r.data)).catch(() => {});
     loadDocuments();
-    api.get('/simulations').then((r) => {
-      const all = Array.isArray(r.data) ? r.data : [];
-      setSimulations(all.filter((s: Sim) => s.project_id === id));
+    api.get('/simulations', { params: { project_id: id, limit: 50 } }).then((r) => {
+      setSimulations(Array.isArray(r.data) ? r.data : []);
     }).catch(() => {});
   }, [id]);
 
@@ -443,7 +443,7 @@ export default function ProjectDetailPage() {
                     </div>
                     <p className="text-[12px] text-saibyl-muted line-clamp-1">{sim.prediction_goal}</p>
                     <div className="flex items-center gap-4 mt-2 text-[11px] text-saibyl-muted">
-                      <span>{(sim.platforms || []).join(', ')}</span>
+                      <span>{formatPlatforms(sim.platforms || [])}</span>
                       <span>{sim.max_rounds} rounds</span>
                       <span>{new Date(sim.created_at).toLocaleDateString()}</span>
                     </div>

@@ -121,15 +121,21 @@ async def create_simulation(body: CreateSimulationBody, auth: dict = Depends(get
 async def list_simulations(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    project_id: str | None = Query(None),
     auth: dict = Depends(get_current_org),
 ):
-    """List simulations (paginated)."""
-    log.info("list_simulations", org_id=auth["org_id"], limit=limit, offset=offset)
+    """List simulations (paginated, optionally filtered by project)."""
+    log.info("list_simulations", org_id=auth["org_id"], limit=limit, offset=offset, project_id=project_id)
     admin = get_supabase_admin()
-    result = (
+    query = (
         admin.table("simulations")
-        .select("*")
+        .select("*", count="exact")
         .eq("organization_id", auth["org_id"])
+    )
+    if project_id:
+        query = query.eq("project_id", project_id)
+    result = (
+        query
         .order("created_at", desc=True)
         .range(offset, offset + limit - 1)
         .execute()

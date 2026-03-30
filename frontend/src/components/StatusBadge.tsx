@@ -8,6 +8,8 @@ const statusColors: Record<string, string> = {
   failed: 'bg-saibyl-negative/15 text-saibyl-negative',
   stopped: 'bg-saibyl-elevated text-saibyl-muted',
   pending: 'bg-saibyl-violet/15 text-saibyl-violet',
+  pending_review: 'bg-saibyl-violet/15 text-saibyl-violet',
+  approved: 'bg-saibyl-positive/15 text-saibyl-positive',
   generating: 'bg-saibyl-violet/15 text-saibyl-violet',
   processing: 'bg-saibyl-indigo/15 text-saibyl-indigo',
   active: 'bg-saibyl-positive/15 text-saibyl-positive',
