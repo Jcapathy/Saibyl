@@ -105,8 +105,9 @@ class PredictionResult(BaseModel):
 PREDICTION_PROMPT = """Analyze the results of a swarm simulation targeting this prediction market:
 
 Market: {title}
+Possible outcomes: {outcome_labels}
 Resolution rules: {resolution_rules}
-Current market probability: {market_probability:.1%}
+Current market probability: {market_probability:.1%} (for first outcome)
 Market closes: {closes_at}
 
 Research data:
@@ -120,12 +121,12 @@ Weight the factual research heavily — the simulation captures sentiment, the r
 
 Return JSON:
 {{
-  "predicted_outcome": "Yes" or "No",
-  "predicted_probability": float 0-1 (your TRUE probability estimate),
+  "predicted_outcome": one of {outcome_labels} (the outcome you predict will happen),
+  "predicted_probability": float 0-1 (probability of your predicted outcome),
   "confidence_low": float 0-1 (lower bound of 80% CI),
   "confidence_high": float 0-1 (upper bound of 80% CI),
-  "recommended_position": "YES" or "NO" or "PASS" (PASS if |edge| < 0.03),
-  "edge_vs_market": float (your probability - market probability, positive = YES, negative = NO),
+  "recommended_position": your predicted outcome label or "PASS" (PASS if |edge| < 0.03),
+  "edge_vs_market": float (your probability - market probability for that outcome),
   "reasoning_summary": "2-3 sentence summary",
   "key_drivers": ["driver1", "driver2", ...] (top 5),
   "contra_indicators": ["contra1", "contra2", ...] (top 3)
@@ -240,8 +241,10 @@ async def run_prediction(market_id: UUID, org_id: UUID) -> dict:
                 sim_summary += f"Avg sentiment: {avg_sent:.2f}. "
 
         # Generate prediction via LLM
+        outcome_labels = [o.get("label", "?") for o in (market.get("outcomes") or [])]
         prompt = PREDICTION_PROMPT.format(
             title=market["title"],
+            outcome_labels=outcome_labels,
             resolution_rules=market.get("resolution_rules", "N/A"),
             market_probability=market_prob,
             closes_at=market.get("closes_at", "N/A"),

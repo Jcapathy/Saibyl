@@ -222,7 +222,8 @@ export default function MarketDetailPage() {
               {market.predictions.map((pred) => {
                 const edge = pred.edge_vs_market;
                 const edgeColor = Math.abs(edge) < 0.03 ? 'text-saibyl-muted' : edge > 0 ? 'text-saibyl-positive' : 'text-saibyl-negative';
-                const posColor = pred.recommended_position === 'PASS' ? 'bg-saibyl-elevated text-saibyl-muted' : pred.recommended_position === 'YES' ? 'bg-saibyl-positive/15 text-saibyl-positive' : 'bg-saibyl-negative/15 text-saibyl-negative';
+                const isPass = pred.recommended_position === 'PASS';
+                const posColor = isPass ? 'bg-saibyl-elevated text-saibyl-muted' : 'bg-saibyl-indigo/15 text-saibyl-indigo';
 
                 return (
                   <div key={pred.id} className="glass rounded-xl p-6">
