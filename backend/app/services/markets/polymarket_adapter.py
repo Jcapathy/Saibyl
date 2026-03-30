@@ -15,12 +15,28 @@ GAMMA_URL = "https://gamma-api.polymarket.com"
 CLOB_URL = "https://clob.polymarket.com"
 
 
-async def fetch_market(condition_id: str) -> dict:
-    """Fetch Polymarket market details by condition ID."""
+async def fetch_market(condition_id_or_slug: str) -> dict:
+    """Fetch Polymarket market by condition ID or slug."""
     async with httpx.AsyncClient(timeout=15) as client:
-        response = await client.get(f"{GAMMA_URL}/markets/{condition_id}")
-        response.raise_for_status()
-        market = response.json()
+        # Try direct condition ID lookup first
+        try:
+            response = await client.get(f"{GAMMA_URL}/markets/{condition_id_or_slug}")
+            response.raise_for_status()
+            market = response.json()
+        except httpx.HTTPStatusError:
+            # Fallback: search by slug
+            response = await client.get(
+                f"{GAMMA_URL}/markets",
+                params={"slug": condition_id_or_slug, "_limit": 1},
+            )
+            response.raise_for_status()
+            results = response.json()
+            if isinstance(results, list) and results:
+                market = results[0]
+            elif isinstance(results, dict) and results.get("data"):
+                market = results["data"][0]
+            else:
+                raise ValueError(f"Market not found: {condition_id_or_slug}")
 
         outcomes = []
         for token in market.get("tokens", []):

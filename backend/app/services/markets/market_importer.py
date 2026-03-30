@@ -26,13 +26,16 @@ def _detect_platform(url: str) -> str:
 
 
 def _extract_id_from_url(url: str, platform: str) -> str:
-    """Extract market ID or ticker from URL."""
-    parts = url.rstrip("/").split("/")
+    """Extract market ID or slug from URL."""
+    # Strip query params and fragments
+    clean = url.split("?")[0].split("#")[0].rstrip("/")
+    parts = clean.split("/")
     if platform == "kalshi":
         # https://kalshi.com/markets/TICKER or /events/.../markets/TICKER
         return parts[-1]
     elif platform == "polymarket":
-        # https://polymarket.com/event/SLUG
+        # Various formats: /event/SLUG, /sports/cat/SLUG, /politics/SLUG
+        # Always take the last path segment as the slug
         return parts[-1]
     return parts[-1]
 
