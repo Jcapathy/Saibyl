@@ -16,15 +16,48 @@ CLOB_URL = "https://clob.polymarket.com"
 
 
 async def fetch_market(condition_id_or_slug: str) -> dict:
-    """Fetch Polymarket market by condition ID or slug."""
+    """Fetch Polymarket market by condition ID, slug, or hex ID."""
     async with httpx.AsyncClient(timeout=15) as client:
-        # Try direct condition ID lookup first
-        try:
-            response = await client.get(f"{GAMMA_URL}/markets/{condition_id_or_slug}")
-            response.raise_for_status()
-            market = response.json()
-        except httpx.HTTPStatusError:
-            # Fallback: search by slug
+        market = None
+
+        # If it looks like a hex condition ID (0x...), use CLOB API to get the slug first
+        if condition_id_or_slug.startswith("0x"):
+            try:
+                clob_resp = await client.get(f"{CLOB_URL}/markets/{condition_id_or_slug}")
+                clob_resp.raise_for_status()
+                clob_data = clob_resp.json()
+                # CLOB has the question but not full market data — search Gamma by question
+                question = clob_data.get("question", "")
+                if question:
+                    gamma_resp = await client.get(
+                        f"{GAMMA_URL}/markets",
+                        params={"_q": question, "_limit": 5},
+                    )
+                    gamma_resp.raise_for_status()
+                    results = gamma_resp.json()
+                    if isinstance(results, list):
+                        # Match by condition_id
+                        for r in results:
+                            cid = r.get("conditionId") or r.get("condition_id") or ""
+                            if cid == condition_id_or_slug:
+                                market = r
+                                break
+                        if not market and results:
+                            market = results[0]
+            except Exception:
+                pass
+
+        # Try direct Gamma ID lookup
+        if not market:
+            try:
+                response = await client.get(f"{GAMMA_URL}/markets/{condition_id_or_slug}")
+                response.raise_for_status()
+                market = response.json()
+            except httpx.HTTPStatusError:
+                pass
+
+        # Try slug-based search
+        if not market:
             response = await client.get(
                 f"{GAMMA_URL}/markets",
                 params={"slug": condition_id_or_slug, "_limit": 1},
@@ -35,8 +68,9 @@ async def fetch_market(condition_id_or_slug: str) -> dict:
                 market = results[0]
             elif isinstance(results, dict) and results.get("data"):
                 market = results["data"][0]
-            else:
-                raise ValueError(f"Market not found: {condition_id_or_slug}")
+
+        if not market:
+            raise ValueError(f"Market not found: {condition_id_or_slug}")
 
         # Build outcomes — handle both token-based and list-based response formats
         outcomes = []
