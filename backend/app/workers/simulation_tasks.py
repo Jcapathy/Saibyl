@@ -65,47 +65,66 @@ async def run_prepare_agents(simulation_id: str):
     doc_context = "".join(doc_chunks)
 
     prediction_goal = sim.get("prediction_goal", "")
-    agents_to_create = []
 
-    if persona_pack_ids:
-        # -- Generate agents from persona packs --
-        from app.services.engine.personas.pack_loader import get_pack
+    # Load ontology context if available — used to enrich persona-based agents
+    ontology_context = ""
+    try:
+        ontologies = admin.table("ontologies").select("entity_types, relationship_types").eq(
+            "project_id", project_id
+        ).order("created_at", desc=True).limit(1).execute().data
+        if ontologies:
+            entity_types = ontologies[0].get("entity_types") or []
+            relationships = ontologies[0].get("relationship_types") or []
+            entity_names = [et.get("name", "") for et in entity_types]
+            rel_summaries = [f"{r.get('name', '')}: {r.get('source_entity_type', '')} → {r.get('target_entity_type', '')}" for r in relationships[:10]]
+            ontology_context = f"Key entities in this domain: {', '.join(entity_names[:15])}."
+            if rel_summaries:
+                ontology_context += f" Key relationships: {'; '.join(rel_summaries)}."
+    except Exception:
+        pass  # Ontology enrichment is optional
 
-        # Collect all archetypes from selected packs with their weights
-        all_archetypes = []
-        for pack_id in persona_pack_ids:
+    if not persona_pack_ids:
+        admin.table("simulations").update({"status": "failed"}).eq("id", simulation_id).execute()
+        raise ValueError(
+            "No persona packs selected. Please select at least one persona pack "
+            "(built-in or custom) to run a simulation."
+        )
+
+    # -- Generate agents from persona packs (enriched with ontology + doc context) --
+    from app.services.engine.personas.pack_loader import get_pack
+
+    all_archetypes = []
+    for pack_id in persona_pack_ids:
+        try:
+            pack = get_pack(pack_id)
+            for archetype in pack.archetypes:
+                all_archetypes.append((pack, archetype))
+        except KeyError:
+            logger.warning("pack_not_found", pack_id=pack_id)
+
+    if not all_archetypes:
+        admin.table("simulations").update({"status": "failed"}).eq("id", simulation_id).execute()
+        raise ValueError("No valid persona packs found")
+
+    total_weight = sum(a.weight for _, a in all_archetypes)
+    agents_per_platform = max(1, target_agent_count // len(platforms))
+
+    agent_specs = []
+    for platform in platforms:
+        remaining = agents_per_platform
+        for pack, archetype in all_archetypes:
+            count = max(1, round(archetype.weight / total_weight * agents_per_platform))
+            if remaining <= 0:
+                break
+            count = min(count, remaining)
+            remaining -= count
+            for i in range(count):
+                agent_specs.append((pack, archetype, platform, i))
+
+    async def _gen_pack_agent(pack, archetype, platform, i):
+        async with _AGENT_GEN_SEMAPHORE:
             try:
-                pack = get_pack(pack_id)
-                for archetype in pack.archetypes:
-                    all_archetypes.append((pack, archetype))
-            except KeyError:
-                logger.warning("pack_not_found", pack_id=pack_id)
-
-        if not all_archetypes:
-            admin.table("simulations").update({"status": "failed"}).eq("id", simulation_id).execute()
-            raise ValueError("No valid persona packs found")
-
-        # Distribute agents across archetypes by weight, then across platforms
-        total_weight = sum(a.weight for _, a in all_archetypes)
-        agents_per_platform = max(1, target_agent_count // len(platforms))
-
-        # Build agent specs first, then generate all profiles concurrently
-        agent_specs = []
-        for platform in platforms:
-            remaining = agents_per_platform
-            for pack, archetype in all_archetypes:
-                count = max(1, round(archetype.weight / total_weight * agents_per_platform))
-                if remaining <= 0:
-                    break
-                count = min(count, remaining)
-                remaining -= count
-                for i in range(count):
-                    agent_specs.append((pack, archetype, platform, i))
-
-        async def _gen_pack_agent(pack, archetype, platform, i):
-            async with _AGENT_GEN_SEMAPHORE:
-                try:
-                    prompt = f"""Create a realistic social media persona for a {platform} simulation.
+                prompt = f"""Create a realistic social media persona for a {platform} simulation.
 
 Archetype: {archetype.label}
 Pack: {pack.name}
@@ -118,162 +137,77 @@ Typical content: {', '.join(archetype.behavior_traits.typical_content)}
 Sentiment baseline: {archetype.behavior_traits.sentiment_baseline}
 
 Topic context: {prediction_goal}
+Domain context: {ontology_context}
 Document context: {doc_context[:2000]}
+
+This persona should have grounded knowledge of the topic from the domain and document context above.
+Their opinions, backstory, and behavior should reflect how a real {archetype.label} would engage with this specific subject matter.
 
 Return a JSON object:
 - "display_name": realistic full name
 - "username": {platform} handle (lowercase, no spaces)
-- "bio": 1-2 sentence bio in character
+- "bio": 1-2 sentence bio in character, referencing the topic
 - "age": integer within the age range
-- "profession": specific job title fitting this archetype
+- "profession": specific job title fitting this archetype and domain
 - "sentiment_baseline": float (use {archetype.behavior_traits.sentiment_baseline} as center, vary +/-0.15)
-- "backstory": 2 sentences about their perspective on the topic"""
+- "backstory": 2-3 sentences about their perspective on the topic, informed by the domain context"""
 
-                    raw = await llm_complete(
-                        messages=[{"role": "user", "content": prompt}],
-                        max_tokens=300,
-                    )
-                    profile_data = json.loads(_extract_json(raw))
+                raw = await llm_complete(
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=400,
+                )
+                profile_data = json.loads(_extract_json(raw))
 
-                    logger.info("agent_created", archetype=archetype.label, platform=platform)
-                    return {
-                        "simulation_id": simulation_id,
-                        "organization_id": org_id,
-                        "entity_id": f"{archetype.id}_{platform}_{i}",
-                        "entity_name": profile_data.get("display_name", archetype.label),
-                        "persona_pack_id": pack.id,
-                        "variant": "a",
+                logger.info("agent_created", archetype=archetype.label, platform=platform)
+                return {
+                    "simulation_id": simulation_id,
+                    "organization_id": org_id,
+                    "entity_id": f"{archetype.id}_{platform}_{i}",
+                    "entity_name": profile_data.get("display_name", archetype.label),
+                    "persona_pack_id": pack.id,
+                    "variant": "a",
+                    "platform": platform,
+                    "profile": {
+                        **profile_data,
+                        "archetype": archetype.label,
+                        "pack": pack.name,
+                        "persona_type": archetype.label,
+                        "entity_type": archetype.label,
                         "platform": platform,
-                        "profile": {
-                            **profile_data,
-                            "archetype": archetype.label,
-                            "pack": pack.name,
-                            "persona_type": archetype.label,
-                            "entity_type": archetype.label,
-                            "platform": platform,
-                            "influence_multiplier": archetype.behavior_traits.influence_multiplier,
-                        },
-                        "username": profile_data.get("username", f"{archetype.id}_{i}"),
-                    }
-                except Exception as e:
-                    logger.warning("agent_creation_failed", archetype=archetype.label, error=str(e))
-                    return {
-                        "simulation_id": simulation_id,
-                        "organization_id": org_id,
-                        "entity_id": f"{archetype.id}_{platform}_{i}",
-                        "entity_name": f"{archetype.label} #{i+1}",
-                        "persona_pack_id": pack.id,
-                        "variant": "a",
+                        "influence_multiplier": archetype.behavior_traits.influence_multiplier,
+                    },
+                    "username": profile_data.get("username", f"{archetype.id}_{i}"),
+                }
+            except Exception as e:
+                logger.warning("agent_creation_failed", archetype=archetype.label, error=str(e))
+                return {
+                    "simulation_id": simulation_id,
+                    "organization_id": org_id,
+                    "entity_id": f"{archetype.id}_{platform}_{i}",
+                    "entity_name": f"{archetype.label} #{i+1}",
+                    "persona_pack_id": pack.id,
+                    "variant": "a",
+                    "platform": platform,
+                    "profile": {
+                        "display_name": f"{archetype.label} #{i+1}",
+                        "persona_type": archetype.label,
                         "platform": platform,
-                        "profile": {
-                            "display_name": f"{archetype.label} #{i+1}",
-                            "persona_type": archetype.label,
-                            "platform": platform,
-                            "bio": f"A {archetype.label.lower()} active on {platform}",
-                            "sentiment_baseline": archetype.behavior_traits.sentiment_baseline,
-                            "influence_multiplier": archetype.behavior_traits.influence_multiplier,
-                        },
-                        "username": f"{archetype.id}_{platform}_{i}",
-                    }
+                        "bio": f"A {archetype.label.lower()} active on {platform}",
+                        "sentiment_baseline": archetype.behavior_traits.sentiment_baseline,
+                        "influence_multiplier": archetype.behavior_traits.influence_multiplier,
+                    },
+                    "username": f"{archetype.id}_{platform}_{i}",
+                }
 
-        if not agent_specs:
-            admin.table("simulations").update({"status": "failed"}).eq("id", simulation_id).execute()
-            raise ValueError("No agents to generate — check persona pack archetypes and platform selection")
+    if not agent_specs:
+        admin.table("simulations").update({"status": "failed"}).eq("id", simulation_id).execute()
+        raise ValueError("No agents to generate — check persona pack archetypes and platform selection")
 
-        results = await asyncio.gather(
-            *[_gen_pack_agent(p, a, plat, idx) for p, a, plat, idx in agent_specs],
-            return_exceptions=True,
-        )
-        agents_to_create = [r for r in results if isinstance(r, dict)]
-    else:
-        # -- Fallback: generate from ontology entities (original behavior) --
-        ontologies = admin.table("ontologies").select("*").eq(
-            "project_id", project_id
-        ).order("created_at", desc=True).limit(1).execute().data
-
-        if not ontologies:
-            admin.table("simulations").update({"status": "failed"}).eq("id", simulation_id).execute()
-            raise ValueError("No ontology found and no persona packs selected.")
-
-        entity_types = ontologies[0].get("entity_types") or []
-        agents_per_entity = max(1, target_agent_count // (len(entity_types) * len(platforms))) if entity_types else 2
-
-        # Build specs then generate concurrently
-        ontology_specs = []
-        for entity_type in entity_types:
-            if not entity_type.get("social_media_suitable", True):
-                continue
-            for platform in platforms:
-                for i in range(agents_per_entity):
-                    ontology_specs.append((entity_type, platform, i))
-
-        async def _gen_ontology_agent(entity_type, platform, i):
-            async with _AGENT_GEN_SEMAPHORE:
-                try:
-                    prompt = f"""Create a realistic social media persona for simulation.
-
-Entity type: {entity_type['name']}
-Description: {entity_type.get('description', '')}
-Platform: {platform}
-Context from documents: {doc_context[:2000]}
-
-Return a JSON object with these fields:
-- "display_name": realistic full name
-- "username": social media handle (lowercase, no spaces)
-- "bio": 1-2 sentence bio in character
-- "age": integer
-- "profession": specific job title
-- "sentiment_baseline": float -1.0 to 1.0
-- "backstory": 2 sentences about their perspective"""
-
-                    raw = await llm_complete(messages=[{"role": "user", "content": prompt}], max_tokens=300)
-                    profile_data = json.loads(_extract_json(raw))
-
-                    return {
-                        "simulation_id": simulation_id,
-                        "organization_id": org_id,
-                        "entity_id": f"{entity_type['name']}_{platform}_{i}",
-                        "entity_name": profile_data.get("display_name", entity_type["name"]),
-                        "persona_pack_id": None,
-                        "variant": "a",
-                        "platform": platform,
-                        "profile": {
-                            **profile_data,
-                            "persona_type": entity_type["name"],
-                            "entity_type": entity_type["name"],
-                            "platform": platform,
-                        },
-                        "username": profile_data.get("username", f"{entity_type['name'].lower().replace(' ', '_')}_{i}"),
-                    }
-                except Exception as e:
-                    logger.warning("agent_creation_failed", entity=entity_type["name"], error=str(e))
-                    return {
-                        "simulation_id": simulation_id,
-                        "organization_id": org_id,
-                        "entity_id": f"{entity_type['name']}_{platform}_{i}",
-                        "entity_name": f"{entity_type['name']} Agent {i+1}",
-                        "persona_pack_id": None,
-                        "variant": "a",
-                        "platform": platform,
-                        "profile": {
-                            "display_name": f"{entity_type['name']} Agent {i+1}",
-                            "persona_type": entity_type["name"],
-                            "platform": platform,
-                            "bio": f"A {entity_type['name'].lower()} active on {platform}",
-                            "sentiment_baseline": random.uniform(-0.3, 0.5),
-                        },
-                        "username": f"{entity_type['name'].lower().replace(' ', '_')}_{platform}_{i}",
-                    }
-
-        if not ontology_specs:
-            admin.table("simulations").update({"status": "failed"}).eq("id", simulation_id).execute()
-            raise ValueError("No suitable entity types found in ontology for simulation")
-
-        results = await asyncio.gather(
-            *[_gen_ontology_agent(et, p, idx) for et, p, idx in ontology_specs],
-            return_exceptions=True,
-        )
-        agents_to_create = [r for r in results if isinstance(r, dict)]
+    results = await asyncio.gather(
+        *[_gen_pack_agent(p, a, plat, idx) for p, a, plat, idx in agent_specs],
+        return_exceptions=True,
+    )
+    agents_to_create = [r for r in results if isinstance(r, dict)]
 
     # Guard: if zero agents were created, fail explicitly
     if not agents_to_create:

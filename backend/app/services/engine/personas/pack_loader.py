@@ -95,19 +95,59 @@ def load_all_packs() -> list[PersonaPack]:
 
 
 def get_pack(pack_id: str) -> PersonaPack:
-    """Get a specific persona pack by ID."""
+    """Get a specific persona pack by ID (built-in or custom)."""
     if not _pack_cache:
         load_all_packs()
-    if pack_id not in _pack_cache:
-        raise KeyError(f"Persona pack '{pack_id}' not found")
-    return _pack_cache[pack_id]
+    if pack_id in _pack_cache:
+        return _pack_cache[pack_id]
+    # Check custom packs in DB
+    pack = _load_custom_pack(pack_id)
+    if pack:
+        return pack
+    raise KeyError(f"Persona pack '{pack_id}' not found")
 
 
-def list_available_packs() -> list[PackSummary]:
-    """List all available packs with summary info."""
+def _load_custom_pack(pack_id: str) -> PersonaPack | None:
+    """Load a single custom pack from DB by pack_id."""
+    try:
+        from app.core.database import get_supabase_admin
+        admin = get_supabase_admin()
+        result = admin.table("custom_persona_packs").select("pack_data").eq("pack_id", pack_id).execute()
+        if result.data:
+            pack = PersonaPack.model_validate(result.data[0]["pack_data"])
+            _pack_cache[pack.id] = pack
+            return pack
+    except Exception as e:
+        logger.warning("custom_pack_load_failed", pack_id=pack_id, error=str(e))
+    return None
+
+
+def load_custom_packs_for_org(org_id: str) -> list[PersonaPack]:
+    """Load all custom packs for an organization from DB."""
+    try:
+        from app.core.database import get_supabase_admin
+        admin = get_supabase_admin()
+        result = admin.table("custom_persona_packs").select("pack_data").eq("organization_id", org_id).execute()
+        packs = []
+        for row in result.data:
+            try:
+                pack = PersonaPack.model_validate(row["pack_data"])
+                _pack_cache[pack.id] = pack
+                packs.append(pack)
+            except Exception as e:
+                logger.warning("custom_pack_parse_failed", error=str(e))
+        return packs
+    except Exception as e:
+        logger.warning("custom_packs_load_failed", org_id=org_id, error=str(e))
+        return []
+
+
+def list_available_packs(org_id: str | None = None) -> list[PackSummary]:
+    """List all available packs (built-in + custom for org)."""
     if not _pack_cache:
         load_all_packs()
-    return [
+
+    summaries = [
         PackSummary(
             id=p.id,
             name=p.name,
@@ -118,6 +158,23 @@ def list_available_packs() -> list[PackSummary]:
         )
         for p in _pack_cache.values()
     ]
+
+    # Include custom packs from DB if org_id provided
+    if org_id:
+        custom = load_custom_packs_for_org(org_id)
+        existing_ids = {s.id for s in summaries}
+        for p in custom:
+            if p.id not in existing_ids:
+                summaries.append(PackSummary(
+                    id=p.id,
+                    name=p.name,
+                    category=p.category,
+                    description=p.description,
+                    archetype_count=len(p.archetypes),
+                    archetype_labels=[a.label for a in p.archetypes],
+                ))
+
+    return summaries
 
 
 def reload_packs() -> list[PersonaPack]:

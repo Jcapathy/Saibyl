@@ -54,6 +54,10 @@ export default function NewSimulationPage() {
   // Step 3
   const [packs, setPacks] = useState<PersonaPack[]>([]);
   const [selectedPacks, setSelectedPacks] = useState<string[]>([]);
+  const [showCustomModal, setShowCustomModal] = useState(false);
+  const [customName, setCustomName] = useState('');
+  const [customDesc, setCustomDesc] = useState('');
+  const [creatingCustom, setCreatingCustom] = useState(false);
 
   // Step 4
   const [agentCount, setAgentCount] = useState(20);
@@ -82,6 +86,23 @@ export default function NewSimulationPage() {
 
   const togglePlatform = (id: string) => setSelectedPlatforms((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
   const togglePack = (id: string) => setSelectedPacks((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+
+  const handleCreateCustomPack = async () => {
+    if (!customName.trim() || !customDesc.trim()) return;
+    setCreatingCustom(true);
+    try {
+      const { data } = await api.post('/persona-packs/custom', { name: customName, description: customDesc });
+      setPacks((prev) => [...prev, data]);
+      setSelectedPacks((prev) => [...prev, data.id]);
+      setShowCustomModal(false);
+      setCustomName('');
+      setCustomDesc('');
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to create custom persona');
+    } finally {
+      setCreatingCustom(false);
+    }
+  };
 
   const handleSubmit = async () => {
     setSubmitting(true);
@@ -231,11 +252,23 @@ export default function NewSimulationPage() {
           {/* ── Step 3: Persona Packs ── */}
           {step === 2 && (
             <div>
-              <p className="text-[14px] text-saibyl-muted mb-5">Choose persona packs to populate your simulation agents.</p>
+              <p className="text-[14px] text-saibyl-muted mb-5">Choose persona packs to populate your simulation agents, or create a custom persona.</p>
               {packs.length === 0 ? (
                 <div className="text-center py-8 text-saibyl-muted">Loading persona packs...</div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Create Custom card */}
+                  <button
+                    onClick={() => setShowCustomModal(true)}
+                    className="text-left p-4 rounded-xl border border-dashed border-saibyl-indigo/30 bg-saibyl-indigo/5 hover:border-saibyl-indigo/50 hover:bg-saibyl-indigo/10 transition-all duration-200"
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <svg className="w-5 h-5 text-saibyl-indigo" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                      <span className="font-medium text-[14px] text-saibyl-indigo">Create Custom Persona</span>
+                    </div>
+                    <p className="text-[11px] text-saibyl-muted leading-relaxed">Describe a persona and we'll generate a full archetype pack with demographics, personality, and behavior traits.</p>
+                  </button>
+
                   {packs.map((pack) => {
                     const selected = selectedPacks.includes(pack.id);
                     return (
@@ -263,6 +296,61 @@ export default function NewSimulationPage() {
                 </div>
               )}
               <p className="text-[12px] text-saibyl-muted mt-4">{selectedPacks.length} pack{selectedPacks.length !== 1 ? 's' : ''} selected</p>
+
+              {/* Custom Persona Modal */}
+              {showCustomModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="glass rounded-2xl p-8 w-full max-w-lg mx-4"
+                  >
+                    <h3 className="text-[18px] font-semibold text-saibyl-white mb-1">Create Custom Persona</h3>
+                    <p className="text-[12px] text-saibyl-muted mb-6">Describe the persona and we'll generate a complete pack with archetypes, demographics, and behavior traits.</p>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-2">Persona Name</label>
+                        <input
+                          type="text"
+                          value={customName}
+                          onChange={(e) => setCustomName(e.target.value)}
+                          placeholder="e.g. Crypto Day Trader, Healthcare Administrator, Gen Z Activist"
+                          className={`${inputClass} ${inputBg}`}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-2">Description</label>
+                        <textarea
+                          value={customDesc}
+                          onChange={(e) => setCustomDesc(e.target.value)}
+                          rows={4}
+                          placeholder="Describe who this persona is, what drives them, how they behave on social media, and what topics they care about. The more detail you provide, the richer the generated archetypes will be."
+                          className={`${inputClass} ${inputBg} resize-none`}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-3 mt-6">
+                      <button
+                        onClick={() => { setShowCustomModal(false); setCustomName(''); setCustomDesc(''); }}
+                        className="px-5 py-2.5 text-[14px] text-saibyl-muted hover:text-saibyl-platinum transition-colors"
+                        disabled={creatingCustom}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleCreateCustomPack}
+                        disabled={creatingCustom || !customName.trim() || !customDesc.trim()}
+                        className="relative px-6 py-2.5 rounded-xl text-white font-medium text-sm overflow-hidden disabled:opacity-50 transition-all hover:scale-[1.02]"
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-r from-[#5B5FEE] to-[#00D4FF]" />
+                        <span className="relative">{creatingCustom ? 'Generating...' : 'Create Persona'}</span>
+                      </button>
+                    </div>
+                  </motion.div>
+                </div>
+              )}
             </div>
           )}
 
