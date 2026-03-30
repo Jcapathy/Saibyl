@@ -426,45 +426,50 @@ export default function SimulationDetailPage() {
         </div>
       )}
 
-      {/* Prediction Accuracy Scoring */}
+      {/* Prediction Analysis */}
       {isDone && (
         <div className="glass rounded-2xl p-6 mb-6">
-          <h2 className="text-[11px] font-mono text-saibyl-muted uppercase tracking-widest mb-4">Prediction Accuracy</h2>
+          <h2 className="text-[11px] font-mono text-saibyl-muted uppercase tracking-widest mb-4">Prediction Analysis</h2>
           {!accuracyResult ? (
             <div className="space-y-4">
-              <p className="text-[13px] text-saibyl-muted">Compare the simulation's predictions against actual real-world outcomes.</p>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[12px] text-saibyl-muted mb-1">Actual Sentiment (-1 to 1)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="-1"
-                    max="1"
-                    value={actualSentiment}
-                    onChange={(e) => setActualSentiment(e.target.value)}
-                    placeholder="e.g. -0.3"
-                    className="w-full rounded-lg px-3 py-2 text-[13px] bg-[#0B1120] border border-white/[0.08] text-saibyl-platinum focus:outline-none focus:ring-2 focus:ring-saibyl-indigo/50"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[12px] text-saibyl-muted mb-1">Notes on actual outcome</label>
-                  <input
-                    type="text"
-                    value={actualNotes}
-                    onChange={(e) => setActualNotes(e.target.value)}
-                    placeholder="What actually happened?"
-                    className="w-full rounded-lg px-3 py-2 text-[13px] bg-[#0B1120] border border-white/[0.08] text-saibyl-platinum placeholder-saibyl-muted/50 focus:outline-none focus:ring-2 focus:ring-saibyl-indigo/50"
-                  />
-                </div>
+              <div className="flex items-center justify-between">
+                <p className="text-[13px] text-saibyl-muted">Analyze the simulation's predicted sentiment and outcomes.</p>
+                <button
+                  onClick={handleScoreAccuracy}
+                  disabled={scoringLoading}
+                  className="px-6 py-2.5 rounded-xl bg-saibyl-indigo text-white text-[13px] font-medium hover:bg-[#4B4FDE] disabled:opacity-50 transition-all shrink-0"
+                >
+                  {scoringLoading ? 'Analyzing...' : 'Analyze Predictions'}
+                </button>
               </div>
-              <button
-                onClick={handleScoreAccuracy}
-                disabled={scoringLoading}
-                className="px-6 py-2.5 rounded-xl bg-saibyl-indigo text-white text-[13px] font-medium hover:bg-[#4B4FDE] disabled:opacity-50 transition-all"
-              >
-                {scoringLoading ? 'Analyzing...' : 'Score Accuracy'}
-              </button>
+              <details className="text-[12px] text-saibyl-muted">
+                <summary className="cursor-pointer hover:text-saibyl-platinum transition-colors">Have real-world data to compare? (optional)</summary>
+                <div className="grid grid-cols-2 gap-4 mt-3">
+                  <div>
+                    <label className="block text-[12px] text-saibyl-muted mb-1">Actual Sentiment (-1 to 1)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="-1"
+                      max="1"
+                      value={actualSentiment}
+                      onChange={(e) => setActualSentiment(e.target.value)}
+                      placeholder="e.g. -0.3"
+                      className="w-full rounded-lg px-3 py-2 text-[13px] bg-[#0B1120] border border-white/[0.08] text-saibyl-platinum focus:outline-none focus:ring-2 focus:ring-saibyl-indigo/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[12px] text-saibyl-muted mb-1">Notes on actual outcome</label>
+                    <input
+                      type="text"
+                      value={actualNotes}
+                      onChange={(e) => setActualNotes(e.target.value)}
+                      placeholder="What actually happened?"
+                      className="w-full rounded-lg px-3 py-2 text-[13px] bg-[#0B1120] border border-white/[0.08] text-saibyl-platinum placeholder-saibyl-muted/50 focus:outline-none focus:ring-2 focus:ring-saibyl-indigo/50"
+                    />
+                  </div>
+                </div>
+              </details>
             </div>
           ) : (
             <div className="space-y-4">
