@@ -97,7 +97,9 @@ export default function NewSimulationPage() {
         persona_pack_ids: selectedPacks,
         agent_count: agentCount,
       });
-      // Navigate immediately — the detail page handles prepare + start
+
+      // Kick off prepare in background, then navigate
+      api.post(`/simulations/${sim.id}/prepare`).catch(() => {});
       navigate(`/app/simulations/${sim.id}`);
     } catch (err: any) {
       setError(err.response?.data?.detail || JSON.stringify(err.response?.data) || 'Failed to create simulation');

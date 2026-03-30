@@ -54,12 +54,29 @@ export default function SimulationDetailPage() {
 
   useEffect(() => { loadSim(); }, [loadSim]);
 
-  // Poll while running
+  // Poll while running or preparing
   useEffect(() => {
     if (!sim || !['running', 'preparing'].includes(sim.status)) return;
     const interval = setInterval(loadSim, 4000);
     return () => clearInterval(interval);
   }, [sim?.status, loadSim]);
+
+  // Auto-start simulation when prepare finishes (from wizard flow)
+  useEffect(() => {
+    if (!sim || !id || sim.status !== 'ready') return;
+    // Check if events exist — if so, this sim already ran, don't re-start
+    if (eventCount > 0) return;
+    // Auto-start
+    setRunning(true);
+    setRunStatus('Starting simulation...');
+    api.post(`/simulations/${id}/start`).then(() => {
+      setRunStatus('Simulation running...');
+      loadSim();
+    }).catch(() => {
+      setRunning(false);
+      setRunStatus('');
+    });
+  }, [sim?.status, id, eventCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // One-click: prepare + wait for ready + start + poll
   async function handleRunNow() {
