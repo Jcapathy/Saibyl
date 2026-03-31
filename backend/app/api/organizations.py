@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Literal
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
@@ -29,7 +30,7 @@ class UpdateOrgBody(BaseModel):
 
 class InviteMemberBody(BaseModel):
     email: str
-    role: str = "member"
+    role: Literal["member", "viewer"] = "member"
 
 
 # ---------------------------------------------------------------------------

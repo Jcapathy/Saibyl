@@ -84,18 +84,12 @@ def check_storage_quota(org_id: UUID, file_size_bytes: int) -> StorageCheckResul
 def update_org_storage_usage(org_id: UUID, delta_bytes: int) -> None:
     """Update org storage usage atomically (+delta for upload, -delta for delete)."""
     admin = get_supabase_admin()
-    org = admin.table("organizations").select(
-        "storage_bytes_used"
-    ).eq("id", str(org_id)).single().execute().data
+    admin.rpc("increment_storage", {
+        "org_uuid": str(org_id),
+        "delta": delta_bytes,
+    }).execute()
 
-    current = org.get("storage_bytes_used", 0) or 0
-    new_total = max(0, current + delta_bytes)
-
-    admin.table("organizations").update({
-        "storage_bytes_used": new_total,
-    }).eq("id", str(org_id)).execute()
-
-    logger.info("storage_updated", org_id=str(org_id), delta=delta_bytes, total=new_total)
+    logger.info("storage_updated", org_id=str(org_id), delta=delta_bytes)
 
 
 def get_storage_packs_for_org(org_id: UUID) -> list[StoragePack]:

@@ -13,8 +13,7 @@ services:
         value: production
       - key: ANTHROPIC_API_KEY
         sync: false
-      - key: ZEP_API_KEY
-        sync: false
+
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_ANON_KEY
@@ -80,6 +79,18 @@ services:
       - path: /*
         name: X-Content-Type-Options
         value: nosniff
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://saibyl-backend.onrender.com wss://saibyl-backend.onrender.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
+      - path: /*
+        name: Strict-Transport-Security
+        value: "max-age=31536000; includeSubDomains"
+      - path: /*
+        name: Referrer-Policy
+        value: "strict-origin-when-cross-origin"
+      - path: /*
+        name: Permissions-Policy
+        value: "camera=(), microphone=(), geolocation=()"
     envVars:
       - key: VITE_API_URL
         value: https://saibyl-backend.onrender.com/api

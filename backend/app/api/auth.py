@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from app.core.auth import get_current_org, get_current_user
 from app.core.database import get_supabase, get_supabase_admin
+from app.core.rate_limit import check_rate_limit
 
 router = APIRouter(tags=["auth"])
 
@@ -21,8 +22,9 @@ class LoginRequest(BaseModel):
 
 
 @router.post("/signup")
-async def signup(body: SignupRequest):
+async def signup(body: SignupRequest, request: Request):
     """Create a new user, organization, and link them."""
+    await check_rate_limit(request, "signup", max_attempts=5, window_seconds=300)
     supabase = get_supabase()
     admin = get_supabase_admin()
 
@@ -36,8 +38,10 @@ async def signup(body: SignupRequest):
         user = auth_result.user
         if not user:
             raise HTTPException(400, "Signup failed")
-    except Exception as e:
-        raise HTTPException(400, f"Signup failed: {e}")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(400, "Signup failed")
 
     # Create organization
     slug = body.org_name.lower().replace(" ", "-")[:50]
@@ -62,8 +66,9 @@ async def signup(body: SignupRequest):
 
 
 @router.post("/login")
-async def login(body: LoginRequest):
+async def login(body: LoginRequest, request: Request):
     """Sign in and return session."""
+    await check_rate_limit(request, "login", max_attempts=10, window_seconds=60)
     supabase = get_supabase()
     try:
         result = supabase.auth.sign_in_with_password({
@@ -75,19 +80,25 @@ async def login(body: LoginRequest):
             "refresh_token": result.session.refresh_token,
             "user_id": result.user.id,
         }
-    except Exception as e:
-        raise HTTPException(401, f"Login failed: {e}")
+    except Exception:
+        raise HTTPException(401, "Invalid email or password")
 
 
 @router.post("/logout")
 async def logout():
-    """Sign out (client should discard tokens)."""
+    """Sign out (invalidate Supabase refresh token, client should discard tokens)."""
+    try:
+        supabase = get_supabase()
+        supabase.auth.sign_out()
+    except Exception:
+        pass
     return {"message": "Logged out"}
 
 
 @router.post("/refresh")
-async def refresh(refresh_token: str):
+async def refresh(refresh_token: str, request: Request):
     """Refresh session token."""
+    await check_rate_limit(request, "refresh", max_attempts=20, window_seconds=60)
     supabase = get_supabase()
     try:
         result = supabase.auth.refresh_session(refresh_token)
@@ -95,8 +106,8 @@ async def refresh(refresh_token: str):
             "access_token": result.session.access_token,
             "refresh_token": result.session.refresh_token,
         }
-    except Exception as e:
-        raise HTTPException(401, f"Refresh failed: {e}")
+    except Exception:
+        raise HTTPException(401, "Token refresh failed")
 
 
 @router.get("/me")

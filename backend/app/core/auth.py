@@ -20,8 +20,10 @@ async def get_current_user(
         if response.user is None:
             raise HTTPException(status_code=401, detail="Invalid token")
         return {"id": response.user.id, "email": response.user.email}
-    except Exception as e:
-        raise HTTPException(status_code=401, detail=f"Authentication failed: {e}")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=401, detail="Authentication failed")
 
 
 async def get_current_org(

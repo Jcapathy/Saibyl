@@ -50,7 +50,11 @@ async def upload_document(
 
     # Upload file to Supabase Storage
     file_bytes = await file.read()
-    storage_path = f"{auth['org_id']}/{project_id}/{file.filename}"
+    import re as _re
+    import uuid as _uuid
+    safe_name = _re.sub(r"[^a-zA-Z0-9._-]", "_", file.filename or "document")[:100]
+    doc_uuid = str(_uuid.uuid4())[:8]
+    storage_path = f"{auth['org_id']}/{project_id}/{doc_uuid}_{safe_name}"
     admin.storage.from_("project-media").upload(storage_path, file_bytes)
 
     # Derive file_type from extension (documents table requires file_type NOT NULL)

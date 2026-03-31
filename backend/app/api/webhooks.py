@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import re
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.core.auth import get_current_org
 from app.core.database import get_supabase_admin
@@ -11,11 +12,30 @@ from app.core.security import validate_external_url
 
 router = APIRouter(tags=["webhooks"])
 
+_FORBIDDEN_HEADERS = frozenset({
+    "host", "authorization", "cookie", "transfer-encoding",
+    "content-length", "content-type", "connection", "upgrade",
+})
+
+
+def _validate_custom_headers(v: dict) -> dict:
+    for key in v:
+        if key.lower() in _FORBIDDEN_HEADERS:
+            raise ValueError(f"Header '{key}' is not allowed as a custom header")
+        if not re.match(r"^[a-zA-Z0-9-]+$", key):
+            raise ValueError(f"Header name '{key}' contains invalid characters")
+    return v
+
 
 class CreateWebhookRequest(BaseModel):
     url: str
     events: list[str]
     custom_headers: dict = {}
+
+    @field_validator("custom_headers")
+    @classmethod
+    def check_headers(cls, v: dict) -> dict:
+        return _validate_custom_headers(v)
 
 
 class UpdateWebhookRequest(BaseModel):
@@ -23,6 +43,13 @@ class UpdateWebhookRequest(BaseModel):
     events: list[str] | None = None
     is_active: bool | None = None
     custom_headers: dict | None = None
+
+    @field_validator("custom_headers")
+    @classmethod
+    def check_headers(cls, v: dict | None) -> dict | None:
+        if v is not None:
+            return _validate_custom_headers(v)
+        return v
 
 
 @router.get("")

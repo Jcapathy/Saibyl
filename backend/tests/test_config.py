@@ -8,7 +8,6 @@ def test_settings_loads_defaults():
         supabase_anon_key="test",
         supabase_service_role_key="test",
         database_url="postgresql://test:test@localhost/test",
-        zep_api_key="test",
     )
     assert s.environment == "development"
     assert s.redis_url == "redis://localhost:6379"
@@ -29,6 +28,5 @@ def test_settings_accepts_production():
         supabase_anon_key="prod-anon",
         supabase_service_role_key="prod-service",
         database_url="postgresql://prod@db/saibyl",
-        zep_api_key="zep-prod",
     )
     assert s.environment == "production"

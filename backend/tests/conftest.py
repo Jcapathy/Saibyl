@@ -11,7 +11,7 @@ os.environ.setdefault("SUPABASE_ANON_KEY", "test-anon-key")
 os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-service-key")
 os.environ.setdefault("DATABASE_URL", "postgresql://test:test@localhost/test")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379")
-os.environ.setdefault("ZEP_API_KEY", "test-zep-key")
+
 
 
 @pytest.fixture

@@ -10,7 +10,7 @@ dependencies = [
 
     "anthropic>=0.30.0",
     "litellm>=1.40.0",
-    "zep-cloud>=3.13.0",
+
     "unstructured>=0.14.0",
     "PyMuPDF>=1.24.0",
     "charset-normalizer>=3.0.0",

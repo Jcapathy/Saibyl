@@ -10,16 +10,6 @@ services:
       - redis
     restart: unless-stopped
 
-  worker:
-    build: ./backend
-    env_file: .env
-    environment:
-      - ENVIRONMENT=production
-    depends_on:
-      - redis
-    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=4
-    restart: unless-stopped
-
   frontend:
     build: ./frontend
     ports:

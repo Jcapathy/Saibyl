@@ -20,10 +20,12 @@ FRAME_INTERVAL_SECONDS = 30
 
 
 async def _transcribe_audio(audio_path: str) -> str:
-    """Transcribe audio using Whisper API (OpenAI or Groq)."""
-    api_key = os.environ.get("GROQ_API_KEY") or os.environ.get("OPENAI_API_KEY", "")
-    base_url = "https://api.groq.com/openai/v1" if os.environ.get("GROQ_API_KEY") else "https://api.openai.com/v1"
-    model = "whisper-large-v3" if os.environ.get("GROQ_API_KEY") else "whisper-1"
+    """Transcribe audio using Whisper via Groq."""
+    api_key = os.environ.get("GROQ_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("GROQ_API_KEY is required for audio transcription")
+    base_url = "https://api.groq.com/openai/v1"
+    model = "whisper-large-v3"
 
     async with httpx.AsyncClient(timeout=300) as client:
         with open(audio_path, "rb") as f:

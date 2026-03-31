@@ -118,17 +118,11 @@ def check_agent_budget(org_id: UUID, agent_count: int, rounds: int) -> BudgetChe
 
 
 def deduct_agent_credits(org_id: UUID, agent_rounds: int) -> None:
-    """Deduct agent-rounds from org's credit balance."""
+    """Deduct agent-rounds from org's credit balance atomically."""
     admin = get_supabase_admin()
-    org = admin.table("organizations").select(
-        "agent_credits_balance"
-    ).eq("id", str(org_id)).single().execute().data
+    admin.rpc("deduct_agent_credits", {
+        "org_uuid": str(org_id),
+        "amount": agent_rounds,
+    }).execute()
 
-    current = org.get("agent_credits_balance", 0) or 0
-    new_balance = max(0, current - agent_rounds)
-
-    admin.table("organizations").update({
-        "agent_credits_balance": new_balance,
-    }).eq("id", str(org_id)).execute()
-
-    logger.info("agent_credits_deducted", org_id=str(org_id), deducted=agent_rounds, remaining=new_balance)
+    logger.info("agent_credits_deducted", org_id=str(org_id), deducted=agent_rounds)

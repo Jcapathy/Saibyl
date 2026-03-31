@@ -1,5 +1,5 @@
 # Saibyl Code Audit Report
-**Date:** 2026-03-30
+**Date:** 2026-03-30 (Updated)
 **Auditor:** Claude Code (Opus 4.6)
 **Purpose:** Pre-provisional patent code provenance audit — identify any Mirofish code, third-party code reuse, or architectural dependencies that could affect IP claims.
 
@@ -7,7 +7,9 @@
 
 ## Executive Summary
 
-**The Saibyl codebase is clean.** No Mirofish code exists in the implementation. The entire platform was built as a clean-room implementation using open-source dependencies and custom architecture. One unused dependency (CAMEL-AI) should be removed from `pyproject.toml` as it was never imported or used.
+**The Saibyl codebase is clean.** No Mirofish code exists in the implementation. The entire platform was built as a clean-room implementation using open-source dependencies and custom architecture. All previously flagged dependency issues have been resolved:
+- **CAMEL-AI** — removed from `pyproject.toml` (was never imported or used)
+- **Zep Cloud** — fully removed and replaced with Supabase-native graph storage using Claude for entity extraction
 
 ---
 
@@ -36,22 +38,34 @@
 
 ---
 
-## 2. CAMEL-AI / OASIS Dependency Audit
+## 2. Banned Dependency Audit
 
-### Critical Finding: CAMEL-AI Listed but Never Used
+### CAMEL-AI / OASIS — REMOVED
 
-**Dependency declared in `backend/pyproject.toml` (line 10):**
-```
-"camel-ai>=0.2.78",
-```
+**Status:** Fully removed from `backend/pyproject.toml`. Zero imports across all Python files. The package is not installed in the dependency tree.
 
-**Actual usage in implementation: ZERO.**
-- Zero imports of `from camel` or `import camel` across all 94 Python files
-- Zero usage of CAMEL-AI agent framework classes, methods, or utilities
-- Zero usage of CAMEL-AI OASIS social simulation primitives
-- The package is installed in `.venv/` but never imported
+### Zep Cloud — REMOVED AND REPLACED
 
-### What Was Built Instead
+**Status:** Fully removed from all configuration and source files:
+- `backend/pyproject.toml` — `zep-cloud` dependency removed
+- `backend/app/core/config.py` — `zep_api_key` and `zep_base_url` settings removed
+- `.env` and `.env.example` — `ZEP_API_KEY` and `ZEP_BASE_URL` entries removed
+- `render.yaml` — `ZEP_API_KEY` env var removed
+- `DEPLOY.md` — Zep setup instructions removed
+- `backend/tests/conftest.py` — `ZEP_API_KEY` test env var removed
+- `backend/tests/test_config.py` — `zep_api_key` test params removed
+- `backend/scripts/migrations/004_documents_knowledge.sql` — `zep_graph_id` column removed
+- `backend/scripts/migrations/_apply_remote.py` — `zep_graph_id` column removed
+
+**Replacement:** `backend/app/services/engine/knowledge_graph_builder.py` now uses:
+- **Claude (via Anthropic SDK)** for entity and relationship extraction from document chunks
+- **Supabase Postgres** for graph storage in new `graph_nodes` and `graph_edges` tables
+- **Text search** via Supabase `ilike` queries on node names and summaries
+- **Migration:** `015_native_graph_tables.sql` creates the new tables and drops the `zep_graph_id` column
+
+The public interface (`build_graph`, `search_graph`, `get_all_nodes`, `get_all_edges`, `get_graph_stats`) is unchanged — all callers (`simulation_tasks.py`, `agent_profile_generator.py`, `react_tools.py`) require zero modifications.
+
+### What Was Built Instead of CAMEL-AI
 
 Saibyl uses a fully custom multi-agent architecture:
 
@@ -63,10 +77,7 @@ Saibyl uses a fully custom multi-agent architecture:
 | Agent profiles | `services/engine/personas/agent_profile_generator.py` | CAMEL AgentProfile |
 | Interview system | `services/engine/personas/interview_engine.py` | No equivalent |
 | Report generation | `services/intelligence/report_agent.py` — ReACT loop | No equivalent |
-
-### Recommendation
-
-**Remove `camel-ai>=0.2.78` from `pyproject.toml`.** It is dead weight — never imported, never used, and its presence in the dependency list could create unnecessary confusion during patent review. The entire agent system is original work.
+| Knowledge graph | `services/engine/knowledge_graph_builder.py` — Claude + Supabase | No equivalent |
 
 ---
 
@@ -81,6 +92,7 @@ All dependencies are standard open-source libraries used as intended (imported, 
 |-----------|---------|-------|---------|
 | FastAPI | MIT | Web framework | None |
 | litellm | MIT | LLM provider abstraction | None |
+| Anthropic SDK | MIT | Claude API client | None |
 | Pydantic | MIT | Data validation | None |
 | Supabase Python | MIT | Database client | None |
 | Redis | MIT | Caching/pub-sub | None |
@@ -88,6 +100,8 @@ All dependencies are standard open-source libraries used as intended (imported, 
 | WeasyPrint | BSD | PDF export | None |
 | python-pptx | MIT | PPTX export | None |
 | Stripe | MIT | Billing | None |
+| httpx | BSD | HTTP client | None |
+| cryptography | Apache 2.0/BSD | Encryption | None |
 
 **Frontend (TypeScript):**
 | Dependency | License | Usage | IP Risk |
@@ -105,14 +119,13 @@ All dependencies are standard open-source libraries used as intended (imported, 
 
 | Service | Usage | Code Reuse? |
 |---------|-------|-------------|
-| Anthropic Claude API | LLM calls for agent generation, reports | No — API consumer only |
-| Zep Cloud | Knowledge graph storage/search | No — API consumer only |
-| Supabase | Database + Auth + Storage | No — managed service |
+| Anthropic Claude API | LLM calls for agent generation, entity extraction, reports | No — API consumer only |
+| Supabase | Database + Auth + Storage + Graph storage | No — managed service |
 | Stripe | Billing/subscriptions | No — SDK consumer only |
 | Kalshi API | Prediction market data | No — API consumer only |
 | Polymarket Gamma API | Prediction market data | No — API consumer only |
 
-**Assessment:** All third-party usage is standard library/API consumption. No forked code, no vendored libraries, no modified open-source code. All dependencies are MIT or Apache 2.0 licensed.
+**Assessment:** All third-party usage is standard library/API consumption. No forked code, no vendored libraries, no modified open-source code. All dependencies are MIT, Apache 2.0, or BSD licensed.
 
 ---
 
@@ -144,7 +157,8 @@ The following architectural components are original work and constitute Saibyl's
 ### 4.4 Knowledge Graph Pipeline
 - **Document processing** (PDF, DOCX, MD, TXT) with sentence-boundary chunking
 - **3-pass ontology generation** (generate → self-critique → human feedback)
-- **Zep-backed graph construction** with batch ingestion
+- **Claude-powered entity and relationship extraction** with batch processing
+- **Supabase-native graph storage** with text search across nodes and edges
 - Files: `services/engine/` (document_processor, ontology_generator, knowledge_graph_builder)
 
 ### 4.5 Real-Time Streaming Layer
@@ -163,19 +177,18 @@ The following architectural components are original work and constitute Saibyl's
 
 ## 5. Items Requiring Action
 
-### 5.1 Remove Unused CAMEL-AI Dependency (HIGH PRIORITY)
-- **File:** `backend/pyproject.toml` line 10
-- **Action:** Remove `"camel-ai>=0.2.78"` from dependencies
-- **Reason:** Never imported, never used. Its presence could raise questions during patent review about whether the agent system derives from CAMEL-AI. It does not — the entire system is custom — but removing it eliminates ambiguity.
-
-### 5.2 Clean PRD Mirofish References (MEDIUM PRIORITY)
+### 5.1 Clean PRD Mirofish References (MEDIUM PRIORITY)
 - **Files:** 5 PRD markdown files (listed in Section 1)
 - **Action:** Consider removing or rewording comparative Mirofish references. While they document design decisions, they could be misinterpreted as indicating code lineage during patent review.
 - **Suggested rewording:** Replace "Key improvement over MiroFish" with "Design decision" or "Architectural choice" — describe what Saibyl does without referencing what Mirofish does.
 
-### 5.3 Update TECH_STACK.md (LOW PRIORITY)
+### 5.2 Update TECH_STACK.md (LOW PRIORITY)
 - **File:** `05_PRD/saibyl-prd/TECH_STACK.md`
-- **Action:** Remove CAMEL-AI and OASIS from the tech stack since they're not actually used. Replace with the actual stack: litellm + custom adapters + custom ReACT engine.
+- **Action:** Remove CAMEL-AI and OASIS from the tech stack since they're not used. Remove Zep Cloud references. Replace with the actual stack: litellm + Anthropic SDK + Supabase-native graph storage.
+
+### 5.3 Regenerate uv.lock (LOW PRIORITY)
+- **File:** `backend/uv.lock`
+- **Action:** Run `uv lock` to regenerate the lock file and remove the `zep-cloud` entries. This will happen automatically on next Render deploy.
 
 ---
 
@@ -191,7 +204,7 @@ For provisional patent documentation, Saibyl's novel architecture can be describ
 >
 > 3. A **ReACT (Reasoning-Action-Observation) intelligence engine** that autonomously investigates simulation results through iterative tool use — querying analytics, interviewing agents in-character, and searching knowledge graphs — to produce evidence-backed predictive intelligence reports.
 >
-> 4. A **knowledge graph pipeline** that processes source documents through ontology generation with human-in-the-loop refinement, building searchable semantic graphs that inform agent behavior and report generation.
+> 4. A **knowledge graph pipeline** that processes source documents through ontology generation with human-in-the-loop refinement, using LLM-powered entity and relationship extraction to build searchable semantic graphs stored in Postgres, informing agent behavior and report generation.
 >
 > 5. A **prediction market integration layer** that imports real-world market data and uses focused swarm simulations to generate independent probability estimates for market outcomes.
 
@@ -201,9 +214,10 @@ For provisional patent documentation, Saibyl's novel architecture can be describ
 
 **This audit confirms:**
 - Zero Mirofish code exists in the Saibyl implementation
-- Zero CAMEL-AI or OASIS code is used (dependency listed but never imported)
+- Zero CAMEL-AI or OASIS code is used (dependency removed)
+- Zero Zep Cloud code is used (dependency removed, replaced with Supabase-native)
 - All source code is original work by Saido Labs LLC
-- All third-party dependencies are standard open-source libraries used as intended under MIT/Apache 2.0 licenses
+- All third-party dependencies are standard open-source libraries used as intended under MIT/Apache 2.0/BSD licenses
 - The architecture is novel and suitable for provisional patent filing
 
 **Auditor:** Claude Code (Opus 4.6)

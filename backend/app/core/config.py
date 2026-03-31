@@ -1,14 +1,21 @@
 from typing import Literal
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     environment: Literal["development", "staging", "production"] = "development"
     secret_key: str = ""
+
+    @field_validator("secret_key")
+    @classmethod
+    def validate_secret_key(cls, v: str, info) -> str:
+        env = info.data.get("environment", "development")
+        if env == "production" and len(v) < 32:
+            raise ValueError("SECRET_KEY must be at least 32 characters in production")
+        return v
     anthropic_api_key: str = ""
-    zep_api_key: str = ""
-    zep_base_url: str = "https://api.getzep.com"
     supabase_url: str = ""
     supabase_anon_key: str = ""
     supabase_service_role_key: str = ""

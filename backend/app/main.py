@@ -49,8 +49,8 @@ def create_app() -> FastAPI:
         title="Saibyl API",
         description="Swarm Intelligence Prediction Platform",
         version="1.0.0",
-        docs_url="/docs",
-        redoc_url="/redoc",
+        docs_url="/docs" if settings.environment != "production" else None,
+        redoc_url="/redoc" if settings.environment != "production" else None,
         redirect_slashes=False,
         lifespan=lifespan,
     )
@@ -94,8 +94,8 @@ def create_app() -> FastAPI:
             admin = get_supabase_admin()
             admin.table("organizations").select("id").limit(1).execute()
             checks["database"] = "ok"
-        except Exception as e:
-            checks["database"] = f"error: {e}"
+        except Exception:
+            checks["database"] = "error"
 
         # Redis check
         try:
@@ -103,8 +103,8 @@ def create_app() -> FastAPI:
             rc = r.from_url(settings.redis_url, decode_responses=True)
             rc.ping()
             checks["redis"] = "ok"
-        except Exception as e:
-            checks["redis"] = f"error: {e}"
+        except Exception:
+            checks["redis"] = "error"
 
         checks["llm"] = "ok"  # don't call LLM on health check
         status = "ok" if all(v == "ok" for v in checks.values()) else "degraded"

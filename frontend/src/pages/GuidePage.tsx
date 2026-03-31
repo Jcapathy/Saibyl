@@ -331,13 +331,13 @@ export default function GuidePage() {
           className="text-center pb-8"
         >
           <Link
-            to="/app/simulations/new"
+            to="/app/projects"
             className="relative inline-flex items-center gap-2 px-8 py-3 rounded-xl text-white font-semibold text-[15px] overflow-hidden hover:scale-[1.02] transition-transform"
           >
             <div className="absolute inset-0 bg-gradient-to-r from-[#5B5FEE] to-[#00D4FF]" />
             <div className="absolute inset-0 animate-glow-pulse rounded-xl" />
             <FlaskConical className="relative w-4 h-4" />
-            <span className="relative">Run Your First Simulation</span>
+            <span className="relative">Start a New Project</span>
           </Link>
           <p className="text-[12px] text-saibyl-muted mt-3">Results in minutes, not weeks.</p>
         </motion.div>

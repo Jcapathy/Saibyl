@@ -188,7 +188,7 @@ async def start_simulation(id: str, auth: dict = Depends(get_current_org)):
     admin = get_supabase_admin()
     sim = (
         admin.table("simulations")
-        .select("id, is_ab_test, status")
+        .select("id, is_ab_test, status, agent_count, max_rounds")
         .eq("id", id)
         .eq("organization_id", auth["org_id"])
         .single()
@@ -210,6 +210,19 @@ async def start_simulation(id: str, auth: dict = Depends(get_current_org)):
         )
     if current_status == "running":
         raise HTTPException(status_code=409, detail="Simulation is already running.")
+
+    # Enforce billing quota
+    from app.services.billing.stripe_service import check_simulation_quota
+    if not await check_simulation_quota(auth["org_id"]):
+        raise HTTPException(status_code=402, detail="Simulation quota exceeded for this billing period")
+
+    # Enforce agent budget
+    from app.services.billing.agent_pricing import check_agent_budget
+    agent_count = sim.data.get("agent_count") or 1000
+    max_rounds = sim.data.get("max_rounds") or 10
+    budget = check_agent_budget(auth["org_id"], agent_count, max_rounds)
+    if not budget.allowed:
+        raise HTTPException(status_code=402, detail=budget.message)
 
     if sim.data.get("is_ab_test"):
         asyncio.create_task(_safe_task(run_simulation_ab(id), "run_simulation_ab", simulation_id=id))

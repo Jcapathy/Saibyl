@@ -32,7 +32,6 @@ CREATE TABLE knowledge_graphs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     organization_id UUID NOT NULL REFERENCES organizations(id),
-    zep_graph_id TEXT,
     node_count INT DEFAULT 0,
     edge_count INT DEFAULT 0,
     build_status TEXT DEFAULT 'pending',
