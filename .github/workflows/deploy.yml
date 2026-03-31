@@ -25,7 +25,5 @@ jobs:
     steps:
       - name: Deploy Backend
         run: curl -sS -X POST "${{ secrets.RENDER_DEPLOY_HOOK_BACKEND }}"
-      - name: Deploy Worker
-        run: curl -sS -X POST "${{ secrets.RENDER_DEPLOY_HOOK_WORKER }}"
       - name: Deploy Frontend
         run: curl -sS -X POST "${{ secrets.RENDER_DEPLOY_HOOK_FRONTEND }}"

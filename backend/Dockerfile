@@ -19,12 +19,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/.venv .venv
-COPY app/ app/
-COPY scripts/ scripts/
-COPY data/ data/
-
 RUN useradd -m -s /bin/bash appuser
+
+COPY --chown=appuser:appuser --from=builder /app/.venv .venv
+COPY --chown=appuser:appuser app/ app/
+COPY --chown=appuser:appuser scripts/ scripts/
+COPY --chown=appuser:appuser data/ data/
+
 USER appuser
 
 ENV PATH="/app/.venv/bin:$PATH"
