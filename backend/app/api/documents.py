@@ -76,6 +76,9 @@ async def upload_document(
         .execute()
     ).data[0]
 
+    # Increment project asset count
+    admin.rpc("increment_asset_count", {"p_project_id": project_id}).execute()
+
     # Trigger async processing
     asyncio.create_task(_safe_task(run_process_document(doc["id"]), "process_document"))
     log.info("document_processing_queued", document_id=doc["id"])
@@ -123,10 +126,10 @@ async def delete_document(id: str, auth: dict = Depends(get_current_org)):
     log.info("delete_document", document_id=id)
     admin = get_supabase_admin()
 
-    # Fetch document to get storage path
+    # Fetch document to get storage path and project
     doc = (
         admin.table("documents")
-        .select("id, storage_path")
+        .select("id, storage_path, project_id")
         .eq("id", id)
         .eq("organization_id", auth["org_id"])
         .single()
@@ -140,5 +143,8 @@ async def delete_document(id: str, auth: dict = Depends(get_current_org)):
 
     # Delete database record
     admin.table("documents").delete().eq("id", id).execute()
+
+    # Decrement project asset count
+    admin.rpc("decrement_asset_count", {"p_project_id": doc.data["project_id"]}).execute()
 
     return {"detail": "Document deleted"}
