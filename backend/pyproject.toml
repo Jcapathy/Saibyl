@@ -7,7 +7,7 @@ dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.30.0",
     "redis>=5.0.0",
-    "camel-ai>=0.2.78",
+
     "anthropic>=0.30.0",
     "litellm>=1.40.0",
     "zep-cloud>=3.13.0",
