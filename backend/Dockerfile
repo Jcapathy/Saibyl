@@ -31,5 +31,4 @@ USER appuser
 ENV PATH="/app/.venv/bin:$PATH"
 
 # Render assigns $PORT (default 10000); fall back to 8000 for local
-# --limit-max-request-size=52428800 enforces 50MB global request body limit
-CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --limit-max-request-size 52428800
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1

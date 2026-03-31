@@ -1,8 +1,9 @@
 import asyncio
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api import (
     accuracy,
@@ -54,6 +55,18 @@ def create_app() -> FastAPI:
         redirect_slashes=False,
         lifespan=lifespan,
     )
+
+    # 50MB request body limit
+    MAX_BODY_SIZE = 50 * 1024 * 1024
+
+    class LimitRequestBodyMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next):
+            content_length = request.headers.get("content-length")
+            if content_length and int(content_length) > MAX_BODY_SIZE:
+                return Response(status_code=413, content="Request body too large")
+            return await call_next(request)
+
+    app.add_middleware(LimitRequestBodyMiddleware)
 
     app.add_middleware(
         CORSMiddleware,
