@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import mimetypes
 import uuid
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -57,7 +58,7 @@ async def upload_asset(
     if media_type != "news_article":
         valid_exts = ALLOWED_EXTENSIONS.get(media_type, set())
         if ext not in valid_exts:
-            raise HTTPException(400, f"Extension .{ext} not allowed for {media_type}. Allowed: {valid_exts}")
+            raise HTTPException(400, "File type not allowed")
 
     # Read file
     file_bytes = await file.read()
@@ -81,7 +82,7 @@ async def upload_asset(
     admin.storage.from_("project-media").upload(
         storage_path,
         file_bytes,
-        {"content-type": file.content_type or "application/octet-stream"},
+        {"content-type": mimetypes.types_map.get(f".{ext}", "application/octet-stream")},
     )
 
     # Create project_assets record

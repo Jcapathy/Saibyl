@@ -90,6 +90,12 @@ async def delete_market(market_id: str, auth: dict = Depends(get_current_org)):
 @router.post("/{market_id}/refresh")
 async def refresh(market_id: str, auth: dict = Depends(get_current_org)):
     """Re-fetch latest prices for a market."""
+    admin = get_supabase_admin()
+    market = admin.table("prediction_markets").select("organization_id").eq(
+        "id", market_id
+    ).execute().data
+    if not market or market[0]["organization_id"] != auth["org_id"]:
+        raise HTTPException(404, "Market not found")
     try:
         result = await refresh_market(market_id)
         return result

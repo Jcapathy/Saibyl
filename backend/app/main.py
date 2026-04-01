@@ -1,8 +1,10 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api import (
@@ -59,22 +61,64 @@ def create_app() -> FastAPI:
     # 50MB request body limit
     MAX_BODY_SIZE = 50 * 1024 * 1024
 
+    logger = logging.getLogger(__name__)
+
     class LimitRequestBodyMiddleware(BaseHTTPMiddleware):
         async def dispatch(self, request: Request, call_next):
-            content_length = request.headers.get("content-length")
-            if content_length and int(content_length) > MAX_BODY_SIZE:
-                return Response(status_code=413, content="Request body too large")
+            if request.headers.get("content-length"):
+                if int(request.headers["content-length"]) > MAX_BODY_SIZE:
+                    return JSONResponse(status_code=413, content={"detail": "Request too large"})
+
+            received = 0
+            original_receive = request._receive
+
+            async def sized_receive():
+                nonlocal received
+                message = await original_receive()
+                if message.get("type") == "http.request":
+                    received += len(message.get("body", b""))
+                    if received > MAX_BODY_SIZE:
+                        raise HTTPException(413, "Request too large")
+                return message
+
+            request._receive = sized_receive
             return await call_next(request)
 
     app.add_middleware(LimitRequestBodyMiddleware)
 
+    # CORS configuration
+    cors_origins = [o.strip() for o in settings.cors_origins.split(",")]
+    allow_credentials = True
+    if "*" in cors_origins and allow_credentials:
+        logger.warning(
+            "CORS wildcard '*' with allow_credentials=True is invalid per spec; "
+            "disabling credentials"
+        )
+        allow_credentials = False
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins.split(","),
-        allow_credentials=True,
+        allow_origins=cors_origins,
+        allow_credentials=allow_credentials,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
     )
+
+    # Security response headers
+    class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next):
+            response = await call_next(request)
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["X-Frame-Options"] = "DENY"
+            response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+            response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+            if settings.environment in ("production", "staging"):
+                response.headers["Strict-Transport-Security"] = (
+                    "max-age=31536000; includeSubDomains"
+                )
+            return response
+
+    app.add_middleware(SecurityHeadersMiddleware)
 
     # REST API routers
     app.include_router(auth.router, prefix="/api/auth")

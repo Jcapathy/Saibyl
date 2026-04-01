@@ -24,7 +24,7 @@ class LoginRequest(BaseModel):
 @router.post("/signup")
 async def signup(body: SignupRequest, request: Request):
     """Create a new user, organization, and link them."""
-    await check_rate_limit(request, "signup", max_attempts=5, window_seconds=300)
+    await check_rate_limit(request, "signup", max_attempts=5, window_seconds=300, fail_open=False)
     supabase = get_supabase()
     admin = get_supabase_admin()
 
@@ -44,7 +44,8 @@ async def signup(body: SignupRequest, request: Request):
         raise HTTPException(400, "Signup failed")
 
     # Create organization
-    slug = body.org_name.lower().replace(" ", "-")[:50]
+    import secrets
+    slug = body.org_name.lower().replace(" ", "-")[:50] + "-" + secrets.token_hex(3)
     org = admin.table("organizations").insert({
         "name": body.org_name,
         "slug": slug,
@@ -68,7 +69,7 @@ async def signup(body: SignupRequest, request: Request):
 @router.post("/login")
 async def login(body: LoginRequest, request: Request):
     """Sign in and return session."""
-    await check_rate_limit(request, "login", max_attempts=10, window_seconds=60)
+    await check_rate_limit(request, "login", max_attempts=10, window_seconds=60, fail_open=False)
     supabase = get_supabase()
     try:
         result = supabase.auth.sign_in_with_password({
@@ -98,7 +99,7 @@ async def logout():
 @router.post("/refresh")
 async def refresh(refresh_token: str, request: Request):
     """Refresh session token."""
-    await check_rate_limit(request, "refresh", max_attempts=20, window_seconds=60)
+    await check_rate_limit(request, "refresh", max_attempts=20, window_seconds=60, fail_open=False)
     supabase = get_supabase()
     try:
         result = supabase.auth.refresh_session(refresh_token)

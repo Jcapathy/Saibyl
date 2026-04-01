@@ -72,12 +72,12 @@ async def verify_api_key(
     key_record = result.data[0]
 
     if key_record.get("revoked_at"):
-        raise HTTPException(status_code=401, detail="API key has been revoked")
+        raise HTTPException(status_code=401, detail="Invalid API key")
 
     if key_record.get("expires_at"):
         expires = datetime.fromisoformat(key_record["expires_at"])
         if expires < datetime.now(UTC):
-            raise HTTPException(status_code=401, detail="API key has expired")
+            raise HTTPException(status_code=401, detail="Invalid API key")
 
     # Update last_used_at
     admin.table("api_keys").update(

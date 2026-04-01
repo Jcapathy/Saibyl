@@ -14,6 +14,8 @@ from app.core.database import get_supabase_admin
 logger = structlog.get_logger()
 
 CATCHUP_EVENT_COUNT = 50
+MAX_CONNECTIONS_PER_USER = 5
+MAX_CONNECTIONS_GLOBAL = 500
 
 
 class ConnectionManager:
@@ -21,9 +23,20 @@ class ConnectionManager:
 
     def __init__(self):
         self.connections: dict[str, list[WebSocket]] = {}
+        self._user_connection_count: dict[str, int] = {}
 
-    async def connect(self, ws: WebSocket, sim_id: str, org_id: str) -> bool:
+    async def connect(self, ws: WebSocket, sim_id: str, org_id: str, user_id: str | None = None) -> bool:
         """Accept connection, verify access, send catch-up events."""
+        if self.active_connections >= MAX_CONNECTIONS_GLOBAL:
+            await ws.accept()
+            await ws.close(code=1008, reason="Server connection limit reached")
+            return False
+
+        if user_id and self._user_connection_count.get(user_id, 0) >= MAX_CONNECTIONS_PER_USER:
+            await ws.accept()
+            await ws.close(code=1008, reason="Per-user connection limit reached")
+            return False
+
         await ws.accept()
 
         # Verify org has access to this simulation
@@ -37,6 +50,9 @@ class ConnectionManager:
             return False
 
         self.connections.setdefault(sim_id, []).append(ws)
+        if user_id:
+            self._user_connection_count[user_id] = self._user_connection_count.get(user_id, 0) + 1
+            ws._saibyl_user_id = user_id  # type: ignore[attr-defined]
 
         # Send catch-up events
         await self._send_catchup(ws, sim_id)
@@ -46,6 +62,11 @@ class ConnectionManager:
 
     def disconnect(self, ws: WebSocket, sim_id: str) -> None:
         """Remove a WebSocket connection."""
+        uid = getattr(ws, "_saibyl_user_id", None)
+        if uid and uid in self._user_connection_count:
+            self._user_connection_count[uid] -= 1
+            if self._user_connection_count[uid] <= 0:
+                del self._user_connection_count[uid]
         if sim_id in self.connections:
             try:
                 self.connections[sim_id].remove(ws)

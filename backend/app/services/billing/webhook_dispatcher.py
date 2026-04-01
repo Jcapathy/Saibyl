@@ -13,6 +13,7 @@ import httpx
 import structlog
 
 from app.core.database import get_supabase_admin
+from app.core.security import validate_external_url
 
 logger = structlog.get_logger()
 
@@ -56,6 +57,12 @@ async def dispatch_webhook(org_id: UUID, event_type: str, payload: dict) -> None
         for wh in webhooks:
             # Check if webhook subscribes to this event type
             if event_type not in (wh.get("events") or []):
+                continue
+
+            try:
+                validate_external_url(wh["url"])
+            except Exception:
+                logger.error("webhook_url_validation_failed", webhook_id=wh["id"], url=wh["url"])
                 continue
 
             delivery_id = str(uuid.uuid4())

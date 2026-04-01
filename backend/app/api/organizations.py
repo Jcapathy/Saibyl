@@ -155,5 +155,18 @@ async def remove_member(id: str, user_id: str, auth: dict = Depends(get_current_
         raise HTTPException(status_code=403, detail="Cannot modify another organization")
     log.info("remove_member", org_id=id, user_id=user_id)
     admin = get_supabase_admin()
+
+    member = admin.table("organization_members").select("role").eq(
+        "organization_id", id
+    ).eq("user_id", user_id).execute().data
+    if member and member[0]["role"] == "owner":
+        owner_count = len(
+            admin.table("organization_members").select("id").eq(
+                "organization_id", id
+            ).eq("role", "owner").execute().data
+        )
+        if owner_count <= 1:
+            raise HTTPException(status_code=400, detail="Cannot remove the last owner")
+
     admin.table("organization_members").delete().eq("organization_id", id).eq("user_id", user_id).execute()
     return {"detail": "Member removed"}

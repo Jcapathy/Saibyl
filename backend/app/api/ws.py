@@ -54,7 +54,7 @@ async def simulation_websocket(
         await websocket.close(code=4001, reason="Invalid token")
         return
 
-    connected = await manager.connect(websocket, str(simulation_id), auth["org_id"])
+    connected = await manager.connect(websocket, str(simulation_id), auth["org_id"], user_id=auth["user_id"])
     if not connected:
         return
 

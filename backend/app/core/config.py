@@ -12,8 +12,8 @@ class Settings(BaseSettings):
     @classmethod
     def validate_secret_key(cls, v: str, info) -> str:
         env = info.data.get("environment", "development")
-        if env == "production" and len(v) < 32:
-            raise ValueError("SECRET_KEY must be at least 32 characters in production")
+        if env in ("production", "staging") and len(v) < 32:
+            raise ValueError("SECRET_KEY must be at least 32 characters in production/staging")
         return v
     anthropic_api_key: str = ""
     supabase_url: str = ""

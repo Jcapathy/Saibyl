@@ -33,6 +33,11 @@ async def upload_document(
     auth: dict = Depends(get_current_org),
 ):
     """Upload a document, store in Supabase Storage, and trigger processing."""
+    allowed_extensions = {"pdf", "txt", "doc", "docx", "csv", "json", "md", "html", "pptx", "xlsx"}
+    ext = (file.filename or "").rsplit(".", 1)[-1].lower() if file.filename else ""
+    if ext not in allowed_extensions:
+        raise HTTPException(status_code=400, detail="File type not allowed")
+
     log.info("upload_document", project_id=project_id, filename=file.filename, org_id=auth["org_id"])
     admin = get_supabase_admin()
 

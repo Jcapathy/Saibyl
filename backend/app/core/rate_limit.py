@@ -19,6 +19,7 @@ async def check_rate_limit(
     key_prefix: str,
     max_attempts: int,
     window_seconds: int,
+    fail_open: bool = True,
 ) -> None:
     """Check rate limit using Redis. Raises 429 if exceeded."""
     ip = _get_client_ip(request)
@@ -37,5 +38,8 @@ async def check_rate_limit(
     except HTTPException:
         raise
     except Exception:
-        # If Redis is down, allow the request (fail open)
-        pass
+        if not fail_open:
+            raise HTTPException(
+                status_code=503,
+                detail="Service temporarily unavailable",
+            )

@@ -9,6 +9,8 @@ import re
 import httpx
 import structlog
 
+from app.core.security import validate_external_url
+
 logger = structlog.get_logger()
 
 
@@ -58,6 +60,7 @@ async def process_article(
     html = html_content or ""
 
     if source_url and not html:
+        validate_external_url(source_url)
         try:
             async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
                 response = await client.get(source_url, headers={
