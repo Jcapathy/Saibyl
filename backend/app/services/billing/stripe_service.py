@@ -73,8 +73,8 @@ async def create_checkout_session(org_id: UUID, plan: str) -> str:
         customer=customer_id,
         mode="subscription",
         line_items=[{"price": PLAN_PRICE_MAP.get(plan, "price_starter"), "quantity": 1}],
-        success_url=f"{settings.frontend_url}/billing?success=true",
-        cancel_url=f"{settings.frontend_url}/billing?canceled=true",
+        success_url=f"{settings.frontend_url}/settings?success=true",
+        cancel_url=f"{settings.frontend_url}/settings?canceled=true",
         metadata={"org_id": str(org_id), "plan": plan},
     )
     return session.url
@@ -103,8 +103,8 @@ async def create_flash_report_checkout(org_id: UUID, report_type: str) -> str:
         customer=customer_id,
         mode="payment",
         line_items=[{"price": price_id, "quantity": 1}],
-        success_url=f"{settings.frontend_url}/billing?flash_report={report_type}&success=true",
-        cancel_url=f"{settings.frontend_url}/billing?canceled=true",
+        success_url=f"{settings.frontend_url}/settings?flash_report={report_type}&success=true",
+        cancel_url=f"{settings.frontend_url}/settings?canceled=true",
         metadata={"org_id": str(org_id), "report_type": report_type},
     )
     return session.url
@@ -122,7 +122,7 @@ async def create_customer_portal_session(org_id: UUID) -> str:
 
     session = stripe.billing_portal.Session.create(
         customer=org["stripe_customer_id"],
-        return_url=f"{settings.frontend_url}/billing",
+        return_url=f"{settings.frontend_url}/settings",
     )
     return session.url
 
