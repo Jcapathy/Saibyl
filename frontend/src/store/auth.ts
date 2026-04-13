@@ -17,11 +17,11 @@ interface AuthState {
   user: User | null;
   org: Organization | null;
   role: string | null;
-  token: string | null;
+  isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, orgName: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   loadSession: () => Promise<void>;
 }
 
@@ -29,63 +29,56 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   org: null,
   role: null,
-  token: localStorage.getItem('saibyl_access_token'),
+  isAuthenticated: false,
   isLoading: true,
 
   login: async (email, password) => {
-    const { data } = await api.post('/auth/login', { email, password });
-    const token = data.access_token;
-    localStorage.setItem('saibyl_access_token', token);
-    if (data.refresh_token) {
-      localStorage.setItem('saibyl_refresh_token', data.refresh_token);
-    }
-    set({ token });
-
-    // Fetch user info with the new token
-    const me = await api.get('/auth/me', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    await api.post('/auth/login', { email, password });
+    // Cookie is set by the server — now fetch user info
+    const me = await api.get('/auth/me');
     set({
       user: me.data.user,
       org: me.data.organization,
       role: me.data.role,
+      isAuthenticated: true,
       isLoading: false,
     });
   },
 
   signup: async (email, password, orgName) => {
     await api.post('/auth/signup', { email, password, org_name: orgName });
-    // Auto-login after signup
-    await get().login(email, password);
+    // Signup sets cookies too — fetch user info
+    const me = await api.get('/auth/me');
+    set({
+      user: me.data.user,
+      org: me.data.organization,
+      role: me.data.role,
+      isAuthenticated: true,
+      isLoading: false,
+    });
   },
 
-  logout: () => {
-    localStorage.removeItem('saibyl_access_token');
-    localStorage.removeItem('saibyl_refresh_token');
-    set({ user: null, org: null, role: null, token: null, isLoading: false });
+  logout: async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch {
+      // Server might be unreachable — clear local state anyway
+    }
+    set({ user: null, org: null, role: null, isAuthenticated: false, isLoading: false });
   },
 
   loadSession: async () => {
-    const token = localStorage.getItem('saibyl_access_token');
-    if (!token) {
-      set({ isLoading: false });
-      return;
-    }
     try {
-      const me = await api.get('/auth/me', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const me = await api.get('/auth/me');
       set({
         user: me.data.user,
         org: me.data.organization,
         role: me.data.role,
-        token,
+        isAuthenticated: true,
         isLoading: false,
       });
     } catch {
-      // Token invalid/expired — clear it silently
-      localStorage.removeItem('saibyl_access_token');
-      set({ user: null, org: null, role: null, token: null, isLoading: false });
+      set({ user: null, org: null, role: null, isAuthenticated: false, isLoading: false });
     }
   },
 }));

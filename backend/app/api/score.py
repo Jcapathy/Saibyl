@@ -9,12 +9,12 @@ import math
 from datetime import UTC, datetime
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Security
+from fastapi import APIRouter, Depends, HTTPException, Request, Security
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
-from app.core.auth import get_current_org, verify_api_key
-from app.core.database import get_supabase_admin
+from app.core.auth import verify_api_key
+from app.core.database import get_supabase, get_supabase_admin
 from app.core.llm_client import llm_complete
 
 logger = structlog.get_logger()
@@ -22,13 +22,14 @@ logger = structlog.get_logger()
 router = APIRouter(tags=["score"])
 
 # ---------------------------------------------------------------------------
-# Auth: accept either JWT bearer token OR X-API-Key header
+# Auth: accept JWT (cookie or header) OR X-API-Key header
 # ---------------------------------------------------------------------------
 _bearer = HTTPBearer(auto_error=False)
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
 async def _get_org_id(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Security(_bearer),
     api_key: str | None = Security(_api_key_header),
 ) -> str:
@@ -36,13 +37,16 @@ async def _get_org_id(
     if api_key:
         key_auth = await verify_api_key(api_key)
         return key_auth["org_id"]
-    if credentials:
-        # Re-use the JWT -> org flow without triggering auto_error on missing header
-        from app.core.database import get_supabase
 
+    # Try cookie first, then Authorization header
+    token = request.cookies.get("saibyl_access_token")
+    if not token and credentials:
+        token = credentials.credentials
+
+    if token:
         supabase = get_supabase()
         try:
-            response = supabase.auth.get_user(credentials.credentials)
+            response = supabase.auth.get_user(token)
             if response.user is None:
                 raise HTTPException(status_code=401, detail="Invalid token")
         except HTTPException:

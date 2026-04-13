@@ -1,13 +1,46 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from app.core.auth import get_current_org, get_current_user
+from app.core.config import settings
 from app.core.database import get_supabase, get_supabase_admin
 from app.core.rate_limit import check_rate_limit
 
 router = APIRouter(tags=["auth"])
+
+# Cookie configuration
+_COOKIE_OPTS: dict = {
+    "httponly": True,
+    "secure": True,
+    "samesite": "none",
+    "path": "/",
+}
+_ACCESS_MAX_AGE = 60 * 60           # 1 hour
+_REFRESH_MAX_AGE = 60 * 60 * 24 * 7  # 7 days
+
+
+def _set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
+    """Set httpOnly cookies for both tokens."""
+    response.set_cookie(
+        key="saibyl_access_token",
+        value=access_token,
+        max_age=_ACCESS_MAX_AGE,
+        **_COOKIE_OPTS,
+    )
+    response.set_cookie(
+        key="saibyl_refresh_token",
+        value=refresh_token,
+        max_age=_REFRESH_MAX_AGE,
+        **_COOKIE_OPTS,
+    )
+
+
+def _clear_auth_cookies(response: Response) -> None:
+    """Remove auth cookies."""
+    for name in ("saibyl_access_token", "saibyl_refresh_token"):
+        response.delete_cookie(key=name, path="/", httponly=True, secure=True, samesite="none")
 
 
 class SignupRequest(BaseModel):
@@ -22,7 +55,7 @@ class LoginRequest(BaseModel):
 
 
 @router.post("/signup")
-async def signup(body: SignupRequest, request: Request):
+async def signup(body: SignupRequest, request: Request, response: Response):
     """Create a new user, organization, and link them."""
     await check_rate_limit(request, "signup", max_attempts=5, window_seconds=300, fail_open=False)
     supabase = get_supabase()
@@ -63,12 +96,22 @@ async def signup(body: SignupRequest, request: Request):
         "default_organization_id": org["id"],
     }).eq("id", user.id).execute()
 
+    # Sign in to get tokens, then set cookies
+    try:
+        result = supabase.auth.sign_in_with_password({
+            "email": body.email,
+            "password": body.password,
+        })
+        _set_auth_cookies(response, result.session.access_token, result.session.refresh_token)
+    except Exception:
+        pass  # Signup succeeded but auto-login failed — user can login manually
+
     return {"user_id": user.id, "organization_id": org["id"], "email": body.email}
 
 
 @router.post("/login")
-async def login(body: LoginRequest, request: Request):
-    """Sign in and return session."""
+async def login(body: LoginRequest, request: Request, response: Response):
+    """Sign in and set httpOnly session cookies."""
     await check_rate_limit(request, "login", max_attempts=10, window_seconds=60, fail_open=False)
     supabase = get_supabase()
     try:
@@ -76,38 +119,38 @@ async def login(body: LoginRequest, request: Request):
             "email": body.email,
             "password": body.password,
         })
-        return {
-            "access_token": result.session.access_token,
-            "refresh_token": result.session.refresh_token,
-            "user_id": result.user.id,
-        }
+        _set_auth_cookies(response, result.session.access_token, result.session.refresh_token)
+        return {"user_id": result.user.id}
     except Exception:
         raise HTTPException(401, "Invalid email or password")
 
 
 @router.post("/logout")
-async def logout():
-    """Sign out (invalidate Supabase refresh token, client should discard tokens)."""
+async def logout(response: Response):
+    """Sign out — clear httpOnly cookies."""
     try:
         supabase = get_supabase()
         supabase.auth.sign_out()
     except Exception:
         pass
+    _clear_auth_cookies(response)
     return {"message": "Logged out"}
 
 
 @router.post("/refresh")
-async def refresh(refresh_token: str, request: Request):
-    """Refresh session token."""
+async def refresh(request: Request, response: Response):
+    """Refresh session using httpOnly cookie."""
     await check_rate_limit(request, "refresh", max_attempts=20, window_seconds=60, fail_open=False)
+    token = request.cookies.get("saibyl_refresh_token")
+    if not token:
+        raise HTTPException(401, "No refresh token")
     supabase = get_supabase()
     try:
-        result = supabase.auth.refresh_session(refresh_token)
-        return {
-            "access_token": result.session.access_token,
-            "refresh_token": result.session.refresh_token,
-        }
+        result = supabase.auth.refresh_session(token)
+        _set_auth_cookies(response, result.session.access_token, result.session.refresh_token)
+        return {"message": "Refreshed"}
     except Exception:
+        _clear_auth_cookies(response)
         raise HTTPException(401, "Token refresh failed")
 
 

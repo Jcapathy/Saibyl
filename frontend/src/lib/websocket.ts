@@ -5,9 +5,9 @@ export class SimulationSocket {
   private handlers: Map<string, EventHandler[]> = new Map();
   private pingInterval: ReturnType<typeof setInterval> | null = null;
 
-  connect(simulationId: string, token: string) {
+  connect(simulationId: string) {
     const wsUrl = import.meta.env.VITE_WS_URL || `ws://${window.location.host}`;
-    this.ws = new WebSocket(`${wsUrl}/ws/simulations/${simulationId}?token=${token}`);
+    this.ws = new WebSocket(`${wsUrl}/ws/simulations/${simulationId}`);
 
     this.ws.onmessage = (e) => {
       try {

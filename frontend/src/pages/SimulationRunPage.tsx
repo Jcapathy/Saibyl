@@ -144,7 +144,6 @@ export default function SimulationRunPage() {
 
   useEffect(() => {
     reset();
-    const token = localStorage.getItem('saibyl_access_token') || '';
     const socket = new SimulationSocket();
     socketRef.current = socket;
 
@@ -157,7 +156,7 @@ export default function SimulationRunPage() {
     socket.on('simulation_failed', () => setRunning(false));
     socket.on('disconnect', () => setRunning(false));
 
-    socket.connect(id!, token);
+    socket.connect(id!);
     setRunning(true);
 
     return () => {
