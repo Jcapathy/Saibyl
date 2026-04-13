@@ -37,9 +37,9 @@ const plans = [
 ];
 
 const flashReports = [
-  { name: 'Quick Read', price: '197', desc: 'A focused intelligence snapshot on any topic — delivered in under 24 hours.', href: '#flash-quick' },
-  { name: 'Deep Dive', price: '497', desc: 'Multi-platform swarm analysis with full evidence chains and probability estimates.', href: '#flash-deep' },
-  { name: 'War Room Brief', price: '997', desc: 'Executive-grade predictive intelligence with interactive Q&A and strategic recommendations.', href: '#flash-war-room' },
+  { name: 'Quick Read', price: '197', desc: 'A focused intelligence snapshot on any topic — delivered in under 24 hours.', reportType: 'quick_read' },
+  { name: 'Deep Dive', price: '497', desc: 'Multi-platform swarm analysis with full evidence chains and probability estimates.', reportType: 'deep_dive' },
+  { name: 'War Room Brief', price: '997', desc: 'Executive-grade predictive intelligence with interactive Q&A and strategic recommendations.', reportType: 'war_room_brief' },
 ];
 
 /* ── Simulated dashboard (product showcase) ─────────────── */
@@ -347,7 +347,7 @@ export default function LandingPage() {
                   <h4 className="font-sans font-semibold text-[20px] text-white">{r.name}</h4>
                   <div className="mt-4 mb-4"><span className="text-[48px] font-display font-extrabold text-white leading-none">${r.price}</span><span className="text-saibyl-muted text-[14px] ml-1">one-time</span></div>
                   <p className="text-[14px] text-saibyl-muted leading-[1.7] mb-8">{r.desc}</p>
-                  <a href={r.href} className="block text-center py-3 rounded-xl font-medium text-[14px] glass glass-hover text-saibyl-platinum transition-all">Purchase report</a>
+                  <Link to={`/signup?report=${r.reportType}`} className="block text-center py-3 rounded-xl font-medium text-[14px] glass glass-hover text-saibyl-platinum transition-all">Purchase report</Link>
                 </motion.div>
               ))}
             </div>

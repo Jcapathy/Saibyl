@@ -23,9 +23,15 @@ logger = structlog.get_logger()
 stripe.api_key = settings.stripe_secret_key
 
 PLAN_PRICE_MAP = {
-    "starter": settings.stripe_secret_key and "price_starter",  # populated from env
-    "pro": "price_pro",
-    "enterprise": "price_enterprise",
+    "starter": "price_1TLd4VIqFuuRAGd4tWbna0Dd",   # Analyst $149/mo
+    "pro": "price_1TLd5yIqFuuRAGd4k7ZSTPuq",        # Strategist $499/mo
+    "enterprise": "price_1TLd6nIqFuuRAGd4Z6amqUOR",  # War Room $1,499/mo
+}
+
+FLASH_REPORT_PRICE_MAP = {
+    "quick_read": "price_1TLd7YIqFuuRAGd4jIMH2J07",      # $197 one-time
+    "deep_dive": "price_1TLd8GIqFuuRAGd4xkisiqPJ",       # $497 one-time
+    "war_room_brief": "price_1TLd9RIqFuuRAGd4M0l0eGhF",  # $997 one-time
 }
 
 PLAN_LIMITS = {
@@ -70,6 +76,36 @@ async def create_checkout_session(org_id: UUID, plan: str) -> str:
         success_url=f"{settings.frontend_url}/billing?success=true",
         cancel_url=f"{settings.frontend_url}/billing?canceled=true",
         metadata={"org_id": str(org_id), "plan": plan},
+    )
+    return session.url
+
+
+async def create_flash_report_checkout(org_id: UUID, report_type: str) -> str:
+    """Create a Stripe Checkout session for a one-time Flash Report purchase."""
+    price_id = FLASH_REPORT_PRICE_MAP.get(report_type)
+    if not price_id:
+        raise ValueError(f"Unknown report type: {report_type}")
+
+    admin = get_supabase_admin()
+    org = admin.table("organizations").select("*").eq("id", str(org_id)).single().execute().data
+
+    customer_id = org.get("stripe_customer_id")
+    if not customer_id:
+        customer = stripe.Customer.create(
+            metadata={"org_id": str(org_id), "org_name": org["name"]},
+        )
+        customer_id = customer.id
+        admin.table("organizations").update({
+            "stripe_customer_id": customer_id,
+        }).eq("id", str(org_id)).execute()
+
+    session = stripe.checkout.Session.create(
+        customer=customer_id,
+        mode="payment",
+        line_items=[{"price": price_id, "quantity": 1}],
+        success_url=f"{settings.frontend_url}/billing?flash_report={report_type}&success=true",
+        cancel_url=f"{settings.frontend_url}/billing?canceled=true",
+        metadata={"org_id": str(org_id), "report_type": report_type},
     )
     return session.url
 
