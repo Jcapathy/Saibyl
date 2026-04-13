@@ -138,7 +138,7 @@ async def handle_webhook(payload: bytes, signature: str) -> None:
 
     admin = get_supabase_admin()
     event_type = event["type"]
-    data = event["data"]["object"]
+    data = dict(event["data"]["object"])
 
     logger.info("stripe_webhook", event_type=event_type)
 
