@@ -9,7 +9,7 @@ const stagger = (i: number) => ({ ...fadeUp, transition: { duration: 0.6, delay:
 const hoverLift = { whileHover: { y: -5, transition: { duration: 0.25 } } };
 
 /* ── Data ───────────────────────────────────────────────── */
-const proofNames = ['Meridian Capital', 'Apex Strategies', 'NovaBridge AI', 'Polaris Research', 'Elysium Labs'];
+const proofLine = 'Trusted by PR firms, political consultancies, and brand strategists';
 
 const steps = [
   { n: '01', t: 'Upload source material', d: 'PDFs, videos, images, news articles — any content about the topic you want to predict.' },
@@ -18,30 +18,36 @@ const steps = [
 ];
 
 const features = [
-  { tag: 'SIMULATE', title: 'Swarm intelligence at scale', body: 'Up to 1,000,000 synthetic personas across 8 social platforms. Each agent has a unique personality, backstory, and behavioral fingerprint.', color: '#5B5FEE', stats: [{ v: '1M', l: 'max agents' }, { v: '8', l: 'platforms' }, { v: '42', l: 'archetypes' }] },
-  { tag: 'ANALYZE', title: 'ReACT intelligence engine', body: 'Multi-pass reasoning with 5 retrieval tools. Tunable depth from quick pulse checks to exhaustive research. Full evidence chains and interactive Q&A.', color: '#00D4FF', stats: [{ v: '5', l: 'tools' }, { v: '4', l: 'depth levels' }, { v: '∞', l: 'follow-ups' }] },
-  { tag: 'PREDICT', title: 'Prediction market edge', body: 'Import from Kalshi and Polymarket. Get probability estimates, edge-vs-market analysis, and recommended positions backed by swarm consensus.', color: '#A78BFA', stats: [{ v: '2', l: 'exchanges' }, { v: '<3pp', l: 'pass threshold' }, { v: '80%', l: 'CI bands' }] },
+  { tag: 'SIMULATE', title: 'Swarm intelligence at scale', body: 'Up to 1,000,000 synthetic personas across 8 social platforms. Each agent has a unique personality, backstory, and behavioral fingerprint.', color: '#C9A227', stats: [{ v: '1M', l: 'max agents' }, { v: '8', l: 'platforms' }, { v: '42', l: 'archetypes' }] },
+  { tag: 'ANALYZE', title: 'ReACT intelligence engine', body: 'Multi-pass reasoning with 5 retrieval tools. Tunable depth from quick pulse checks to exhaustive research. Full evidence chains and interactive Q&A.', color: '#2563EB', stats: [{ v: '5', l: 'tools' }, { v: '4', l: 'depth levels' }, { v: '∞', l: 'follow-ups' }] },
+  { tag: 'PREDICT', title: 'Prediction market edge', body: 'Import from Kalshi and Polymarket. Get probability estimates, edge-vs-market analysis, and recommended positions backed by swarm consensus.', color: '#8B5CF6', stats: [{ v: '2', l: 'exchanges' }, { v: '<3pp', l: 'pass threshold' }, { v: '80%', l: 'CI bands' }] },
 ];
 
 const platforms = [
-  { n: 'Twitter / X', a: 'Engagement-weighted', c: '#5B5FEE' }, { n: 'Reddit', a: 'Hot ranking', c: '#00D4FF' },
-  { n: 'LinkedIn', a: 'Connection graph', c: '#5B5FEE' }, { n: 'Instagram', a: 'Explore algo', c: '#A78BFA' },
-  { n: 'Hacker News', a: 'Karma decay', c: '#00D4FF' }, { n: 'Discord', a: 'Channel-based', c: '#5B5FEE' },
-  { n: 'News Comments', a: 'Moderation sim', c: '#A78BFA' }, { n: 'Custom', a: 'Your rules', c: '#00D4FF' },
+  { n: 'Twitter / X', a: 'Engagement-weighted', c: '#C9A227' }, { n: 'Reddit', a: 'Hot ranking', c: '#2563EB' },
+  { n: 'LinkedIn', a: 'Connection graph', c: '#C9A227' }, { n: 'Instagram', a: 'Explore algo', c: '#8B5CF6' },
+  { n: 'Hacker News', a: 'Karma decay', c: '#2563EB' }, { n: 'Discord', a: 'Channel-based', c: '#C9A227' },
+  { n: 'News Comments', a: 'Moderation sim', c: '#8B5CF6' }, { n: 'Custom', a: 'Your rules', c: '#2563EB' },
 ];
 
 const plans = [
-  { name: 'Starter', price: '99', items: ['10 simulations / mo', '5,000 agents per sim', '5 GB storage', '3 team members', '3 platforms'] },
-  { name: 'Pro', price: '299', items: ['50 simulations / mo', '50,000 agents per sim', '25 GB storage', '10 team members', 'All platforms', 'Prediction markets'], pop: true },
-  { name: 'Enterprise', price: '999', items: ['Unlimited simulations', '500,000 agents per sim', '100 GB storage', 'Unlimited team', 'Custom adapters', 'Dedicated support'] },
+  { name: 'Analyst', price: '149', items: ['15 simulations / mo', '10,000 agents per sim', '5 GB storage', '3 team members', 'All platforms'] },
+  { name: 'Strategist', price: '499', items: ['75 simulations / mo', '100,000 agents per sim', '25 GB storage', '10 team members', 'All platforms', 'Prediction markets'], pop: true },
+  { name: 'War Room', price: '1,499', items: ['Unlimited simulations', '1,000,000 agents per sim', '100 GB storage', 'Unlimited team', 'Custom adapters', 'Dedicated support', 'White-label ready'] },
+];
+
+const flashReports = [
+  { name: 'Quick Read', price: '197', desc: 'A focused intelligence snapshot on any topic — delivered in under 24 hours.', href: '#flash-quick' },
+  { name: 'Deep Dive', price: '497', desc: 'Multi-platform swarm analysis with full evidence chains and probability estimates.', href: '#flash-deep' },
+  { name: 'War Room Brief', price: '997', desc: 'Executive-grade predictive intelligence with interactive Q&A and strategic recommendations.', href: '#flash-war-room' },
 ];
 
 /* ── Simulated dashboard (product showcase) ─────────────── */
 function FakeDashboard() {
   const agents = [
-    { name: 'Sarah Chen', type: 'CTO', platform: 'Twitter / X', content: '"This merger changes everything for cloud infrastructure..."', sentiment: 0.7, color: '#5B5FEE' },
-    { name: 'Mike Torres', type: 'Reddit Trader', platform: 'Reddit', content: '"Bullish on this — $ACME to $180 by Q3..."', sentiment: 0.4, color: '#00D4FF' },
-    { name: 'Dr. Priya Nair', type: 'Academic', platform: 'LinkedIn', content: '"The regulatory implications here are significant..."', sentiment: -0.2, color: '#A78BFA' },
+    { name: 'Sarah Chen', type: 'CTO', platform: 'Twitter / X', content: '"This merger changes everything for cloud infrastructure..."', sentiment: 0.7, color: '#C9A227' },
+    { name: 'Marcus Webb', type: 'Policy Analyst', platform: 'LinkedIn', content: '"The regulatory implications here are significant..."', sentiment: -0.2, color: '#2563EB' },
+    { name: 'Rachel Kim', type: 'Crisis Consultant', platform: 'News Comments', content: '"Public backlash is going to be severe if this leaks early..."', sentiment: 0.4, color: '#8B5CF6' },
   ];
   return (
     <div className="glass rounded-2xl overflow-hidden border border-white/[0.08]">
@@ -61,7 +67,7 @@ function FakeDashboard() {
         <div className="flex-1 p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <span className="text-[10px] font-mono text-saibyl-indigo tracking-wider uppercase">Live simulation</span>
+              <span className="text-[10px] font-mono text-saibyl-gold tracking-wider uppercase">Live simulation</span>
               <h4 className="text-[14px] font-medium text-white mt-0.5">ACME Corp Merger Analysis</h4>
             </div>
             <div className="flex items-center gap-3 text-[11px] text-saibyl-muted">
@@ -92,7 +98,7 @@ function FakeDashboard() {
           {/* Fake chart */}
           <div className="mt-4 flex items-end gap-1 h-12">
             {[35, 42, 38, 55, 48, 62, 58, 70, 65, 72, 68, 75].map((h, i) => (
-              <div key={i} className="flex-1 rounded-sm" style={{ height: `${h}%`, background: `linear-gradient(to top, #5B5FEE${i > 8 ? '' : '80'}, #00D4FF${i > 8 ? '' : '60'})` }} />
+              <div key={i} className="flex-1 rounded-sm" style={{ height: `${h}%`, background: `linear-gradient(to top, #C9A227${i > 8 ? '' : '80'}, #2563EB${i > 8 ? '' : '60'})` }} />
             ))}
           </div>
           <div className="flex justify-between text-[9px] text-saibyl-muted mt-1 font-mono">
@@ -114,14 +120,14 @@ export default function LandingPage() {
   const navShadow = useTransform(scrollYProgress, [0, 0.02], [0, 1]);
 
   return (
-    <div ref={containerRef} className="min-h-screen bg-saibyl-void text-saibyl-platinum overflow-x-hidden selection:bg-saibyl-indigo/30">
+    <div ref={containerRef} className="min-h-screen bg-saibyl-void text-saibyl-platinum overflow-x-hidden selection:bg-saibyl-gold/30">
 
       {/* BG layers */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute inset-0 bg-grid" />
-        <div className="absolute top-[-40%] left-[-20%] w-[80%] h-[80%] rounded-full bg-[radial-gradient(ellipse,rgba(91,95,238,0.12)_0%,transparent_60%)] animate-breathe" />
-        <div className="absolute bottom-[-30%] right-[-15%] w-[70%] h-[70%] rounded-full bg-[radial-gradient(ellipse,rgba(0,212,255,0.07)_0%,transparent_60%)] animate-breathe" style={{ animationDelay: '-4s' }} />
-        <div className="absolute top-[20%] right-[5%] w-[50%] h-[50%] rounded-full bg-[radial-gradient(ellipse,rgba(167,139,250,0.05)_0%,transparent_60%)] animate-breathe" style={{ animationDelay: '-7s' }} />
+        <div className="absolute top-[-40%] left-[-20%] w-[80%] h-[80%] rounded-full bg-[radial-gradient(ellipse,rgba(201,162,39,0.12)_0%,transparent_60%)] animate-breathe" />
+        <div className="absolute bottom-[-30%] right-[-15%] w-[70%] h-[70%] rounded-full bg-[radial-gradient(ellipse,rgba(37,99,235,0.07)_0%,transparent_60%)] animate-breathe" style={{ animationDelay: '-4s' }} />
+        <div className="absolute top-[20%] right-[5%] w-[50%] h-[50%] rounded-full bg-[radial-gradient(ellipse,rgba(139,92,246,0.05)_0%,transparent_60%)] animate-breathe" style={{ animationDelay: '-7s' }} />
       </div>
 
       {/* NAV */}
@@ -135,8 +141,8 @@ export default function LandingPage() {
               <a href="#pricing" className="text-[13px] text-saibyl-muted hover:text-saibyl-platinum transition-colors hidden md:block">Pricing</a>
               <div className="w-px h-5 bg-white/[0.08] hidden md:block" />
               <Link to="/login" className="text-[13px] text-saibyl-muted hover:text-saibyl-platinum transition-colors">Sign in</Link>
-              <Link to="/signup" className="text-[13px] font-medium px-4 py-1.5 rounded-lg bg-saibyl-indigo text-white hover:bg-[#4B4FDE] transition-all hover:shadow-[0_0_20px_rgba(91,95,238,0.25)]">
-                Get started
+              <Link to="/signup" className="text-[13px] font-medium px-4 py-1.5 rounded-lg bg-saibyl-gold text-white hover:bg-[#B08E22] transition-all hover:shadow-[0_0_20px_rgba(201,162,39,0.25)]">
+                Start free trial
               </Link>
             </div>
           </div>
@@ -146,7 +152,7 @@ export default function LandingPage() {
       {/* ═══ HERO ═══ */}
       <section className="relative min-h-[100dvh] flex flex-col items-center justify-center text-center px-6 overflow-hidden">
         <div className="absolute inset-0 opacity-50"><HeroAnimation /></div>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full bg-[radial-gradient(circle,rgba(91,95,238,0.12)_0%,transparent_65%)] pointer-events-none" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full bg-[radial-gradient(circle,rgba(201,162,39,0.12)_0%,transparent_65%)] pointer-events-none" />
 
         <div className="relative z-10 max-w-3xl">
           <motion.div {...stagger(0)} className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full glass mb-10">
@@ -155,7 +161,7 @@ export default function LandingPage() {
           </motion.div>
 
           <motion.div {...stagger(1)} className="flex items-center justify-center gap-5 mb-10">
-            <img src="/logo-mark.svg" alt="" className="w-[72px] h-[72px] sm:w-[88px] sm:h-[88px] animate-float drop-shadow-[0_0_40px_rgba(91,95,238,0.5)]" />
+            <img src="/logo-mark.svg" alt="" className="w-[72px] h-[72px] sm:w-[88px] sm:h-[88px] animate-float drop-shadow-[0_0_40px_rgba(201,162,39,0.5)]" />
             <span className="font-display font-extrabold text-[56px] sm:text-[68px] md:text-[80px] text-gradient select-none" style={{ lineHeight: 1, letterSpacing: '-0.03em' }}>SAIBYL</span>
           </motion.div>
 
@@ -164,17 +170,17 @@ export default function LandingPage() {
           </motion.h1>
 
           <motion.p {...stagger(3)} className="text-[16px] sm:text-[17px] text-saibyl-muted max-w-xl mx-auto leading-[1.75] mb-12">
-            Run thousands of synthetic AI personas across 8 social platforms. Know exactly how the internet reacts — before you publish a word.
+            Predictive intelligence powered by synthetic agents. Simulate public reactions across 8 platforms before you publish.
           </motion.p>
 
           <motion.div {...stagger(4)} className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link to="/signup" className="group relative w-full sm:w-auto inline-flex items-center justify-center px-8 py-4 rounded-xl text-white font-semibold text-[15px] overflow-hidden transition-all hover:scale-[1.03]">
-              <div className="absolute inset-0 bg-gradient-to-r from-[#5B5FEE] to-[#00D4FF]" />
-              <div className="absolute inset-0 bg-gradient-to-r from-[#4B4FDE] to-[#00B8D9] opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="absolute inset-0 bg-gradient-to-r from-[#C9A227] to-[#2563EB]" />
+              <div className="absolute inset-0 bg-gradient-to-r from-[#B08E22] to-[#1D4ED8] opacity-0 group-hover:opacity-100 transition-opacity" />
               <div className="absolute inset-0 animate-glow-pulse rounded-xl" />
-              <span className="relative flex items-center gap-2">Request early access<svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg></span>
+              <span className="relative flex items-center gap-2">Start free trial<svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg></span>
             </Link>
-            <a href="#how" className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-4 rounded-xl text-saibyl-platinum font-medium text-[15px] glass glass-hover transition-all">See how it works →</a>
+            <a href="#how" className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-4 rounded-xl text-saibyl-platinum font-medium text-[15px] glass glass-hover transition-all">See how it works</a>
           </motion.div>
         </div>
 
@@ -188,11 +194,8 @@ export default function LandingPage() {
 
       {/* ═══ SOCIAL PROOF ═══ */}
       <section className="py-14 px-6">
-        <motion.div {...fadeUp} className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-10">
-          <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-saibyl-muted/50 shrink-0">Used by early access teams across research &amp; strategy</span>
-          <div className="flex flex-wrap items-center justify-center gap-8">
-            {proofNames.map((n) => (<span key={n} className="text-[14px] font-medium text-saibyl-muted/30 tracking-wide">{n}</span>))}
-          </div>
+        <motion.div {...fadeUp} className="max-w-4xl mx-auto text-center">
+          <span className="text-[13px] font-mono tracking-[0.1em] uppercase text-saibyl-muted/50">{proofLine}</span>
         </motion.div>
       </section>
 
@@ -221,12 +224,12 @@ export default function LandingPage() {
       <section id="how" className="py-32 px-6">
         <div className="max-w-5xl mx-auto">
           <motion.div {...fadeUp} className="text-center mb-20">
-            <span className="font-mono text-[11px] tracking-[0.22em] uppercase text-saibyl-cyan">How It Works</span>
+            <span className="font-mono text-[11px] tracking-[0.22em] uppercase text-saibyl-gold">How It Works</span>
             <h2 className="font-display font-extrabold text-[36px] sm:text-[44px] text-white mt-4 leading-[1.08]" style={{ letterSpacing: '-0.025em' }}>Three steps to prediction</h2>
           </motion.div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
             {/* Connecting lines */}
-            <div className="hidden md:block absolute top-14 left-[33%] right-[33%] h-px bg-gradient-to-r from-saibyl-indigo/30 via-saibyl-cyan/30 to-saibyl-violet/30" />
+            <div className="hidden md:block absolute top-14 left-[33%] right-[33%] h-px bg-gradient-to-r from-saibyl-gold/30 via-saibyl-blue/30 to-saibyl-violet/30" />
             {steps.map((s, i) => (
               <motion.div key={s.n} {...stagger(i)} {...hoverLift} className="glass glass-hover rounded-2xl p-8 transition-all duration-300 relative">
                 <span className="font-mono text-[42px] font-bold text-gradient opacity-25">{s.n}</span>
@@ -244,7 +247,7 @@ export default function LandingPage() {
       <section id="features" className="py-32 px-6">
         <div className="max-w-5xl mx-auto">
           <motion.div {...fadeUp} className="text-center mb-20">
-            <span className="font-mono text-[11px] tracking-[0.22em] uppercase text-saibyl-indigo">Capabilities</span>
+            <span className="font-mono text-[11px] tracking-[0.22em] uppercase text-saibyl-gold">Capabilities</span>
             <h2 className="font-display font-extrabold text-[36px] sm:text-[44px] text-white mt-4 leading-[1.08]" style={{ letterSpacing: '-0.025em' }}>
               Everything you need to <span className="text-gradient">predict the future</span>
             </h2>
@@ -278,7 +281,7 @@ export default function LandingPage() {
       <section className="py-32 px-6">
         <div className="max-w-5xl mx-auto">
           <motion.div {...fadeUp} className="text-center mb-16">
-            <span className="font-mono text-[11px] tracking-[0.22em] uppercase text-saibyl-cyan">Platforms</span>
+            <span className="font-mono text-[11px] tracking-[0.22em] uppercase text-saibyl-gold">Platforms</span>
             <h2 className="font-display font-extrabold text-[36px] sm:text-[44px] text-white mt-4 leading-[1.08]" style={{ letterSpacing: '-0.025em' }}>
               Simulate <span className="text-gradient">every platform</span>
             </h2>
@@ -303,13 +306,13 @@ export default function LandingPage() {
       <section id="pricing" className="py-32 px-6">
         <div className="max-w-5xl mx-auto">
           <motion.div {...fadeUp} className="text-center mb-16">
-            <span className="font-mono text-[11px] tracking-[0.22em] uppercase text-saibyl-violet">Pricing</span>
+            <span className="font-mono text-[11px] tracking-[0.22em] uppercase text-saibyl-gold">Pricing</span>
             <h2 className="font-display font-extrabold text-[36px] sm:text-[44px] text-white mt-4 leading-[1.08]" style={{ letterSpacing: '-0.025em' }}>Simple, transparent pricing</h2>
           </motion.div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {plans.map((p, i) => (
               <motion.div key={p.name} {...stagger(i)} {...hoverLift}
-                className={`relative rounded-2xl p-8 transition-all duration-300 ${p.pop ? 'glass border-saibyl-indigo/30 shadow-[0_0_60px_rgba(91,95,238,0.08)] scale-[1.03]' : 'glass glass-hover'}`}
+                className={`relative rounded-2xl p-8 transition-all duration-300 ${p.pop ? 'glass border-saibyl-gold/30 shadow-[0_0_60px_rgba(201,162,39,0.08)] scale-[1.03]' : 'glass glass-hover'}`}
               >
                 {p.pop && <div className="absolute -top-3 left-1/2 -translate-x-1/2"><span className="font-mono text-[9px] tracking-[0.2em] uppercase px-3 py-1 rounded-full text-white" style={{ background: 'var(--grad-arc)' }}>Recommended</span></div>}
                 <h3 className="font-sans font-semibold text-[20px] text-white">{p.name}</h3>
@@ -321,13 +324,34 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
-                <Link to="/signup" className={`block text-center py-3 rounded-xl font-medium text-[14px] transition-all ${p.pop ? 'text-white hover:shadow-[0_0_30px_rgba(91,95,238,0.3)] hover:scale-[1.02]' : 'glass glass-hover text-saibyl-platinum'}`} style={p.pop ? { background: 'var(--grad-arc)' } : undefined}>
+                <Link to="/signup" className={`block text-center py-3 rounded-xl font-medium text-[14px] transition-all ${p.pop ? 'text-white hover:shadow-[0_0_30px_rgba(201,162,39,0.3)] hover:scale-[1.02]' : 'glass glass-hover text-saibyl-platinum'}`} style={p.pop ? { background: 'var(--grad-arc)' } : undefined}>
                   {p.pop ? 'Start free trial' : 'Get started'}
                 </Link>
               </motion.div>
             ))}
           </div>
           <motion.p {...fadeUp} className="text-center text-[13px] text-saibyl-muted/60 mt-8">All plans include a 14-day free trial. No credit card required.</motion.p>
+
+          {/* Flash Reports */}
+          <motion.div {...fadeUp} className="mt-24">
+            <div className="text-center mb-12">
+              <span className="font-mono text-[11px] tracking-[0.22em] uppercase text-saibyl-gold">Flash Reports</span>
+              <h3 className="font-display font-extrabold text-[28px] sm:text-[36px] text-white mt-4 leading-[1.08]" style={{ letterSpacing: '-0.025em' }}>
+                One-time intelligence, <span className="text-gradient">on demand</span>
+              </h3>
+              <p className="text-[15px] text-saibyl-muted mt-3 max-w-md mx-auto leading-[1.7]">No subscription required. Commission a single predictive intelligence report.</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {flashReports.map((r, i) => (
+                <motion.div key={r.name} {...stagger(i)} {...hoverLift} className="glass glass-hover rounded-2xl p-8 transition-all duration-300">
+                  <h4 className="font-sans font-semibold text-[20px] text-white">{r.name}</h4>
+                  <div className="mt-4 mb-4"><span className="text-[48px] font-display font-extrabold text-white leading-none">${r.price}</span><span className="text-saibyl-muted text-[14px] ml-1">one-time</span></div>
+                  <p className="text-[14px] text-saibyl-muted leading-[1.7] mb-8">{r.desc}</p>
+                  <a href={r.href} className="block text-center py-3 rounded-xl font-medium text-[14px] glass glass-hover text-saibyl-platinum transition-all">Purchase report</a>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
         </div>
       </section>
 
@@ -335,26 +359,36 @@ export default function LandingPage() {
 
       {/* ═══ FINAL CTA ═══ */}
       <section className="py-40 px-6 relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(91,95,238,0.08)_0%,transparent_60%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(201,162,39,0.06)_0%,transparent_60%)]" />
         <motion.div {...fadeUp} className="relative z-10 max-w-2xl mx-auto text-center">
-          <img src="/logo-mark.svg" alt="" className="w-20 h-20 mx-auto mb-10 animate-float drop-shadow-[0_0_40px_rgba(91,95,238,0.5)]" />
+          <img src="/logo-mark.svg" alt="" className="w-20 h-20 mx-auto mb-10 drop-shadow-[0_0_40px_rgba(201,162,39,0.4)]" />
           <h2 className="font-display font-extrabold text-[36px] sm:text-[48px] text-white leading-[1.08]" style={{ letterSpacing: '-0.025em' }}>
-            The oracle who saw everything.<br /><span className="text-gradient">Now as software.</span>
+            The reaction already exists.<br /><span className="text-gradient">Run the simulation.</span>
           </h2>
-          <p className="text-[15px] text-saibyl-muted mt-6 leading-[1.7] max-w-md mx-auto">Join the private beta. Start predicting before the world reacts.</p>
+          <p className="text-[15px] text-saibyl-muted mt-6 leading-[1.7] max-w-md mx-auto">Start predicting before the world reacts.</p>
           <Link to="/signup" className="group relative inline-flex items-center mt-10 px-10 py-4 rounded-xl text-white font-semibold text-[15px] overflow-hidden transition-all hover:scale-[1.03]">
-            <div className="absolute inset-0 bg-gradient-to-r from-[#5B5FEE] to-[#00D4FF]" /><div className="absolute inset-0 animate-glow-pulse rounded-xl" />
-            <span className="relative flex items-center gap-2">Request early access<svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg></span>
+            <div className="absolute inset-0 bg-gradient-to-r from-[#C9A227] to-[#2563EB]" /><div className="absolute inset-0 animate-glow-pulse rounded-xl" />
+            <span className="relative flex items-center gap-2">Start your first prediction<svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg></span>
           </Link>
         </motion.div>
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-white/[0.04] py-10 px-6">
-        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <img src="/logo-primary.svg" alt="Saibyl" className="h-5 opacity-50" />
-          <p className="text-[12px] text-saibyl-muted/50">&copy; 2026 Saido Labs LLC</p>
-          <div className="flex gap-5"><Link to="/login" className="text-[12px] text-saibyl-muted/50 hover:text-saibyl-platinum transition-colors">Sign in</Link><Link to="/signup" className="text-[12px] text-saibyl-muted/50 hover:text-saibyl-platinum transition-colors">Get access</Link></div>
+      <footer className="border-t border-white/[0.04] py-12 px-6">
+        <div className="max-w-5xl mx-auto">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            <img src="/logo-primary.svg" alt="Saibyl" className="h-5 opacity-50" />
+            <div className="flex flex-wrap items-center justify-center gap-6">
+              <Link to="/login" className="text-[12px] text-saibyl-muted/50 hover:text-saibyl-platinum transition-colors">Sign in</Link>
+              <Link to="/signup" className="text-[12px] text-saibyl-muted/50 hover:text-saibyl-platinum transition-colors">Get access</Link>
+              <a href="/terms" className="text-[12px] text-saibyl-muted/50 hover:text-saibyl-platinum transition-colors">Terms</a>
+              <a href="/privacy" className="text-[12px] text-saibyl-muted/50 hover:text-saibyl-platinum transition-colors">Privacy</a>
+              <a href="/contact" className="text-[12px] text-saibyl-muted/50 hover:text-saibyl-platinum transition-colors">Contact</a>
+              <a href="https://twitter.com/saidolabs" target="_blank" rel="noopener noreferrer" className="text-[12px] text-saibyl-muted/50 hover:text-saibyl-platinum transition-colors">Twitter</a>
+              <a href="https://linkedin.com/company/saido-labs" target="_blank" rel="noopener noreferrer" className="text-[12px] text-saibyl-muted/50 hover:text-saibyl-platinum transition-colors">LinkedIn</a>
+            </div>
+          </div>
+          <p className="text-[12px] text-saibyl-muted/50 text-center mt-6">&copy; 2026 Saido Labs LLC</p>
         </div>
       </footer>
     </div>

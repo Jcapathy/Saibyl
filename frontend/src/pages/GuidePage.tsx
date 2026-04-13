@@ -27,7 +27,7 @@ const STEPS = [
     title: 'Create a Project',
     desc: 'Projects group related simulations together. Think of them as folders — one for each topic, campaign, or research question.',
     Icon: FolderOpen,
-    color: 'text-saibyl-cyan',
+    color: 'text-saibyl-blue',
     link: '/app/projects',
     linkLabel: 'Go to Projects',
   },
@@ -36,7 +36,7 @@ const STEPS = [
     title: 'Configure a Simulation',
     desc: 'Write your prediction goal in plain language, pick the social platforms to simulate, choose persona packs, and set how many AI agents will participate.',
     Icon: FlaskConical,
-    color: 'text-saibyl-indigo',
+    color: 'text-saibyl-gold',
     link: '/app/simulations/new',
     linkLabel: 'New Simulation',
   },
@@ -52,7 +52,7 @@ const STEPS = [
     title: 'Read Your Report',
     desc: 'When the simulation finishes, an intelligence report is generated automatically — complete with sentiment trajectories, agent archetypes, platform dynamics, and predictive insights.',
     Icon: FileText,
-    color: 'text-saibyl-violet',
+    color: 'text-saibyl-gold',
   },
 ];
 
@@ -142,7 +142,7 @@ export default function GuidePage() {
         {/* ── Section 1: How It Works ── */}
         <section className="mb-12">
           <div className="flex items-center gap-2 mb-6">
-            <Zap className="w-4 h-4 text-saibyl-indigo" />
+            <Zap className="w-4 h-4 text-saibyl-gold" />
             <h2 className="text-[16px] font-semibold text-saibyl-white uppercase tracking-wide">How It Works</h2>
           </div>
 
@@ -170,7 +170,7 @@ export default function GuidePage() {
                 {s.link && (
                   <Link
                     to={s.link}
-                    className="inline-block mt-3 text-[12px] text-saibyl-indigo hover:text-saibyl-cyan transition-colors"
+                    className="inline-block mt-3 text-[12px] text-saibyl-gold hover:text-saibyl-blue transition-colors"
                   >
                     {s.linkLabel} &rarr;
                   </Link>
@@ -183,7 +183,7 @@ export default function GuidePage() {
         {/* ── Section 2: Speed & Cost ── */}
         <section className="mb-12">
           <div className="flex items-center gap-2 mb-6">
-            <Clock className="w-4 h-4 text-saibyl-cyan" />
+            <Clock className="w-4 h-4 text-saibyl-blue" />
             <h2 className="text-[16px] font-semibold text-saibyl-white uppercase tracking-wide">What Affects Speed</h2>
           </div>
 
@@ -191,14 +191,14 @@ export default function GuidePage() {
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            className="rounded-2xl p-5 mb-5 border border-saibyl-indigo/20 bg-saibyl-indigo/5"
+            className="rounded-2xl p-5 mb-5 border border-saibyl-gold/20 bg-saibyl-gold/5"
           >
             <div className="flex items-start gap-3">
-              <Target className="w-5 h-5 text-saibyl-indigo mt-0.5 shrink-0" />
+              <Target className="w-5 h-5 text-saibyl-gold mt-0.5 shrink-0" />
               <div>
                 <p className="text-[14px] text-saibyl-platinum font-medium mb-1">The sweet spot: 20 agents, 5 rounds, 1-2 platforms</p>
                 <p className="text-[13px] text-saibyl-muted leading-relaxed">
-                  Delivers actionable insights in <span className="text-saibyl-cyan font-medium">~3 minutes</span>.
+                  Delivers actionable insights in <span className="text-saibyl-blue font-medium">~3 minutes</span>.
                   That's what would take a focus group 2-4 weeks and $5,000-$15,000.
                   Scale up when you need deeper analysis — even a 100-agent, 15-round simulation finishes in under 20 minutes.
                 </p>
@@ -227,7 +227,7 @@ export default function GuidePage() {
                   >
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2">
-                        <f.Icon className="w-3.5 h-3.5 text-saibyl-indigo shrink-0" />
+                        <f.Icon className="w-3.5 h-3.5 text-saibyl-gold shrink-0" />
                         <span className="text-saibyl-platinum font-medium">{f.factor}</span>
                       </div>
                     </td>
@@ -244,7 +244,7 @@ export default function GuidePage() {
         {/* ── Section 3: Tips ── */}
         <section className="mb-12">
           <div className="flex items-center gap-2 mb-6">
-            <Lightbulb className="w-4 h-4 text-saibyl-violet" />
+            <Lightbulb className="w-4 h-4 text-saibyl-gold" />
             <h2 className="text-[16px] font-semibold text-saibyl-white uppercase tracking-wide">Tips for Best Results</h2>
           </div>
 
@@ -258,8 +258,8 @@ export default function GuidePage() {
                 className="glass rounded-xl p-5"
               >
                 <div className="flex items-start gap-3">
-                  <span className="w-6 h-6 rounded-lg bg-saibyl-violet/10 flex items-center justify-center shrink-0 mt-0.5">
-                    <span className="text-[11px] font-bold text-saibyl-violet">{i + 1}</span>
+                  <span className="w-6 h-6 rounded-lg bg-saibyl-gold/10 flex items-center justify-center shrink-0 mt-0.5">
+                    <span className="text-[11px] font-bold text-saibyl-gold">{i + 1}</span>
                   </span>
                   <div>
                     <h3 className="text-[14px] font-medium text-saibyl-platinum mb-1">{tip.title}</h3>
@@ -274,7 +274,7 @@ export default function GuidePage() {
         {/* ── Section 4: FAQ ── */}
         <section className="mb-12">
           <div className="flex items-center gap-2 mb-6">
-            <MessageSquare className="w-4 h-4 text-saibyl-cyan" />
+            <MessageSquare className="w-4 h-4 text-saibyl-blue" />
             <h2 className="text-[16px] font-semibold text-saibyl-white uppercase tracking-wide">Frequently Asked Questions</h2>
           </div>
 
@@ -334,7 +334,7 @@ export default function GuidePage() {
             to="/app/projects"
             className="relative inline-flex items-center gap-2 px-8 py-3 rounded-xl text-white font-semibold text-[15px] overflow-hidden hover:scale-[1.02] transition-transform"
           >
-            <div className="absolute inset-0 bg-gradient-to-r from-[#5B5FEE] to-[#00D4FF]" />
+            <div className="absolute inset-0 bg-gradient-to-r from-[#C9A227] to-[#2563EB]" />
             <div className="absolute inset-0 animate-glow-pulse rounded-xl" />
             <FlaskConical className="relative w-4 h-4" />
             <span className="relative">Start a New Project</span>

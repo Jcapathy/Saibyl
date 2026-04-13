@@ -114,8 +114,8 @@ export const SaibylHero: React.FC = () => {
           centerX + 200 * scale,
           centerY
         );
-        gradient.addColorStop(0, `rgba(91,95,238,${glowAlpha * 0.3})`);
-        gradient.addColorStop(1, `rgba(0,212,255,${glowAlpha * 0.3})`);
+        gradient.addColorStop(0, `rgba(201,162,39,${glowAlpha * 0.3})`);
+        gradient.addColorStop(1, `rgba(37,99,235,${glowAlpha * 0.3})`);
         ctx.fillStyle = gradient;
         ctx.fillRect(centerX - 210 * scale, centerY - 40 * scale, 420 * scale, 80 * scale);
       }
@@ -148,8 +148,8 @@ export const SaibylHero: React.FC = () => {
           const markCx = centerX - 220 * scale;
           const markCy = centerY - 90 * scale;
           const grad = ctx.createRadialGradient(markCx, markCy, 0, markCx, markCy, 20 * scale);
-          grad.addColorStop(0, `rgba(91,95,238,${pulse * 0.4})`);
-          grad.addColorStop(1, 'rgba(91,95,238,0)');
+          grad.addColorStop(0, `rgba(201,162,39,${pulse * 0.4})`);
+          grad.addColorStop(1, 'rgba(201,162,39,0)');
           ctx.fillStyle = grad;
           ctx.beginPath();
           ctx.arc(markCx, markCy, 20 * scale, 0, Math.PI * 2);
@@ -177,20 +177,20 @@ export const SaibylHero: React.FC = () => {
           const ty = markCy + Math.sin(trailAngle) * orbitRy - 20 * scale;
           ctx.beginPath();
           ctx.arc(tx, ty, 2 * scale, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(91,95,238,${0.3 - t * 0.06})`;
+          ctx.fillStyle = `rgba(201,162,39,${0.3 - t * 0.06})`;
           ctx.fill();
         }
 
         // Orbiting node
         ctx.beginPath();
         ctx.arc(orbX, orbY, 4 * scale, 0, Math.PI * 2);
-        ctx.fillStyle = '#5B5FEE';
+        ctx.fillStyle = '#C9A227';
         ctx.fill();
 
         // Glow
         const grad = ctx.createRadialGradient(orbX, orbY, 0, orbX, orbY, 12 * scale);
-        grad.addColorStop(0, 'rgba(91,95,238,0.3)');
-        grad.addColorStop(1, 'rgba(91,95,238,0)');
+        grad.addColorStop(0, 'rgba(201,162,39,0.3)');
+        grad.addColorStop(1, 'rgba(201,162,39,0)');
         ctx.fillStyle = grad;
         ctx.beginPath();
         ctx.arc(orbX, orbY, 12 * scale, 0, Math.PI * 2);

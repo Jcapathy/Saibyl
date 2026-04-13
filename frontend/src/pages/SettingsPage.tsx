@@ -43,24 +43,24 @@ function BillingTab() {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="font-medium text-saibyl-platinum mb-1">Current Plan: <span className="text-saibyl-indigo">{billing.plan}</span></h3>
+        <h3 className="font-medium text-saibyl-platinum mb-1">Current Plan: <span className="text-saibyl-gold">{billing.plan}</span></h3>
       </div>
       <div>
         <div className="text-sm text-saibyl-muted mb-1">Simulations: {billing.simulations_used} / {billing.simulations_limit}</div>
         <div className="w-full bg-saibyl-surface rounded-full h-2.5 overflow-hidden">
-          <div className="h-2.5 rounded-full" style={{ width: `${Math.min(simPct, 100)}%`, background: 'linear-gradient(90deg, #5B5FEE, #00D4FF)' }} />
+          <div className="h-2.5 rounded-full" style={{ width: `${Math.min(simPct, 100)}%`, background: 'linear-gradient(90deg, #C9A227, #2563EB)' }} />
         </div>
       </div>
       <div>
         <div className="text-sm text-saibyl-muted mb-1">Agents: {billing.agents_used} / {billing.agents_limit}</div>
         <div className="w-full bg-saibyl-surface rounded-full h-2.5 overflow-hidden">
-          <div className="h-2.5 rounded-full" style={{ width: `${Math.min(agentPct, 100)}%`, background: 'linear-gradient(90deg, #A78BFA, #5B5FEE)' }} />
+          <div className="h-2.5 rounded-full" style={{ width: `${Math.min(agentPct, 100)}%`, background: 'linear-gradient(90deg, #8B5CF6, #C9A227)' }} />
         </div>
       </div>
       <button
         onClick={handleUpgrade}
         disabled={upgrading}
-        className="bg-saibyl-indigo text-white px-4 py-2 rounded-lg hover:bg-[#4B4FDE] disabled:opacity-50 transition"
+        className="bg-saibyl-gold text-white px-4 py-2 rounded-lg hover:bg-[#4B4FDE] disabled:opacity-50 transition"
       >
         {upgrading ? 'Redirecting...' : 'Upgrade Plan'}
       </button>
@@ -111,12 +111,12 @@ function TeamTab() {
           value={inviteEmail}
           onChange={(e) => setInviteEmail(e.target.value)}
           placeholder="colleague@company.com"
-          className="flex-1 bg-saibyl-surface border border-saibyl-border rounded-lg px-3 py-2 text-sm text-saibyl-platinum placeholder-saibyl-muted focus:outline-none focus:ring-2 focus:ring-saibyl-indigo"
+          className="flex-1 bg-saibyl-surface border border-saibyl-border rounded-lg px-3 py-2 text-sm text-saibyl-platinum placeholder-saibyl-muted focus:outline-none focus:ring-2 focus:ring-saibyl-gold"
         />
         <button
           type="submit"
           disabled={inviting}
-          className="bg-saibyl-indigo text-white px-4 py-2 rounded-lg text-sm hover:bg-[#4B4FDE] disabled:opacity-50"
+          className="bg-saibyl-gold text-white px-4 py-2 rounded-lg text-sm hover:bg-[#4B4FDE] disabled:opacity-50"
         >
           {inviting ? 'Inviting...' : 'Invite'}
         </button>
@@ -182,7 +182,7 @@ function ApiKeysTab() {
     <div className="space-y-6">
       <button
         onClick={() => { setShowModal(true); setNewKeyValue(''); }}
-        className="bg-saibyl-indigo text-white px-4 py-2 rounded-lg text-sm hover:bg-[#4B4FDE]"
+        className="bg-saibyl-gold text-white px-4 py-2 rounded-lg text-sm hover:bg-[#4B4FDE]"
       >
         + Create API Key
       </button>
@@ -211,7 +211,7 @@ function ApiKeysTab() {
               <div className="space-y-4">
                 <p className="text-sm text-saibyl-muted">Copy this key now. It will not be shown again.</p>
                 <div className="bg-saibyl-surface p-3 rounded-lg font-mono text-sm break-all text-saibyl-platinum">{newKeyValue}</div>
-                <button onClick={() => { setShowModal(false); setNewKeyValue(''); }} className="bg-saibyl-indigo text-white px-4 py-2 rounded-lg text-sm">
+                <button onClick={() => { setShowModal(false); setNewKeyValue(''); }} className="bg-saibyl-gold text-white px-4 py-2 rounded-lg text-sm">
                   Done
                 </button>
               </div>
@@ -223,12 +223,12 @@ function ApiKeysTab() {
                     required
                     value={keyName}
                     onChange={(e) => setKeyName(e.target.value)}
-                    className="w-full bg-saibyl-surface border border-saibyl-border rounded-lg px-3 py-2 text-saibyl-platinum placeholder-saibyl-muted focus:outline-none focus:ring-2 focus:ring-saibyl-indigo"
+                    className="w-full bg-saibyl-surface border border-saibyl-border rounded-lg px-3 py-2 text-saibyl-platinum placeholder-saibyl-muted focus:outline-none focus:ring-2 focus:ring-saibyl-gold"
                   />
                 </div>
                 <div className="flex justify-end gap-3">
                   <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-saibyl-muted hover:text-saibyl-platinum">Cancel</button>
-                  <button type="submit" disabled={creating} className="bg-saibyl-indigo text-white px-4 py-2 rounded-lg hover:bg-[#4B4FDE] disabled:opacity-50">
+                  <button type="submit" disabled={creating} className="bg-saibyl-gold text-white px-4 py-2 rounded-lg hover:bg-[#4B4FDE] disabled:opacity-50">
                     {creating ? 'Creating...' : 'Create'}
                   </button>
                 </div>
@@ -309,7 +309,7 @@ function WebhooksTab() {
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://example.com/webhook"
-            className="w-full bg-saibyl-surface border border-saibyl-border rounded-lg px-3 py-2 text-sm text-saibyl-platinum placeholder-saibyl-muted focus:outline-none focus:ring-2 focus:ring-saibyl-indigo"
+            className="w-full bg-saibyl-surface border border-saibyl-border rounded-lg px-3 py-2 text-sm text-saibyl-platinum placeholder-saibyl-muted focus:outline-none focus:ring-2 focus:ring-saibyl-gold"
           />
         </div>
         <div>
@@ -322,7 +322,7 @@ function WebhooksTab() {
                 onClick={() => toggleEvent(evt)}
                 className={`text-xs px-3 py-1.5 rounded-lg border transition ${
                   selectedEvents.includes(evt)
-                    ? 'bg-saibyl-indigo text-white border-saibyl-indigo'
+                    ? 'bg-saibyl-gold text-white border-saibyl-gold'
                     : 'border-saibyl-border text-saibyl-muted hover:border-saibyl-border'
                 }`}
               >
@@ -334,7 +334,7 @@ function WebhooksTab() {
         <button
           type="submit"
           disabled={creating || selectedEvents.length === 0}
-          className="bg-saibyl-indigo text-white px-4 py-2 rounded-lg text-sm hover:bg-[#4B4FDE] disabled:opacity-50"
+          className="bg-saibyl-gold text-white px-4 py-2 rounded-lg text-sm hover:bg-[#4B4FDE] disabled:opacity-50"
         >
           {creating ? 'Creating...' : 'Add Webhook'}
         </button>
@@ -442,7 +442,7 @@ function IntegrationsTab() {
                   value={kalshiKeyId}
                   onChange={(e) => setKalshiKeyId(e.target.value)}
                   placeholder="e.g. 385c289d-a6b9-48e3-..."
-                  className="w-full bg-saibyl-surface border border-saibyl-border rounded-lg px-3 py-2 text-sm text-saibyl-platinum placeholder-saibyl-muted focus:outline-none focus:ring-2 focus:ring-saibyl-indigo"
+                  className="w-full bg-saibyl-surface border border-saibyl-border rounded-lg px-3 py-2 text-sm text-saibyl-platinum placeholder-saibyl-muted focus:outline-none focus:ring-2 focus:ring-saibyl-gold"
                 />
               </div>
               <div>
@@ -452,13 +452,13 @@ function IntegrationsTab() {
                   onChange={(e) => setKalshiPem(e.target.value)}
                   placeholder="-----BEGIN RSA PRIVATE KEY-----&#10;..."
                   rows={4}
-                  className="w-full bg-saibyl-surface border border-saibyl-border rounded-lg px-3 py-2 text-sm text-saibyl-platinum placeholder-saibyl-muted focus:outline-none focus:ring-2 focus:ring-saibyl-indigo font-mono text-xs resize-none"
+                  className="w-full bg-saibyl-surface border border-saibyl-border rounded-lg px-3 py-2 text-sm text-saibyl-platinum placeholder-saibyl-muted focus:outline-none focus:ring-2 focus:ring-saibyl-gold font-mono text-xs resize-none"
                 />
               </div>
               <button
                 type="submit"
                 disabled={saving || !kalshiKeyId.trim() || !kalshiPem.trim()}
-                className="bg-saibyl-indigo text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#4B4FDE] disabled:opacity-50"
+                className="bg-saibyl-gold text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#4B4FDE] disabled:opacity-50"
               >
                 {saving ? 'Saving...' : 'Connect Kalshi'}
               </button>
@@ -493,7 +493,7 @@ export default function SettingsPage() {
             onClick={() => setTab(t.key)}
             className={`px-4 py-2 -mb-px text-sm font-medium transition ${
               tab === t.key
-                ? 'border-b-2 border-saibyl-border-active text-saibyl-indigo'
+                ? 'border-b-2 border-saibyl-border-active text-saibyl-gold'
                 : 'text-saibyl-muted hover:text-saibyl-platinum'
             }`}
           >

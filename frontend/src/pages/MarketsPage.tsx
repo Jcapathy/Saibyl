@@ -96,7 +96,7 @@ export default function MarketsPage() {
             <button
               onClick={handleImport}
               disabled={importing || !importUrl.trim()}
-              className="bg-saibyl-indigo text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-[#4B4FDE] transition-colors disabled:opacity-40"
+              className="bg-saibyl-gold text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-[#4B4FDE] transition-colors disabled:opacity-40"
             >
               {importing ? 'Importing...' : 'Import'}
             </button>
@@ -110,7 +110,7 @@ export default function MarketsPage() {
               key={t}
               onClick={() => setTab(t)}
               className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
-                tab === t ? 'bg-saibyl-indigo text-white' : 'text-saibyl-muted hover:text-saibyl-platinum'
+                tab === t ? 'bg-saibyl-gold text-white' : 'text-saibyl-muted hover:text-saibyl-platinum'
               }`}
             >
               {t === 'imported' ? `My Markets (${markets.length})` : 'Search Markets'}
@@ -141,7 +141,7 @@ export default function MarketsPage() {
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1.5">
-                          <span className="font-mono text-[10px] tracking-[0.15em] uppercase text-saibyl-cyan">{m.platform}</span>
+                          <span className="font-mono text-[10px] tracking-[0.15em] uppercase text-saibyl-blue">{m.platform}</span>
                           <StatusBadge status={m.status} />
                         </div>
                         <h3 className="text-[15px] font-medium text-saibyl-white truncate">{m.title}</h3>
@@ -190,7 +190,7 @@ export default function MarketsPage() {
               <button
                 onClick={handleSearch}
                 disabled={searching}
-                className="bg-saibyl-indigo text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-[#4B4FDE] disabled:opacity-40"
+                className="bg-saibyl-gold text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-[#4B4FDE] disabled:opacity-40"
               >
                 {searching ? 'Searching...' : 'Search'}
               </button>
@@ -207,7 +207,7 @@ export default function MarketsPage() {
                       </span>
                       <button
                         onClick={() => { setImportUrl(String(r.url || '')); setTab('imported'); handleImport(); }}
-                        className="text-[12px] text-saibyl-indigo hover:text-saibyl-cyan transition-colors font-medium"
+                        className="text-[12px] text-saibyl-gold hover:text-saibyl-blue transition-colors font-medium"
                       >
                         Import →
                       </button>

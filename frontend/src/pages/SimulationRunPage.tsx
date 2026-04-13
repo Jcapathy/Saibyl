@@ -7,12 +7,12 @@ import { TERMINAL_STATUSES } from '@/lib/constants';
 import api from '@/lib/api';
 
 const PLATFORM_STYLES: Record<string, { bg: string; text: string; dot: string }> = {
-  Twitter:   { bg: 'bg-[#5B5FEE]/15', text: 'text-[#5B5FEE]',  dot: '#5B5FEE' },
-  Reddit:    { bg: 'bg-[#00D4FF]/15', text: 'text-[#00D4FF]',  dot: '#00D4FF' },
-  TikTok:    { bg: 'bg-[#A78BFA]/15', text: 'text-[#A78BFA]',  dot: '#A78BFA' },
-  Instagram: { bg: 'bg-[#A78BFA]/15', text: 'text-[#A78BFA]',  dot: '#A78BFA' },
-  Facebook:  { bg: 'bg-[#5B5FEE]/15', text: 'text-[#5B5FEE]',  dot: '#5B5FEE' },
-  LinkedIn:  { bg: 'bg-[#00D4FF]/15', text: 'text-[#00D4FF]',  dot: '#00D4FF' },
+  Twitter:   { bg: 'bg-[#C9A227]/15', text: 'text-[#C9A227]',  dot: '#C9A227' },
+  Reddit:    { bg: 'bg-[#2563EB]/15', text: 'text-[#2563EB]',  dot: '#2563EB' },
+  TikTok:    { bg: 'bg-[#8B5CF6]/15', text: 'text-[#8B5CF6]',  dot: '#8B5CF6' },
+  Instagram: { bg: 'bg-[#8B5CF6]/15', text: 'text-[#8B5CF6]',  dot: '#8B5CF6' },
+  Facebook:  { bg: 'bg-[#C9A227]/15', text: 'text-[#C9A227]',  dot: '#C9A227' },
+  LinkedIn:  { bg: 'bg-[#2563EB]/15', text: 'text-[#2563EB]',  dot: '#2563EB' },
   YouTube:   { bg: 'bg-[#EF4444]/15', text: 'text-[#EF4444]',  dot: '#EF4444' },
 };
 
@@ -225,11 +225,11 @@ export default function SimulationRunPage() {
         <div className="flex items-center gap-6 text-[12px] font-mono">
           <div className="flex items-center gap-2">
             <span className="text-saibyl-muted">Round</span>
-            <span className="font-bold text-saibyl-indigo">{roundNumber}</span>
+            <span className="font-bold text-saibyl-gold">{roundNumber}</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-saibyl-muted">Events</span>
-            <span className="font-bold text-saibyl-cyan">{totalEvents.toLocaleString()}</span>
+            <span className="font-bold text-saibyl-blue">{totalEvents.toLocaleString()}</span>
           </div>
         </div>
       </div>
@@ -244,8 +244,8 @@ export default function SimulationRunPage() {
               <div className="h-full flex flex-col items-center justify-center gap-3 text-center">
                 {isRunning ? (
                   <>
-                    <div className="w-12 h-12 rounded-2xl bg-saibyl-indigo/10 flex items-center justify-center">
-                      <svg className="w-6 h-6 text-saibyl-indigo animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div className="w-12 h-12 rounded-2xl bg-saibyl-gold/10 flex items-center justify-center">
+                      <svg className="w-6 h-6 text-saibyl-gold animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
                       </svg>
                     </div>
@@ -259,7 +259,7 @@ export default function SimulationRunPage() {
                     </p>
                     <Link
                       to={`/app/simulations/${id}`}
-                      className="text-saibyl-indigo text-sm hover:underline"
+                      className="text-saibyl-gold text-sm hover:underline"
                     >
                       ← Back to simulation details
                     </Link>

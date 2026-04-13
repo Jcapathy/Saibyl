@@ -29,8 +29,8 @@ PLAN_PRICE_MAP = {
 }
 
 PLAN_LIMITS = {
-    "starter": {"max_simulations_per_month": 10, "max_team_members": 3},
-    "pro": {"max_simulations_per_month": 50, "max_team_members": 10},
+    "starter": {"max_simulations_per_month": 15, "max_team_members": 3},
+    "pro": {"max_simulations_per_month": 75, "max_team_members": 10},
     "enterprise": {"max_simulations_per_month": 999999, "max_team_members": 999999},
 }
 
@@ -179,7 +179,7 @@ async def get_subscription_status(org_id: UUID) -> SubscriptionStatus:
 
     plan = org.get("plan", "starter")
     limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["starter"])
-    agent_limits = {"starter": 50_000, "pro": 2_500_000, "enterprise": 50_000_000}
+    agent_limits = {"starter": 150_000, "pro": 7_500_000, "enterprise": 50_000_000}
 
     return SubscriptionStatus(
         plan=plan,

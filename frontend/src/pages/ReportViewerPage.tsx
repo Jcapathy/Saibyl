@@ -91,7 +91,7 @@ export default function ReportViewerPage() {
               onClick={() => setActiveSection(i)}
               className={`block w-full text-left text-sm px-3 py-2 rounded transition ${
                 i === activeSection
-                  ? 'bg-saibyl-surface text-saibyl-indigo font-medium'
+                  ? 'bg-saibyl-surface text-saibyl-gold font-medium'
                   : 'text-saibyl-muted hover:bg-saibyl-elevated'
               }`}
             >
@@ -121,13 +121,13 @@ export default function ReportViewerPage() {
         <div className="p-4 border-b border-saibyl-border">
           <h3 className="text-sm font-semibold text-saibyl-platinum mb-2">Export</h3>
           <div className="flex gap-2">
-            <button onClick={() => exportReport('pdf')} className="text-xs bg-saibyl-indigo text-white px-3 py-1.5 rounded-lg hover:bg-[#4B4FDE]">
+            <button onClick={() => exportReport('pdf')} className="text-xs bg-saibyl-gold text-white px-3 py-1.5 rounded-lg hover:bg-[#4B4FDE]">
               PDF
             </button>
-            <button onClick={() => exportReport('pptx')} className="text-xs bg-saibyl-indigo text-white px-3 py-1.5 rounded-lg hover:bg-[#4B4FDE]">
+            <button onClick={() => exportReport('pptx')} className="text-xs bg-saibyl-gold text-white px-3 py-1.5 rounded-lg hover:bg-[#4B4FDE]">
               PPTX
             </button>
-            <button onClick={() => exportReport('json')} className="text-xs bg-saibyl-indigo text-white px-3 py-1.5 rounded-lg hover:bg-[#4B4FDE]">
+            <button onClick={() => exportReport('json')} className="text-xs bg-saibyl-gold text-white px-3 py-1.5 rounded-lg hover:bg-[#4B4FDE]">
               JSON
             </button>
           </div>
@@ -158,12 +158,12 @@ export default function ReportViewerPage() {
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
               placeholder="Ask a question..."
-              className="flex-1 bg-saibyl-surface border border-saibyl-border rounded-lg px-3 py-1.5 text-sm text-saibyl-platinum placeholder-saibyl-muted focus:outline-none focus:ring-2 focus:ring-saibyl-indigo"
+              className="flex-1 bg-saibyl-surface border border-saibyl-border rounded-lg px-3 py-1.5 text-sm text-saibyl-platinum placeholder-saibyl-muted focus:outline-none focus:ring-2 focus:ring-saibyl-gold"
             />
             <button
               type="submit"
               disabled={chatLoading}
-              className="bg-saibyl-indigo text-white px-3 py-1.5 rounded-lg text-sm hover:bg-[#4B4FDE] disabled:opacity-50"
+              className="bg-saibyl-gold text-white px-3 py-1.5 rounded-lg text-sm hover:bg-[#4B4FDE] disabled:opacity-50"
             >
               Send
             </button>

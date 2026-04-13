@@ -222,9 +222,9 @@ export default function SimulationDetailPage() {
   if (!sim) return <div className="p-8 text-center text-saibyl-negative">Simulation not found.</div>;
 
   const stats = [
-    { value: sim.agent_count ?? 0, label: 'Agents', color: '#5B5FEE' },
-    { value: eventCount, label: 'Events', color: '#00D4FF' },
-    { value: sim.max_rounds, label: 'Rounds', color: '#A78BFA' },
+    { value: sim.agent_count ?? 0, label: 'Agents', color: '#C9A227' },
+    { value: eventCount, label: 'Events', color: '#2563EB' },
+    { value: sim.max_rounds, label: 'Rounds', color: '#8B5CF6' },
     { value: sim.platforms?.length ?? 0, label: 'Platforms', color: '#10B981' },
   ];
 
@@ -287,7 +287,7 @@ export default function SimulationDetailPage() {
               onClick={handleRunNow}
               className="relative px-8 py-3 rounded-xl text-white font-semibold text-sm overflow-hidden transition-all hover:scale-[1.02]"
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-[#5B5FEE] to-[#00D4FF]" />
+              <div className="absolute inset-0 bg-gradient-to-r from-[#C9A227] to-[#2563EB]" />
               <div className="absolute inset-0 animate-glow-pulse rounded-xl" />
               <span className="relative">Run Simulation →</span>
             </button>
@@ -297,7 +297,7 @@ export default function SimulationDetailPage() {
         {(running || isRunning) && (
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-saibyl-indigo" />
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-saibyl-gold" />
               <div>
                 <p className="text-[15px] font-medium text-saibyl-platinum">
                   {runStatus || `Simulation ${sim.status}...`}
@@ -324,7 +324,7 @@ export default function SimulationDetailPage() {
                 to={`/app/simulations/${id}/report`}
                 className="relative px-6 py-2.5 rounded-xl text-white font-medium text-sm overflow-hidden transition-all hover:scale-[1.02]"
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-[#5B5FEE] to-[#00D4FF]" />
+                <div className="absolute inset-0 bg-gradient-to-r from-[#C9A227] to-[#2563EB]" />
                 <span className="relative">View Report →</span>
               </Link>
               <Link
@@ -360,7 +360,7 @@ export default function SimulationDetailPage() {
               return (
                 <div key={i} className={`p-3 rounded-lg bg-white/[0.02] border-l-2 ${sentColor}`}>
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-saibyl-indigo/15 text-saibyl-indigo">{String(evt.platform)}</span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-saibyl-gold/15 text-saibyl-gold">{String(evt.platform)}</span>
                     <span className="text-[10px] font-mono text-saibyl-muted">R{String(evt.round_number)}</span>
                     <span className="text-[11px] text-saibyl-muted ml-auto">
                       sentiment: <span className={sentiment > 0.2 ? 'text-saibyl-positive' : sentiment < -0.2 ? 'text-saibyl-negative' : 'text-saibyl-muted'}>{sentiment.toFixed(2)}</span>
@@ -384,7 +384,7 @@ export default function SimulationDetailPage() {
             <select
               value={selectedAgentId}
               onChange={(e) => setSelectedAgentId(e.target.value)}
-              className="flex-shrink-0 w-48 rounded-lg px-3 py-2 text-[13px] bg-[#0B1120] border border-white/[0.08] text-saibyl-platinum focus:outline-none focus:ring-2 focus:ring-saibyl-indigo/50"
+              className="flex-shrink-0 w-48 rounded-lg px-3 py-2 text-[13px] bg-[#0B1120] border border-white/[0.08] text-saibyl-platinum focus:outline-none focus:ring-2 focus:ring-saibyl-gold/50"
               style={{ colorScheme: 'dark' }}
             >
               <option value="">All agents (top 5)</option>
@@ -400,12 +400,12 @@ export default function SimulationDetailPage() {
               onChange={(e) => setInterviewPrompt(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleInterview()}
               placeholder="Ask agents a question..."
-              className="flex-1 rounded-lg px-4 py-2 text-[13px] bg-[#0B1120] border border-white/[0.08] text-saibyl-platinum placeholder-saibyl-muted/50 focus:outline-none focus:ring-2 focus:ring-saibyl-indigo/50"
+              className="flex-1 rounded-lg px-4 py-2 text-[13px] bg-[#0B1120] border border-white/[0.08] text-saibyl-platinum placeholder-saibyl-muted/50 focus:outline-none focus:ring-2 focus:ring-saibyl-gold/50"
             />
             <button
               onClick={handleInterview}
               disabled={interviewLoading || !interviewPrompt.trim()}
-              className="px-5 py-2 rounded-lg bg-saibyl-indigo text-white text-[13px] font-medium hover:bg-[#4B4FDE] disabled:opacity-50 transition-all"
+              className="px-5 py-2 rounded-lg bg-saibyl-gold text-white text-[13px] font-medium hover:bg-[#4B4FDE] disabled:opacity-50 transition-all"
             >
               {interviewLoading ? 'Asking...' : 'Ask'}
             </button>
@@ -416,7 +416,7 @@ export default function SimulationDetailPage() {
                 <div key={i} className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
                   <div className="flex items-center gap-2 mb-1.5">
                     <span className="text-[12px] font-medium text-saibyl-platinum">{r.agent}</span>
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-saibyl-indigo/15 text-saibyl-indigo">{r.persona}</span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-saibyl-gold/15 text-saibyl-gold">{r.persona}</span>
                     <span className="text-[10px] font-mono text-saibyl-muted ml-auto">
                       sentiment: <span className={r.sentiment > 0.2 ? 'text-saibyl-positive' : r.sentiment < -0.2 ? 'text-saibyl-negative' : 'text-saibyl-muted'}>{r.sentiment.toFixed(2)}</span>
                     </span>
@@ -440,7 +440,7 @@ export default function SimulationDetailPage() {
                 <button
                   onClick={handleScoreAccuracy}
                   disabled={scoringLoading}
-                  className="px-6 py-2.5 rounded-xl bg-saibyl-indigo text-white text-[13px] font-medium hover:bg-[#4B4FDE] disabled:opacity-50 transition-all shrink-0"
+                  className="px-6 py-2.5 rounded-xl bg-saibyl-gold text-white text-[13px] font-medium hover:bg-[#4B4FDE] disabled:opacity-50 transition-all shrink-0"
                 >
                   {scoringLoading ? 'Analyzing...' : 'Analyze Predictions'}
                 </button>
@@ -458,7 +458,7 @@ export default function SimulationDetailPage() {
                       value={actualSentiment}
                       onChange={(e) => setActualSentiment(e.target.value)}
                       placeholder="e.g. -0.3"
-                      className="w-full rounded-lg px-3 py-2 text-[13px] bg-[#0B1120] border border-white/[0.08] text-saibyl-platinum focus:outline-none focus:ring-2 focus:ring-saibyl-indigo/50"
+                      className="w-full rounded-lg px-3 py-2 text-[13px] bg-[#0B1120] border border-white/[0.08] text-saibyl-platinum focus:outline-none focus:ring-2 focus:ring-saibyl-gold/50"
                     />
                   </div>
                   <div>
@@ -468,7 +468,7 @@ export default function SimulationDetailPage() {
                       value={actualNotes}
                       onChange={(e) => setActualNotes(e.target.value)}
                       placeholder="What actually happened?"
-                      className="w-full rounded-lg px-3 py-2 text-[13px] bg-[#0B1120] border border-white/[0.08] text-saibyl-platinum placeholder-saibyl-muted/50 focus:outline-none focus:ring-2 focus:ring-saibyl-indigo/50"
+                      className="w-full rounded-lg px-3 py-2 text-[13px] bg-[#0B1120] border border-white/[0.08] text-saibyl-platinum placeholder-saibyl-muted/50 focus:outline-none focus:ring-2 focus:ring-saibyl-gold/50"
                     />
                   </div>
                 </div>
@@ -478,11 +478,11 @@ export default function SimulationDetailPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-3 gap-4">
                 <div className="text-center p-4 rounded-xl bg-white/[0.02] border border-white/[0.04]">
-                  <div className="text-2xl font-display font-bold text-saibyl-indigo">{(accuracyResult.accuracy_score * 100).toFixed(1)}%</div>
+                  <div className="text-2xl font-display font-bold text-saibyl-gold">{(accuracyResult.accuracy_score * 100).toFixed(1)}%</div>
                   <div className="text-[11px] text-saibyl-muted mt-1">Accuracy Score</div>
                 </div>
                 <div className="text-center p-4 rounded-xl bg-white/[0.02] border border-white/[0.04]">
-                  <div className="text-2xl font-display font-bold text-saibyl-cyan">{accuracyResult.predicted_sentiment.toFixed(3)}</div>
+                  <div className="text-2xl font-display font-bold text-saibyl-blue">{accuracyResult.predicted_sentiment.toFixed(3)}</div>
                   <div className="text-[11px] text-saibyl-muted mt-1">Predicted Sentiment</div>
                 </div>
                 <div className="text-center p-4 rounded-xl bg-white/[0.02] border border-white/[0.04]">
@@ -494,7 +494,7 @@ export default function SimulationDetailPage() {
                 <h3 className="text-[12px] font-medium text-saibyl-platinum mb-2">Analysis</h3>
                 <p className="text-[13px] text-saibyl-muted leading-relaxed whitespace-pre-wrap">{accuracyResult.analysis}</p>
               </div>
-              <button onClick={() => setAccuracyResult(null)} className="text-[12px] text-saibyl-indigo hover:underline">Re-score with different data</button>
+              <button onClick={() => setAccuracyResult(null)} className="text-[12px] text-saibyl-gold hover:underline">Re-score with different data</button>
             </div>
           )}
         </div>

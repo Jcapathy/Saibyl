@@ -64,7 +64,7 @@ export default function ProjectsPage() {
           onClick={() => setShowModal(true)}
           className="relative inline-flex items-center gap-2 px-4 py-2 rounded-xl text-white font-medium text-sm overflow-hidden transition-all hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(91,95,238,0.25)]"
         >
-          <div className="absolute inset-0 bg-gradient-to-r from-saibyl-indigo to-[#4B8BEE]" />
+          <div className="absolute inset-0 bg-gradient-to-r from-saibyl-gold to-[#4B8BEE]" />
           <span className="relative">+ New Project</span>
         </button>
       </div>
@@ -77,14 +77,14 @@ export default function ProjectsPage() {
         </div>
       ) : projects.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="w-14 h-14 rounded-2xl bg-saibyl-indigo/10 flex items-center justify-center mb-4">
-            <svg className="w-7 h-7 text-saibyl-indigo" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="w-14 h-14 rounded-2xl bg-saibyl-gold/10 flex items-center justify-center mb-4">
+            <svg className="w-7 h-7 text-saibyl-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
             </svg>
           </div>
           <p className="text-saibyl-platinum font-medium mb-1">No projects yet</p>
           <p className="text-saibyl-muted text-sm mb-6">Organize your simulations into projects</p>
-          <button onClick={() => setShowModal(true)} className="bg-saibyl-indigo text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-[#4B4FDE] transition">
+          <button onClick={() => setShowModal(true)} className="bg-saibyl-gold text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-[#4B4FDE] transition">
             Create Project
           </button>
         </div>
@@ -100,10 +100,10 @@ export default function ProjectsPage() {
             >
               <Link
                 to={`/app/projects/${p.id}`}
-                className="block bg-saibyl-deep rounded-2xl p-5 border border-white/[0.05] hover:border-saibyl-indigo/20 hover:bg-saibyl-elevated transition-all"
+                className="block bg-saibyl-deep rounded-2xl p-5 border border-white/[0.05] hover:border-saibyl-gold/20 hover:bg-saibyl-elevated transition-all"
               >
-                <div className="w-9 h-9 rounded-xl bg-saibyl-indigo/10 flex items-center justify-center mb-4 group-hover:bg-saibyl-indigo/15 transition-colors">
-                  <svg className="w-[18px] h-[18px] text-saibyl-indigo" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className="w-9 h-9 rounded-xl bg-saibyl-gold/10 flex items-center justify-center mb-4 group-hover:bg-saibyl-gold/15 transition-colors">
+                  <svg className="w-[18px] h-[18px] text-saibyl-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
                   </svg>
                 </div>
@@ -158,7 +158,7 @@ export default function ProjectsPage() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="My Research Project"
-                    className="w-full bg-white/[0.04] border border-white/[0.07] rounded-xl px-4 py-2.5 text-saibyl-platinum placeholder-saibyl-muted/40 focus:outline-none focus:ring-2 focus:ring-saibyl-indigo/50 transition text-sm"
+                    className="w-full bg-white/[0.04] border border-white/[0.07] rounded-xl px-4 py-2.5 text-saibyl-platinum placeholder-saibyl-muted/40 focus:outline-none focus:ring-2 focus:ring-saibyl-gold/50 transition text-sm"
                   />
                 </div>
                 <div>
@@ -170,7 +170,7 @@ export default function ProjectsPage() {
                     onChange={(e) => setDescription(e.target.value)}
                     rows={3}
                     placeholder="What is this project about?"
-                    className="w-full bg-white/[0.04] border border-white/[0.07] rounded-xl px-4 py-2.5 text-saibyl-platinum placeholder-saibyl-muted/40 focus:outline-none focus:ring-2 focus:ring-saibyl-indigo/50 transition text-sm resize-none"
+                    className="w-full bg-white/[0.04] border border-white/[0.07] rounded-xl px-4 py-2.5 text-saibyl-platinum placeholder-saibyl-muted/40 focus:outline-none focus:ring-2 focus:ring-saibyl-gold/50 transition text-sm resize-none"
                   />
                 </div>
                 <div className="flex justify-end gap-3 pt-1">
@@ -184,7 +184,7 @@ export default function ProjectsPage() {
                   <button
                     type="submit"
                     disabled={creating}
-                    className="bg-saibyl-indigo text-white px-5 py-2 rounded-xl text-sm font-medium hover:bg-[#4B4FDE] disabled:opacity-50 transition"
+                    className="bg-saibyl-gold text-white px-5 py-2 rounded-xl text-sm font-medium hover:bg-[#4B4FDE] disabled:opacity-50 transition"
                   >
                     {creating ? 'Creating...' : 'Create Project'}
                   </button>

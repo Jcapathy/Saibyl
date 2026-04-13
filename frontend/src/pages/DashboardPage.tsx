@@ -53,7 +53,7 @@ export default function DashboardPage() {
           to="/app/projects"
           className="relative inline-flex items-center gap-2 px-4 py-2 rounded-xl text-white font-medium text-sm overflow-hidden transition-all hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(91,95,238,0.25)]"
         >
-          <div className="absolute inset-0 bg-gradient-to-r from-saibyl-indigo to-[#4B8BEE]" />
+          <div className="absolute inset-0 bg-gradient-to-r from-saibyl-gold to-[#4B8BEE]" />
           <span className="relative">+ New Project</span>
         </Link>
       </div>
@@ -86,8 +86,8 @@ export default function DashboardPage() {
                       <span className="text-sm font-normal text-saibyl-muted ml-1">/ {billing.simulations_limit}</span>
                     </p>
                   </div>
-                  <div className="w-10 h-10 rounded-xl bg-saibyl-indigo/10 flex items-center justify-center">
-                    <svg className="w-5 h-5 text-saibyl-indigo" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <div className="w-10 h-10 rounded-xl bg-saibyl-gold/10 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-saibyl-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5" />
                     </svg>
                   </div>
@@ -98,7 +98,7 @@ export default function DashboardPage() {
                     animate={{ width: `${Math.min(simPct, 100)}%` }}
                     transition={{ duration: 0.8, ease: 'easeOut', delay: 0.2 }}
                     className="h-full rounded-full"
-                    style={{ background: 'linear-gradient(90deg, #5B5FEE, #00D4FF)' }}
+                    style={{ background: 'linear-gradient(90deg, #C9A227, #2563EB)' }}
                   />
                 </div>
                 <p className="text-[11px] text-saibyl-muted mt-1.5">{simPct}% used</p>
@@ -114,8 +114,8 @@ export default function DashboardPage() {
                       <span className="text-sm font-normal text-saibyl-muted ml-1">/ {billing.agents_limit.toLocaleString()}</span>
                     </p>
                   </div>
-                  <div className="w-10 h-10 rounded-xl bg-saibyl-violet/10 flex items-center justify-center">
-                    <svg className="w-5 h-5 text-saibyl-violet" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <div className="w-10 h-10 rounded-xl bg-saibyl-gold/10 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-saibyl-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
                     </svg>
                   </div>
@@ -126,7 +126,7 @@ export default function DashboardPage() {
                     animate={{ width: `${Math.min(agentPct, 100)}%` }}
                     transition={{ duration: 0.8, ease: 'easeOut', delay: 0.35 }}
                     className="h-full rounded-full"
-                    style={{ background: 'linear-gradient(90deg, #A78BFA, #5B5FEE)' }}
+                    style={{ background: 'linear-gradient(90deg, #8B5CF6, #C9A227)' }}
                   />
                 </div>
                 <p className="text-[11px] text-saibyl-muted mt-1.5">{agentPct}% used · {billing.plan} plan</p>
@@ -143,7 +143,7 @@ export default function DashboardPage() {
           >
             <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
               <h2 className="font-semibold text-saibyl-platinum text-sm">Recent Simulations</h2>
-              <Link to="/app/simulations" className="text-[12px] text-saibyl-indigo hover:text-saibyl-cyan transition-colors">
+              <Link to="/app/simulations" className="text-[12px] text-saibyl-gold hover:text-saibyl-blue transition-colors">
                 View all →
               </Link>
             </div>
@@ -151,7 +151,7 @@ export default function DashboardPage() {
             {sims.length === 0 ? (
               <div className="py-12 text-center">
                 <p className="text-saibyl-muted text-sm mb-4">No simulations yet</p>
-                <Link to="/app/projects" className="text-sm text-saibyl-indigo hover:text-saibyl-cyan transition-colors">
+                <Link to="/app/projects" className="text-sm text-saibyl-gold hover:text-saibyl-blue transition-colors">
                   Create a project to get started →
                 </Link>
               </div>
@@ -162,7 +162,7 @@ export default function DashboardPage() {
                     key={sim.id}
                     className={`flex items-center justify-between px-5 py-3.5 hover:bg-white/[0.02] transition-colors ${i < sims.length - 1 ? 'border-b border-white/[0.03]' : ''}`}
                   >
-                    <Link to={`/app/simulations/${sim.id}`} className="font-medium text-saibyl-platinum hover:text-saibyl-indigo transition-colors text-sm">
+                    <Link to={`/app/simulations/${sim.id}`} className="font-medium text-saibyl-platinum hover:text-saibyl-gold transition-colors text-sm">
                       {sim.name}
                     </Link>
                     <div className="flex items-center gap-4">

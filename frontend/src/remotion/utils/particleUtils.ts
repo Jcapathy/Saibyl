@@ -17,9 +17,9 @@ export interface Particle {
 }
 
 const COLORS = {
-  indigo: '#5B5FEE',
-  cyan: '#00D4FF',
-  violet: '#A78BFA',
+  gold: '#C9A227',
+  blue: '#2563EB',
+  violet: '#8B5CF6',
 };
 
 export function generateParticles(
@@ -31,15 +31,15 @@ export function generateParticles(
   const particles: Particle[] = [];
 
   for (let i = 0; i < count; i++) {
-    // Color distribution: 60% indigo, 30% cyan, 10% violet
+    // Color distribution: 60% gold, 30% blue, 10% violet
     const rand = Math.random();
     let color: string;
     let opacity: number;
     if (rand < 0.6) {
-      color = COLORS.indigo;
+      color = COLORS.gold;
       opacity = 0.4 + Math.random() * 0.4;
     } else if (rand < 0.9) {
-      color = COLORS.cyan;
+      color = COLORS.blue;
       opacity = 0.3 + Math.random() * 0.4;
     } else {
       color = COLORS.violet;

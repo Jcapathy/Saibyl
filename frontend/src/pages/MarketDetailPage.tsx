@@ -135,7 +135,7 @@ export default function MarketDetailPage() {
           <div className="flex items-start justify-between gap-6">
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-3">
-                <span className="font-mono text-[10px] tracking-[0.15em] uppercase text-saibyl-cyan">{market.platform}</span>
+                <span className="font-mono text-[10px] tracking-[0.15em] uppercase text-saibyl-blue">{market.platform}</span>
                 <StatusBadge status={market.status} />
               </div>
               <h1 className="text-[22px] font-display font-bold text-saibyl-white leading-tight mb-3">{market.title}</h1>
@@ -150,7 +150,7 @@ export default function MarketDetailPage() {
                 {market.closes_at && (
                   <span>Closes: <span className="text-saibyl-platinum">{new Date(market.closes_at).toLocaleDateString()}</span></span>
                 )}
-                <a href={market.external_url} target="_blank" rel="noopener noreferrer" className="text-saibyl-indigo hover:text-saibyl-cyan transition-colors">
+                <a href={market.external_url} target="_blank" rel="noopener noreferrer" className="text-saibyl-gold hover:text-saibyl-blue transition-colors">
                   View on {market.platform} →
                 </a>
               </div>
@@ -169,8 +169,8 @@ export default function MarketDetailPage() {
                     />
                     <defs>
                       <linearGradient id="gauge-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="#5B5FEE" />
-                        <stop offset="100%" stopColor="#00D4FF" />
+                        <stop offset="0%" stopColor="#C9A227" />
+                        <stop offset="100%" stopColor="#2563EB" />
                       </linearGradient>
                     </defs>
                   </svg>
@@ -191,7 +191,7 @@ export default function MarketDetailPage() {
                   <span className="text-[13px] text-saibyl-muted w-12">{o.label}</span>
                   <div className="flex-1 h-2 bg-saibyl-elevated rounded-full overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-gradient-to-r from-saibyl-indigo to-saibyl-cyan"
+                      className="h-full rounded-full bg-gradient-to-r from-saibyl-gold to-saibyl-blue"
                       style={{ width: `${Math.round(o.current_probability * 100)}%` }}
                     />
                   </div>
@@ -211,7 +211,7 @@ export default function MarketDetailPage() {
                 disabled={predicting}
                 className="relative flex-1 py-3 rounded-xl text-white font-medium text-[14px] transition-all hover:scale-[1.01] disabled:opacity-40 overflow-hidden"
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-[#5B5FEE] to-[#00D4FF]" />
+                <div className="absolute inset-0 bg-gradient-to-r from-[#C9A227] to-[#2563EB]" />
                 <span className="relative">{predicting ? 'Running prediction...' : 'Run Saibyl Prediction'}</span>
               </button>
               <button
@@ -223,8 +223,8 @@ export default function MarketDetailPage() {
               </button>
             </div>
             {predicting && predictionStatus && (
-              <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-saibyl-indigo/10 border border-saibyl-indigo/20">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-saibyl-indigo shrink-0" />
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-saibyl-gold/10 border border-saibyl-gold/20">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-saibyl-gold shrink-0" />
                 <span className="text-[13px] text-saibyl-platinum">{predictionStatus}</span>
                 {predictionStart && (
                   <span className="text-[11px] font-mono text-saibyl-muted ml-auto">
@@ -265,7 +265,7 @@ export default function MarketDetailPage() {
                 const edge = pred.edge_vs_market;
                 const edgeColor = Math.abs(edge) < 0.03 ? 'text-saibyl-muted' : edge > 0 ? 'text-saibyl-positive' : 'text-saibyl-negative';
                 const isPass = pred.recommended_position === 'PASS';
-                const posColor = isPass ? 'bg-saibyl-elevated text-saibyl-muted' : 'bg-saibyl-indigo/15 text-saibyl-indigo';
+                const posColor = isPass ? 'bg-saibyl-elevated text-saibyl-muted' : 'bg-saibyl-gold/15 text-saibyl-gold';
 
                 return (
                   <div key={pred.id} className="glass rounded-xl p-6">

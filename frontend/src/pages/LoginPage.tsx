@@ -29,8 +29,8 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-saibyl-void relative overflow-hidden">
       {/* Ambient background orbs */}
       <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-[-30%] left-[-15%] w-[60%] h-[60%] rounded-full bg-[radial-gradient(ellipse,rgba(91,95,238,0.1)_0%,transparent_65%)] animate-breathe" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-[radial-gradient(ellipse,rgba(0,212,255,0.06)_0%,transparent_65%)] animate-breathe" style={{ animationDelay: '-4s' }} />
+        <div className="absolute top-[-30%] left-[-15%] w-[60%] h-[60%] rounded-full bg-[radial-gradient(ellipse,rgba(201,162,39,0.1)_0%,transparent_65%)] animate-breathe" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-[radial-gradient(ellipse,rgba(37,99,235,0.06)_0%,transparent_65%)] animate-breathe" style={{ animationDelay: '-4s' }} />
         <div className="absolute inset-0 bg-grid opacity-50" />
       </div>
 
@@ -42,7 +42,7 @@ export default function LoginPage() {
       >
         {/* Logo */}
         <div className="flex items-center justify-center gap-3 mb-8">
-          <img src="/logo-mark.svg" alt="" className="w-9 h-9 drop-shadow-[0_0_20px_rgba(91,95,238,0.4)]" />
+          <img src="/logo-mark.svg" alt="" className="w-9 h-9 drop-shadow-[0_0_20px_rgba(201,162,39,0.4)]" />
           <span className="font-display font-extrabold text-[22px] text-gradient" style={{ letterSpacing: '-0.025em' }}>SAIBYL</span>
         </div>
 
@@ -70,7 +70,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@company.com"
-                className="w-full bg-white/[0.04] border border-white/[0.07] rounded-xl px-4 py-2.5 text-saibyl-platinum placeholder-saibyl-muted/40 focus:outline-none focus:ring-2 focus:ring-saibyl-indigo/50 focus:border-saibyl-indigo/40 transition text-sm"
+                className="w-full bg-white/[0.04] border border-white/[0.07] rounded-xl px-4 py-2.5 text-saibyl-platinum placeholder-saibyl-muted/40 focus:outline-none focus:ring-2 focus:ring-saibyl-gold/50 focus:border-saibyl-gold/40 transition text-sm"
               />
             </div>
             <div>
@@ -81,7 +81,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full bg-white/[0.04] border border-white/[0.07] rounded-xl px-4 py-2.5 text-saibyl-platinum placeholder-saibyl-muted/40 focus:outline-none focus:ring-2 focus:ring-saibyl-indigo/50 focus:border-saibyl-indigo/40 transition text-sm"
+                className="w-full bg-white/[0.04] border border-white/[0.07] rounded-xl px-4 py-2.5 text-saibyl-platinum placeholder-saibyl-muted/40 focus:outline-none focus:ring-2 focus:ring-saibyl-gold/50 focus:border-saibyl-gold/40 transition text-sm"
               />
             </div>
             <button
@@ -89,7 +89,7 @@ export default function LoginPage() {
               disabled={loading}
               className="relative w-full py-2.5 rounded-xl text-white font-semibold text-sm overflow-hidden transition-all hover:scale-[1.01] disabled:opacity-60 disabled:scale-100 mt-2"
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-[#5B5FEE] to-[#00D4FF]" />
+              <div className="absolute inset-0 bg-gradient-to-r from-[#C9A227] to-[#2563EB]" />
               <div className="absolute inset-0 animate-glow-pulse rounded-xl" />
               <span className="relative">{loading ? 'Signing in...' : 'Sign In'}</span>
             </button>
@@ -97,7 +97,7 @@ export default function LoginPage() {
 
           <p className="mt-5 text-center text-sm text-saibyl-muted">
             Don't have an account?{' '}
-            <Link to="/signup" className="text-saibyl-indigo hover:text-saibyl-cyan transition-colors font-medium">
+            <Link to="/signup" className="text-saibyl-gold hover:text-saibyl-blue transition-colors font-medium">
               Sign up
             </Link>
           </p>

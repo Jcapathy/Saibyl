@@ -33,13 +33,13 @@ const PLATFORMS = [
 const STEPS = ['Setup', 'Platforms', 'Personas', 'Settings', 'Review'];
 const DEPTH_LABELS: Record<number, string> = { 1: 'Shallow', 2: 'Standard', 3: 'Standard', 4: 'Deep', 5: 'Exhaustive' };
 
-const inputClass = 'w-full rounded-xl px-4 py-3 text-[14px] text-saibyl-platinum placeholder-saibyl-muted/50 focus:outline-none focus:ring-2 focus:ring-saibyl-indigo/50 focus:border-transparent transition';
+const inputClass = 'w-full rounded-xl px-4 py-3 text-[14px] text-saibyl-platinum placeholder-saibyl-muted/50 focus:outline-none focus:ring-2 focus:ring-saibyl-gold/50 focus:border-transparent transition';
 const inputBg = 'bg-[#0B1120] border border-white/[0.08]';
 
 function Hint({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-saibyl-indigo/5 border border-saibyl-indigo/15 mb-5">
-      <Lightbulb className="w-3.5 h-3.5 text-saibyl-indigo mt-0.5 shrink-0" />
+    <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-saibyl-gold/5 border border-saibyl-gold/15 mb-5">
+      <Lightbulb className="w-3.5 h-3.5 text-saibyl-gold mt-0.5 shrink-0" />
       <p className="text-[12px] text-saibyl-muted leading-relaxed">{children}</p>
     </div>
   );
@@ -48,7 +48,7 @@ function Hint({ children }: { children: React.ReactNode }) {
 function EstimatedTime({ agents, rounds, platforms }: { agents: number; rounds: number; platforms: number }) {
   const platformCount = Math.max(platforms, 1);
   const minutes = Math.max(1, Math.round((agents * rounds * platformCount) / 200));
-  const label = minutes <= 3 ? 'text-saibyl-positive' : minutes <= 10 ? 'text-saibyl-cyan' : 'text-saibyl-muted';
+  const label = minutes <= 3 ? 'text-saibyl-positive' : minutes <= 10 ? 'text-saibyl-blue' : 'text-saibyl-muted';
   return (
     <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-white/[0.02] border border-white/[0.06] mt-5">
       <Clock className="w-3.5 h-3.5 text-saibyl-muted shrink-0" />
@@ -171,7 +171,7 @@ export default function NewSimulationPage() {
           {STEPS.map((label, i) => (
             <div key={label} className="flex items-center">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-mono font-bold transition-colors ${
-                i < step ? 'bg-saibyl-positive text-white' : i === step ? 'bg-saibyl-indigo text-white' : 'bg-white/[0.04] text-saibyl-muted'
+                i < step ? 'bg-saibyl-positive text-white' : i === step ? 'bg-saibyl-gold text-white' : 'bg-white/[0.04] text-saibyl-muted'
               }`}>
                 {i < step ? '✓' : i + 1}
               </div>
@@ -213,7 +213,7 @@ export default function NewSimulationPage() {
                 <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-2">Project</label>
                 {projects.length === 0 ? (
                   <div className={`${inputClass} ${inputBg} text-saibyl-muted/50`}>
-                    No projects yet — <button onClick={() => navigate('/app/projects')} className="text-saibyl-indigo hover:underline">create one first</button>
+                    No projects yet — <button onClick={() => navigate('/app/projects')} className="text-saibyl-gold hover:underline">create one first</button>
                   </div>
                 ) : (
                   <div className="relative">
@@ -265,13 +265,13 @@ export default function NewSimulationPage() {
                       onClick={() => togglePlatform(p.id)}
                       className={`text-left p-4 rounded-xl border transition-all duration-200 ${
                         selected
-                          ? 'border-saibyl-indigo/50 bg-saibyl-indigo/10'
+                          ? 'border-saibyl-gold/50 bg-saibyl-gold/10'
                           : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12]'
                       }`}
                     >
                       <div className="flex items-center justify-between">
                         <span className={`font-medium text-[14px] ${selected ? 'text-saibyl-white' : 'text-saibyl-platinum'}`}>{p.name}</span>
-                        {selected && <div className="w-5 h-5 rounded-full bg-saibyl-indigo flex items-center justify-center"><svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg></div>}
+                        {selected && <div className="w-5 h-5 rounded-full bg-saibyl-gold flex items-center justify-center"><svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg></div>}
                       </div>
                       <p className="text-[11px] text-saibyl-muted mt-1">{p.desc}</p>
                     </button>
@@ -297,11 +297,11 @@ export default function NewSimulationPage() {
                   {/* Create Custom card */}
                   <button
                     onClick={() => setShowCustomModal(true)}
-                    className="text-left p-4 rounded-xl border border-dashed border-saibyl-indigo/30 bg-saibyl-indigo/5 hover:border-saibyl-indigo/50 hover:bg-saibyl-indigo/10 transition-all duration-200"
+                    className="text-left p-4 rounded-xl border border-dashed border-saibyl-gold/30 bg-saibyl-gold/5 hover:border-saibyl-gold/50 hover:bg-saibyl-gold/10 transition-all duration-200"
                   >
                     <div className="flex items-center gap-2 mb-1">
-                      <svg className="w-5 h-5 text-saibyl-indigo" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                      <span className="font-medium text-[14px] text-saibyl-indigo">Create Custom Persona</span>
+                      <svg className="w-5 h-5 text-saibyl-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                      <span className="font-medium text-[14px] text-saibyl-gold">Create Custom Persona</span>
                     </div>
                     <p className="text-[11px] text-saibyl-muted leading-relaxed">Describe a persona and we'll generate a full archetype pack with demographics, personality, and behavior traits.</p>
                   </button>
@@ -314,13 +314,13 @@ export default function NewSimulationPage() {
                         onClick={() => togglePack(pack.id)}
                         className={`text-left p-4 rounded-xl border transition-all duration-200 ${
                           selected
-                            ? 'border-saibyl-indigo/50 bg-saibyl-indigo/10'
+                            ? 'border-saibyl-gold/50 bg-saibyl-gold/10'
                             : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12]'
                         }`}
                       >
                         <div className="flex items-center justify-between mb-1">
                           <span className={`font-medium text-[14px] ${selected ? 'text-saibyl-white' : 'text-saibyl-platinum'}`}>{pack.name}</span>
-                          {selected && <div className="w-5 h-5 rounded-full bg-saibyl-indigo flex items-center justify-center"><svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg></div>}
+                          {selected && <div className="w-5 h-5 rounded-full bg-saibyl-gold flex items-center justify-center"><svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg></div>}
                         </div>
                         <p className="text-[11px] text-saibyl-muted leading-relaxed">{pack.description}</p>
                         <div className="flex items-center gap-2 mt-2">
@@ -381,7 +381,7 @@ export default function NewSimulationPage() {
                         disabled={creatingCustom || !customName.trim() || !customDesc.trim()}
                         className="relative px-6 py-2.5 rounded-xl text-white font-medium text-sm overflow-hidden disabled:opacity-50 transition-all hover:scale-[1.02]"
                       >
-                        <div className="absolute inset-0 bg-gradient-to-r from-[#5B5FEE] to-[#00D4FF]" />
+                        <div className="absolute inset-0 bg-gradient-to-r from-[#C9A227] to-[#2563EB]" />
                         <span className="relative">{creatingCustom ? 'Generating...' : 'Create Persona'}</span>
                       </button>
                     </div>
@@ -400,16 +400,16 @@ export default function NewSimulationPage() {
               </Hint>
               <div>
                 <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-3">
-                  Agent Count: <span className="text-saibyl-indigo font-bold">{agentCount}</span>
+                  Agent Count: <span className="text-saibyl-gold font-bold">{agentCount}</span>
                 </label>
-                <input type="range" min={5} max={100} value={agentCount} onChange={(e) => setAgentCount(Number(e.target.value))} className="w-full accent-saibyl-indigo" />
+                <input type="range" min={5} max={100} value={agentCount} onChange={(e) => setAgentCount(Number(e.target.value))} className="w-full accent-saibyl-gold" />
                 <div className="flex justify-between text-[10px] text-saibyl-muted/50 mt-1"><span>5</span><span>50</span><span>100</span></div>
               </div>
               <div>
                 <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-3">
-                  Simulation Rounds: <span className="text-saibyl-indigo font-bold">{rounds}</span>
+                  Simulation Rounds: <span className="text-saibyl-gold font-bold">{rounds}</span>
                 </label>
-                <input type="range" min={1} max={20} value={rounds} onChange={(e) => setRounds(Number(e.target.value))} className="w-full accent-saibyl-indigo" />
+                <input type="range" min={1} max={20} value={rounds} onChange={(e) => setRounds(Number(e.target.value))} className="w-full accent-saibyl-gold" />
                 <div className="flex justify-between text-[10px] text-saibyl-muted/50 mt-1"><span>1</span><span>10</span><span>20</span></div>
               </div>
               <div>
@@ -426,7 +426,7 @@ export default function NewSimulationPage() {
                 </select>
               </div>
               <div className="flex items-center gap-3 p-4 rounded-xl bg-white/[0.02] border border-white/[0.06]">
-                <input type="checkbox" id="ab-toggle" checked={abEnabled} onChange={(e) => setAbEnabled(e.target.checked)} className="accent-saibyl-indigo w-4 h-4" />
+                <input type="checkbox" id="ab-toggle" checked={abEnabled} onChange={(e) => setAbEnabled(e.target.checked)} className="accent-saibyl-gold w-4 h-4" />
                 <div>
                   <label htmlFor="ab-toggle" className="text-[14px] text-saibyl-platinum font-medium cursor-pointer">Enable A/B Testing</label>
                   <p className="text-[11px] text-saibyl-muted mt-0.5">Run two variants simultaneously and compare results</p>
@@ -434,9 +434,9 @@ export default function NewSimulationPage() {
               </div>
               <div>
                 <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-3">
-                  ReACT Report Depth: <span className="text-saibyl-indigo font-bold">{DEPTH_LABELS[reactDepth] || reactDepth}</span>
+                  ReACT Report Depth: <span className="text-saibyl-gold font-bold">{DEPTH_LABELS[reactDepth] || reactDepth}</span>
                 </label>
-                <input type="range" min={1} max={5} value={reactDepth} onChange={(e) => setReactDepth(Number(e.target.value))} className="w-full accent-saibyl-indigo" />
+                <input type="range" min={1} max={5} value={reactDepth} onChange={(e) => setReactDepth(Number(e.target.value))} className="w-full accent-saibyl-gold" />
                 <div className="flex justify-between text-[10px] text-saibyl-muted/50 mt-1"><span>Shallow</span><span>Standard</span><span>Exhaustive</span></div>
               </div>
               <EstimatedTime agents={agentCount} rounds={rounds} platforms={selectedPlatforms.length} />
@@ -482,7 +482,7 @@ export default function NewSimulationPage() {
               <button
                 onClick={() => setStep((s) => s + 1)}
                 disabled={!canNext()}
-                className="bg-saibyl-indigo text-white px-6 py-2.5 rounded-xl text-[14px] font-medium hover:bg-[#4B4FDE] disabled:opacity-30 transition-all"
+                className="bg-saibyl-gold text-white px-6 py-2.5 rounded-xl text-[14px] font-medium hover:bg-[#4B4FDE] disabled:opacity-30 transition-all"
               >
                 Next →
               </button>
@@ -492,7 +492,7 @@ export default function NewSimulationPage() {
                 disabled={submitting}
                 className="relative px-8 py-2.5 rounded-xl text-white font-semibold text-[14px] overflow-hidden disabled:opacity-50 transition-all hover:scale-[1.02]"
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-[#5B5FEE] to-[#00D4FF]" />
+                <div className="absolute inset-0 bg-gradient-to-r from-[#C9A227] to-[#2563EB]" />
                 <div className="absolute inset-0 animate-glow-pulse rounded-xl" />
                 <span className="relative">{submitting ? 'Launching...' : 'Start Simulation →'}</span>
               </button>

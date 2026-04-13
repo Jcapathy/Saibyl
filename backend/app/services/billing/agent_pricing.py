@@ -22,8 +22,8 @@ MAX_AGENTS = 1_000_000
 
 # Plan base allowances (agent-rounds per month)
 PLAN_ALLOWANCES = {
-    "starter": 50_000,       # 5,000 agents × 10 sims
-    "pro": 2_500_000,        # 50,000 agents × 50 sims
+    "starter": 150_000,       # 10,000 agents × 15 sims
+    "pro": 7_500_000,         # 100,000 agents × 75 sims
     "enterprise": 50_000_000,  # effectively unlimited
 }
 

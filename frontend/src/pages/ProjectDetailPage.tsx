@@ -130,7 +130,7 @@ export default function ProjectDetailPage() {
               onClick={() => setTab(t.key)}
               className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
                 tab === t.key
-                  ? 'bg-saibyl-indigo text-white'
+                  ? 'bg-saibyl-gold text-white'
                   : 'text-saibyl-muted hover:text-saibyl-platinum'
               }`}
             >
@@ -159,12 +159,12 @@ export default function ProjectDetailPage() {
                   type="file"
                   multiple
                   accept=".pdf,.docx,.txt,.md"
-                  className="text-sm text-saibyl-muted file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-saibyl-indigo/20 file:text-saibyl-indigo file:font-medium file:cursor-pointer hover:file:bg-saibyl-indigo/30"
+                  className="text-sm text-saibyl-muted file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-saibyl-gold/20 file:text-saibyl-gold file:font-medium file:cursor-pointer hover:file:bg-saibyl-gold/30"
                 />
                 <button
                   onClick={handleUpload}
                   disabled={uploading}
-                  className="bg-saibyl-indigo text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-[#4B4FDE] disabled:opacity-50 transition-colors shrink-0"
+                  className="bg-saibyl-gold text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-[#4B4FDE] disabled:opacity-50 transition-colors shrink-0"
                 >
                   {uploading ? 'Uploading...' : 'Upload'}
                 </button>
@@ -182,7 +182,7 @@ export default function ProjectDetailPage() {
                 {documents.map((doc, i) => (
                   <div key={doc.id} className={`flex items-center justify-between px-5 py-3 ${i > 0 ? 'border-t border-white/[0.04]' : ''}`}>
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-8 h-8 rounded-lg bg-saibyl-indigo/10 flex items-center justify-center text-[11px] font-mono text-saibyl-indigo uppercase shrink-0">
+                      <div className="w-8 h-8 rounded-lg bg-saibyl-gold/10 flex items-center justify-center text-[11px] font-mono text-saibyl-gold uppercase shrink-0">
                         {doc.file_type}
                       </div>
                       <div className="min-w-0">
@@ -216,7 +216,7 @@ export default function ProjectDetailPage() {
                   onClick={handleRunSimulation}
                   className="relative px-5 py-2 rounded-lg text-white font-medium text-sm overflow-hidden transition-all hover:scale-[1.02] shrink-0"
                 >
-                  <div className="absolute inset-0 bg-gradient-to-r from-[#5B5FEE] to-[#00D4FF]" />
+                  <div className="absolute inset-0 bg-gradient-to-r from-[#C9A227] to-[#2563EB]" />
                   <span className="relative">New Simulation →</span>
                 </button>
               </div>
@@ -231,7 +231,7 @@ export default function ProjectDetailPage() {
               <p className="text-[14px] text-saibyl-muted">{simulations.length} simulation{simulations.length !== 1 ? 's' : ''} for this project</p>
               <button
                 onClick={() => navigate(`/app/simulations/new?project=${id}`)}
-                className="bg-saibyl-indigo text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-[#4B4FDE]"
+                className="bg-saibyl-gold text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-[#4B4FDE]"
               >
                 + New Simulation
               </button>
@@ -242,7 +242,7 @@ export default function ProjectDetailPage() {
                 <p className="text-saibyl-muted text-sm mb-5">Create a simulation to predict how people will react to your content.</p>
                 <button
                   onClick={() => navigate(`/app/simulations/new?project=${id}`)}
-                  className="bg-saibyl-indigo text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-[#4B4FDE]"
+                  className="bg-saibyl-gold text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-[#4B4FDE]"
                 >
                   Create Simulation
                 </button>

@@ -76,7 +76,7 @@ export default function ComparisonPage() {
                       onClick={() => toggleSim(sim.id)}
                       className={`w-full text-left p-3 rounded-xl border transition-all ${
                         isSelected
-                          ? 'border-saibyl-indigo/50 bg-saibyl-indigo/10'
+                          ? 'border-saibyl-gold/50 bg-saibyl-gold/10'
                           : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12]'
                       }`}
                     >
@@ -87,7 +87,7 @@ export default function ComparisonPage() {
                           <span className="text-[11px] text-saibyl-muted ml-2">{new Date(sim.created_at).toLocaleDateString()}</span>
                         </div>
                         {isSelected && (
-                          <div className="w-5 h-5 rounded-full bg-saibyl-indigo flex items-center justify-center">
+                          <div className="w-5 h-5 rounded-full bg-saibyl-gold flex items-center justify-center">
                             <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                           </div>
                         )}
@@ -102,7 +102,7 @@ export default function ComparisonPage() {
               <button
                 onClick={runComparison}
                 disabled={loading || selected.length < 2}
-                className="px-6 py-2.5 rounded-xl bg-saibyl-indigo text-white text-[13px] font-medium hover:bg-[#4B4FDE] disabled:opacity-50 transition-all"
+                className="px-6 py-2.5 rounded-xl bg-saibyl-gold text-white text-[13px] font-medium hover:bg-[#4B4FDE] disabled:opacity-50 transition-all"
               >
                 {loading ? 'Comparing...' : 'Compare Simulations'}
               </button>
@@ -148,7 +148,7 @@ export default function ComparisonPage() {
                   <tr>
                     <td className="py-3 pr-4 text-saibyl-muted">Top Platform</td>
                     {result.simulations.map((s) => (
-                      <td key={s.simulation_id} className="text-center py-3 px-3 text-saibyl-cyan">{s.top_platform}</td>
+                      <td key={s.simulation_id} className="text-center py-3 px-3 text-saibyl-blue">{s.top_platform}</td>
                     ))}
                   </tr>
                   <tr>
@@ -168,7 +168,7 @@ export default function ComparisonPage() {
             <p className="text-[13px] text-saibyl-platinum/80 leading-relaxed whitespace-pre-wrap">{result.analysis}</p>
           </div>
 
-          <button onClick={() => setResult(null)} className="text-[12px] text-saibyl-indigo hover:underline">
+          <button onClick={() => setResult(null)} className="text-[12px] text-saibyl-gold hover:underline">
             ← New comparison
           </button>
         </>

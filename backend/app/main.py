@@ -22,6 +22,7 @@ from app.api import (
     platforms,
     projects,
     reports,
+    score,
     simulations,
     uploads,
     webhooks,
@@ -137,6 +138,7 @@ def create_app() -> FastAPI:
     app.include_router(uploads.router, prefix="/api/uploads")
     app.include_router(markets.router, prefix="/api/markets")
     app.include_router(accuracy.router, prefix="/api/accuracy")
+    app.include_router(score.router, prefix="/api/score")
     app.include_router(comparison.router, prefix="/api/compare")
 
     # WebSocket + SSE streaming

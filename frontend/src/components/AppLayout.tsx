@@ -30,7 +30,7 @@ export default function AppLayout() {
       {/* Sidebar */}
       <aside className="w-[220px] flex flex-col border-r border-white/[0.05] bg-saibyl-deep relative overflow-hidden shrink-0">
         {/* Ambient glow */}
-        <div className="absolute top-0 left-0 w-full h-48 bg-[radial-gradient(ellipse_at_top_left,rgba(91,95,238,0.08)_0%,transparent_70%)] pointer-events-none" />
+        <div className="absolute top-0 left-0 w-full h-48 bg-[radial-gradient(ellipse_at_top_left,rgba(201,162,39,0.08)_0%,transparent_70%)] pointer-events-none" />
 
         {/* Logo */}
         <div className="px-5 py-5 flex items-center gap-2.5">
@@ -47,7 +47,7 @@ export default function AppLayout() {
         {org?.name && (
           <div className="px-5 pb-4">
             <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.04]">
-              <Zap className="w-3 h-3 text-saibyl-indigo shrink-0" />
+              <Zap className="w-3 h-3 text-saibyl-gold shrink-0" />
               <span className="text-[11px] text-saibyl-muted truncate">{org.name}</span>
             </div>
           </div>
@@ -68,7 +68,7 @@ export default function AppLayout() {
                   {isActive && (
                     <motion.span
                       layoutId="sidebar-active"
-                      className="absolute inset-0 rounded-xl bg-saibyl-elevated border border-saibyl-indigo/20"
+                      className="absolute inset-0 rounded-xl bg-saibyl-elevated border border-saibyl-gold/20"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
@@ -79,7 +79,7 @@ export default function AppLayout() {
 
                 <Icon
                   className={`relative w-4 h-4 shrink-0 transition-colors ${
-                    isActive ? 'text-saibyl-indigo' : 'text-saibyl-muted group-hover:text-saibyl-platinum'
+                    isActive ? 'text-saibyl-gold' : 'text-saibyl-muted group-hover:text-saibyl-platinum'
                   }`}
                 />
                 <span
@@ -92,7 +92,7 @@ export default function AppLayout() {
 
                 {/* Active left accent */}
                 {isActive && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-full bg-saibyl-indigo" />
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-full bg-saibyl-gold" />
                 )}
               </Link>
             );
@@ -118,9 +118,9 @@ export default function AppLayout() {
         <header className="h-14 border-b border-white/[0.04] flex items-center px-6 shrink-0 bg-saibyl-void/80 backdrop-blur-sm">
           <div className="flex-1" />
           {org?.plan && (
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-saibyl-indigo/20 bg-saibyl-indigo/5">
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-saibyl-gold/20 bg-saibyl-gold/5">
               <span className="w-1.5 h-1.5 rounded-full bg-saibyl-positive" />
-              <span className="font-mono text-[10px] tracking-widest uppercase text-saibyl-indigo">
+              <span className="font-mono text-[10px] tracking-widest uppercase text-saibyl-gold">
                 {org.plan}
               </span>
             </div>

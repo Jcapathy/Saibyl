@@ -1,8 +1,8 @@
 const statusColors: Record<string, string> = {
   draft: 'bg-saibyl-elevated text-saibyl-muted',
-  preparing: 'bg-saibyl-indigo/15 text-saibyl-indigo',
-  ready: 'bg-saibyl-indigo/15 text-saibyl-cyan',
-  running: 'bg-saibyl-indigo/20 text-saibyl-indigo',
+  preparing: 'bg-saibyl-gold/15 text-saibyl-gold',
+  ready: 'bg-saibyl-gold/15 text-saibyl-blue',
+  running: 'bg-saibyl-gold/20 text-saibyl-gold',
   complete: 'bg-saibyl-positive/15 text-saibyl-positive',
   completed: 'bg-saibyl-positive/15 text-saibyl-positive',
   failed: 'bg-saibyl-negative/15 text-saibyl-negative',
@@ -11,7 +11,7 @@ const statusColors: Record<string, string> = {
   pending_review: 'bg-saibyl-violet/15 text-saibyl-violet',
   approved: 'bg-saibyl-positive/15 text-saibyl-positive',
   generating: 'bg-saibyl-violet/15 text-saibyl-violet',
-  processing: 'bg-saibyl-indigo/15 text-saibyl-indigo',
+  processing: 'bg-saibyl-gold/15 text-saibyl-gold',
   active: 'bg-saibyl-positive/15 text-saibyl-positive',
   archived: 'bg-saibyl-elevated text-saibyl-muted',
 };
