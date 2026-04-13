@@ -46,12 +46,10 @@ async def _validate_ws_token(token: str) -> dict | None:
 async def simulation_websocket(
     websocket: WebSocket,
     simulation_id: UUID,
-    token: str = Query(default=""),
+    token: str = Query(...),
 ):
     """WebSocket endpoint for real-time simulation event streaming."""
-    # Try cookie first, fall back to query param
-    ws_token = websocket.cookies.get("saibyl_access_token") or token
-    auth = await _validate_ws_token(ws_token)
+    auth = await _validate_ws_token(token)
     if not auth:
         await websocket.close(code=4001, reason="Invalid token")
         return

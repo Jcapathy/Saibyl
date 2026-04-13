@@ -9,7 +9,7 @@ import math
 from datetime import UTC, datetime
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request, Security
+from fastapi import APIRouter, Depends, HTTPException, Security
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
@@ -22,14 +22,13 @@ logger = structlog.get_logger()
 router = APIRouter(tags=["score"])
 
 # ---------------------------------------------------------------------------
-# Auth: accept JWT (cookie or header) OR X-API-Key header
+# Auth: accept either JWT bearer token OR X-API-Key header
 # ---------------------------------------------------------------------------
 _bearer = HTTPBearer(auto_error=False)
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
 async def _get_org_id(
-    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Security(_bearer),
     api_key: str | None = Security(_api_key_header),
 ) -> str:
@@ -37,13 +36,7 @@ async def _get_org_id(
     if api_key:
         key_auth = await verify_api_key(api_key)
         return key_auth["org_id"]
-
-    # Try cookie first, then Authorization header
-    token = request.cookies.get("saibyl_access_token")
-    if not token and credentials:
-        token = credentials.credentials
-
-    if token:
+    if credentials:
         supabase = get_supabase()
         try:
             response = supabase.auth.get_user(token)

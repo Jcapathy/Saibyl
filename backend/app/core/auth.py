@@ -1,33 +1,22 @@
 import hashlib
 from datetime import UTC, datetime
 
-from fastapi import Depends, HTTPException, Request, Security
+from fastapi import Depends, HTTPException, Security
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.database import get_supabase, get_supabase_admin
 
-security = HTTPBearer(auto_error=False)
+security = HTTPBearer()
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
 async def get_current_user(
-    request: Request,
-    credentials: HTTPAuthorizationCredentials | None = Security(security),
+    credentials: HTTPAuthorizationCredentials = Security(security),
 ) -> dict:
-    """Validate JWT from httpOnly cookie or Authorization header and return user data."""
-    # 1. Try httpOnly cookie first
-    token = request.cookies.get("saibyl_access_token")
-
-    # 2. Fall back to Authorization header (for API clients, Swagger, etc.)
-    if not token and credentials:
-        token = credentials.credentials
-
-    if not token:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
+    """Validate Supabase JWT and return user data."""
     supabase = get_supabase()
     try:
-        response = supabase.auth.get_user(token)
+        response = supabase.auth.get_user(credentials.credentials)
         if response.user is None:
             raise HTTPException(status_code=401, detail="Invalid token")
         return {"id": response.user.id, "email": response.user.email}
