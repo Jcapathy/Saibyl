@@ -129,16 +129,21 @@ async def create_customer_portal_session(org_id: UUID) -> str:
 
 async def handle_webhook(payload: bytes, signature: str) -> None:
     """Process Stripe webhook events."""
+    import json
+
+    # Verify signature using Stripe SDK
     try:
-        event = stripe.Webhook.construct_event(
+        stripe.Webhook.construct_event(
             payload, signature, settings.stripe_webhook_secret,
         )
     except stripe.error.SignatureVerificationError:
         raise ValueError("Invalid webhook signature")
 
+    # Parse raw JSON to avoid StripeObject attribute access issues
+    event_dict = json.loads(payload)
     admin = get_supabase_admin()
-    event_type = event["type"]
-    data = dict(event["data"]["object"])
+    event_type = event_dict["type"]
+    data = event_dict["data"]["object"]
 
     logger.info("stripe_webhook", event_type=event_type)
 
