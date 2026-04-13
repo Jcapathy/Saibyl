@@ -81,7 +81,7 @@ services:
         value: nosniff
       - path: /*
         name: Content-Security-Policy
-        value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://saibyl-backend.onrender.com wss://saibyl-backend.onrender.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
+        value: "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://saibyl-backend.onrender.com wss://saibyl-backend.onrender.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
       - path: /*
         name: Strict-Transport-Security
         value: "max-age=31536000; includeSubDomains"
