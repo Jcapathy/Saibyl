@@ -54,7 +54,8 @@ def clean_report_output(text: str) -> str:
       2. Preamble sentences without a following ANSWER:
       3. All standalone TOOL: call lines
       4. All ANSWER: markers at start of any line
-      5. Collapses resulting multi-blank-line runs
+      5. CoT artifact lines (Thought:, Reasoning:, Action:, Observation:, etc.)
+      6. Collapses resulting multi-blank-line runs
     """
     # 1a. Full preamble-through-ANSWER blocks (dotAll for multiline CoT)
     text = re.sub(
@@ -81,6 +82,10 @@ def clean_report_output(text: str) -> str:
     text = re.sub(r"^TOOL:\s*.*$", "", text, flags=re.MULTILINE)
     # 3. All ANSWER: markers at start of any line (strip marker, keep content after it)
     text = re.sub(r"^ANSWER:\s*", "", text, flags=re.MULTILINE)
+    # 4. Chain-of-thought artifact lines (Thought:, Reasoning:, Action:, Observation:, etc.)
+    text = re.sub(r"^(?:Thought|Reasoning|Action|Observation):\s.*$", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^(?:Using tool|Calling tool|Tool call|Tool output|Tool result)\b.*$", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^(?:>?\s*)?(?:search_web|read_url|get_page)\b.*$", "", text, flags=re.MULTILINE)
     # 5. Collapse triple+ blank lines to a single blank line
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
