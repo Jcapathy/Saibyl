@@ -332,12 +332,10 @@ export default function GuidePage() {
         >
           <Link
             to="/app/projects"
-            className="relative inline-flex items-center gap-2 px-8 py-3 rounded-xl text-white font-semibold text-[15px] overflow-hidden hover:scale-[1.02] transition-transform"
+            className="inline-flex items-center gap-2 px-8 py-3 rounded-xl bg-[#C9A227] text-[#070B14] font-semibold text-[15px] hover:bg-[#D4AF37] transition-all hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(201,162,39,0.3)]"
           >
-            <div className="absolute inset-0 bg-gradient-to-r from-[#C9A227] to-[#2563EB]" />
-            <div className="absolute inset-0 animate-glow-pulse rounded-xl" />
-            <FlaskConical className="relative w-4 h-4" />
-            <span className="relative">Start a New Project</span>
+            <FlaskConical className="w-4 h-4" />
+            Start a New Project
           </Link>
           <p className="text-[12px] text-saibyl-muted mt-3">Results in minutes, not weeks.</p>
         </motion.div>

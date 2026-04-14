@@ -209,10 +209,10 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between">
         <h1 className="font-extrabold text-[22px] text-[#E8ECF2]">Dashboard</h1>
         <Link
-          to="/app/simulations/new"
+          to="/app/projects"
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#C9A227] text-[#070B14] font-semibold text-sm hover:bg-[#D4AF37] transition-all hover:-translate-y-0.5"
         >
-          + New Simulation
+          Start a New Project
         </Link>
       </div>
 
@@ -357,15 +357,15 @@ export default function DashboardPage() {
                   <Zap className="w-5 h-5 text-[#5B5FEE]" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-[#E8ECF2]">Launch a Simulation</h3>
-                  <p className="text-xs text-[#5A6578]">Get results in under 3 minutes</p>
+                  <h3 className="text-sm font-semibold text-[#E8ECF2]">Start a New Project</h3>
+                  <p className="text-xs text-[#5A6578]">Set up your scenario and run your first simulation</p>
                 </div>
               </div>
               <Link
-                to="/app/simulations/new"
+                to="/app/projects"
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#C9A227] text-[#070B14] font-semibold text-sm hover:bg-[#D4AF37] transition-all hover:-translate-y-0.5 mt-2"
               >
-                New Simulation <ArrowRight className="w-4 h-4" />
+                Start a Project <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
           </motion.div>

@@ -18,7 +18,8 @@ export default function ReportExport({ reportId, simulationName, sections }: Rep
       const response = await api.post(`/reports/${reportId}/export`, { format: 'pdf' }, { responseType: 'blob' });
       downloadBlob(new Blob([response.data]), `${simulationName}-report.pdf`);
     } catch {
-      console.warn('PDF export endpoint unavailable');
+      // Fallback: trigger browser print dialog for the report page
+      window.print();
     } finally {
       setExporting(null);
     }

@@ -319,21 +319,12 @@ export default function SimulationDetailPage() {
                 {sim.completed_at ? `Completed ${new Date(sim.completed_at).toLocaleString()}` : 'Results available'}
               </p>
             </div>
-            <div className="flex gap-3">
-              <Link
-                to={`/app/simulations/${id}/report`}
-                className="relative px-6 py-2.5 rounded-xl text-white font-medium text-sm overflow-hidden transition-all hover:scale-[1.02]"
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-[#C9A227] to-[#2563EB]" />
-                <span className="relative">View Report →</span>
-              </Link>
-              <Link
-                to={`/app/simulations/${id}/run`}
-                className="glass glass-hover px-5 py-2.5 rounded-xl text-saibyl-platinum text-sm font-medium"
-              >
-                Live View
-              </Link>
-            </div>
+            <Link
+              to={`/app/simulations/${id}/report`}
+              className="px-6 py-2.5 rounded-xl bg-[#C9A227] text-[#070B14] font-semibold text-sm hover:bg-[#D4AF37] transition-all hover:-translate-y-0.5"
+            >
+              View Report →
+            </Link>
           </div>
         )}
       </div>

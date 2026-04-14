@@ -1,5 +1,19 @@
 import ReactMarkdown from 'react-markdown';
 
+/** Strip tool-use artifacts, ReACT traces, and agent internals from AI-generated content */
+function cleanContent(raw: string): string {
+  return raw
+    // Remove tool-use blocks
+    .replace(/(?:using tool|tool call|tool output|tool result|calling tool)[:\s].*?(?=\n\n|\n#|$)/gis, '')
+    // Remove lines starting with common tool prefixes
+    .replace(/^(?:>\s*)?(?:search_web|read_url|get_page|fetch|retrieve|Tool:|Action:|Observation:).*$/gim, '')
+    // Remove ReACT-style reasoning traces
+    .replace(/^(?:Thought|Reasoning|Step \d):\s.*$/gim, '')
+    // Clean up multiple blank lines left behind
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 interface Report {
   id: string;
   simulation_id: string;
@@ -103,11 +117,11 @@ export default function ExecutiveSummary({
         <h2 className="text-[16px] font-bold text-[#E8ECF2] mb-4">Executive Brief</h2>
         {execSection ? (
           <div className="prose prose-sm prose-invert max-w-none text-[#8B97A8] leading-[1.75]">
-            <ReactMarkdown>{execSection.content}</ReactMarkdown>
+            <ReactMarkdown>{cleanContent(execSection.content)}</ReactMarkdown>
           </div>
         ) : fallbackContent ? (
           <div className="prose prose-sm prose-invert max-w-none text-[#8B97A8] leading-[1.75]">
-            <ReactMarkdown>{fallbackContent}</ReactMarkdown>
+            <ReactMarkdown>{cleanContent(fallbackContent)}</ReactMarkdown>
           </div>
         ) : (
           <p className="text-[14px] text-[#5A6578]">
