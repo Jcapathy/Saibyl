@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef, type ReactElement } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -70,7 +70,7 @@ function formatAgentCount(n: number | undefined): string {
   return String(n);
 }
 
-function statusDot(status: string, pulse = false): JSX.Element {
+function statusDot(status: string, pulse = false): ReactElement {
   const color = STATUS_COLOR[status] ?? '#5A6578';
   return (
     <span
