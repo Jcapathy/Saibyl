@@ -85,20 +85,26 @@ def _extract_text(file_bytes: bytes, file_type: str) -> tuple[str, str, int | No
 
 
 def _extract_docx(file_bytes: bytes) -> str:
-    """Extract text from a DOCX file. Tries python-docx first (always available),
-    falls back to unstructured if installed."""
+    """Extract text from a DOCX file.
+
+    Chain: python-docx → zipfile+XML (stdlib) → unstructured → error.
+    The zipfile fallback is guaranteed to work on any valid DOCX since
+    DOCX is just a ZIP archive containing word/document.xml."""
     import io as _io
 
-    # Primary: python-docx (lightweight, always installed)
+    logger.info("docx_extraction_start", byte_length=len(file_bytes),
+                header=file_bytes[:4].hex() if len(file_bytes) >= 4 else "short")
+
+    # Method 1: python-docx
     try:
         import docx as _docx
 
         doc = _docx.Document(_io.BytesIO(file_bytes))
         paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
         if paragraphs:
+            logger.info("docx_python_docx_ok", paragraphs=len(paragraphs))
             return "\n\n".join(paragraphs)
-        logger.warning("docx_no_paragraphs, trying tables")
-        # Some DOCX files use tables instead of paragraphs
+        # Try tables if no paragraphs
         rows = []
         for table in doc.tables:
             for row in table.rows:
@@ -106,11 +112,39 @@ def _extract_docx(file_bytes: bytes) -> str:
                 if cells:
                     rows.append(" | ".join(cells))
         if rows:
+            logger.info("docx_python_docx_tables_ok", rows=len(rows))
             return "\n".join(rows)
+        logger.warning("docx_python_docx_empty")
     except Exception as e:
-        logger.warning("python_docx_failed", error=str(e))
+        logger.warning("docx_python_docx_failed", error=str(e), error_type=type(e).__name__)
 
-    # Fallback: unstructured (heavier, may not be installed)
+    # Method 2: stdlib zipfile + XML text extraction (guaranteed for valid DOCX)
+    try:
+        import zipfile
+        import xml.etree.ElementTree as ET
+
+        with zipfile.ZipFile(_io.BytesIO(file_bytes)) as zf:
+            if "word/document.xml" not in zf.namelist():
+                logger.warning("docx_zip_no_document_xml", files=zf.namelist()[:10])
+            else:
+                xml_bytes = zf.read("word/document.xml")
+                root = ET.fromstring(xml_bytes)
+                # DOCX namespace for text nodes
+                ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+                texts = []
+                for paragraph in root.iter(f"{{{ns['w']}}}p"):
+                    runs = paragraph.findall(f".//{{{ns['w']}}}t")
+                    para_text = "".join(r.text or "" for r in runs).strip()
+                    if para_text:
+                        texts.append(para_text)
+                if texts:
+                    logger.info("docx_zipxml_ok", paragraphs=len(texts))
+                    return "\n\n".join(texts)
+                logger.warning("docx_zipxml_empty")
+    except Exception as e:
+        logger.warning("docx_zipxml_failed", error=str(e), error_type=type(e).__name__)
+
+    # Method 3: unstructured (may not be installed)
     try:
         from unstructured.partition.docx import partition_docx
 
@@ -120,10 +154,12 @@ def _extract_docx(file_bytes: bytes) -> str:
             elements = partition_docx(filename=tmp.name)
             text = "\n\n".join(str(el) for el in elements)
             Path(tmp.name).unlink(missing_ok=True)
-        return text
+        if text.strip():
+            return text
     except Exception as e:
-        logger.warning("unstructured_docx_failed", error=str(e))
+        logger.warning("docx_unstructured_failed", error=str(e))
 
+    logger.error("docx_all_methods_failed", byte_length=len(file_bytes))
     return "[Unable to extract text from this DOCX file]"
 
 
