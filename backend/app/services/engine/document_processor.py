@@ -72,38 +72,59 @@ def _extract_text(file_bytes: bytes, file_type: str) -> tuple[str, str, int | No
             Path(tmp.name).unlink(missing_ok=True)
         return text, "utf-8", pages
 
+    # DOCX is a binary ZIP format — must be handled before charset detection
+    if file_type == "docx":
+        return _extract_docx(file_bytes), "utf-8", None
+
     # For text-based formats, detect encoding
     result = from_bytes(file_bytes)
     best = result.best()
     encoding = best.encoding if best else "utf-8"
     text = file_bytes.decode(encoding, errors="replace")
-
-    if file_type == "docx":
-        try:
-            from unstructured.partition.docx import partition_docx
-
-            with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp:
-                tmp.write(file_bytes)
-                tmp.flush()
-                elements = partition_docx(filename=tmp.name)
-                text = "\n\n".join(str(el) for el in elements)
-                Path(tmp.name).unlink(missing_ok=True)
-        except ImportError:
-            # Fallback to python-docx (lighter dependency)
-            try:
-                import docx as _docx
-                import io as _io
-
-                doc = _docx.Document(_io.BytesIO(file_bytes))
-                paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
-                if paragraphs:
-                    text = "\n\n".join(paragraphs)
-                else:
-                    logger.warning("docx_empty_extraction", file_type=file_type)
-            except Exception:
-                logger.warning("docx_extraction_failed, falling back to raw text")
-
     return text, encoding, None
+
+
+def _extract_docx(file_bytes: bytes) -> str:
+    """Extract text from a DOCX file. Tries python-docx first (always available),
+    falls back to unstructured if installed."""
+    import io as _io
+
+    # Primary: python-docx (lightweight, always installed)
+    try:
+        import docx as _docx
+
+        doc = _docx.Document(_io.BytesIO(file_bytes))
+        paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+        if paragraphs:
+            return "\n\n".join(paragraphs)
+        logger.warning("docx_no_paragraphs, trying tables")
+        # Some DOCX files use tables instead of paragraphs
+        rows = []
+        for table in doc.tables:
+            for row in table.rows:
+                cells = [c.text.strip() for c in row.cells if c.text.strip()]
+                if cells:
+                    rows.append(" | ".join(cells))
+        if rows:
+            return "\n".join(rows)
+    except Exception as e:
+        logger.warning("python_docx_failed", error=str(e))
+
+    # Fallback: unstructured (heavier, may not be installed)
+    try:
+        from unstructured.partition.docx import partition_docx
+
+        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp:
+            tmp.write(file_bytes)
+            tmp.flush()
+            elements = partition_docx(filename=tmp.name)
+            text = "\n\n".join(str(el) for el in elements)
+            Path(tmp.name).unlink(missing_ok=True)
+        return text
+    except Exception as e:
+        logger.warning("unstructured_docx_failed", error=str(e))
+
+    return "[Unable to extract text from this DOCX file]"
 
 
 async def process_document(document_id: UUID) -> DocumentContent:
