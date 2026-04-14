@@ -29,9 +29,9 @@
   * { border-color: hsl(var(--border)); }
 
   body {
-    background-color: #0A0F1C;
-    color: #F1F5F9;
-    font-family: 'Inter', system-ui, sans-serif;
+    background-color: #070B14;
+    color: #E8ECF2;
+    font-family: 'Aktiv Grotesk', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -39,11 +39,24 @@
 
 /* ── Custom props ── */
 :root {
+  --grad-brand: linear-gradient(135deg, #5B5FEE 0%, #00D4FF 100%);
   --grad-arc: linear-gradient(135deg, #C9A227 0%, #2563EB 100%);
   --grad-violet: linear-gradient(135deg, #8B5CF6 0%, #C9A227 100%);
+  --brand-purple: #5B5FEE;
+  --brand-cyan: #00D4FF;
+  --gold: #C9A227;
+  --gold-hover: #D4AF37;
 }
 
-/* ── Gradient text ── */
+/* ── Gradient text (purple → cyan brand) ── */
+.text-gradient-brand {
+  background: var(--grad-brand);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Legacy gradient text (gold → blue) ── */
 .text-gradient {
   background: var(--grad-arc);
   -webkit-background-clip: text;
@@ -52,11 +65,11 @@
 }
 
 /* ── Typography ── */
-.text-display { font-family: 'Inter', system-ui; font-weight: 800; font-size: 3rem; letter-spacing: -0.025em; }
-.text-h1 { font-family: 'Inter', system-ui; font-weight: 700; font-size: 2rem; letter-spacing: -0.02em; }
-.text-h2 { font-family: 'Inter', system-ui; font-weight: 600; font-size: 1.375rem; letter-spacing: -0.01em; }
-.text-body { font-family: 'Inter', system-ui; font-weight: 400; font-size: 0.9375rem; line-height: 1.7; }
-.text-small { font-family: 'Inter', system-ui; font-weight: 400; font-size: 0.8125rem; color: #64748B; }
+.text-display { font-family: 'Aktiv Grotesk', system-ui; font-weight: 800; font-size: 3rem; letter-spacing: -0.025em; }
+.text-h1 { font-family: 'Aktiv Grotesk', system-ui; font-weight: 700; font-size: 2rem; letter-spacing: -0.02em; }
+.text-h2 { font-family: 'Aktiv Grotesk', system-ui; font-weight: 600; font-size: 1.375rem; letter-spacing: -0.01em; }
+.text-body { font-family: 'Aktiv Grotesk', system-ui; font-weight: 400; font-size: 0.9375rem; line-height: 1.7; }
+.text-small { font-family: 'Aktiv Grotesk', system-ui; font-weight: 400; font-size: 0.8125rem; color: #5A6578; }
 .text-label { font-family: 'JetBrains Mono', monospace; font-size: 0.6875rem; letter-spacing: 0.18em; text-transform: uppercase; }
 
 /* ── Animations ── */
@@ -84,11 +97,23 @@
   0% { --angle: 0deg; }
   100% { --angle: 360deg; }
 }
+@keyframes drift {
+  0% { opacity: 0; transform: translateY(0) scale(1); }
+  10% { opacity: 0.4; }
+  90% { opacity: 0.4; }
+  100% { opacity: 0; transform: translateY(-120px) scale(0.5); }
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
 
 /* ── Utility classes ── */
 .animate-breathe { animation: breathe 8s ease-in-out infinite; }
 .animate-float { animation: float 6s ease-in-out infinite; }
 .animate-glow-pulse { animation: glow-pulse 3s ease-in-out infinite; }
+.animate-drift { animation: drift 12s linear infinite; }
+.animate-pulse-dot { animation: pulse-dot 3s ease-in-out infinite; }
 
 .bg-grid {
   background-image:
@@ -96,6 +121,13 @@
     linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
   background-size: 64px 64px;
   animation: grid-fade 8s ease-in-out infinite;
+}
+
+.bg-grid-brand {
+  background-image:
+    linear-gradient(rgba(91,95,238,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(91,95,238,0.02) 1px, transparent 1px);
+  background-size: 48px 48px;
 }
 
 .shimmer-border {

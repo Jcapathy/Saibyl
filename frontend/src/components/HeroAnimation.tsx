@@ -23,7 +23,7 @@ export default function HeroAnimation() {
       alpha: number; phase: number;
     }
 
-    const COLORS = ['#C9A227', '#2563EB', '#8B5CF6'];
+    const COLORS = ['#5B5FEE', '#00D4FF'];
     const CONNECT_DIST = 160;
     const MOUSE_PUSH = 100;
     const MOUSE_FORCE = 0.6;
@@ -161,9 +161,9 @@ export default function HeroAnimation() {
       // Mouse proximity highlight ring
       if (mx > 0 && my > 0) {
         const ringGrad = ctx.createRadialGradient(mx, my, MOUSE_PUSH * 0.3, mx, my, MOUSE_PUSH);
-        ringGrad.addColorStop(0, 'rgba(201,162,39,0)');
-        ringGrad.addColorStop(0.85, 'rgba(201,162,39,0.04)');
-        ringGrad.addColorStop(1, 'rgba(201,162,39,0)');
+        ringGrad.addColorStop(0, 'rgba(91,95,238,0)');
+        ringGrad.addColorStop(0.85, 'rgba(91,95,238,0.04)');
+        ringGrad.addColorStop(1, 'rgba(91,95,238,0)');
         ctx.beginPath();
         ctx.arc(mx, my, MOUSE_PUSH, 0, Math.PI * 2);
         ctx.fillStyle = ringGrad;

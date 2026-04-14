@@ -1,183 +1,410 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { Clock, Users, FileText, Activity, Zap, ArrowRight } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
 import api from '@/lib/api';
-import StatusBadge from '@/components/StatusBadge';
 
 interface Simulation {
   id: string;
   name: string;
   status: string;
   created_at: string;
+  platforms?: string[];
+  agent_count?: number;
+  sentiment_score?: number;
 }
 
 interface BillingStatus {
   plan: string;
   simulations_used: number;
   simulations_limit: number;
-  agents_used: number;
-  agents_limit: number;
+  agents_used?: number;
+  agents_limit?: number;
+}
+
+function formatCount(n: number | undefined | null): string {
+  if (n == null) return '—';
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(n % 1_000 === 0 ? 0 : 1)}K`;
+  return n.toString();
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  running: '#3B82F6',
+  completed: '#22C55E',
+  complete: '#22C55E',
+  queued: '#F59E0B',
+  failed: '#EF4444',
+  draft: '#818CF8',
+};
+
+function StatusDot({ status }: { status: string }) {
+  const color = STATUS_COLORS[status] ?? '#5A6578';
+  const isRunning = status === 'running';
+  return (
+    <span className="relative flex h-2.5 w-2.5 shrink-0">
+      {isRunning && (
+        <span
+          className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75"
+          style={{ backgroundColor: color }}
+        />
+      )}
+      <span
+        className="relative inline-flex h-2.5 w-2.5 rounded-full"
+        style={{ backgroundColor: color }}
+      />
+    </span>
+  );
 }
 
 function Skeleton({ className }: { className: string }) {
-  return <div className={`animate-pulse rounded-xl bg-saibyl-deep ${className}`} />;
+  return <div className={`animate-pulse bg-[#111820] rounded-2xl ${className}`} />;
+}
+
+function StatCard({
+  icon,
+  label,
+  value,
+  meta,
+  gradientFrom,
+  gradientTo,
+  iconBg,
+  iconColor,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: React.ReactNode;
+  meta: string;
+  gradientFrom: string;
+  gradientTo: string;
+  iconBg: string;
+  iconColor: string;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35 }}
+      className="bg-[#111820] border border-[#1B2433] rounded-2xl p-5 relative overflow-hidden"
+    >
+      <div
+        className="absolute top-0 left-0 right-0 h-[2px]"
+        style={{
+          background: `linear-gradient(to right, ${gradientFrom}, ${gradientTo})`,
+        }}
+      />
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[11px] font-mono tracking-widest uppercase text-[#5A6578]">
+          {label}
+        </p>
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center"
+          style={{ backgroundColor: iconBg }}
+        >
+          <span style={{ color: iconColor }}>{icon}</span>
+        </div>
+      </div>
+      <p className="text-2xl font-bold text-[#E8ECF2]">{value}</p>
+      <p className="text-xs text-[#5A6578] mt-1">{meta}</p>
+    </motion.div>
+  );
 }
 
 export default function DashboardPage() {
-  const [sims, setSims] = useState<Simulation[]>([]);
+  const [recentSims, setRecentSims] = useState<Simulation[]>([]);
+  const [allSims, setAllSims] = useState<Simulation[]>([]);
   const [billing, setBilling] = useState<BillingStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([
-      api.get('/simulations', { params: { limit: 5 } }),
-      api.get('/billing/status'),
-    ])
-      .then(([simRes, billRes]) => {
-        setSims(simRes.data.items || simRes.data);
+    async function fetchData() {
+      try {
+        const [recentRes, allRes, billRes] = await Promise.all([
+          api.get('/simulations', { params: { limit: 5 } }),
+          api.get('/simulations', { params: { limit: 100 } }),
+          api.get('/billing/status'),
+        ]);
+        setRecentSims(recentRes.data.items || recentRes.data);
+        setAllSims(allRes.data.items || allRes.data);
         setBilling(billRes.data);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      } catch {
+        // Dashboard renders with fallback values
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
   }, []);
 
-  const simPct   = billing ? Math.round((billing.simulations_used / Math.max(billing.simulations_limit, 1)) * 100) : 0;
-  const agentPct = billing ? Math.round((billing.agents_used / Math.max(billing.agents_limit, 1)) * 100) : 0;
+  // Derived stats
+  const completedSims = allSims.filter(
+    (s) => s.status === 'completed' || s.status === 'complete',
+  );
+
+  const avgSentiment = (() => {
+    const withScore = completedSims.filter(
+      (s) => s.sentiment_score != null,
+    );
+    if (withScore.length === 0) return null;
+    const sum = withScore.reduce((acc, s) => acc + (s.sentiment_score ?? 0), 0);
+    return (sum / withScore.length).toFixed(2);
+  })();
+
+  // Activity feed derived from recent sims
+  const activityEntries = recentSims.slice(0, 5).map((sim) => {
+    let action: string;
+    let dotColor: string;
+    if (sim.status === 'completed' || sim.status === 'complete') {
+      action = 'completed';
+      dotColor = '#22C55E';
+    } else if (sim.status === 'running') {
+      action = 'started running';
+      dotColor = '#3B82F6';
+    } else if (sim.status === 'failed') {
+      action = 'failed';
+      dotColor = '#EF4444';
+    } else if (sim.status === 'queued') {
+      action = 'queued';
+      dotColor = '#F59E0B';
+    } else {
+      action = 'created';
+      dotColor = '#818CF8';
+    }
+    return {
+      id: sim.id,
+      text: `Simulation "${sim.name}" ${action}`,
+      dotColor,
+      time: formatDistanceToNow(new Date(sim.created_at), { addSuffix: true }),
+    };
+  });
+
+  if (loading) {
+    return (
+      <div className="p-6 max-w-6xl mx-auto space-y-6">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-8 w-40" />
+          <Skeleton className="h-10 w-40" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Skeleton className="h-32" />
+          <Skeleton className="h-32" />
+          <Skeleton className="h-32" />
+          <Skeleton className="h-32" />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          <Skeleton className="lg:col-span-3 h-72" />
+          <div className="lg:col-span-2 space-y-6">
+            <Skeleton className="h-44" />
+            <Skeleton className="h-52" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
-      {/* Header */}
+    <div className="p-6 max-w-6xl mx-auto space-y-6">
+      {/* Page Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-saibyl-platinum">Dashboard</h1>
+        <h1 className="font-extrabold text-[22px] text-[#E8ECF2]">Dashboard</h1>
         <Link
-          to="/app/projects"
-          className="relative inline-flex items-center gap-2 px-4 py-2 rounded-xl text-white font-medium text-sm overflow-hidden transition-all hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(91,95,238,0.25)]"
+          to="/app/simulations/new"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#C9A227] text-[#070B14] font-semibold text-sm hover:bg-[#D4AF37] transition-all hover:-translate-y-0.5"
         >
-          <div className="absolute inset-0 bg-gradient-to-r from-saibyl-gold to-[#4B8BEE]" />
-          <span className="relative">+ New Project</span>
+          + New Simulation
         </Link>
       </div>
 
-      {loading ? (
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <Skeleton className="h-32" />
-            <Skeleton className="h-32" />
-          </div>
-          <Skeleton className="h-48" />
-        </div>
-      ) : (
-        <>
-          {/* Usage cards */}
-          {billing && (
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35 }}
-              className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+      {/* Stat Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          icon={<Clock className="w-5 h-5" />}
+          label="Simulations"
+          value={
+            <>
+              {billing?.simulations_used ?? '—'}
+              <span className="text-sm font-normal text-[#5A6578] ml-1">
+                / {billing?.simulations_limit ?? '—'}
+              </span>
+            </>
+          }
+          meta="this billing period"
+          gradientFrom="#5B5FEE"
+          gradientTo="#00D4FF"
+          iconBg="rgba(91,95,238,0.1)"
+          iconColor="#5B5FEE"
+        />
+        <StatCard
+          icon={<Users className="w-5 h-5" />}
+          label="Agents Deployed"
+          value={
+            <>
+              {billing?.agents_used != null ? formatCount(billing.agents_used) : '—'}
+              {billing?.agents_limit != null && (
+                <span className="text-sm font-normal text-[#5A6578] ml-1">
+                  / {formatCount(billing.agents_limit)}
+                </span>
+              )}
+            </>
+          }
+          meta={billing?.plan ?? '—'}
+          gradientFrom="#00D4FF"
+          gradientTo="#5B5FEE"
+          iconBg="rgba(0,212,255,0.1)"
+          iconColor="#00D4FF"
+        />
+        <StatCard
+          icon={<FileText className="w-5 h-5" />}
+          label="Reports"
+          value={completedSims.length}
+          meta="completed simulations"
+          gradientFrom="#22C55E"
+          gradientTo="#00D4FF"
+          iconBg="rgba(34,197,94,0.1)"
+          iconColor="#22C55E"
+        />
+        <StatCard
+          icon={<Activity className="w-5 h-5" />}
+          label="Avg Sentiment"
+          value={avgSentiment ?? '—'}
+          meta="across completed sims"
+          gradientFrom="#C9A227"
+          gradientTo="#5B5FEE"
+          iconBg="rgba(201,162,39,0.1)"
+          iconColor="#C9A227"
+        />
+      </div>
+
+      {/* Two-Column Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        {/* Left: Recent Simulations */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.1 }}
+          className="lg:col-span-3 bg-[#111820] border border-[#1B2433] rounded-2xl overflow-hidden"
+        >
+          <div className="px-5 py-4 border-b border-[#1B2433] flex items-center justify-between">
+            <h2 className="font-semibold text-[#E8ECF2] text-sm">Recent Simulations</h2>
+            <Link
+              to="/app/simulations"
+              className="text-xs text-[#C9A227] hover:text-[#D4AF37] transition-colors flex items-center gap-1"
             >
-              {/* Simulations usage */}
-              <div className="bg-saibyl-deep rounded-2xl p-5 border border-white/[0.05]">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <p className="text-[11px] font-mono tracking-widest uppercase text-saibyl-muted">Simulations</p>
-                    <p className="text-2xl font-bold text-saibyl-platinum mt-0.5">
-                      {billing.simulations_used}
-                      <span className="text-sm font-normal text-saibyl-muted ml-1">/ {billing.simulations_limit}</span>
-                    </p>
-                  </div>
-                  <div className="w-10 h-10 rounded-xl bg-saibyl-gold/10 flex items-center justify-center">
-                    <svg className="w-5 h-5 text-saibyl-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5" />
-                    </svg>
-                  </div>
-                </div>
-                <div className="w-full h-1.5 bg-white/[0.05] rounded-full overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${Math.min(simPct, 100)}%` }}
-                    transition={{ duration: 0.8, ease: 'easeOut', delay: 0.2 }}
-                    className="h-full rounded-full"
-                    style={{ background: 'linear-gradient(90deg, #C9A227, #2563EB)' }}
-                  />
-                </div>
-                <p className="text-[11px] text-saibyl-muted mt-1.5">{simPct}% used</p>
-              </div>
+              View All <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
 
-              {/* Agents usage */}
-              <div className="bg-saibyl-deep rounded-2xl p-5 border border-white/[0.05]">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <p className="text-[11px] font-mono tracking-widest uppercase text-saibyl-muted">Agents</p>
-                    <p className="text-2xl font-bold text-saibyl-platinum mt-0.5">
-                      {billing.agents_used.toLocaleString()}
-                      <span className="text-sm font-normal text-saibyl-muted ml-1">/ {billing.agents_limit.toLocaleString()}</span>
-                    </p>
+          {recentSims.length === 0 ? (
+            <div className="py-12 text-center">
+              <p className="text-[#5A6578] text-sm mb-4">No simulations yet</p>
+              <Link
+                to="/app/simulations/new"
+                className="text-sm text-[#C9A227] hover:text-[#D4AF37] transition-colors"
+              >
+                Create your first simulation
+              </Link>
+            </div>
+          ) : (
+            <div>
+              {recentSims.map((sim, i) => (
+                <Link
+                  key={sim.id}
+                  to={`/app/simulations/${sim.id}`}
+                  className={`flex items-center justify-between px-5 py-3.5 hover:bg-white/[0.02] transition-colors ${
+                    i < recentSims.length - 1 ? 'border-b border-[#1B2433]/50' : ''
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <StatusDot status={sim.status} />
+                    <span className="text-sm font-medium text-[#E8ECF2] truncate">
+                      {sim.name}
+                    </span>
                   </div>
-                  <div className="w-10 h-10 rounded-xl bg-saibyl-gold/10 flex items-center justify-center">
-                    <svg className="w-5 h-5 text-saibyl-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
-                    </svg>
+                  <div className="flex items-center gap-4 shrink-0 ml-4">
+                    {sim.agent_count != null && (
+                      <span className="text-xs text-[#5A6578] font-mono">
+                        {formatCount(sim.agent_count)} agents
+                      </span>
+                    )}
+                    {sim.platforms && sim.platforms.length > 0 && (
+                      <span className="text-xs text-[#5A6578] font-mono">
+                        {sim.platforms.length} platform{sim.platforms.length !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                    <span className="text-xs text-[#5A6578]">
+                      {formatDistanceToNow(new Date(sim.created_at), { addSuffix: true })}
+                    </span>
                   </div>
-                </div>
-                <div className="w-full h-1.5 bg-white/[0.05] rounded-full overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${Math.min(agentPct, 100)}%` }}
-                    transition={{ duration: 0.8, ease: 'easeOut', delay: 0.35 }}
-                    className="h-full rounded-full"
-                    style={{ background: 'linear-gradient(90deg, #8B5CF6, #C9A227)' }}
-                  />
-                </div>
-                <p className="text-[11px] text-saibyl-muted mt-1.5">{agentPct}% used · {billing.plan} plan</p>
-              </div>
-            </motion.div>
+                </Link>
+              ))}
+            </div>
           )}
+        </motion.div>
 
-          {/* Recent Simulations */}
+        {/* Right Column */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Quick Launch Card */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, delay: 0.1 }}
-            className="bg-saibyl-deep rounded-2xl border border-white/[0.05] overflow-hidden"
+            transition={{ duration: 0.35, delay: 0.15 }}
+            className="bg-gradient-to-r from-[#5B5FEE] to-[#00D4FF] p-px rounded-2xl"
           >
-            <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
-              <h2 className="font-semibold text-saibyl-platinum text-sm">Recent Simulations</h2>
-              <Link to="/app/simulations" className="text-[12px] text-saibyl-gold hover:text-saibyl-blue transition-colors">
-                View all →
+            <div className="bg-[#111820] rounded-2xl p-6">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-[#5B5FEE]/10 flex items-center justify-center">
+                  <Zap className="w-5 h-5 text-[#5B5FEE]" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-[#E8ECF2]">Launch a Simulation</h3>
+                  <p className="text-xs text-[#5A6578]">Get results in under 3 minutes</p>
+                </div>
+              </div>
+              <Link
+                to="/app/simulations/new"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#C9A227] text-[#070B14] font-semibold text-sm hover:bg-[#D4AF37] transition-all hover:-translate-y-0.5 mt-2"
+              >
+                New Simulation <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
+          </motion.div>
 
-            {sims.length === 0 ? (
-              <div className="py-12 text-center">
-                <p className="text-saibyl-muted text-sm mb-4">No simulations yet</p>
-                <Link to="/app/projects" className="text-sm text-saibyl-gold hover:text-saibyl-blue transition-colors">
-                  Create a project to get started →
-                </Link>
+          {/* Activity Feed */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: 0.2 }}
+            className="bg-[#111820] border border-[#1B2433] rounded-2xl overflow-hidden"
+          >
+            <div className="px-5 py-4 border-b border-[#1B2433]">
+              <h2 className="font-semibold text-[#E8ECF2] text-sm">Recent Activity</h2>
+            </div>
+            {activityEntries.length === 0 ? (
+              <div className="py-8 text-center">
+                <p className="text-[#5A6578] text-sm">No recent activity</p>
               </div>
             ) : (
-              <ul>
-                {sims.map((sim, i) => (
-                  <li
-                    key={sim.id}
-                    className={`flex items-center justify-between px-5 py-3.5 hover:bg-white/[0.02] transition-colors ${i < sims.length - 1 ? 'border-b border-white/[0.03]' : ''}`}
-                  >
-                    <Link to={`/app/simulations/${sim.id}`} className="font-medium text-saibyl-platinum hover:text-saibyl-gold transition-colors text-sm">
-                      {sim.name}
-                    </Link>
-                    <div className="flex items-center gap-4">
-                      <span className="font-mono text-[11px] text-saibyl-muted">
-                        {new Date(sim.created_at).toLocaleDateString()}
-                      </span>
-                      <StatusBadge status={sim.status} />
+              <div className="divide-y divide-[#1B2433]/50">
+                {activityEntries.map((entry) => (
+                  <div key={entry.id} className="px-5 py-3 flex items-start gap-3">
+                    <span
+                      className="mt-1.5 h-2 w-2 rounded-full shrink-0"
+                      style={{ backgroundColor: entry.dotColor }}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-[#E8ECF2] leading-relaxed truncate">
+                        {entry.text}
+                      </p>
+                      <p className="text-[11px] text-[#5A6578] mt-0.5">{entry.time}</p>
                     </div>
-                  </li>
+                  </div>
                 ))}
-              </ul>
+              </div>
             )}
           </motion.div>
-        </>
-      )}
+        </div>
+      </div>
     </div>
   );
 }
