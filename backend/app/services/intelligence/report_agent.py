@@ -34,22 +34,35 @@ logger = structlog.get_logger()
 
 # ── Post-processing ─────────────────────────────────────
 
+_PREAMBLE_VERBS = (
+    r"gather|start|begin|analyze|look|pull|search|investigate|examine"
+    r"|collect|retrieve|check|review|query|explore|write|assess|evaluate"
+    r"|compile|synthesize|research|identify|determine|provide"
+)
+
 def strip_react_artifacts(text: str) -> str:
     """Remove ReACT chain-of-thought / tool-call leakage from LLM output.
 
     Strips:
       - Preamble-through-ANSWER blocks ("I'll gather … ANSWER:")
+      - Preamble lines with no ANSWER (e.g. "I'll systematically gather … section.")
       - Standalone TOOL: lines
       - Standalone ANSWER: markers
-      - "Let me start/begin/pull …" preamble lines
     """
-    # 1. Full blocks: preamble → TOOL calls → ANSWER marker
+    # 1a. Full blocks: preamble → (optional TOOL calls) → ANSWER marker
     text = re.sub(
-        r"(?:I'll|I will|Let me)\s+(?:gather|start|begin|analyze|look|pull|search"
-        r"|investigate|examine|collect|retrieve|check|review|query|explore).*?ANSWER:\s*",
+        r"(?:I'll|I will|Let me)\s+(?:\w+\s+)*?(?:" + _PREAMBLE_VERBS + r").*?ANSWER:\s*",
         "",
         text,
         flags=re.DOTALL | re.IGNORECASE,
+    )
+    # 1b. Preamble sentences NOT followed by ANSWER: (stop at sentence-ending period)
+    #     Allows optional adverbs between "I'll" and the verb.
+    text = re.sub(
+        r"(?:I'll|I will|Let me)\s+(?:\w+\s+)*?(?:" + _PREAMBLE_VERBS + r")\b[^.]*\.\s*",
+        "",
+        text,
+        flags=re.IGNORECASE,
     )
     # 2. Standalone TOOL: lines (e.g. "TOOL: simulation_analytics(sentiment_over_time)")
     text = re.sub(r"^TOOL:.*$", "", text, flags=re.MULTILINE)

@@ -1,10 +1,18 @@
 import SectionRenderer from '@/components/report/SectionRenderer';
 
+const PREAMBLE_VERBS =
+  'gather|start|begin|analyze|look|pull|search|investigate|examine|collect|retrieve|check|review|query|explore|write|assess|evaluate|compile|synthesize|research|identify|determine|provide';
+
 /** Strip tool-use artifacts and ReACT traces from AI-generated content. */
 function cleanContent(raw: string): string {
-  // 1. Strip full preamble-through-ANSWER blocks
+  // 1a. Strip full preamble-through-ANSWER blocks
   let text = raw.replace(
-    /(?:I'll|I will|Let me)\s+(?:gather|start|begin|analyze|look|pull|search|investigate|examine|collect|retrieve|check|review|query|explore)[\s\S]*?ANSWER:\s*/gi,
+    new RegExp(`(?:I'll|I will|Let me)\\s+(?:\\w+\\s+)*?(?:${PREAMBLE_VERBS})[\\s\\S]*?ANSWER:\\s*`, 'gi'),
+    '',
+  );
+  // 1b. Strip preamble sentences with no ANSWER (e.g. "I'll systematically gather … section.")
+  text = text.replace(
+    new RegExp(`(?:I'll|I will|Let me)\\s+(?:\\w+\\s+)*?(?:${PREAMBLE_VERBS})\\b[^.]*\\.\\s*`, 'gi'),
     '',
   );
   // 2. Strip standalone ANSWER: markers
