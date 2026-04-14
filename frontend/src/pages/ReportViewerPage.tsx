@@ -4,6 +4,7 @@ import { ArrowLeft, MessageCircle, X, Send, Copy, Download, Share, RotateCcw } f
 import ReactMarkdown from 'react-markdown';
 import { formatDistanceToNow } from 'date-fns';
 import api from '@/lib/api';
+import SectionRenderer from '@/components/report/SectionRenderer';
 import ExecutiveSummary from '@/components/report/ExecutiveSummary';
 import SentimentTimeline from '@/components/report/SentimentTimeline';
 import PlatformBreakdown from '@/components/report/PlatformBreakdown';
@@ -590,9 +591,7 @@ export default function ReportViewerPage() {
                 );
                 if (mitigationSection) {
                   return (
-                    <div className="prose prose-sm prose-invert max-w-none">
-                      <ReactMarkdown>{mitigationSection.content}</ReactMarkdown>
-                    </div>
+                    <SectionRenderer content={mitigationSection.content} />
                   );
                 }
                 return (

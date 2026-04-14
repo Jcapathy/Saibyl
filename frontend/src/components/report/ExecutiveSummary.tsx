@@ -1,4 +1,4 @@
-import ReactMarkdown from 'react-markdown';
+import SectionRenderer from '@/components/report/SectionRenderer';
 
 /** Strip tool-use artifacts and ReACT traces from AI-generated content.
  *  Conservative: only removes full lines that match tool patterns. */
@@ -121,13 +121,9 @@ export default function ExecutiveSummary({
       <div className="bg-[#111820] border border-[#1B2433] rounded-2xl p-6">
         <h2 className="text-[16px] font-bold text-[#E8ECF2] mb-4">Executive Brief</h2>
         {execSection ? (
-          <div className="prose prose-sm prose-invert max-w-none text-[#8B97A8] leading-[1.75]">
-            <ReactMarkdown>{cleanContent(execSection.content)}</ReactMarkdown>
-          </div>
+          <SectionRenderer content={cleanContent(execSection.content)} className="text-[#8B97A8] leading-[1.75]" />
         ) : fallbackContent ? (
-          <div className="prose prose-sm prose-invert max-w-none text-[#8B97A8] leading-[1.75]">
-            <ReactMarkdown>{cleanContent(fallbackContent)}</ReactMarkdown>
-          </div>
+          <SectionRenderer content={cleanContent(fallbackContent)} className="text-[#8B97A8] leading-[1.75]" />
         ) : (
           <p className="text-[14px] text-[#5A6578]">
             Executive summary will appear once the report generation completes.

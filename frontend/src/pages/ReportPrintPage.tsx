@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
+import SectionRenderer from '@/components/report/SectionRenderer';
 import {
   BarChart,
   Bar,
@@ -558,9 +559,7 @@ export default function ReportPrintPage() {
                 color: '#1a1a1a',
               }}
             >
-              <ReactMarkdown>
-                {cleanContent(execSection.content)}
-              </ReactMarkdown>
+              <SectionRenderer content={cleanContent(execSection.content)} printMode />
             </div>
           )}
         </div>
@@ -748,9 +747,7 @@ export default function ReportPrintPage() {
                   color: '#333',
                 }}
               >
-                <ReactMarkdown>
-                  {cleanContent(section.content)}
-                </ReactMarkdown>
+                <SectionRenderer content={cleanContent(section.content)} printMode />
               </div>
             </div>
           ))}
@@ -773,9 +770,7 @@ export default function ReportPrintPage() {
                 color: '#1a1a1a',
               }}
             >
-              <ReactMarkdown>
-                {cleanContent(conclusionFallback.content)}
-              </ReactMarkdown>
+              <SectionRenderer content={cleanContent(conclusionFallback.content)} printMode />
             </div>
           ) : (
             <p style={{ fontSize: 14, color: '#666' }}>
