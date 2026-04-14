@@ -1,14 +1,23 @@
 import SectionRenderer from '@/components/report/SectionRenderer';
 
-/** Strip tool-use artifacts and ReACT traces from AI-generated content.
- *  Conservative: only removes full lines that match tool patterns. */
+/** Strip tool-use artifacts and ReACT traces from AI-generated content. */
 function cleanContent(raw: string): string {
-  return raw
+  // 1. Strip full preamble-through-ANSWER blocks
+  let text = raw.replace(
+    /(?:I'll|I will|Let me)\s+(?:gather|start|begin|analyze|look|pull|search|investigate|examine|collect|retrieve|check|review|query|explore)[\s\S]*?ANSWER:\s*/gi,
+    '',
+  );
+  // 2. Strip standalone ANSWER: markers
+  text = text.replace(/^ANSWER:\s*/gm, '');
+
+  return text
     .split('\n')
     .filter(line => {
       const trimmed = line.trim();
-      // Remove lines that are clearly tool-use artifacts
-      if (/^(?:>\s*)?(?:Tool:|Action:|Observation:|search_web|read_url|get_page)\b/i.test(trimmed)) return false;
+      // Remove TOOL: lines (ReACT tool calls)
+      if (/^(?:>\s*)?TOOL:\s/i.test(trimmed)) return false;
+      // Remove other tool-use artifact patterns
+      if (/^(?:>\s*)?(?:Action:|Observation:|search_web|read_url|get_page)\b/i.test(trimmed)) return false;
       if (/^(?:Using tool|Calling tool|Tool call|Tool output|Tool result)\b/i.test(trimmed)) return false;
       if (/^(?:Thought|Reasoning):\s/i.test(trimmed)) return false;
       return true;
@@ -31,6 +40,7 @@ interface ExecutiveSummaryProps {
   sentiment?: number;
   engagement?: number;
   controversy?: number;
+  controversyLabel?: string;
   riskCount?: number;
 }
 
@@ -54,6 +64,7 @@ export default function ExecutiveSummary({
   sentiment,
   engagement,
   controversy,
+  controversyLabel,
   riskCount,
 }: ExecutiveSummaryProps) {
   // Find the best section to display — try executive/summary/overview, fall back to first section
@@ -87,7 +98,7 @@ export default function ExecutiveSummary({
     },
     {
       label: 'Controversy',
-      value: controversy != null ? controversy.toFixed(2) : '—',
+      value: controversyLabel ?? (controversy != null ? controversy.toFixed(2) : '—'),
       sub: controversy != null
         ? controversy < 0.3 ? 'Low — Minimal polarization' : controversy < 0.6 ? 'Moderate' : 'High — Significant polarization'
         : 'Pending',

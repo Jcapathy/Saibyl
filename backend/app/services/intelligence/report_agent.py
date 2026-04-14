@@ -3,11 +3,13 @@
 # generate_report(simulation_id, config) -> dict
 # generate_ab_comparison_report(simulation_id, config) -> dict
 # get_report_progress(report_id) -> ReportProgress
+# strip_react_artifacts(text) -> str
 # ─────────────────────────────────────────────────────────
 from __future__ import annotations
 
 import asyncio
 import json
+import re
 from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID
@@ -28,6 +30,36 @@ from app.services.intelligence.react_tools import (
 )
 
 logger = structlog.get_logger()
+
+
+# ── Post-processing ─────────────────────────────────────
+
+def strip_react_artifacts(text: str) -> str:
+    """Remove ReACT chain-of-thought / tool-call leakage from LLM output.
+
+    Strips:
+      - Preamble-through-ANSWER blocks ("I'll gather … ANSWER:")
+      - Standalone TOOL: lines
+      - Standalone ANSWER: markers
+      - "Let me start/begin/pull …" preamble lines
+    """
+    # 1. Full blocks: preamble → TOOL calls → ANSWER marker
+    text = re.sub(
+        r"(?:I'll|I will|Let me)\s+(?:gather|start|begin|analyze|look|pull|search"
+        r"|investigate|examine|collect|retrieve|check|review|query|explore).*?ANSWER:\s*",
+        "",
+        text,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+    # 2. Standalone TOOL: lines (e.g. "TOOL: simulation_analytics(sentiment_over_time)")
+    text = re.sub(r"^TOOL:.*$", "", text, flags=re.MULTILINE)
+    # 3. Standalone ANSWER: markers (with or without trailing whitespace)
+    text = re.sub(r"^ANSWER:\s*$", "", text, flags=re.MULTILINE)
+    # 4. Inline ANSWER: at start of text
+    text = re.sub(r"^ANSWER:\s*", "", text)
+    # 5. Collapse blank-line runs left behind
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
 
 
 # ── Config & Models ──────────────────────────────────────
@@ -199,7 +231,7 @@ async def _run_react_loop(
         )
 
         if response.strip().startswith("ANSWER:"):
-            return response.split("ANSWER:", 1)[1].strip()
+            return strip_react_artifacts(response.split("ANSWER:", 1)[1].strip())
 
         if response.strip().startswith("TOOL:"):
             tool_line = response.split("TOOL:", 1)[1].strip()
@@ -209,7 +241,7 @@ async def _run_react_loop(
             evidence.append(f"[Tool: {tool_line}]\n{observation}")
         else:
             # LLM didn't follow format — treat as final answer
-            return response.strip()
+            return strip_react_artifacts(response.strip())
 
     # Max tool calls reached — force answer
     final_prompt = REACT_PROMPT.format(
@@ -224,8 +256,8 @@ async def _run_react_loop(
         temperature=config.temperature,
     )
     if "ANSWER:" in result:
-        return result.split("ANSWER:", 1)[1].strip()
-    return result.strip()
+        return strip_react_artifacts(result.split("ANSWER:", 1)[1].strip())
+    return strip_react_artifacts(result.strip())
 
 
 async def _execute_tool(
@@ -393,12 +425,13 @@ async def generate_report(
             f"## {s.title}\n\n{c}" for s, c in zip(outline.sections, section_contents)
         )
 
-        exec_summary = await llm_complete(
+        exec_summary_raw = await llm_complete(
             messages=[{"role": "user", "content": EXECUTIVE_SUMMARY_PROMPT.format(
                 prediction_goal=sim["prediction_goal"],
                 sections_text=sections_text[:20000],
             )}],
         )
+        exec_summary = strip_react_artifacts(exec_summary_raw)
 
         full_markdown = f"# {sim['name']} — Intelligence Report\n\n## Executive Summary\n\n{exec_summary}\n\n{sections_text}"
 

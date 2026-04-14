@@ -18,12 +18,19 @@ import ReportExport from '@/components/report/ReportExport';
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
+interface Polarization {
+  controversy_score: number | null;
+  polarization_ratio: string | null;
+  valence_switching_pct: number | null;
+}
+
 interface Report {
   id: string;
   simulation_id: string;
   status?: string;
   sections: { section_type?: string; title: string; content: string }[];
   full_markdown: string;
+  polarization?: Polarization;
 }
 
 interface SimDetail {
@@ -108,23 +115,27 @@ function parseReportData(report: Report, sim: SimDetail | null) {
   }
   if (engagement == null) engagement = 0.6; // reasonable default for completed reports
 
-  // --- Controversy ---
+  // --- Controversy: prefer API-computed polarization, fall back to markdown parsing ---
   let controversy: number | undefined;
-  const conPatterns = [
-    /controversy[:\s]*(\d+\.?\d*)/i,
-    /polariz\w*[:\s]*(\d+\.?\d*)/i,
-    /divisive[:\s]*(\d+\.?\d*)/i,
-    /contentiou?s?[:\s]*(\d+\.?\d*)/i,
-  ];
-  for (const pat of conPatterns) {
-    const m = md.match(pat);
-    if (m) {
-      const v = parseFloat(m[1]);
-      controversy = v > 1 ? v / 100 : v;
-      break;
+  if (report.polarization?.controversy_score != null) {
+    controversy = report.polarization.controversy_score;
+  } else {
+    const conPatterns = [
+      /controversy[:\s]*(\d+\.?\d*)/i,
+      /polariz\w*[:\s]*(\d+\.?\d*)/i,
+      /divisive[:\s]*(\d+\.?\d*)/i,
+      /contentiou?s?[:\s]*(\d+\.?\d*)/i,
+    ];
+    for (const pat of conPatterns) {
+      const m = md.match(pat);
+      if (m) {
+        const v = parseFloat(m[1]);
+        controversy = v > 1 ? v / 100 : v;
+        break;
+      }
     }
+    if (controversy == null) controversy = 0.3; // moderate default
   }
-  if (controversy == null) controversy = 0.3; // moderate default
 
   // --- Risk count ---
   let riskCount = 0;
@@ -229,7 +240,16 @@ function parseReportData(report: Report, sim: SimDetail | null) {
     });
   }
 
-  return { sentiment, engagement, controversy, riskCount, timeline, platforms, themes, responses, personas, risks };
+  // Build a display label for the controversy card from API polarization data
+  const pol = report.polarization;
+  let controversyLabel: string | undefined;
+  if (pol?.polarization_ratio && pol.controversy_score != null) {
+    controversyLabel = pol.polarization_ratio;
+  } else if (pol?.valence_switching_pct != null) {
+    controversyLabel = `${pol.valence_switching_pct}%`;
+  }
+
+  return { sentiment, engagement, controversy, controversyLabel, riskCount, timeline, platforms, themes, responses, personas, risks };
 }
 
 /* ------------------------------------------------------------------ */
@@ -546,6 +566,7 @@ export default function ReportViewerPage() {
               sentiment={parsed?.sentiment}
               engagement={parsed?.engagement}
               controversy={parsed?.controversy}
+              controversyLabel={parsed?.controversyLabel}
               riskCount={parsed?.riskCount}
             />
             <SentimentTimeline data={parsed?.timeline} />

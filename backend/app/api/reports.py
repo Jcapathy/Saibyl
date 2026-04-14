@@ -12,11 +12,52 @@ from pydantic import BaseModel
 
 from app.core.auth import get_current_org
 from app.core.database import get_supabase_admin
-from app.services.intelligence.report_agent import get_report_progress
+from app.services.intelligence.report_agent import get_report_progress, strip_react_artifacts
 from app.services.intelligence.report_chat import chat_with_report
 from app.workers.report_tasks import run_generate_report
 
 log = structlog.get_logger()
+
+
+def _compute_polarization(events: list[dict]) -> dict:
+    """Compute polarization metrics from simulation event sentiment values.
+
+    Returns controversy_score (0-1), polarization_ratio (str like "2.7:1"),
+    and valence_switching_pct (int 0-100).
+    """
+    sentiments: list[float] = []
+    for e in events:
+        md = e.get("metadata") or {}
+        s = md.get("sentiment")
+        if s is not None:
+            try:
+                sentiments.append(float(s))
+            except (ValueError, TypeError):
+                pass
+
+    if not sentiments:
+        return {"controversy_score": None, "polarization_ratio": None, "valence_switching_pct": None}
+
+    # Extreme-to-moderate ratio: |sentiment| > 0.5 vs |sentiment| <= 0.5
+    extreme = sum(1 for s in sentiments if abs(s) > 0.5)
+    moderate = max(sum(1 for s in sentiments if abs(s) <= 0.5), 1)
+    ratio = round(extreme / moderate, 1)
+
+    # Valence switching: % of consecutive pairs that cross the zero line
+    switches = 0
+    for i in range(1, len(sentiments)):
+        if (sentiments[i] > 0) != (sentiments[i - 1] > 0):
+            switches += 1
+    switching_pct = round(switches / max(len(sentiments) - 1, 1) * 100)
+
+    # Normalize ratio to 0-1 scale (ratio of 5:1+ saturates at 1.0)
+    controversy_score = round(min(1.0, ratio / 5.0), 2)
+
+    return {
+        "controversy_score": controversy_score,
+        "polarization_ratio": f"{ratio}:1",
+        "valence_switching_pct": switching_pct,
+    }
 
 
 async def _safe_task(coro, name: str):
@@ -117,16 +158,27 @@ async def get_reports_by_simulation(sim_id: str, auth: dict = Depends(get_curren
         .execute()
     )
 
-    # Return shape the frontend expects
+    # Compute polarization metrics from simulation events
+    events = (
+        admin.table("simulation_events")
+        .select("metadata")
+        .eq("simulation_id", sim_id)
+        .limit(2000)
+        .execute()
+    ).data or []
+    polarization = _compute_polarization(events)
+
+    # Return shape the frontend expects — strip any ReACT artifacts from content
     return {
         "id": report["id"],
         "simulation_id": report["simulation_id"],
         "status": report.get("status"),
         "sections": [
-            {"title": s["title"], "content": s.get("content") or ""}
+            {"title": s["title"], "content": strip_react_artifacts(s.get("content") or "")}
             for s in (sections_result.data or [])
         ],
-        "full_markdown": report.get("markdown_content") or "",
+        "full_markdown": strip_react_artifacts(report.get("markdown_content") or ""),
+        "polarization": polarization,
     }
 
 
@@ -238,7 +290,7 @@ async def export_report(id: str, body: ExportReportBody, auth: dict = Depends(ge
         raise HTTPException(status_code=404, detail="Report not found")
 
     rpt = report.data
-    markdown = rpt.get("markdown_content") or ""
+    markdown = strip_react_artifacts(rpt.get("markdown_content") or "")
     title = rpt.get("title") or "Report"
     safe_title = re.sub(r"[^a-zA-Z0-9_\- ]", "", title)[:80].strip()
 
@@ -257,7 +309,7 @@ async def export_report(id: str, body: ExportReportBody, auth: dict = Depends(ge
             "title": title,
             "simulation_id": rpt["simulation_id"],
             "status": rpt.get("status"),
-            "sections": [{"title": s["title"], "content": s.get("content") or ""} for s in sections],
+            "sections": [{"title": s["title"], "content": strip_react_artifacts(s.get("content") or "")} for s in sections],
             "full_markdown": markdown,
         }
         buf = io.BytesIO(json.dumps(payload, indent=2, ensure_ascii=False).encode("utf-8"))
@@ -310,7 +362,7 @@ async def export_report(id: str, body: ExportReportBody, auth: dict = Depends(ge
         for sec in sections:
             slide = prs.slides.add_slide(prs.slide_layouts[1])
             slide.shapes.title.text = sec["title"]
-            content = sec.get("content") or ""
+            content = strip_react_artifacts(sec.get("content") or "")
             # Strip markdown formatting for plain text slides
             plain = re.sub(r"[#*_`>]", "", content)
             tf = slide.placeholders[1].text_frame

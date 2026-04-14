@@ -21,12 +21,19 @@ import api from '@/lib/api';
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
+interface Polarization {
+  controversy_score: number | null;
+  polarization_ratio: string | null;
+  valence_switching_pct: number | null;
+}
+
 interface Report {
   id: string;
   simulation_id: string;
   status?: string;
   sections: { section_type?: string; title: string; content: string }[];
   full_markdown: string;
+  polarization?: Polarization;
 }
 
 interface SimDetail {
@@ -46,22 +53,23 @@ interface SimDetail {
 /* ------------------------------------------------------------------ */
 
 function cleanContent(raw: string): string {
-  return raw
+  // 1. Strip full preamble-through-ANSWER blocks
+  let text = raw.replace(
+    /(?:I'll|I will|Let me)\s+(?:gather|start|begin|analyze|look|pull|search|investigate|examine|collect|retrieve|check|review|query|explore)[\s\S]*?ANSWER:\s*/gi,
+    '',
+  );
+  // 2. Strip standalone ANSWER: markers
+  text = text.replace(/^ANSWER:\s*/gm, '');
+
+  return text
     .split('\n')
     .filter((line) => {
       const trimmed = line.trim();
-      if (
-        /^(?:>\s*)?(?:Tool:|Action:|Observation:|search_web|read_url|get_page)\b/i.test(
-          trimmed,
-        )
-      )
-        return false;
-      if (
-        /^(?:Using tool|Calling tool|Tool call|Tool output|Tool result)\b/i.test(
-          trimmed,
-        )
-      )
-        return false;
+      // Remove TOOL: lines (ReACT tool calls)
+      if (/^(?:>\s*)?TOOL:\s/i.test(trimmed)) return false;
+      // Remove other tool-use artifact patterns
+      if (/^(?:>\s*)?(?:Action:|Observation:|search_web|read_url|get_page)\b/i.test(trimmed)) return false;
+      if (/^(?:Using tool|Calling tool|Tool call|Tool output|Tool result)\b/i.test(trimmed)) return false;
       if (/^(?:Thought|Reasoning):\s/i.test(trimmed)) return false;
       return true;
     })
@@ -83,10 +91,11 @@ const PLATFORM_NAMES: Record<string, string> = {
 };
 
 /** Try to parse sentiment/engagement/controversy from markdown text */
-function parseMetrics(md: string) {
+function parseMetrics(md: string, polarization?: Polarization) {
   let sentiment: number | null = null;
   let engagement: number | null = null;
   let controversy: number | null = null;
+  let controversyLabel: string | null = null;
 
   // Sentiment
   const sentPatterns = [
@@ -128,21 +137,26 @@ function parseMetrics(md: string) {
     }
   }
 
-  // Controversy
-  const conPatterns = [
-    /controversy[:\s]*(\d+\.?\d*)/i,
-    /polariz\w*[:\s]*(\d+\.?\d*)/i,
-  ];
-  for (const pat of conPatterns) {
-    const m = md.match(pat);
-    if (m) {
-      const v = parseFloat(m[1]);
-      controversy = v > 1 ? v / 100 : v;
-      break;
+  // Controversy: prefer API-computed polarization
+  if (polarization?.controversy_score != null) {
+    controversy = polarization.controversy_score;
+    controversyLabel = polarization.polarization_ratio ?? `${polarization.valence_switching_pct ?? 0}%`;
+  } else {
+    const conPatterns = [
+      /controversy[:\s]*(\d+\.?\d*)/i,
+      /polariz\w*[:\s]*(\d+\.?\d*)/i,
+    ];
+    for (const pat of conPatterns) {
+      const m = md.match(pat);
+      if (m) {
+        const v = parseFloat(m[1]);
+        controversy = v > 1 ? v / 100 : v;
+        break;
+      }
     }
   }
 
-  return { sentiment, engagement, controversy };
+  return { sentiment, engagement, controversy, controversyLabel };
 }
 
 /* ------------------------------------------------------------------ */
@@ -195,7 +209,7 @@ export default function ReportPrintPage() {
   /* ---------------------------------------------------------------- */
 
   const metrics = report
-    ? parseMetrics(report.full_markdown || '')
+    ? parseMetrics(report.full_markdown || '', report.polarization)
     : null;
 
   // Find executive summary section
@@ -539,9 +553,10 @@ export default function ReportPrintPage() {
               <MetricBox
                 label="Controversy"
                 value={
-                  metrics.controversy != null
-                    ? `${Math.round(metrics.controversy * 100)}%`
-                    : 'N/A'
+                  metrics.controversyLabel
+                    ?? (metrics.controversy != null
+                      ? `${Math.round(metrics.controversy * 100)}%`
+                      : 'N/A')
                 }
               />
               <MetricBox
