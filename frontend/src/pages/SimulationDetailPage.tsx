@@ -285,11 +285,9 @@ export default function SimulationDetailPage() {
             </div>
             <button
               onClick={handleRunNow}
-              className="relative px-8 py-3 rounded-xl text-white font-semibold text-sm overflow-hidden transition-all hover:scale-[1.02]"
+              className="px-8 py-3 rounded-xl bg-[#C9A227] text-[#070B14] font-semibold text-sm transition-all hover:bg-[#D4AF37] hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(201,162,39,0.3)]"
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-[#C9A227] to-[#2563EB]" />
-              <div className="absolute inset-0 animate-glow-pulse rounded-xl" />
-              <span className="relative">Run Simulation →</span>
+              Run Simulation →
             </button>
           </div>
         )}

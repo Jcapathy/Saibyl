@@ -379,10 +379,9 @@ export default function NewSimulationPage() {
                       <button
                         onClick={handleCreateCustomPack}
                         disabled={creatingCustom || !customName.trim() || !customDesc.trim()}
-                        className="relative px-6 py-2.5 rounded-xl text-white font-medium text-sm overflow-hidden disabled:opacity-50 transition-all hover:scale-[1.02]"
+                        className="px-6 py-2.5 rounded-xl bg-[#C9A227] text-[#070B14] font-medium text-sm disabled:opacity-50 transition-all hover:bg-[#D4AF37] hover:-translate-y-0.5"
                       >
-                        <div className="absolute inset-0 bg-gradient-to-r from-[#C9A227] to-[#2563EB]" />
-                        <span className="relative">{creatingCustom ? 'Generating...' : 'Create Persona'}</span>
+                        {creatingCustom ? 'Generating...' : 'Create Persona'}
                       </button>
                     </div>
                   </motion.div>
@@ -490,11 +489,9 @@ export default function NewSimulationPage() {
               <button
                 onClick={handleSubmit}
                 disabled={submitting}
-                className="relative px-8 py-2.5 rounded-xl text-white font-semibold text-[14px] overflow-hidden disabled:opacity-50 transition-all hover:scale-[1.02]"
+                className="px-8 py-2.5 rounded-xl bg-[#C9A227] text-[#070B14] font-semibold text-[14px] disabled:opacity-50 transition-all hover:bg-[#D4AF37] hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(201,162,39,0.3)]"
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-[#C9A227] to-[#2563EB]" />
-                <div className="absolute inset-0 animate-glow-pulse rounded-xl" />
-                <span className="relative">{submitting ? 'Launching...' : 'Start Simulation →'}</span>
+                {submitting ? 'Launching...' : 'Start Simulation →'}
               </button>
             )}
           </div>

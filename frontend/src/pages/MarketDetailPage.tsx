@@ -191,7 +191,7 @@ export default function MarketDetailPage() {
                   <span className="text-[13px] text-saibyl-muted w-12">{o.label}</span>
                   <div className="flex-1 h-2 bg-saibyl-elevated rounded-full overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-gradient-to-r from-saibyl-gold to-saibyl-blue"
+                      className="h-full rounded-full bg-gradient-to-r from-[#5B5FEE] to-[#00D4FF]"
                       style={{ width: `${Math.round(o.current_probability * 100)}%` }}
                     />
                   </div>
@@ -209,10 +209,9 @@ export default function MarketDetailPage() {
               <button
                 onClick={runPrediction}
                 disabled={predicting}
-                className="relative flex-1 py-3 rounded-xl text-white font-medium text-[14px] transition-all hover:scale-[1.01] disabled:opacity-40 overflow-hidden"
+                className="flex-1 py-3 rounded-xl bg-[#C9A227] text-[#070B14] font-medium text-[14px] transition-all hover:bg-[#D4AF37] hover:-translate-y-0.5 disabled:opacity-40"
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-[#C9A227] to-[#2563EB]" />
-                <span className="relative">{predicting ? 'Running prediction...' : 'Run Saibyl Prediction'}</span>
+                {predicting ? 'Running prediction...' : 'Run Saibyl Prediction'}
               </button>
               <button
                 onClick={refresh}

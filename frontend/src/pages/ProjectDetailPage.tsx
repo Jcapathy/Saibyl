@@ -214,10 +214,9 @@ export default function ProjectDetailPage() {
                 </div>
                 <button
                   onClick={handleRunSimulation}
-                  className="relative px-5 py-2 rounded-lg text-white font-medium text-sm overflow-hidden transition-all hover:scale-[1.02] shrink-0"
+                  className="px-5 py-2 rounded-lg bg-[#C9A227] text-[#070B14] font-medium text-sm transition-all hover:bg-[#D4AF37] hover:-translate-y-0.5 shrink-0"
                 >
-                  <div className="absolute inset-0 bg-gradient-to-r from-[#C9A227] to-[#2563EB]" />
-                  <span className="relative">New Simulation →</span>
+                  New Simulation →
                 </button>
               </div>
             )}
