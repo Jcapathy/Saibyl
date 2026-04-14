@@ -89,7 +89,19 @@ def _extract_text(file_bytes: bytes, file_type: str) -> tuple[str, str, int | No
                 text = "\n\n".join(str(el) for el in elements)
                 Path(tmp.name).unlink(missing_ok=True)
         except ImportError:
-            logger.warning("unstructured not available, falling back to raw text")
+            # Fallback to python-docx (lighter dependency)
+            try:
+                import docx as _docx
+                import io as _io
+
+                doc = _docx.Document(_io.BytesIO(file_bytes))
+                paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+                if paragraphs:
+                    text = "\n\n".join(paragraphs)
+                else:
+                    logger.warning("docx_empty_extraction", file_type=file_type)
+            except Exception:
+                logger.warning("docx_extraction_failed, falling back to raw text")
 
     return text, encoding, None
 

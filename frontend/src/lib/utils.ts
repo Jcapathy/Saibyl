@@ -22,6 +22,11 @@ export function cleanContent(raw: string): string {
     new RegExp(`(?:I'll|I will|Let me)\\s+(?:\\w+\\s+)*?(?:${PREAMBLE_VERBS})\\b[^.]*\\.\\s*`, 'gi'),
     '',
   );
+  // 1c. Broader self-referential preambles ("I have extensive evidence..., but ##")
+  text = text.replace(
+    /^(?:I have|I've|Based on|From the|Using the|After)(?:\s+\w+){0,5}?\s+(?:evidence|data|research|analysis|findings|information|results|rounds?)\b[\s\S]*?(?=\n##|\n\n)/gim,
+    '',
+  );
   // 2. Strip standalone ANSWER: markers
   text = text.replace(/^ANSWER:\s*/gm, '');
 

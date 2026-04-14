@@ -389,19 +389,19 @@ export default function ReportPrintPage() {
         {/* ============================================================ */}
         <div style={{ pageBreakAfter: 'always' }}>
           {/* Logo */}
-          <div style={{ textAlign: 'center', marginTop: 80 }}>
+          <div style={{ textAlign: 'center', marginTop: 60 }}>
             <img
               src="/logo-mark.svg"
               alt="Saibyl"
-              style={{ width: 48, height: 48, margin: '0 auto' }}
+              style={{ width: 96, height: 96, margin: '0 auto' }}
             />
             <div
               style={{
                 fontWeight: 800,
-                fontSize: 14,
-                letterSpacing: '0.3em',
+                fontSize: 28,
+                letterSpacing: '0.35em',
                 color: '#5B5FEE',
-                marginTop: 12,
+                marginTop: 16,
               }}
             >
               SAIBYL

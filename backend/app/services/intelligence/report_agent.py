@@ -78,6 +78,16 @@ def clean_report_output(text: str) -> str:
         text,
         flags=re.IGNORECASE,
     )
+    # 1d. Broader self-referential preambles ("I have extensive evidence..., but ##")
+    text = re.sub(
+        r"^(?:I have|I've|Based on|From the|Using the|After)"
+        r"(?:\s+\w+){0,5}?\s+"
+        r"(?:evidence|data|research|analysis|findings|information|results|rounds?)\b"
+        r".*?(?=\n##|\n\n)",
+        "",
+        text,
+        flags=re.DOTALL | re.IGNORECASE | re.MULTILINE,
+    )
     # 2. All standalone TOOL: call lines
     text = re.sub(r"^TOOL:\s*.*$", "", text, flags=re.MULTILINE)
     # 3. All ANSWER: markers at start of any line (strip marker, keep content after it)
