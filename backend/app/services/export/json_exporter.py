@@ -13,6 +13,7 @@ from uuid import UUID
 import structlog
 
 from app.core.database import get_supabase_admin
+from app.services.intelligence.report_agent import clean_report_output
 
 logger = structlog.get_logger()
 
@@ -59,7 +60,7 @@ async def export_report_json(report_id: UUID) -> bytes:
             {
                 "index": s["section_index"],
                 "title": s["title"],
-                "content": s.get("content"),
+                "content": clean_report_output(s.get("content") or ""),
                 "tool_calls": s.get("tool_calls", []),
             }
             for s in sections

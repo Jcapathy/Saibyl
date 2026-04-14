@@ -278,10 +278,10 @@ export default function ReportPrintPage() {
   const neutralPct = 100 - positivePct - negativePct;
   const sentimentDistribution = [
     { name: 'Positive', value: positivePct },
-    { name: 'Neutral', value: Math.max(0, neutralPct) },
+    { name: 'Moderate/Undecided', value: Math.max(0, neutralPct) },
     { name: 'Negative', value: negativePct },
   ];
-  const PIE_COLORS = ['#16a34a', '#ca8a04', '#dc2626'];
+  const PIE_COLORS = ['#34D399', '#D4A84B', '#F87171'];
 
   // Per-platform cards
   const platformCards = (simulation?.platforms ?? []).map((p, i) => {

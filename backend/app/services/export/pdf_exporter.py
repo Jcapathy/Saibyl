@@ -18,7 +18,7 @@ from app.services.export.chart_renderer import (
     render_sentiment_chart,
 )
 from app.services.intelligence.react_tools import simulation_analytics
-from app.services.intelligence.report_agent import strip_react_artifacts
+from app.services.intelligence.report_agent import clean_report_output
 
 logger = structlog.get_logger()
 
@@ -81,7 +81,7 @@ async def export_report_pdf(report_id: UUID) -> bytes:
     # Build HTML
     sections_html = ""
     for s in sections:
-        content = strip_react_artifacts(s.get("content") or "").replace("\n", "<br>")
+        content = clean_report_output(s.get("content") or "").replace("\n", "<br>")
         sections_html += f"""
         <div class="section">
             <h2>{s['title']}</h2>

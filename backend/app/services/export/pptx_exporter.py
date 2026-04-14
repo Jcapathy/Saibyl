@@ -19,6 +19,7 @@ from app.services.export.chart_renderer import (
     render_sentiment_chart,
 )
 from app.services.intelligence.react_tools import simulation_analytics
+from app.services.intelligence.report_agent import clean_report_output
 
 logger = structlog.get_logger()
 
@@ -105,7 +106,7 @@ async def export_report_pptx(report_id: UUID) -> bytes:
 
     # 3. One slide per section
     for s in sections:
-        content = s.get("content") or ""
+        content = clean_report_output(s.get("content") or "")
         bullets = [line.strip() for line in content.split("\n") if line.strip()][:5]
         if bullets:
             _add_content_slide(prs, s["title"], bullets)

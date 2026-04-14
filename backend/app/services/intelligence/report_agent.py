@@ -3,7 +3,8 @@
 # generate_report(simulation_id, config) -> dict
 # generate_ab_comparison_report(simulation_id, config) -> dict
 # get_report_progress(report_id) -> ReportProgress
-# strip_react_artifacts(text) -> str
+# clean_report_output(text) -> str
+# strip_react_artifacts(text) -> str   (alias for clean_report_output)
 # ─────────────────────────────────────────────────────────
 from __future__ import annotations
 
@@ -38,41 +39,57 @@ _PREAMBLE_VERBS = (
     r"gather|start|begin|analyze|look|pull|search|investigate|examine"
     r"|collect|retrieve|check|review|query|explore|write|assess|evaluate"
     r"|compile|synthesize|research|identify|determine|provide"
+    r"|systematically"
 )
 
-def strip_react_artifacts(text: str) -> str:
-    """Remove ReACT chain-of-thought / tool-call leakage from LLM output.
+
+def clean_report_output(text: str) -> str:
+    """Sanitise raw LLM text before storage **and** before rendering.
+
+    Applied belt-and-suspenders: once when content is written to the DB,
+    and again when it is read for display / export.
 
     Strips:
-      - Preamble-through-ANSWER blocks ("I'll gather … ANSWER:")
-      - Preamble lines with no ANSWER (e.g. "I'll systematically gather … section.")
-      - Standalone TOOL: lines
-      - Standalone ANSWER: markers
+      1. Chain-of-thought preamble blocks through ANSWER: marker
+      2. Preamble sentences without a following ANSWER:
+      3. All standalone TOOL: call lines
+      4. Orphaned ANSWER: markers
+      5. Collapses resulting multi-blank-line runs
     """
-    # 1a. Full blocks: preamble → (optional TOOL calls) → ANSWER marker
+    # 1a. Full preamble-through-ANSWER blocks (dotAll for multiline CoT)
+    text = re.sub(
+        r"I'll\s+(?:gather|systematically|start by).*?ANSWER:\s*",
+        "",
+        text,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+    # 1b. Broader preamble-through-ANSWER (covers "I will", "Let me", etc.)
     text = re.sub(
         r"(?:I'll|I will|Let me)\s+(?:\w+\s+)*?(?:" + _PREAMBLE_VERBS + r").*?ANSWER:\s*",
         "",
         text,
         flags=re.DOTALL | re.IGNORECASE,
     )
-    # 1b. Preamble sentences NOT followed by ANSWER: (stop at sentence-ending period)
-    #     Allows optional adverbs between "I'll" and the verb.
+    # 1c. Preamble sentences NOT followed by ANSWER: (stop at sentence period)
     text = re.sub(
         r"(?:I'll|I will|Let me)\s+(?:\w+\s+)*?(?:" + _PREAMBLE_VERBS + r")\b[^.]*\.\s*",
         "",
         text,
         flags=re.IGNORECASE,
     )
-    # 2. Standalone TOOL: lines (e.g. "TOOL: simulation_analytics(sentiment_over_time)")
-    text = re.sub(r"^TOOL:.*$", "", text, flags=re.MULTILINE)
-    # 3. Standalone ANSWER: markers (with or without trailing whitespace)
+    # 2. All standalone TOOL: call lines
+    text = re.sub(r"^TOOL:\s*.*$", "", text, flags=re.MULTILINE)
+    # 3. Orphaned ANSWER: markers (empty line or whitespace-only after marker)
     text = re.sub(r"^ANSWER:\s*$", "", text, flags=re.MULTILINE)
-    # 4. Inline ANSWER: at start of text
+    # 4. Inline ANSWER: at start of remaining text
     text = re.sub(r"^ANSWER:\s*", "", text)
-    # 5. Collapse blank-line runs left behind
+    # 5. Collapse triple+ blank lines to a single blank line
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
+
+
+# Backward-compatible alias — existing imports still work
+strip_react_artifacts = clean_report_output
 
 
 # ── Config & Models ──────────────────────────────────────
@@ -174,20 +191,74 @@ QUALITY REQUIREMENTS for your ANSWER:
 
 Be analytical and data-driven. Synthesize across multiple data sources. Do NOT produce thin, surface-level summaries."""
 
-EXECUTIVE_SUMMARY_PROMPT = """Write a comprehensive executive summary (4-6 paragraphs) for this predictive intelligence report.
+EXECUTIVE_SUMMARY_PROMPT = """Write the Executive Summary for this predictive intelligence report.
+You MUST follow the exact structure below — Parts A through E, in order.
+Do NOT begin the executive summary with data tables, methodology descriptions, or round-by-round analysis.
+Begin with a plain-English situation brief, then numbered key findings, then the bottom line recommendation.
+Data tables come last as supporting evidence.
 
+=== SIMULATION CONTEXT ===
 Prediction goal: {prediction_goal}
+Platforms: {platforms}
+Agent count: {agent_count}
+Rounds completed: {rounds}
+Total events: {event_count}
+Polarization ratio (extreme-to-moderate): {polarization_ratio}
+Polarization controversy score (0-1): {controversy_score}
 
-Report sections:
+=== REPORT SECTIONS (your evidence base) ===
 {sections_text}
 
-The summary should:
-1. State the key prediction/finding upfront with specific metrics
-2. Highlight the most significant insights with data points (sentiment scores, engagement numbers)
-3. Describe the overall sentiment trajectory arc and where it ended
-4. Identify the most important agent archetypes/clusters and their behavior
-5. Note any surprising or counterintuitive findings
-6. End with a forecast: what these patterns predict if trends continue, with confidence level and key caveats"""
+=== MANDATORY OUTPUT STRUCTURE ===
+
+### Part A: Situation Brief
+Write 2-3 sentences MAX in plain English. Summarise what was simulated, for whom, and why it matters.
+No jargon. No metrics. A CEO who has never seen Saibyl should understand the scenario in 10 seconds.
+Example: "Saibyl simulated public reaction to a hypothetical LA Times investigative piece attacking \
+Spencer Pratt's mayoral candidacy. 40 synthetic agents across 4 platforms debated the narrative over \
+5 rounds, modeling how voters, media, and political operatives would respond if this story broke."
+
+### Part B: Key Findings
+Write 3-5 numbered bullet points. Each is ONE sentence with ONE supporting number.
+These are the "so what" takeaways — the headline insights a decision-maker needs.
+Format each as: **Bold headline claim.** Supporting sentence with a specific metric.
+Example:
+1. **The attack backfires on Bass.** Public sentiment toward Bass declined from -0.05 to -0.64 across five rounds with no recovery.
+2. **The moderate middle is collapsing.** Conflicted Moderates shrank from 35% to 21%, with the majority migrating toward anti-Bass positions.
+3. **Twitter/X is the narrative battleground.** Sentiment hit -0.62 on Twitter/X vs. -0.11 on LinkedIn — a 0.51 cross-platform divergence gap.
+
+### Part C: Bottom Line
+Write 1-2 sentences in **bold markdown**. State the single most important strategic implication.
+What should the reader DO with this information? This is a recommendation, not a summary.
+Example: **"Spencer Pratt should amplify the attack narrative rather than defend against it. \
+The simulation shows every attack on Pratt drives sympathy toward him and permanently erodes Bass's position."**
+
+### Part D: Stat Cards
+Output exactly this markdown structure with values filled from your analysis:
+
+| Metric | Value | Label |
+|--------|-------|-------|
+| Sentiment | <overall sentiment score, signed decimal e.g. -0.42> | <Strongly Positive/Positive/Mixed/Negative/Strongly Negative> |
+| Engagement | <engagement score X.X / 10> | <High virality potential OR Moderate reach> |
+| Polarization Ratio | {polarization_ratio} | <Low/Moderate/High — description> |
+| Platforms | <count of platforms> | <comma-separated platform names> |
+| Sentiment Trajectory | <directional summary e.g. "Topic A: -0.59 ↓ / Topic B: +0.40 ↑"> | <Net shift description> |
+
+IMPORTANT for Polarization Ratio: Use the provided value "{polarization_ratio}". Label it as:
+- Low (< 1.5:1): minimal polarization
+- Moderate (1.5:1 - 3:1): notable division
+- High (> 3:1): significant polarization
+
+IMPORTANT for Sentiment Trajectory: Show the directional arrow and net change for the primary \
+subjects/topics in the simulation. Use ↑ for positive movement, ↓ for negative, → for flat.
+
+### Part E: Round-by-Round Evidence
+NOW and only now, provide the supporting data tables:
+1. A round-by-round sentiment progression table (columns: Round, Overall Sentiment, Key Shift, Notable Event)
+2. Brief narrative of the polarization dynamics — which archetypes moved, when, and why
+3. Any platform-specific divergences worth highlighting
+
+This section is SUPPORTING EVIDENCE for the Key Findings above, not the opening content."""
 
 AB_COMPARISON_PROMPT = """Compare the two simulation variants and determine a winner.
 
@@ -210,6 +281,76 @@ class _WinnerResult(BaseModel):
     confidence: float
     reasoning: str
     key_differences: list[str]
+
+
+CONCLUSION_PROMPT = """You are a senior political/crisis strategist writing the concluding section \
+of a predictive intelligence report for a C-suite audience. Be direct. Be specific. Every \
+recommendation must cite simulation data. Do not hedge excessively. The client is paying for \
+decisive intelligence, not academic caution.
+
+=== SIMULATION CONTEXT ===
+Prediction goal: {prediction_goal}
+Platforms: {platforms}
+Agent count: {agent_count}
+Rounds completed: {rounds}
+Total events: {event_count}
+Polarization ratio (extreme-to-moderate): {polarization_ratio}
+Controversy score (0-1): {controversy_score}
+
+=== REPORT SECTIONS (your evidence base) ===
+{sections_text}
+
+=== MANDATORY OUTPUT STRUCTURE ===
+
+Write the section titled "Strategic Implications & Recommended Actions" using EXACTLY the \
+sub-sections below. Do NOT add preamble, methodology notes, or throat-clearing. Start writing \
+the first sub-section immediately.
+
+### 5.1 — Situation Assessment
+
+Write 2-3 sentences restating the core finding in strategic terms.
+NOT "sentiment declined" — instead: "the narrative environment is structurally \
+favorable/unfavorable for [subject] because..."
+Frame the situation as an opportunity or threat that demands specific action.
+
+### 5.2 — Recommended Actions
+
+Write 3-5 numbered recommendations. Each MUST follow this exact format:
+
+**[Action Verb]: [Specific recommendation naming the platform, audience segment, and timeframe]**
+- **Evidence:** [Cite the specific simulation finding — cluster migration, platform sentiment delta, archetype behavior shift]
+- **Timeline:** [When to execute — must be within 7-14 days]
+- **Expected Impact:** [What the simulation data predicts will happen if this action is taken]
+
+Requirements for each recommendation:
+- Be SPECIFIC: name the platform (Twitter/X, Instagram, LinkedIn, etc.), the audience segment \
+(e.g., "Conflicted Moderates", "Media Watchdogs"), and the timeframe
+- Be GROUNDED: cite the exact metric that supports it (sentiment score, percentage shift, \
+archetype migration rate)
+- Be ACTIONABLE within 7-14 days — no vague "build a long-term strategy" recommendations
+- Prioritise recommendations by expected impact (highest-impact first)
+
+### 5.3 — Risks & Watch Items
+
+Write 2-3 items identifying what could change the trajectory. For each:
+- Name the specific risk or scenario
+- Cite the simulation evidence that suggests this risk is plausible (e.g., an archetype that \
+showed instability, a platform where sentiment oscillated rather than converged)
+- State what the reader should monitor and what trigger would indicate the risk is materialising
+
+### 5.4 — Confidence Assessment
+
+State the overall confidence level: **High**, **Medium**, or **Low**.
+
+Then justify it based on these three factors (one sentence each):
+1. **Agent count:** {agent_count} agents — state whether this provides adequate statistical \
+representation (>30 = adequate, >50 = strong, <20 = limited)
+2. **Sentiment convergence:** Did archetypes converge toward similar positions (high confidence) \
+or remain split/oscillating (lower confidence)? Cite the evidence.
+3. **Pattern consistency:** Did trajectories sustain directionally (high confidence) or oscillate \
+unpredictably (lower confidence)? Cite the evidence.
+
+End with ONE sentence on the single biggest uncertainty in the findings."""
 
 
 # ── Core functions ───────────────────────────────────────
@@ -419,6 +560,7 @@ async def generate_report(
             content = await _run_react_loop(
                 section, sim_id, sim["prediction_goal"], graph_id, config
             )
+            content = clean_report_output(content)  # sanitise before DB write
 
             admin.table("report_sections").update({
                 "content": content,
@@ -438,15 +580,98 @@ async def generate_report(
             f"## {s.title}\n\n{c}" for s, c in zip(outline.sections, section_contents)
         )
 
-        exec_summary_raw = await llm_complete(
-            messages=[{"role": "user", "content": EXECUTIVE_SUMMARY_PROMPT.format(
+        # Compute polarization metrics for executive summary prompt
+        all_events = admin.table("simulation_events").select(
+            "metadata"
+        ).eq("simulation_id", sim_id).limit(2000).execute().data or []
+        sentiments: list[float] = []
+        for ev in all_events:
+            md = ev.get("metadata") or {}
+            s = md.get("sentiment")
+            if s is not None:
+                try:
+                    sentiments.append(float(s))
+                except (ValueError, TypeError):
+                    pass
+        if sentiments:
+            extreme = sum(1 for s in sentiments if abs(s) > 0.5)
+            moderate = max(sum(1 for s in sentiments if abs(s) <= 0.5), 1)
+            pol_ratio = round(extreme / moderate, 1)
+            polarization_ratio = f"{pol_ratio}:1"
+            controversy_score = str(round(min(1.0, pol_ratio / 5.0), 2))
+        else:
+            polarization_ratio = "N/A"
+            controversy_score = "N/A"
+
+        platforms = ", ".join(sim.get("platforms") or ["twitter_x"])
+        rounds = sim.get("max_rounds", 10)
+
+        # Phase 3b: Generate conclusion — Strategic Implications & Recommended Actions
+        conclusion_idx = len(outline.sections)
+        conclusion_title = "Strategic Implications & Recommended Actions"
+
+        r.publish(f"report:{report_id}:progress", json.dumps({
+            "section_index": conclusion_idx, "status": "generating",
+            "title": conclusion_title,
+        }))
+
+        admin.table("report_sections").insert({
+            "report_id": report_id,
+            "organization_id": org_id,
+            "section_index": conclusion_idx,
+            "title": conclusion_title,
+            "status": "pending",
+        }).execute()
+
+        conclusion_raw = await llm_complete(
+            messages=[{"role": "user", "content": CONCLUSION_PROMPT.format(
                 prediction_goal=sim["prediction_goal"],
+                platforms=platforms,
+                agent_count=agent_count,
+                rounds=rounds,
+                event_count=event_count,
+                polarization_ratio=polarization_ratio,
+                controversy_score=controversy_score,
                 sections_text=sections_text[:20000],
             )}],
         )
-        exec_summary = strip_react_artifacts(exec_summary_raw)
+        conclusion_content = clean_report_output(conclusion_raw)
+
+        admin.table("report_sections").update({
+            "content": conclusion_content,
+            "status": "complete",
+        }).eq("report_id", report_id).eq("section_index", conclusion_idx).execute()
+
+        r.publish(f"report:{report_id}:progress", json.dumps({
+            "section_index": conclusion_idx, "status": "complete",
+            "title": conclusion_title,
+        }))
+
+        # Append conclusion to sections text so exec summary can reference it
+        sections_text += f"\n\n---\n\n## {conclusion_title}\n\n{conclusion_content}"
+
+        # Update section_count to include conclusion
+        admin.table("reports").update({
+            "section_count": conclusion_idx + 1,
+        }).eq("id", report_id).execute()
+
+        # Phase 4: Executive Summary (generated last — sees all sections + conclusion)
+        exec_summary_raw = await llm_complete(
+            messages=[{"role": "user", "content": EXECUTIVE_SUMMARY_PROMPT.format(
+                prediction_goal=sim["prediction_goal"],
+                platforms=platforms,
+                agent_count=agent_count,
+                rounds=rounds,
+                event_count=event_count,
+                polarization_ratio=polarization_ratio,
+                controversy_score=controversy_score,
+                sections_text=sections_text[:20000],
+            )}],
+        )
+        exec_summary = clean_report_output(exec_summary_raw)
 
         full_markdown = f"# {sim['name']} — Intelligence Report\n\n## Executive Summary\n\n{exec_summary}\n\n{sections_text}"
+        full_markdown = clean_report_output(full_markdown)  # sanitise before DB write
 
         admin.table("reports").update({
             "status": "complete",

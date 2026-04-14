@@ -1,6 +1,6 @@
 # PUBLIC INTERFACE
 # ─────────────────────────────────────────────────────────
-# render_sentiment_chart(timeline: list[float]) -> bytes  (PNG)
+# render_sentiment_chart(timeline: list[float], headline: str | None) -> bytes  (PNG)
 # render_heatmap(data: list[dict]) -> bytes  (PNG)
 # render_persona_distribution(data: dict[str, int]) -> bytes  (PNG)
 # render_platform_activity(data: dict[str, int]) -> bytes  (PNG)
@@ -15,21 +15,86 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
+# ── Brand color system (matches frontend CHART_COLORS) ──
+SUBJECT_A = "#6C63FF"   # Purple — Primary entity
+SUBJECT_B = "#00D4FF"   # Cyan — Secondary entity
+NEUTRAL   = "#D4A84B"   # Gold — Moderate / Undecided
+POSITIVE  = "#34D399"   # Green — Positive movement
+NEGATIVE  = "#F87171"   # Red — Negative movement
+
+# Legacy aliases for backward compat (used in pdf_exporter title styling)
 PRIMARY = "#1A3A5C"
-SECONDARY = "#2E6DA4"
-ACCENT = "#C8970A"
 LIGHT_BG = "#F0F4FA"
 
+# Ordered palette for multi-series charts
+PALETTE = [SUBJECT_A, SUBJECT_B, NEUTRAL, POSITIVE, NEGATIVE, "#818CF8"]
 
-def render_sentiment_chart(timeline: list[float]) -> bytes:
-    """Render sentiment over time as a line chart PNG."""
-    fig, ax = plt.subplots(figsize=(8, 3))
+
+def _sentiment_bar_color(v: float) -> str:
+    """Return bar color based on sentiment value — matches frontend sentimentBarColor()."""
+    if v >= 0.2:
+        return POSITIVE
+    if v >= -0.2:
+        return NEUTRAL
+    return NEGATIVE
+
+
+def _find_inflection(timeline: list[float]) -> int | None:
+    """Find the index of the largest single-step sentiment change."""
+    if len(timeline) < 3:
+        return None
+    max_delta = 0.0
+    max_idx = -1
+    for i in range(1, len(timeline)):
+        delta = abs(timeline[i] - timeline[i - 1])
+        if delta > max_delta:
+            max_delta = delta
+            max_idx = i
+    return max_idx if max_delta > 0.1 else None
+
+
+def render_sentiment_chart(timeline: list[float], headline: str | None = None) -> bytes:
+    """Render sentiment over time as a bar chart with inflection annotation."""
+    fig, ax = plt.subplots(figsize=(8, 3.5))
     rounds = list(range(1, len(timeline) + 1))
-    ax.plot(rounds, timeline, color=SECONDARY, linewidth=2, marker="o", markersize=4)
-    ax.axhline(y=0, color="#ccc", linestyle="--", linewidth=0.5)
+
+    # Per-bar coloring based on sentiment value
+    bar_colors = [_sentiment_bar_color(v) for v in timeline]
+    bars = ax.bar(rounds, timeline, color=bar_colors, edgecolor="none", width=0.7)
+
+    # Zero line
+    ax.axhline(y=0, color="#999", linestyle="--", linewidth=0.5)
+
+    # Inflection annotation
+    inflection_idx = _find_inflection(timeline)
+    if inflection_idx is not None:
+        x = rounds[inflection_idx]
+        y = timeline[inflection_idx]
+        prev = timeline[inflection_idx - 1]
+        delta = y - prev
+        sign = "+" if delta > 0 else ""
+        arrow = "↑" if delta > 0 else "↓"
+        ax.annotate(
+            f"Inflection {arrow} {sign}{delta:.2f}",
+            xy=(x, y),
+            xytext=(x, y + (0.2 if y >= 0 else -0.2)),
+            fontsize=8,
+            fontweight="bold",
+            color=NEGATIVE,
+            ha="center",
+            arrowprops=dict(arrowstyle="->", color=NEGATIVE, lw=1.2),
+        )
+        # Highlight the inflection bar with an outline
+        bars[inflection_idx].set_edgecolor(NEGATIVE)
+        bars[inflection_idx].set_linewidth(2)
+
     ax.set_xlabel("Round", fontsize=10)
     ax.set_ylabel("Avg Sentiment", fontsize=10)
-    ax.set_title("Sentiment Over Time", fontsize=12, color=PRIMARY)
+
+    # Use headline as title if provided, otherwise generic title
+    title = headline or "Sentiment Over Time"
+    ax.set_title(title, fontsize=11, color=PRIMARY, fontweight="bold", loc="left")
+
     ax.set_ylim(-1.1, 1.1)
     ax.set_facecolor(LIGHT_BG)
     fig.tight_layout()
@@ -57,12 +122,17 @@ def render_heatmap(data: list[dict]) -> bytes:
         grid[pi][pj] = d["intensity"]
 
     fig, ax = plt.subplots(figsize=(max(6, len(platforms) * 1.2), max(4, len(personas) * 0.6)))
-    im = ax.imshow(grid, cmap="YlOrRd", aspect="auto", vmin=0, vmax=1)
+
+    # Custom colormap using brand colors: Gold (low) → Purple (high)
+    from matplotlib.colors import LinearSegmentedColormap
+    brand_cmap = LinearSegmentedColormap.from_list("brand", [NEUTRAL, SUBJECT_A], N=256)
+
+    im = ax.imshow(grid, cmap=brand_cmap, aspect="auto", vmin=0, vmax=1)
     ax.set_xticks(range(len(platforms)))
     ax.set_xticklabels(platforms, rotation=45, ha="right", fontsize=8)
     ax.set_yticks(range(len(personas)))
     ax.set_yticklabels(personas, fontsize=8)
-    ax.set_title("Activity Heatmap (Persona × Platform)", fontsize=12, color=PRIMARY)
+    ax.set_title("Activity Heatmap (Persona × Platform)", fontsize=12, color=PRIMARY, fontweight="bold", loc="left")
     fig.colorbar(im, ax=ax, shrink=0.8, label="Activity Intensity")
     fig.tight_layout()
     buf = io.BytesIO()
@@ -80,10 +150,13 @@ def render_persona_distribution(data: dict[str, int]) -> bytes:
     labels = list(data.keys())
     values = list(data.values())
 
+    # Cycle through brand palette
+    bar_colors = [PALETTE[i % len(PALETTE)] for i in range(len(labels))]
+
     fig, ax = plt.subplots(figsize=(8, max(3, len(labels) * 0.4)))
-    bars = ax.barh(labels, values, color=SECONDARY)
+    bars = ax.barh(labels, values, color=bar_colors)
     ax.set_xlabel("Count", fontsize=10)
-    ax.set_title("Persona Distribution", fontsize=12, color=PRIMARY)
+    ax.set_title("Persona Distribution", fontsize=12, color=PRIMARY, fontweight="bold", loc="left")
     ax.set_facecolor(LIGHT_BG)
 
     for bar, val in zip(bars, values):
@@ -106,10 +179,13 @@ def render_platform_activity(data: dict[str, int]) -> bytes:
     labels = list(data.keys())
     values = list(data.values())
 
+    # Use brand palette, cycling if more platforms than colors
+    bar_colors = [PALETTE[i % len(PALETTE)] for i in range(len(labels))]
+
     fig, ax = plt.subplots(figsize=(max(5, len(labels) * 1.5), 4))
-    ax.bar(labels, values, color=[SECONDARY, ACCENT, PRIMARY, "#6C757D", "#28A745"][:len(labels)])
+    ax.bar(labels, values, color=bar_colors)
     ax.set_ylabel("Events", fontsize=10)
-    ax.set_title("Platform Activity", fontsize=12, color=PRIMARY)
+    ax.set_title("Platform Activity", fontsize=12, color=PRIMARY, fontweight="bold", loc="left")
     ax.set_facecolor(LIGHT_BG)
     fig.tight_layout()
     buf = io.BytesIO()

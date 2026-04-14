@@ -1,8 +1,9 @@
 import ReactMarkdown from 'react-markdown';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer,
+  ResponsiveContainer, ReferenceLine, Cell,
 } from 'recharts';
+import { CHART_PALETTE, PRINT_PALETTE, sentimentBarColor } from '@/lib/constants';
 
 /* ------------------------------------------------------------------ */
 /*  Markdown table parser                                              */
@@ -13,9 +14,15 @@ interface ParsedTable {
   rows: string[][];
 }
 
-/** Extract markdown tables from content, returning interleaved text and table blocks */
-function splitContentBlocks(content: string): Array<{ type: 'text'; value: string } | { type: 'table'; value: ParsedTable }> {
-  const blocks: Array<{ type: 'text'; value: string } | { type: 'table'; value: ParsedTable }> = [];
+type ContentBlock =
+  | { type: 'text'; value: string }
+  | { type: 'table'; value: ParsedTable; headline?: string };
+
+/** Extract markdown tables from content, returning interleaved text and table blocks.
+ *  If the text block immediately before a table ends with a bold line, pull it out
+ *  as the table/chart's takeaway headline. */
+function splitContentBlocks(content: string): ContentBlock[] {
+  const blocks: ContentBlock[] = [];
   const lines = content.split('\n');
   let textBuffer: string[] = [];
   let i = 0;
@@ -29,6 +36,18 @@ function splitContentBlocks(content: string): Array<{ type: 'text'; value: strin
       i + 1 < lines.length &&
       /^\s*\|?\s*[-:]+[-|:\s]+\s*\|?\s*$/.test(lines[i + 1])
     ) {
+      // Try to extract a takeaway headline from the last line(s) of the text buffer
+      let headline: string | undefined;
+      if (textBuffer.length > 0) {
+        const lastLine = textBuffer[textBuffer.length - 1].trim();
+        // Match bold markdown line: **Some headline text**
+        const boldMatch = lastLine.match(/^\*\*(.+)\*\*$/);
+        if (boldMatch) {
+          headline = boldMatch[1];
+          textBuffer.pop();
+        }
+      }
+
       // Flush text buffer
       if (textBuffer.length > 0) {
         blocks.push({ type: 'text', value: textBuffer.join('\n') });
@@ -56,7 +75,7 @@ function splitContentBlocks(content: string): Array<{ type: 'text'; value: strin
       }
 
       if (rows.length > 0) {
-        blocks.push({ type: 'table', value: { headers, rows } });
+        blocks.push({ type: 'table', value: { headers, rows }, headline });
       }
     } else {
       textBuffer.push(line);
@@ -96,11 +115,58 @@ function isNumericColumn(rows: string[][], colIndex: number): boolean {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Chart colors                                                       */
+/*  Annotation detection                                               */
 /* ------------------------------------------------------------------ */
 
-const CHART_COLORS = ['#5B5FEE', '#00D4FF', '#22C55E', '#F59E0B', '#EF4444', '#818CF8'];
-const PRINT_COLORS = ['#4338ca', '#0891b2', '#16a34a', '#ca8a04', '#dc2626', '#6d28d9'];
+interface ChartAnnotation {
+  /** The x-axis label (e.g. "Round 3") where the annotation goes */
+  x: string;
+  /** Short label displayed on the chart */
+  label: string;
+}
+
+/** Detect inflection points in chart data.
+ *  Looks for the row where the absolute change from the previous row is largest. */
+function detectInflections(
+  data: Array<Record<string, string | number>>,
+  numericKeys: string[],
+): ChartAnnotation[] {
+  if (data.length < 3 || numericKeys.length === 0) return [];
+
+  const key = numericKeys[0]; // use primary series
+  let maxDelta = 0;
+  let maxIdx = -1;
+
+  for (let i = 1; i < data.length; i++) {
+    const prev = data[i - 1][key];
+    const curr = data[i][key];
+    if (typeof prev === 'number' && typeof curr === 'number') {
+      const delta = Math.abs(curr - prev);
+      if (delta > maxDelta) {
+        maxDelta = delta;
+        maxIdx = i;
+      }
+    }
+  }
+
+  if (maxIdx < 1 || maxDelta < 0.05) return [];
+
+  const prev = data[maxIdx - 1][key] as number;
+  const curr = data[maxIdx][key] as number;
+  const direction = curr > prev ? '↑' : '↓';
+  const delta = (curr - prev).toFixed(2);
+  const sign = curr > prev ? '+' : '';
+
+  return [{
+    x: String(data[maxIdx].name),
+    label: `Inflection ${direction} ${sign}${delta}`,
+  }];
+}
+
+/** Check if a header name suggests sentiment data */
+function isSentimentHeader(header: string): boolean {
+  return /sentiment|score|rating|polarity/i.test(header);
+}
 
 /* ------------------------------------------------------------------ */
 /*  Components                                                         */
@@ -109,9 +175,10 @@ const PRINT_COLORS = ['#4338ca', '#0891b2', '#16a34a', '#ca8a04', '#dc2626', '#6
 interface TableChartProps {
   table: ParsedTable;
   printMode?: boolean;
+  headline?: string;
 }
 
-function TableChart({ table, printMode }: TableChartProps) {
+function TableChart({ table, printMode, headline }: TableChartProps) {
   const { headers, rows } = table;
 
   // Find label column (first non-numeric) and numeric columns
@@ -128,7 +195,12 @@ function TableChart({ table, printMode }: TableChartProps) {
 
   // If no numeric columns, render as plain table
   if (numericCols.length === 0) {
-    return <MarkdownTable table={table} printMode={printMode} />;
+    return (
+      <div style={{ marginBottom: 24 }}>
+        {headline && <ChartHeadline text={headline} printMode={printMode} />}
+        <MarkdownTable table={table} printMode={printMode} />
+      </div>
+    );
   }
 
   // Build chart data
@@ -143,13 +215,23 @@ function TableChart({ table, printMode }: TableChartProps) {
     return entry;
   });
 
-  const colors = printMode ? PRINT_COLORS : CHART_COLORS;
+  const colors = printMode ? PRINT_PALETTE : CHART_PALETTE;
   const textColor = printMode ? '#374151' : '#8B97A8';
   const gridColor = printMode ? '#e5e7eb' : '#1B2433';
   const bg = printMode ? '#f9fafb' : '#0D1117';
 
+  // Check if any numeric columns represent sentiment — use semantic coloring
+  const useSentimentColors = numericCols.length === 1 && isSentimentHeader(headers[numericCols[0]]);
+
+  // Detect inflection annotations
+  const numericKeys = numericCols.map(c => headers[c]);
+  const annotations = detectInflections(data, numericKeys);
+  const annotationColor = printMode ? '#dc2626' : '#F87171';
+
   return (
     <div style={{ marginBottom: 24 }}>
+      {headline && <ChartHeadline text={headline} printMode={printMode} />}
+
       {/* Chart */}
       <div
         style={{
@@ -175,8 +257,44 @@ function TableChart({ table, printMode }: TableChartProps) {
               }
             />
             {numericCols.length > 1 && <Legend wrapperStyle={{ fontSize: 11, color: textColor }} />}
-            {numericCols.map((c, idx) => (
-              <Bar key={headers[c]} dataKey={headers[c]} fill={colors[idx % colors.length]} radius={[4, 4, 0, 0]} maxBarSize={40} />
+            {numericCols.map((c, idx) => {
+              if (useSentimentColors) {
+                // Per-bar semantic coloring for sentiment data
+                return (
+                  <Bar
+                    key={headers[c]}
+                    dataKey={headers[c]}
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={40}
+                  >
+                    {data.map((entry, di) => {
+                      const val = entry[headers[c]];
+                      const fill = typeof val === 'number' ? sentimentBarColor(val) : colors[idx % colors.length];
+                      return <Cell key={di} fill={fill} />;
+                    })}
+                  </Bar>
+                );
+              }
+              return (
+                <Bar key={headers[c]} dataKey={headers[c]} fill={colors[idx % colors.length]} radius={[4, 4, 0, 0]} maxBarSize={40} />
+              );
+            })}
+            {/* Inflection annotations */}
+            {annotations.map((a, ai) => (
+              <ReferenceLine
+                key={ai}
+                x={a.x}
+                stroke={annotationColor}
+                strokeDasharray="4 3"
+                strokeWidth={2}
+                label={{
+                  value: a.label,
+                  position: 'top',
+                  fill: annotationColor,
+                  fontSize: 10,
+                  fontWeight: 600,
+                }}
+              />
             ))}
           </BarChart>
         </ResponsiveContainer>
@@ -185,6 +303,23 @@ function TableChart({ table, printMode }: TableChartProps) {
       {/* Data table below chart */}
       <MarkdownTable table={table} printMode={printMode} compact />
     </div>
+  );
+}
+
+/** Bold takeaway headline rendered above a chart */
+function ChartHeadline({ text, printMode }: { text: string; printMode?: boolean }) {
+  return (
+    <p
+      style={{
+        fontWeight: 700,
+        fontSize: 14,
+        color: printMode ? '#111827' : '#E8ECF2',
+        marginBottom: 8,
+        lineHeight: 1.4,
+      }}
+    >
+      {text}
+    </p>
   );
 }
 
@@ -265,7 +400,7 @@ export default function SectionRenderer({ content, printMode, className }: Secti
     <div className={className}>
       {blocks.map((block, i) => {
         if (block.type === 'table') {
-          return <TableChart key={i} table={block.value} printMode={printMode} />;
+          return <TableChart key={i} table={block.value} printMode={printMode} headline={block.headline} />;
         }
         // Text block — render as markdown
         const trimmed = block.value.trim();

@@ -1,4 +1,5 @@
 import SectionRenderer from '@/components/report/SectionRenderer';
+import { classifySentiment } from '@/lib/constants';
 
 const PREAMBLE_VERBS =
   'gather|start|begin|analyze|look|pull|search|investigate|examine|collect|retrieve|check|review|query|explore|write|assess|evaluate|compile|synthesize|research|identify|determine|provide';
@@ -53,18 +54,15 @@ interface ExecutiveSummaryProps {
 }
 
 function sentimentLabel(v: number): string {
-  if (v >= 0.5) return 'Strongly Positive';
-  if (v >= 0.2) return 'Positive';
-  if (v >= -0.2) return 'Mixed';
-  if (v >= -0.5) return 'Negative';
-  return 'Strongly Negative';
+  return classifySentiment(v).label;
 }
 
 function sentimentColor(v: number | undefined): string {
   if (v == null) return 'text-[#8B97A8]';
-  if (v >= 0.2) return 'text-[#22C55E]';
-  if (v >= -0.2) return 'text-[#F59E0B]';
-  return 'text-[#EF4444]';
+  // Static Tailwind classes — must be complete strings for purge scanner
+  if (v >= 0.2) return 'text-[#34D399]';   // CHART_COLORS.positive
+  if (v >= -0.2) return 'text-[#D4A84B]';  // CHART_COLORS.neutral
+  return 'text-[#F87171]';                  // CHART_COLORS.negative
 }
 
 export default function ExecutiveSummary({
@@ -89,36 +87,39 @@ export default function ExecutiveSummary({
       ? report.full_markdown.slice(0, 2000)
       : null;
 
+  // Static Tailwind classes — must be complete strings for the purge scanner
   const stats = [
     {
       label: 'Sentiment',
       value: sentiment != null ? (sentiment >= 0 ? '+' : '') + sentiment.toFixed(2) : '—',
       sub: sentiment != null ? sentimentLabel(sentiment) : 'Pending',
       color: sentimentColor(sentiment),
-      accent: 'bg-gradient-to-r from-[#5B5FEE] to-[#00D4FF]',
+      accent: 'bg-gradient-to-r from-[#6C63FF] to-[#00D4FF]',   // subjectA → subjectB
     },
     {
       label: 'Engagement',
       value: engagement != null ? `${(engagement * 10).toFixed(1)} / 10` : '—',
       sub: engagement != null ? (engagement >= 0.7 ? 'High virality potential' : 'Moderate reach') : 'Pending',
-      color: 'text-[#00D4FF]',
-      accent: 'bg-[#22C55E]',
+      color: 'text-[#00D4FF]',    // subjectB
+      accent: 'bg-[#34D399]',     // positive
     },
     {
-      label: 'Controversy',
+      label: 'Polarization Ratio',
       value: controversyLabel ?? (controversy != null ? controversy.toFixed(2) : '—'),
       sub: controversy != null
-        ? controversy < 0.3 ? 'Low — Minimal polarization' : controversy < 0.6 ? 'Moderate' : 'High — Significant polarization'
+        ? controversy < 0.3 ? 'Low — Minimal polarization' : controversy < 0.6 ? 'Moderate — Notable division' : 'High — Significant polarization'
         : 'Pending',
-      color: controversy != null ? (controversy < 0.3 ? 'text-[#22C55E]' : controversy < 0.6 ? 'text-[#F59E0B]' : 'text-[#EF4444]') : 'text-[#8B97A8]',
-      accent: 'bg-[#F59E0B]',
+      color: controversy != null
+        ? (controversy < 0.3 ? 'text-[#34D399]' : controversy < 0.6 ? 'text-[#D4A84B]' : 'text-[#F87171]')
+        : 'text-[#8B97A8]',
+      accent: 'bg-[#D4A84B]',     // neutral
     },
     {
       label: 'Risks Found',
       value: riskCount != null ? String(riskCount) : '—',
       sub: riskCount != null ? (riskCount === 0 ? 'No risks detected' : `${riskCount} risk${riskCount > 1 ? 's' : ''} identified`) : 'Pending',
-      color: riskCount != null && riskCount > 3 ? 'text-[#EF4444]' : 'text-[#8B97A8]',
-      accent: 'bg-[#EF4444]',
+      color: riskCount != null && riskCount > 3 ? 'text-[#F87171]' : 'text-[#8B97A8]',
+      accent: 'bg-[#F87171]',     // negative
     },
   ];
 

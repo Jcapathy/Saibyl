@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from app.core.auth import get_current_org
 from app.core.database import get_supabase_admin
-from app.services.intelligence.report_agent import get_report_progress, strip_react_artifacts
+from app.services.intelligence.report_agent import clean_report_output, get_report_progress, strip_react_artifacts
 from app.services.intelligence.report_chat import chat_with_report
 from app.workers.report_tasks import run_generate_report
 
