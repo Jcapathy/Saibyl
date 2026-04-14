@@ -20,6 +20,7 @@ import ReportExport from '@/components/report/ReportExport';
 interface Report {
   id: string;
   simulation_id: string;
+  status?: string;
   sections: { section_type?: string; title: string; content: string }[];
   full_markdown: string;
 }
@@ -277,11 +278,12 @@ export default function ReportViewerPage() {
     return parseReportData(report, simulation);
   }, [report, simulation]);
 
-  /* Fetches -------------------------------------------------------- */
+  /* Fetches — polls every 5s while report is still generating ------- */
   useEffect(() => {
     if (!simId) return;
 
     let cancelled = false;
+    let pollTimer: ReturnType<typeof setTimeout> | null = null;
 
     async function load() {
       try {
@@ -290,17 +292,34 @@ export default function ReportViewerPage() {
           api.get(`/simulations/${simId}`),
         ]);
         if (cancelled) return;
-        setReport(reportRes.data);
+
+        const rpt = reportRes.data as Report;
+        setReport(rpt);
         setSimulation(simRes.data);
+        setLoading(false);
+
+        // If report status is not complete, or sections are all empty, keep polling
+        const isIncomplete =
+          rpt.status === 'generating' ||
+          rpt.status === 'pending' ||
+          (!rpt.full_markdown && rpt.sections.every((s: { content: string }) => !s.content));
+
+        if (isIncomplete && !cancelled) {
+          pollTimer = setTimeout(load, 5000);
+        }
       } catch {
-        if (!cancelled) setError(true);
-      } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setError(true);
+          setLoading(false);
+        }
       }
     }
 
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (pollTimer) clearTimeout(pollTimer);
+    };
   }, [simId]);
 
   /* Scroll chat on new messages ------------------------------------ */
@@ -503,6 +522,19 @@ export default function ReportViewerPage() {
 
       {/* ============ Tab Content ============ */}
       <div className="flex-1 overflow-auto p-8">
+
+        {/* Generating banner */}
+        {report.status && report.status !== 'complete' && report.status !== 'completed' && (
+          <div className="mb-6 flex items-center gap-3 px-5 py-4 rounded-2xl bg-[#5B5FEE]/10 border border-[#5B5FEE]/20">
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#5B5FEE] opacity-75" />
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-[#5B5FEE]" />
+            </span>
+            <span className="text-[14px] text-[#E8ECF2]">
+              Report is generating — sections will appear as they complete. This page refreshes automatically.
+            </span>
+          </div>
+        )}
 
         {/* Tab 0 — Executive Summary */}
         {activeTab === 0 && (

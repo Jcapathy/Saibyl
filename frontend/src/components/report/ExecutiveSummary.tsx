@@ -1,14 +1,19 @@
 import ReactMarkdown from 'react-markdown';
 
-/** Strip tool-use artifacts, ReACT traces, and agent internals from AI-generated content */
+/** Strip tool-use artifacts and ReACT traces from AI-generated content.
+ *  Conservative: only removes full lines that match tool patterns. */
 function cleanContent(raw: string): string {
   return raw
-    // Remove tool-use blocks
-    .replace(/(?:using tool|tool call|tool output|tool result|calling tool)[:\s].*?(?=\n\n|\n#|$)/gis, '')
-    // Remove lines starting with common tool prefixes
-    .replace(/^(?:>\s*)?(?:search_web|read_url|get_page|fetch|retrieve|Tool:|Action:|Observation:).*$/gim, '')
-    // Remove ReACT-style reasoning traces
-    .replace(/^(?:Thought|Reasoning|Step \d):\s.*$/gim, '')
+    .split('\n')
+    .filter(line => {
+      const trimmed = line.trim();
+      // Remove lines that are clearly tool-use artifacts
+      if (/^(?:>\s*)?(?:Tool:|Action:|Observation:|search_web|read_url|get_page)\b/i.test(trimmed)) return false;
+      if (/^(?:Using tool|Calling tool|Tool call|Tool output|Tool result)\b/i.test(trimmed)) return false;
+      if (/^(?:Thought|Reasoning):\s/i.test(trimmed)) return false;
+      return true;
+    })
+    .join('\n')
     // Clean up multiple blank lines left behind
     .replace(/\n{3,}/g, '\n\n')
     .trim();
