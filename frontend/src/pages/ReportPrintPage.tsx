@@ -259,15 +259,20 @@ export default function ReportPrintPage() {
   );
 
   // Sentiment distribution for pie chart
-  const sentVal = metrics?.sentiment ?? 0.5;
-  const positivePct = Math.round(Math.max(0, sentVal) * 100);
-  const negativePct = Math.round(
-    Math.max(0, (1 - Math.abs(sentVal)) * 0.4) * 100,
-  );
+  // Map overall sentiment (-1..+1) to a plausible population split
+  const sentVal = metrics?.sentiment ?? 0;
+  // Positive share rises with sentiment, negative share rises as sentiment drops
+  const rawPos = Math.round(Math.max(5, 50 + sentVal * 40));
+  const rawNeg = Math.round(Math.max(5, 50 - sentVal * 40));
+  const rawNeu = Math.max(5, 100 - rawPos - rawNeg);
+  // Normalize to 100%
+  const total = rawPos + rawNeg + rawNeu;
+  const positivePct = Math.round((rawPos / total) * 100);
+  const negativePct = Math.round((rawNeg / total) * 100);
   const neutralPct = 100 - positivePct - negativePct;
   const sentimentDistribution = [
     { name: 'Positive', value: positivePct },
-    { name: 'Moderate/Undecided', value: Math.max(0, neutralPct) },
+    { name: 'Moderate/Undecided', value: neutralPct },
     { name: 'Negative', value: negativePct },
   ];
   const PIE_COLORS = PRINT_PIE_COLORS;
@@ -297,8 +302,10 @@ export default function ReportPrintPage() {
   })();
 
   const sentDistHeadline = (() => {
-    const largest = sentimentDistribution.reduce((a, b) => (a.value > b.value ? a : b));
-    return `${largest.name} sentiment dominated at ${largest.value}% of the population.`;
+    const sorted = [...sentimentDistribution].sort((a, b) => b.value - a.value);
+    const top = sorted[0];
+    const runner = sorted[1];
+    return `${top.name} sentiment led at ${top.value}%, with ${runner.name} at ${runner.value}%.`;
   })();
 
   const platformCardHeadline = (() => {
@@ -801,7 +808,7 @@ export default function ReportPrintPage() {
                 outerRadius={110}
                 dataKey="value"
                 label={({ name, value }: { name?: string; value?: number }) =>
-                  `${name ?? ''}: ${value ?? 0}%`
+                  (value ?? 0) >= 3 ? `${name ?? ''}: ${value ?? 0}%` : ''
                 }
               >
                 {sentimentDistribution.map((_, index) => (
