@@ -196,6 +196,16 @@ export default function ReportPrintPage() {
     };
   }, [simId]);
 
+  /* Set document title so browser print-to-PDF uses the sim name as filename */
+  useEffect(() => {
+    if (simulation?.name) {
+      document.title = `${simulation.name} — Saibyl Report`;
+      return () => {
+        document.title = 'Saibyl — Know the Conversation Before It Happens';
+      };
+    }
+  }, [simulation?.name]);
+
   /* Auto-trigger print after render */
   useEffect(() => {
     if (report && simulation) {

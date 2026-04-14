@@ -62,10 +62,9 @@ export default function ProjectsPage() {
         <h1 className="text-2xl font-bold text-saibyl-platinum">Projects</h1>
         <button
           onClick={() => setShowModal(true)}
-          className="relative inline-flex items-center gap-2 px-4 py-2 rounded-xl text-white font-medium text-sm overflow-hidden transition-all hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(91,95,238,0.25)]"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#C9A227] text-white font-medium text-sm transition-all hover:bg-[#B08D1F] hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(201,162,39,0.25)]"
         >
-          <div className="absolute inset-0 bg-gradient-to-r from-saibyl-gold to-[#4B8BEE]" />
-          <span className="relative">+ New Project</span>
+          + New Project
         </button>
       </div>
 
