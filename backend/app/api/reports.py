@@ -22,19 +22,39 @@ log = structlog.get_logger()
 def _compute_polarization(events: list[dict]) -> dict:
     """Compute polarization metrics from simulation event sentiment values.
 
-    Returns controversy_score (0-1), polarization_ratio (str like "2.7:1"),
+    Uses per-agent sentiment at the final round to compute the extreme-to-moderate
+    ratio.  Returns controversy_score (0-1), polarization_ratio (str like "2.7:1"),
     and valence_switching_pct (int 0-100).
     """
-    sentiments: list[float] = []
+    if not events:
+        return {"controversy_score": None, "polarization_ratio": None, "valence_switching_pct": None}
+
+    # Find the maximum round number (final round)
+    max_round = 0
+    for e in events:
+        rn = e.get("round_number") or 0
+        if rn > max_round:
+            max_round = rn
+
+    # Collect per-agent sentiment at the final round (deduplicated: last event wins)
+    agent_sentiments: dict[str, float] = {}
+    all_sentiments: list[float] = []
     for e in events:
         md = e.get("metadata") or {}
         s = md.get("sentiment")
-        if s is not None:
-            try:
-                sentiments.append(float(s))
-            except (ValueError, TypeError):
-                pass
+        if s is None:
+            continue
+        try:
+            val = float(s)
+        except (ValueError, TypeError):
+            continue
+        all_sentiments.append(val)
+        rn = e.get("round_number") or 0
+        if rn == max_round and e.get("agent_id"):
+            agent_sentiments[e["agent_id"]] = val
 
+    # Use per-agent final-round sentiments for ratio; fall back to all sentiments
+    sentiments = list(agent_sentiments.values()) if agent_sentiments else all_sentiments
     if not sentiments:
         return {"controversy_score": None, "polarization_ratio": None, "valence_switching_pct": None}
 
@@ -43,12 +63,12 @@ def _compute_polarization(events: list[dict]) -> dict:
     moderate = max(sum(1 for s in sentiments if abs(s) <= 0.5), 1)
     ratio = round(extreme / moderate, 1)
 
-    # Valence switching: % of consecutive pairs that cross the zero line
+    # Valence switching: % of consecutive pairs that cross the zero line (all events)
     switches = 0
-    for i in range(1, len(sentiments)):
-        if (sentiments[i] > 0) != (sentiments[i - 1] > 0):
+    for i in range(1, len(all_sentiments)):
+        if (all_sentiments[i] > 0) != (all_sentiments[i - 1] > 0):
             switches += 1
-    switching_pct = round(switches / max(len(sentiments) - 1, 1) * 100)
+    switching_pct = round(switches / max(len(all_sentiments) - 1, 1) * 100)
 
     # Normalize ratio to 0-1 scale (ratio of 5:1+ saturates at 1.0)
     controversy_score = round(min(1.0, ratio / 5.0), 2)
@@ -127,7 +147,7 @@ async def get_reports_by_simulation(sim_id: str, auth: dict = Depends(get_curren
     # Verify simulation belongs to org
     sim = (
         admin.table("simulations")
-        .select("id")
+        .select("id, project_id")
         .eq("id", sim_id)
         .eq("organization_id", auth["org_id"])
         .single()
@@ -161,12 +181,50 @@ async def get_reports_by_simulation(sim_id: str, auth: dict = Depends(get_curren
     # Compute polarization metrics from simulation events
     events = (
         admin.table("simulation_events")
-        .select("metadata")
+        .select("metadata, round_number, agent_id")
         .eq("simulation_id", sim_id)
         .limit(2000)
         .execute()
     ).data or []
     polarization = _compute_polarization(events)
+
+    # Fetch source documents for the simulation's project
+    source_documents: list[dict] = []
+    project_id = sim.data.get("project_id")
+    if project_id:
+        docs = (
+            admin.table("documents")
+            .select("id, filename, file_type, storage_path, file_size_bytes")
+            .eq("project_id", project_id)
+            .eq("processing_status", "complete")
+            .order("created_at")
+            .limit(5)
+            .execute()
+        ).data or []
+        for doc in docs:
+            try:
+                file_bytes = admin.storage.from_("project-media").download(doc["storage_path"])
+                text = file_bytes.decode("utf-8", errors="replace")
+                word_count = len(text.split())
+                # Truncate to first ~500 words if over 2000 chars
+                if len(text) > 2000:
+                    words = text.split()[:500]
+                    text = " ".join(words)
+                    text += f"\n\n[Full source material: {word_count:,} words total]"
+                source_documents.append({
+                    "filename": doc["filename"],
+                    "file_type": doc["file_type"],
+                    "word_count": word_count,
+                    "text": text,
+                })
+            except Exception:
+                log.warning("source_doc_fetch_failed", doc_id=doc["id"])
+                source_documents.append({
+                    "filename": doc["filename"],
+                    "file_type": doc["file_type"],
+                    "word_count": 0,
+                    "text": "[Document could not be loaded]",
+                })
 
     # Return shape the frontend expects — strip any ReACT artifacts from content
     return {
@@ -179,6 +237,7 @@ async def get_reports_by_simulation(sim_id: str, auth: dict = Depends(get_curren
         ],
         "full_markdown": strip_react_artifacts(report.get("markdown_content") or ""),
         "polarization": polarization,
+        "source_documents": source_documents,
     }
 
 

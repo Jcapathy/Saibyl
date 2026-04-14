@@ -29,6 +29,18 @@ LIGHT_BG = "#F0F4FA"
 # Ordered palette for multi-series charts
 PALETTE = [SUBJECT_A, SUBJECT_B, NEUTRAL, POSITIVE, NEGATIVE, "#818CF8"]
 
+# Per-platform colors (matches frontend PLATFORM_COLORS)
+PLATFORM_COLORS: dict[str, str] = {
+    "twitter_x":     SUBJECT_A,
+    "reddit":        NEGATIVE,
+    "linkedin":      NEUTRAL,
+    "instagram":     SUBJECT_B,
+    "hacker_news":   "#818CF8",
+    "discord":       "#A78BFA",
+    "news_comments": POSITIVE,
+    "custom":        "#94A3B8",
+}
+
 
 def _sentiment_bar_color(v: float) -> str:
     """Return bar color based on sentiment value — matches frontend sentimentBarColor()."""
@@ -179,8 +191,8 @@ def render_platform_activity(data: dict[str, int]) -> bytes:
     labels = list(data.keys())
     values = list(data.values())
 
-    # Use brand palette, cycling if more platforms than colors
-    bar_colors = [PALETTE[i % len(PALETTE)] for i in range(len(labels))]
+    # Use per-platform brand colors, falling back to palette cycling
+    bar_colors = [PLATFORM_COLORS.get(label, PALETTE[i % len(PALETTE)]) for i, label in enumerate(labels)]
 
     fig, ax = plt.subplots(figsize=(max(5, len(labels) * 1.5), 4))
     ax.bar(labels, values, color=bar_colors)

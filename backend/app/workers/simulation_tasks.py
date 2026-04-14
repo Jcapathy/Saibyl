@@ -332,10 +332,13 @@ async def run_simulation(simulation_id: str):
                     async for event in adapter.run_round(round_num):
                         agent_info = agent_lookup.get(event.agent_username, {})
                         agent_id = agent_info.get("id")
-                        sentiment = agent_info.get("sentiment_baseline", 0.0)
+                        baseline = agent_info.get("sentiment_baseline", 0.0)
+                        # Echo-chamber drift: amplify baseline toward extremes as rounds progress
+                        drift_factor = 1.0 + (round_num / max_rounds) * 1.5
+                        sentiment = max(-1.0, min(1.0, baseline * drift_factor))
 
                         meta = event.metadata or {}
-                        meta["sentiment"] = sentiment
+                        meta["sentiment"] = round(sentiment, 4)
 
                         events.append({
                             "simulation_id": simulation_id,

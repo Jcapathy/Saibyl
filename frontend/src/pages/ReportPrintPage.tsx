@@ -16,6 +16,8 @@ import {
 } from 'recharts';
 import { format } from 'date-fns';
 import api from '@/lib/api';
+import { PRINT_PIE_COLORS, CHART_COLORS, platformColor } from '@/lib/constants';
+import { cleanContent } from '@/lib/utils';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -27,6 +29,13 @@ interface Polarization {
   valence_switching_pct: number | null;
 }
 
+interface SourceDocument {
+  filename: string;
+  file_type: string;
+  word_count: number;
+  text: string;
+}
+
 interface Report {
   id: string;
   simulation_id: string;
@@ -34,6 +43,7 @@ interface Report {
   sections: { section_type?: string; title: string; content: string }[];
   full_markdown: string;
   polarization?: Polarization;
+  source_documents?: SourceDocument[];
 }
 
 interface SimDetail {
@@ -44,6 +54,8 @@ interface SimDetail {
   platforms: string[];
   agent_count: number;
   max_rounds: number;
+  persona_pack_ids?: string[];
+  description?: string;
   created_at: string;
   completed_at: string | null;
 }
@@ -52,39 +64,7 @@ interface SimDetail {
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
-const PREAMBLE_VERBS =
-  'gather|start|begin|analyze|look|pull|search|investigate|examine|collect|retrieve|check|review|query|explore|write|assess|evaluate|compile|synthesize|research|identify|determine|provide';
-
-function cleanContent(raw: string): string {
-  // 1a. Strip full preamble-through-ANSWER blocks
-  let text = raw.replace(
-    new RegExp(`(?:I'll|I will|Let me)\\s+(?:\\w+\\s+)*?(?:${PREAMBLE_VERBS})[\\s\\S]*?ANSWER:\\s*`, 'gi'),
-    '',
-  );
-  // 1b. Strip preamble sentences with no ANSWER (e.g. "I'll systematically gather … section.")
-  text = text.replace(
-    new RegExp(`(?:I'll|I will|Let me)\\s+(?:\\w+\\s+)*?(?:${PREAMBLE_VERBS})\\b[^.]*\\.\\s*`, 'gi'),
-    '',
-  );
-  // 2. Strip standalone ANSWER: markers
-  text = text.replace(/^ANSWER:\s*/gm, '');
-
-  return text
-    .split('\n')
-    .filter((line) => {
-      const trimmed = line.trim();
-      // Remove TOOL: lines (ReACT tool calls)
-      if (/^(?:>\s*)?TOOL:\s/i.test(trimmed)) return false;
-      // Remove other tool-use artifact patterns
-      if (/^(?:>\s*)?(?:Action:|Observation:|search_web|read_url|get_page)\b/i.test(trimmed)) return false;
-      if (/^(?:Using tool|Calling tool|Tool call|Tool output|Tool result)\b/i.test(trimmed)) return false;
-      if (/^(?:Thought|Reasoning):\s/i.test(trimmed)) return false;
-      return true;
-    })
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
+// cleanContent imported from @/lib/utils
 
 const PLATFORM_NAMES: Record<string, string> = {
   twitter_x: 'X (Twitter)',
@@ -164,7 +144,21 @@ function parseMetrics(md: string, polarization?: Polarization) {
     }
   }
 
-  return { sentiment, engagement, controversy, controversyLabel };
+  // Sentiment Trajectory: parse from LLM-generated stat cards table
+  let sentimentTrajectory: string | null = null;
+  const trajPatterns = [
+    /Sentiment\s+Trajectory\s*\|\s*([^|]+)\|/i,
+    /Sentiment\s+Trajectory[:\s]+(.+?)(?:\n|$)/i,
+  ];
+  for (const pat of trajPatterns) {
+    const tm = md.match(pat);
+    if (tm) {
+      sentimentTrajectory = tm[1].trim().replace(/^<|>$/g, '');
+      break;
+    }
+  }
+
+  return { sentiment, engagement, controversy, controversyLabel, sentimentTrajectory };
 }
 
 /* ------------------------------------------------------------------ */
@@ -240,7 +234,7 @@ export default function ReportPrintPage() {
   // Find conclusion section
   const conclusionSection = report?.sections.find(
     (s) =>
-      /conclusion|recommendation/i.test(s.title) ||
+      /conclusion|recommendation|strategic.*implication/i.test(s.title) ||
       s.section_type === 'conclusion' ||
       s.section_type === 'recommendations',
   );
@@ -281,7 +275,7 @@ export default function ReportPrintPage() {
     { name: 'Moderate/Undecided', value: Math.max(0, neutralPct) },
     { name: 'Negative', value: negativePct },
   ];
-  const PIE_COLORS = ['#34D399', '#D4A84B', '#F87171'];
+  const PIE_COLORS = PRINT_PIE_COLORS;
 
   // Per-platform cards
   const platformCards = (simulation?.platforms ?? []).map((p, i) => {
@@ -297,6 +291,26 @@ export default function ReportPrintPage() {
       ),
     };
   });
+
+  // --- Insight headlines for charts ---
+  const platformSentHeadline = (() => {
+    if (platformSentimentData.length < 2) return undefined;
+    const sorted = [...platformSentimentData].sort((a, b) => a.sentiment - b.sentiment);
+    const low = sorted[0];
+    const high = sorted[sorted.length - 1];
+    return `${low.name} carried the most negative sentiment (${low.sentiment}%), ${Math.abs(high.sentiment - low.sentiment)} points below ${high.name} (${high.sentiment}%).`;
+  })();
+
+  const sentDistHeadline = (() => {
+    const largest = sentimentDistribution.reduce((a, b) => (a.value > b.value ? a : b));
+    return `${largest.name} sentiment dominated at ${largest.value}% of the population.`;
+  })();
+
+  const platformCardHeadline = (() => {
+    if (platformCards.length < 2) return undefined;
+    const sorted = [...platformCards].sort((a, b) => a.sentiment - b.sentiment);
+    return `Cross-platform gap: ${sorted[sorted.length - 1].name} (${sorted[sorted.length - 1].sentiment}%) vs. ${sorted[0].name} (${sorted[0].sentiment}%) — a ${Math.abs(sorted[sorted.length - 1].sentiment - sorted[0].sentiment)} point divergence.`;
+  })();
 
   /* ---------------------------------------------------------------- */
   /*  Loading                                                          */
@@ -497,12 +511,13 @@ export default function ReportPrintPage() {
         <div style={{ pageBreakAfter: 'always' }}>
           <SectionHeader number="1" title="Source Material" />
 
+          {/* A) Scenario / Question */}
           <p
             style={{
               fontSize: 14,
               fontWeight: 600,
               color: '#333',
-              marginBottom: 12,
+              marginBottom: 8,
             }}
           >
             Scenario / Question Analyzed
@@ -519,6 +534,7 @@ export default function ReportPrintPage() {
                 color: '#444',
                 lineHeight: 1.7,
                 whiteSpace: 'pre-wrap',
+                marginBottom: 20,
               }}
             >
               {simulation.prediction_goal}
@@ -529,11 +545,118 @@ export default function ReportPrintPage() {
                 fontSize: 16,
                 lineHeight: 1.7,
                 color: '#1a1a1a',
+                marginBottom: 20,
               }}
             >
               {simulation.prediction_goal}
             </p>
           )}
+
+          {/* B) Input Article / Document */}
+          {report.source_documents && report.source_documents.length > 0 && (
+            <>
+              <p
+                style={{
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: '#333',
+                  marginBottom: 8,
+                }}
+              >
+                Input Article / Document
+              </p>
+              {report.source_documents.map((doc, i) => (
+                <div
+                  key={i}
+                  style={{
+                    background: '#f7f7f7',
+                    border: '1px solid #e0e0e0',
+                    borderRadius: 8,
+                    padding: '16px 20px',
+                    marginBottom: 12,
+                  }}
+                >
+                  <p
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: '#666',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                      marginBottom: 8,
+                    }}
+                  >
+                    {doc.filename} ({doc.file_type.toUpperCase()}{doc.word_count > 0 ? ` — ${doc.word_count.toLocaleString()} words` : ''})
+                  </p>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: '#444',
+                      lineHeight: 1.7,
+                      whiteSpace: 'pre-wrap',
+                    }}
+                  >
+                    {doc.text}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+
+          {/* C) Simulation Parameters */}
+          <p
+            style={{
+              fontSize: 14,
+              fontWeight: 600,
+              color: '#333',
+              marginBottom: 8,
+              marginTop: 20,
+            }}
+          >
+            Simulation Parameters
+          </p>
+          <table
+            style={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              fontSize: 13,
+            }}
+          >
+            <tbody>
+              {[
+                ['Agent Count', String(simulation.agent_count)],
+                ['Rounds', String(simulation.max_rounds)],
+                ['Platforms', simulation.platforms.map(p => PLATFORM_NAMES[p] ?? p).join(', ')],
+                ...(simulation.persona_pack_ids && simulation.persona_pack_ids.length > 0
+                  ? [['Persona Packs', simulation.persona_pack_ids.join(', ')]]
+                  : []),
+                ['Date Run', new Date(simulation.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })],
+              ].map(([label, value]) => (
+                <tr key={label}>
+                  <td
+                    style={{
+                      padding: '6px 12px',
+                      fontWeight: 600,
+                      color: '#555',
+                      borderBottom: '1px solid #eee',
+                      width: '35%',
+                    }}
+                  >
+                    {label}
+                  </td>
+                  <td
+                    style={{
+                      padding: '6px 12px',
+                      color: '#1a1a1a',
+                      borderBottom: '1px solid #eee',
+                    }}
+                  >
+                    {value}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
 
         {/* ============================================================ */}
@@ -547,7 +670,7 @@ export default function ReportPrintPage() {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(4, 1fr)',
+                gridTemplateColumns: 'repeat(5, 1fr)',
                 gap: 12,
                 marginBottom: 24,
               }}
@@ -569,7 +692,7 @@ export default function ReportPrintPage() {
                 }
               />
               <MetricBox
-                label="Controversy"
+                label="Polarization Ratio"
                 value={
                   metrics.controversyLabel
                     ?? (metrics.controversy != null
@@ -580,6 +703,11 @@ export default function ReportPrintPage() {
               <MetricBox
                 label="Platforms"
                 value={String(simulation.platforms.length)}
+              />
+              <MetricBox
+                label="Sentiment Trajectory"
+                value={metrics.sentimentTrajectory ?? 'N/A'}
+                small
               />
             </div>
           )}
@@ -616,6 +744,11 @@ export default function ReportPrintPage() {
               >
                 Platform Sentiment
               </h4>
+              {platformSentHeadline && (
+                <p style={{ fontSize: 13, fontWeight: 700, color: '#1a1a1a', marginBottom: 8 }}>
+                  {platformSentHeadline}
+                </p>
+              )}
               <BarChart
                 width={700}
                 height={300}
@@ -639,11 +772,11 @@ export default function ReportPrintPage() {
                   width={90}
                 />
                 <Tooltip />
-                <Bar
-                  dataKey="sentiment"
-                  fill="#3b3f9e"
-                  radius={[0, 4, 4, 0]}
-                />
+                <Bar dataKey="sentiment" radius={[0, 4, 4, 0]}>
+                  {platformSentimentData.map((entry, idx) => (
+                    <Cell key={idx} fill={platformColor(entry.name)} />
+                  ))}
+                </Bar>
               </BarChart>
             </div>
           )}
@@ -660,6 +793,11 @@ export default function ReportPrintPage() {
             >
               Sentiment Distribution
             </h4>
+            {sentDistHeadline && (
+              <p style={{ fontSize: 13, fontWeight: 700, color: '#1a1a1a', marginBottom: 8 }}>
+                {sentDistHeadline}
+              </p>
+            )}
             <PieChart width={700} height={300}>
               <Pie
                 data={sentimentDistribution}
@@ -696,6 +834,11 @@ export default function ReportPrintPage() {
               >
                 Per-Platform Breakdown
               </h4>
+              {platformCardHeadline && (
+                <p style={{ fontSize: 13, fontWeight: 700, color: '#1a1a1a', marginBottom: 8 }}>
+                  {platformCardHeadline}
+                </p>
+              )}
               <div
                 style={{
                   display: 'grid',
@@ -732,10 +875,10 @@ export default function ReportPrintPage() {
                         fontSize: 12,
                         color:
                           pc.sentiment >= 60
-                            ? '#16a34a'
+                            ? CHART_COLORS.positive
                             : pc.sentiment >= 40
-                              ? '#ca8a04'
-                              : '#dc2626',
+                              ? CHART_COLORS.neutral
+                              : CHART_COLORS.negative,
                         fontWeight: 600,
                         marginTop: 4,
                       }}
@@ -787,12 +930,12 @@ export default function ReportPrintPage() {
         </div>
 
         {/* ============================================================ */}
-        {/*  SECTION 6: Conclusions                                      */}
+        {/*  SECTION 6: Strategic Implications & Recommended Actions      */}
         {/* ============================================================ */}
         <div>
           <SectionHeader
             number="5"
-            title="Conclusions &amp; Recommendations"
+            title="Strategic Implications &amp; Recommended Actions"
           />
 
           {conclusionFallback ? (
@@ -875,9 +1018,11 @@ function SectionHeader({
 function MetricBox({
   label,
   value,
+  small,
 }: {
   label: string;
   value: string;
+  small?: boolean;
 }) {
   return (
     <div
@@ -902,7 +1047,7 @@ function MetricBox({
       </div>
       <div
         style={{
-          fontSize: 22,
+          fontSize: small ? 12 : 22,
           fontWeight: 800,
           color: '#1a1a1a',
         }}

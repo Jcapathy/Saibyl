@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import io
+import re
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -119,12 +120,25 @@ async def export_report_pptx(report_id: UUID) -> bytes:
         "id", count="exact"
     ).eq("simulation_id", report["simulation_id"]).execute()
 
+    # Extract sentiment trajectory from report markdown
+    full_md = report.get("markdown_content") or ""
+    trajectory = "N/A"
+    for pat in [
+        r"Sentiment\s+Trajectory\s*\|\s*([^|]+)\|",
+        r"Sentiment\s+Trajectory[:\s]+(.+?)(?:\n|$)",
+    ]:
+        tm = re.search(pat, full_md, re.IGNORECASE)
+        if tm:
+            trajectory = tm.group(1).strip().strip("<>")
+            break
+
     _add_content_slide(prs, "Simulation Statistics", [
         f"Agents: {agents.count or 0}",
         f"Total Events: {events.count or 0}",
         f"Platforms: {', '.join(sim.get('platforms') or [])}",
         f"Max Rounds: {sim.get('max_rounds', 'N/A')}",
         f"A/B Test: {'Yes' if sim.get('is_ab_test') else 'No'}",
+        f"Sentiment Trajectory: {trajectory}",
     ])
 
     # 5. Charts

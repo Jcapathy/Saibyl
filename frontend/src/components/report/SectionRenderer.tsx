@@ -178,7 +178,8 @@ interface TableChartProps {
   headline?: string;
 }
 
-function TableChart({ table, printMode, headline }: TableChartProps) {
+function TableChart({ table, printMode, headline: headlineProp }: TableChartProps) {
+  const headline = headlineProp ?? generateTableHeadline(table);
   const { headers, rows } = table;
 
   // Find label column (first non-numeric) and numeric columns
@@ -304,6 +305,39 @@ function TableChart({ table, printMode, headline }: TableChartProps) {
       <MarkdownTable table={table} printMode={printMode} compact />
     </div>
   );
+}
+
+/** Generate a fallback headline from table data when the LLM didn't provide one */
+function generateTableHeadline(table: ParsedTable): string | undefined {
+  const { headers, rows } = table;
+  if (rows.length === 0) return undefined;
+  // Find the first numeric column
+  let numCol = -1;
+  for (let c = 0; c < headers.length; c++) {
+    if (isNumericColumn(rows, c)) { numCol = c; break; }
+  }
+  if (numCol < 0) return undefined;
+  // Find label column (first non-numeric)
+  let labelCol = 0;
+  for (let c = 0; c < headers.length; c++) {
+    if (!isNumericColumn(rows, c)) { labelCol = c; break; }
+  }
+  // Find the row with the max absolute numeric value
+  let maxVal = 0;
+  let maxLabel = '';
+  let minVal = Infinity;
+  let minLabel = '';
+  for (const row of rows) {
+    const val = parseNumeric(row[numCol] ?? '');
+    if (val == null) continue;
+    if (Math.abs(val) > Math.abs(maxVal)) { maxVal = val; maxLabel = row[labelCol] ?? ''; }
+    if (val < minVal) { minVal = val; minLabel = row[labelCol] ?? ''; }
+  }
+  if (!maxLabel) return undefined;
+  if (rows.length >= 2 && minLabel !== maxLabel) {
+    return `${maxLabel} leads at ${maxVal} while ${minLabel} trails at ${minVal} (${headers[numCol]}).`;
+  }
+  return `${maxLabel} recorded the highest ${headers[numCol]} at ${maxVal}.`;
 }
 
 /** Bold takeaway headline rendered above a chart */

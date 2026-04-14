@@ -1,4 +1,4 @@
-import { sentimentBarColor } from '@/lib/constants';
+import { platformColor } from '@/lib/constants';
 
 interface PlatformBreakdownProps {
   platforms?: { name: string; sentiment: number; agents: number }[];
@@ -27,7 +27,7 @@ export default function PlatformBreakdown({ platforms, headline }: PlatformBreak
       <div className="space-y-3">
         {platforms.map((p) => {
           const pct = ((p.sentiment + 1) / 2) * 100;
-          const color = sentimentBarColor(p.sentiment);
+          const color = platformColor(p.name);
           return (
             <div key={p.name}>
               <div className="flex justify-between text-[13px] mb-1">

@@ -1,8 +1,9 @@
 interface PersonaAnalysisProps {
   personas?: { name: string; sentiment: number; engagement: number; topTheme: string; quote: string }[];
+  headline?: string;
 }
 
-export default function PersonaAnalysis({ personas }: PersonaAnalysisProps) {
+export default function PersonaAnalysis({ personas, headline }: PersonaAnalysisProps) {
   if (!personas || personas.length === 0) {
     return (
       <div className="bg-[#111820] border border-[#1B2433] rounded-2xl p-6">
@@ -16,6 +17,9 @@ export default function PersonaAnalysis({ personas }: PersonaAnalysisProps) {
 
   return (
     <div className="bg-[#111820] border border-[#1B2433] rounded-2xl p-6">
+      {headline && (
+        <p className="text-[14px] font-bold text-[#E8ECF2] mb-2 leading-snug">{headline}</p>
+      )}
       <h3 className="text-[16px] font-bold text-[#E8ECF2] mb-4">Persona Analysis</h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {personas.map((p) => (

@@ -10,6 +10,7 @@ interface Risk {
 
 interface RiskMatrixProps {
   risks?: Risk[];
+  headline?: string;
 }
 
 function severityColor(severity: number): string {
@@ -18,7 +19,7 @@ function severityColor(severity: number): string {
   return 'bg-[#00D4FF]/20 text-[#00D4FF] border-[#00D4FF]/30';
 }
 
-export default function RiskMatrix({ risks }: RiskMatrixProps) {
+export default function RiskMatrix({ risks, headline }: RiskMatrixProps) {
   if (!risks || risks.length === 0) {
     return (
       <div className="bg-[#111820] border border-[#1B2433] rounded-2xl p-6 mb-6">
@@ -34,6 +35,9 @@ export default function RiskMatrix({ risks }: RiskMatrixProps) {
 
   return (
     <div className="bg-[#111820] border border-[#1B2433] rounded-2xl p-6 mb-6">
+      {headline && (
+        <p className="text-[14px] font-bold text-[#E8ECF2] mb-2 leading-snug">{headline}</p>
+      )}
       <h3 className="text-[16px] font-bold text-[#E8ECF2] mb-4">Risk Assessment Matrix</h3>
       <div className="overflow-x-auto">
         <table className="w-full text-[13px]">

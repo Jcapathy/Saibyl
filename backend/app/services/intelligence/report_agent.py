@@ -53,7 +53,7 @@ def clean_report_output(text: str) -> str:
       1. Chain-of-thought preamble blocks through ANSWER: marker
       2. Preamble sentences without a following ANSWER:
       3. All standalone TOOL: call lines
-      4. Orphaned ANSWER: markers
+      4. All ANSWER: markers at start of any line
       5. Collapses resulting multi-blank-line runs
     """
     # 1a. Full preamble-through-ANSWER blocks (dotAll for multiline CoT)
@@ -79,10 +79,8 @@ def clean_report_output(text: str) -> str:
     )
     # 2. All standalone TOOL: call lines
     text = re.sub(r"^TOOL:\s*.*$", "", text, flags=re.MULTILINE)
-    # 3. Orphaned ANSWER: markers (empty line or whitespace-only after marker)
-    text = re.sub(r"^ANSWER:\s*$", "", text, flags=re.MULTILINE)
-    # 4. Inline ANSWER: at start of remaining text
-    text = re.sub(r"^ANSWER:\s*", "", text)
+    # 3. All ANSWER: markers at start of any line (strip marker, keep content after it)
+    text = re.sub(r"^ANSWER:\s*", "", text, flags=re.MULTILINE)
     # 5. Collapse triple+ blank lines to a single blank line
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
@@ -136,6 +134,25 @@ class ReportProgress(BaseModel):
 
 # ── Prompts ──────────────────────────────────────────────
 
+REPORT_SYSTEM_PROMPT = """\
+REPORT QUALITY STANDARD:
+This report will be read by C-suite executives, board members, and senior political strategists. \
+Write with the authority and precision of a McKinsey or Bloomberg Intelligence analyst.
+
+Rules:
+1. Lead with insights, not methodology. Every section answers "so what?" before presenting \
+supporting data.
+2. Never include internal tooling references, chain-of-thought reasoning, TOOL: calls, ANSWER: \
+markers, or processing notes in the final output.
+3. Use specific numbers — not "sentiment declined" but "sentiment declined 0.59 points from \
+-0.05 to -0.64."
+4. Bold key findings and inflection points.
+5. Each chart or table must be preceded by a one-sentence insight headline explaining what it \
+reveals.
+6. The executive summary must open with a plain-English situation brief, not data tables.
+7. The conclusion must include specific, actionable recommendations with timelines and \
+supporting data."""
+
 OUTLINE_PROMPT = """You are a predictive intelligence analyst producing a comprehensive, evidence-rich report.
 
 Prediction goal: {prediction_goal}
@@ -180,8 +197,12 @@ Instructions:
 - Use insight_forge or quick_search for contextual knowledge beyond the simulation data
 
 QUALITY REQUIREMENTS for your ANSWER:
+- Lead with the key insight — answer "so what?" in the first sentence before presenting data
 - Include specific numbers: sentiment scores, engagement counts, round-by-round metrics
 - Build markdown tables for platform comparisons, agent archetype breakdowns, or timeline data
+- Precede EVERY markdown table with a **bold one-sentence insight headline** explaining what the \
+table reveals (e.g., "**Twitter/X drove the sharpest negative shift, hitting -0.62 by Round 4.**")
+- Bold key findings and inflection points throughout
 - Identify 3-4 distinct clusters/archetypes when analyzing agent behavior
 - Describe trajectory arcs with specific inflection points (e.g., "Round 3 saw a -0.25 drop")
 - Include cross-cutting dynamics: contagion effects, narrative fatigue, archetype migration
@@ -191,11 +212,24 @@ QUALITY REQUIREMENTS for your ANSWER:
 
 Be analytical and data-driven. Synthesize across multiple data sources. Do NOT produce thin, surface-level summaries."""
 
-EXECUTIVE_SUMMARY_PROMPT = """Write the Executive Summary for this predictive intelligence report.
-You MUST follow the exact structure below — Parts A through E, in order.
-Do NOT begin the executive summary with data tables, methodology descriptions, or round-by-round analysis.
-Begin with a plain-English situation brief, then numbered key findings, then the bottom line recommendation.
-Data tables come last as supporting evidence.
+EXECUTIVE_SUMMARY_PROMPT = """\
+╔══════════════════════════════════════════════════════════════════╗
+║  CRITICAL STRUCTURE CONSTRAINT — READ BEFORE WRITING ANYTHING  ║
+╠══════════════════════════════════════════════════════════════════╣
+║  Your output will be REJECTED and regenerated if it does not   ║
+║  begin with Part A (Situation Brief) as the FIRST text.        ║
+║                                                                ║
+║  FORBIDDEN as opening content:                                 ║
+║  ✗ Data tables          ✗ Round-by-round analysis              ║
+║  ✗ Methodology notes    ✗ Metric definitions                   ║
+║  ✗ Statistical summaries ✗ "This report analyzes..."           ║
+║                                                                ║
+║  MANDATORY order: A → B → C → D → E. No exceptions.           ║
+╚══════════════════════════════════════════════════════════════════╝
+
+Write the Executive Summary for this predictive intelligence report.
+The FIRST paragraph the reader sees must be the Situation Brief — plain English, no numbers.
+Then Key Findings. Then Bottom Line. Then Stat Cards. Then evidence tables LAST.
 
 === SIMULATION CONTEXT ===
 Prediction goal: {prediction_goal}
@@ -209,32 +243,41 @@ Polarization controversy score (0-1): {controversy_score}
 === REPORT SECTIONS (your evidence base) ===
 {sections_text}
 
-=== MANDATORY OUTPUT STRUCTURE ===
+=== REMINDER: Begin your output with Part A (Situation Brief), NOT with data. ===
+
+=== MANDATORY OUTPUT STRUCTURE — Follow Parts A through E in EXACT order ===
 
 ### Part A: Situation Brief
-Write 2-3 sentences MAX in plain English. Summarise what was simulated, for whom, and why it matters.
-No jargon. No metrics. A CEO who has never seen Saibyl should understand the scenario in 10 seconds.
-Example: "Saibyl simulated public reaction to a hypothetical LA Times investigative piece attacking \
-Spencer Pratt's mayoral candidacy. 40 synthetic agents across 4 platforms debated the narrative over \
-5 rounds, modeling how voters, media, and political operatives would respond if this story broke."
+THE FIRST THING YOU WRITE. 2-3 sentences MAX in plain English.
+Summarise what was simulated, for whom, and why it matters.
+No jargon. No metrics. No numbers. A CEO who has never seen Saibyl should understand \
+the scenario in 10 seconds.
+Example: "Saibyl simulated public reaction to a hypothetical LA Times investigative piece \
+attacking Spencer Pratt's mayoral candidacy. 40 synthetic agents across 4 platforms debated \
+the narrative over 5 rounds, modeling how voters, media, and political operatives would \
+respond if this story broke."
 
 ### Part B: Key Findings
 Write 3-5 numbered bullet points. Each is ONE sentence with ONE supporting number.
 These are the "so what" takeaways — the headline insights a decision-maker needs.
 Format each as: **Bold headline claim.** Supporting sentence with a specific metric.
 Example:
-1. **The attack backfires on Bass.** Public sentiment toward Bass declined from -0.05 to -0.64 across five rounds with no recovery.
-2. **The moderate middle is collapsing.** Conflicted Moderates shrank from 35% to 21%, with the majority migrating toward anti-Bass positions.
-3. **Twitter/X is the narrative battleground.** Sentiment hit -0.62 on Twitter/X vs. -0.11 on LinkedIn — a 0.51 cross-platform divergence gap.
+1. **The attack backfires on Bass.** Public sentiment toward Bass declined from -0.05 to \
+-0.64 across five rounds with no recovery.
+2. **The moderate middle is collapsing.** Conflicted Moderates shrank from 35% to 21%, \
+with the majority migrating toward anti-Bass positions.
+3. **Twitter/X is the narrative battleground.** Sentiment hit -0.62 on Twitter/X vs. -0.11 \
+on LinkedIn — a 0.51 cross-platform divergence gap.
 
 ### Part C: Bottom Line
 Write 1-2 sentences in **bold markdown**. State the single most important strategic implication.
 What should the reader DO with this information? This is a recommendation, not a summary.
 Example: **"Spencer Pratt should amplify the attack narrative rather than defend against it. \
-The simulation shows every attack on Pratt drives sympathy toward him and permanently erodes Bass's position."**
+The simulation shows every attack on Pratt drives sympathy toward him and permanently erodes \
+Bass's position."**
 
 ### Part D: Stat Cards
-Output exactly this markdown structure with values filled from your analysis:
+Output exactly this markdown table with values filled from your analysis:
 
 | Metric | Value | Label |
 |--------|-------|-------|
@@ -253,12 +296,14 @@ IMPORTANT for Sentiment Trajectory: Show the directional arrow and net change fo
 subjects/topics in the simulation. Use ↑ for positive movement, ↓ for negative, → for flat.
 
 ### Part E: Round-by-Round Evidence
-NOW and only now, provide the supporting data tables:
-1. A round-by-round sentiment progression table (columns: Round, Overall Sentiment, Key Shift, Notable Event)
+NOW and ONLY now, provide the supporting data tables:
+1. A round-by-round sentiment progression table (columns: Round, Overall Sentiment, Key Shift, \
+Notable Event)
 2. Brief narrative of the polarization dynamics — which archetypes moved, when, and why
 3. Any platform-specific divergences worth highlighting
 
-This section is SUPPORTING EVIDENCE for the Key Findings above, not the opening content."""
+This section is SUPPORTING EVIDENCE for the Key Findings above, not the opening content.
+Keep it concise — 1-2 pages maximum. The reader has already gotten the headline from Parts A-C."""
 
 AB_COMPARISON_PROMPT = """Compare the two simulation variants and determine a winner.
 
@@ -305,6 +350,11 @@ Controversy score (0-1): {controversy_score}
 Write the section titled "Strategic Implications & Recommended Actions" using EXACTLY the \
 sub-sections below. Do NOT add preamble, methodology notes, or throat-clearing. Start writing \
 the first sub-section immediately.
+
+FORMATTING RULES:
+- Bold key findings and inflection points throughout.
+- Use specific numbers (e.g., "declined 0.59 points from -0.05 to -0.64"), never vague language.
+- If you include any table, precede it with a **bold one-sentence insight headline**.
 
 ### 5.1 — Situation Assessment
 
@@ -380,7 +430,10 @@ async def _run_react_loop(
         )
 
         response = await llm_complete(
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {"role": "system", "content": REPORT_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
             temperature=config.temperature,
         )
 
@@ -406,7 +459,10 @@ async def _run_react_loop(
     ) + "\n\nYou have used all available tool calls. You MUST now provide your ANSWER. Synthesize ALL evidence gathered into a comprehensive, data-rich section (800-1500 words) with specific metrics, tables, archetype analysis, and predictive implications:"
 
     result = await llm_complete(
-        messages=[{"role": "user", "content": final_prompt}],
+        messages=[
+            {"role": "system", "content": REPORT_SYSTEM_PROMPT},
+            {"role": "user", "content": final_prompt},
+        ],
         temperature=config.temperature,
     )
     if "ANSWER:" in result:
@@ -581,27 +637,13 @@ async def generate_report(
         )
 
         # Compute polarization metrics for executive summary prompt
+        from app.api.reports import _compute_polarization
         all_events = admin.table("simulation_events").select(
-            "metadata"
+            "metadata, round_number, agent_id"
         ).eq("simulation_id", sim_id).limit(2000).execute().data or []
-        sentiments: list[float] = []
-        for ev in all_events:
-            md = ev.get("metadata") or {}
-            s = md.get("sentiment")
-            if s is not None:
-                try:
-                    sentiments.append(float(s))
-                except (ValueError, TypeError):
-                    pass
-        if sentiments:
-            extreme = sum(1 for s in sentiments if abs(s) > 0.5)
-            moderate = max(sum(1 for s in sentiments if abs(s) <= 0.5), 1)
-            pol_ratio = round(extreme / moderate, 1)
-            polarization_ratio = f"{pol_ratio}:1"
-            controversy_score = str(round(min(1.0, pol_ratio / 5.0), 2))
-        else:
-            polarization_ratio = "N/A"
-            controversy_score = "N/A"
+        pol_metrics = _compute_polarization(all_events)
+        polarization_ratio = pol_metrics["polarization_ratio"] or "N/A"
+        controversy_score = str(pol_metrics["controversy_score"]) if pol_metrics["controversy_score"] is not None else "N/A"
 
         platforms = ", ".join(sim.get("platforms") or ["twitter_x"])
         rounds = sim.get("max_rounds", 10)
@@ -624,7 +666,9 @@ async def generate_report(
         }).execute()
 
         conclusion_raw = await llm_complete(
-            messages=[{"role": "user", "content": CONCLUSION_PROMPT.format(
+            messages=[
+                {"role": "system", "content": REPORT_SYSTEM_PROMPT},
+                {"role": "user", "content": CONCLUSION_PROMPT.format(
                 prediction_goal=sim["prediction_goal"],
                 platforms=platforms,
                 agent_count=agent_count,
@@ -657,7 +701,9 @@ async def generate_report(
 
         # Phase 4: Executive Summary (generated last — sees all sections + conclusion)
         exec_summary_raw = await llm_complete(
-            messages=[{"role": "user", "content": EXECUTIVE_SUMMARY_PROMPT.format(
+            messages=[
+                {"role": "system", "content": REPORT_SYSTEM_PROMPT},
+                {"role": "user", "content": EXECUTIVE_SUMMARY_PROMPT.format(
                 prediction_goal=sim["prediction_goal"],
                 platforms=platforms,
                 agent_count=agent_count,

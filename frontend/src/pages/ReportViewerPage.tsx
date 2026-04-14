@@ -4,6 +4,7 @@ import { ArrowLeft, MessageCircle, X, Send, Copy, Download, Share, RotateCcw } f
 import ReactMarkdown from 'react-markdown';
 import { formatDistanceToNow } from 'date-fns';
 import api from '@/lib/api';
+import { cleanContent } from '@/lib/utils';
 import SectionRenderer from '@/components/report/SectionRenderer';
 import ExecutiveSummary from '@/components/report/ExecutiveSummary';
 import SentimentTimeline from '@/components/report/SentimentTimeline';
@@ -24,6 +25,13 @@ interface Polarization {
   valence_switching_pct: number | null;
 }
 
+interface SourceDocument {
+  filename: string;
+  file_type: string;
+  word_count: number;
+  text: string;
+}
+
 interface Report {
   id: string;
   simulation_id: string;
@@ -31,6 +39,7 @@ interface Report {
   sections: { section_type?: string; title: string; content: string }[];
   full_markdown: string;
   polarization?: Polarization;
+  source_documents?: SourceDocument[];
 }
 
 interface SimDetail {
@@ -58,6 +67,7 @@ const TAB_LABELS = [
   'Platform Deep-Dive',
   'Persona Analysis',
   'Risk Assessment',
+  'Strategic Implications',
   'Raw Data',
 ] as const;
 
@@ -249,7 +259,87 @@ function parseReportData(report: Report, sim: SimDetail | null) {
     controversyLabel = `${pol.valence_switching_pct}%`;
   }
 
-  return { sentiment, engagement, controversy, controversyLabel, riskCount, timeline, platforms, themes, responses, personas, risks };
+  // --- Sentiment Trajectory: parse from LLM-generated stat cards table ---
+  let sentimentTrajectory: string | undefined;
+  const trajPatterns = [
+    /Sentiment\s+Trajectory\s*\|\s*([^|]+)\|/i,
+    /Sentiment\s+Trajectory[:\s]+(.+?)(?:\n|$)/i,
+  ];
+  for (const pat of trajPatterns) {
+    const tm = md.match(pat);
+    if (tm) {
+      sentimentTrajectory = tm[1].trim().replace(/^<|>$/g, '');
+      break;
+    }
+  }
+
+  return { sentiment, engagement, controversy, controversyLabel, riskCount, sentimentTrajectory, timeline, platforms, themes, responses, personas, risks };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Insight headline generators                                        */
+/* ------------------------------------------------------------------ */
+
+function timelineHeadline(data?: { time: string; sentiment: number }[]): string | undefined {
+  if (!data || data.length < 2) return undefined;
+  const first = data[0].sentiment;
+  const last = data[data.length - 1].sentiment;
+  const delta = last - first;
+  // Find sharpest single-step move
+  let maxStep = 0;
+  let stepFrom = 0;
+  let stepTo = 0;
+  for (let i = 1; i < data.length; i++) {
+    const d = Math.abs(data[i].sentiment - data[i - 1].sentiment);
+    if (d > maxStep) { maxStep = d; stepFrom = i - 1; stepTo = i; }
+  }
+  const dir = delta > 0 ? 'positive' : delta < 0 ? 'negative' : 'flat';
+  const arrow = delta > 0 ? '+' : '';
+  let hl = `Sentiment shifted ${dir} by ${arrow}${delta.toFixed(2)} over ${data.length} rounds.`;
+  if (maxStep > 0.1) {
+    hl += ` Sharpest move: ${data[stepFrom].time} → ${data[stepTo].time} (${maxStep.toFixed(2)}).`;
+  }
+  return hl;
+}
+
+function platformHeadline(platforms?: { name: string; sentiment: number; agents: number }[]): string | undefined {
+  if (!platforms || platforms.length < 2) return undefined;
+  const sorted = [...platforms].sort((a, b) => a.sentiment - b.sentiment);
+  const most = sorted[sorted.length - 1];
+  const least = sorted[0];
+  const gap = Math.abs(most.sentiment - least.sentiment);
+  return `${least.name} drove the most negative sentiment (${(least.sentiment * 100).toFixed(0)}%), ${gap > 0.1 ? `${(gap * 100).toFixed(0)} points below` : 'close to'} ${most.name} (${(most.sentiment * 100).toFixed(0)}%).`;
+}
+
+function personaHeadline(personas?: { name: string; sentiment: number; engagement: number }[]): string | undefined {
+  if (!personas || personas.length < 2) return undefined;
+  const sorted = [...personas].sort((a, b) => b.engagement - a.engagement);
+  const top = sorted[0];
+  const mostNeg = [...personas].sort((a, b) => a.sentiment - b.sentiment)[0];
+  return `${top.name} showed the highest engagement (${(top.engagement * 100).toFixed(0)}%). ${mostNeg.name} held the most negative sentiment (${(mostNeg.sentiment * 100).toFixed(0)}%).`;
+}
+
+function themeHeadline(themes?: { label: string; weight: number; sentiment: string }[]): string | undefined {
+  if (!themes || themes.length === 0) return undefined;
+  const top = themes[0]; // already sorted by weight
+  const negCount = themes.filter(t => t.sentiment === 'negative').length;
+  return `"${top.label}" dominated the conversation.${negCount > 0 ? ` ${negCount} of ${themes.length} themes carried negative sentiment.` : ''}`;
+}
+
+function riskHeadline(risks?: { severity: number; category: string }[]): string | undefined {
+  if (!risks || risks.length === 0) return undefined;
+  const high = risks.filter(r => r.severity >= 0.7);
+  if (high.length > 0) {
+    return `${high.length} high-severity risk${high.length > 1 ? 's' : ''} identified — top category: ${high[0].category}.`;
+  }
+  return `${risks.length} risk${risks.length > 1 ? 's' : ''} identified, all moderate or below.`;
+}
+
+function responsesHeadline(responses?: { persona: string; sentiment: number }[]): string | undefined {
+  if (!responses || responses.length === 0) return undefined;
+  const avg = responses.reduce((s, r) => s + r.sentiment, 0) / responses.length;
+  const mostNeg = [...responses].sort((a, b) => a.sentiment - b.sentiment)[0];
+  return `Average response sentiment: ${(avg * 100).toFixed(0)}%. Most critical voice: ${mostNeg.persona} (${(mostNeg.sentiment * 100).toFixed(0)}%).`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -568,23 +658,24 @@ export default function ReportViewerPage() {
               controversy={parsed?.controversy}
               controversyLabel={parsed?.controversyLabel}
               riskCount={parsed?.riskCount}
+              sentimentTrajectory={parsed?.sentimentTrajectory}
             />
-            <SentimentTimeline data={parsed?.timeline} />
+            <SentimentTimeline data={parsed?.timeline} headline={timelineHeadline(parsed?.timeline)} />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-              <PlatformBreakdown platforms={parsed?.platforms} />
-              <PersonaAnalysis personas={parsed?.personas} />
+              <PlatformBreakdown platforms={parsed?.platforms} headline={platformHeadline(parsed?.platforms)} />
+              <PersonaAnalysis personas={parsed?.personas} headline={personaHeadline(parsed?.personas)} />
             </div>
-            <ThemeCloud themes={parsed?.themes} />
-            <SampleResponses responses={parsed?.responses} />
+            <ThemeCloud themes={parsed?.themes} headline={themeHeadline(parsed?.themes)} />
+            <SampleResponses responses={parsed?.responses} headline={responsesHeadline(parsed?.responses)} />
           </>
         )}
 
         {/* Tab 1 — Platform Deep-Dive */}
         {activeTab === 1 && (
           <>
-            <PlatformBreakdown platforms={parsed?.platforms} />
+            <PlatformBreakdown platforms={parsed?.platforms} headline={platformHeadline(parsed?.platforms)} />
             <div className="mt-6">
-              <SampleResponses responses={parsed?.responses} />
+              <SampleResponses responses={parsed?.responses} headline={responsesHeadline(parsed?.responses)} />
             </div>
           </>
         )}
@@ -592,14 +683,14 @@ export default function ReportViewerPage() {
         {/* Tab 2 — Persona Analysis */}
         {activeTab === 2 && (
           <>
-            <PersonaAnalysis personas={parsed?.personas} />
+            <PersonaAnalysis personas={parsed?.personas} headline={personaHeadline(parsed?.personas)} />
           </>
         )}
 
         {/* Tab 3 — Risk Assessment */}
         {activeTab === 3 && (
           <>
-            <RiskMatrix risks={parsed?.risks} />
+            <RiskMatrix risks={parsed?.risks} headline={riskHeadline(parsed?.risks)} />
             <div className="bg-[#111820] border border-[#1B2433] rounded-2xl p-6">
               <h3 className="text-[16px] font-bold text-[#E8ECF2] mb-3">Mitigation Recommendations</h3>
               {(() => {
@@ -612,7 +703,7 @@ export default function ReportViewerPage() {
                 );
                 if (mitigationSection) {
                   return (
-                    <SectionRenderer content={mitigationSection.content} />
+                    <SectionRenderer content={cleanContent(mitigationSection.content)} />
                   );
                 }
                 return (
@@ -625,8 +716,37 @@ export default function ReportViewerPage() {
           </>
         )}
 
-        {/* Tab 4 — Raw Data */}
+        {/* Tab 4 — Strategic Implications */}
         {activeTab === 4 && (
+          <>
+            {(() => {
+              const stratSection = report.sections.find(
+                (s) =>
+                  /strategic.*implication|conclusion|recommended.*action/i.test(s.title) ||
+                  s.section_type === 'conclusion' ||
+                  s.section_type === 'recommendations',
+              );
+              if (stratSection) {
+                return (
+                  <div className="bg-[#111820] border border-[#1B2433] rounded-2xl p-6">
+                    <h2 className="text-[16px] font-bold text-[#E8ECF2] mb-4">{stratSection.title}</h2>
+                    <SectionRenderer content={cleanContent(stratSection.content)} className="text-[#8B97A8] leading-[1.75]" />
+                  </div>
+                );
+              }
+              return (
+                <div className="bg-[#111820] border border-[#1B2433] rounded-2xl p-6">
+                  <p className="text-[13px] text-[#5A6578]">
+                    Strategic implications will appear once the report generation completes.
+                  </p>
+                </div>
+              );
+            })()}
+          </>
+        )}
+
+        {/* Tab 5 — Raw Data */}
+        {activeTab === 5 && (
           <>
             <div className="flex items-center gap-3 mb-4">
               <button

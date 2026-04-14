@@ -1,8 +1,9 @@
 interface SampleResponsesProps {
   responses?: { persona: string; platform: string; text: string; sentiment: number }[];
+  headline?: string;
 }
 
-export default function SampleResponses({ responses }: SampleResponsesProps) {
+export default function SampleResponses({ responses, headline }: SampleResponsesProps) {
   if (!responses || responses.length === 0) {
     return (
       <div className="bg-[#111820] border border-[#1B2433] rounded-2xl p-6 mb-6">
@@ -16,10 +17,13 @@ export default function SampleResponses({ responses }: SampleResponsesProps) {
 
   return (
     <div className="bg-[#111820] border border-[#1B2433] rounded-2xl p-6 mb-6">
+      {headline && (
+        <p className="text-[14px] font-bold text-[#E8ECF2] mb-2 leading-snug">{headline}</p>
+      )}
       <h3 className="text-[16px] font-bold text-[#E8ECF2] mb-4">Sample Responses</h3>
       <div className="space-y-3">
         {responses.map((r, i) => {
-          const sentColor = r.sentiment >= 0.3 ? 'border-[#00D4FF]/30' : r.sentiment >= 0 ? 'border-[#C9A227]/30' : 'border-[#FF6B6B]/30';
+          const sentColor = r.sentiment >= 0.3 ? 'border-[#34D399]/30' : r.sentiment >= 0 ? 'border-[#D4A84B]/30' : 'border-[#F87171]/30';
           return (
             <div key={i} className={`bg-[#0D1117] border ${sentColor} rounded-xl p-4`}>
               <div className="flex items-center gap-2 mb-2">
