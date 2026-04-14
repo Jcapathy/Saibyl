@@ -465,6 +465,7 @@ export default function ReportViewerPage() {
             </button>
             <ReportExport
               reportId={report.id}
+              simulationId={simId ?? ''}
               simulationName={simulation?.name ?? 'report'}
               sections={report.sections}
             />

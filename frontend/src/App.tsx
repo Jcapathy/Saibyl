@@ -15,6 +15,7 @@ import MarketsPage from '@/pages/MarketsPage';
 import NewSimulationPage from '@/pages/NewSimulationPage';
 import ProjectDetailPage from '@/pages/ProjectDetailPage';
 import ProjectsPage from '@/pages/ProjectsPage';
+import ReportPrintPage from '@/pages/ReportPrintPage';
 import ReportViewerPage from '@/pages/ReportViewerPage';
 import SettingsPage from '@/pages/SettingsPage';
 import SignupPage from '@/pages/SignupPage';
@@ -57,6 +58,9 @@ function AnimatedRoutes() {
           <Route path="simulations/:id/compare" element={<PageTransition><ComparisonPage /></PageTransition>} />
           <Route path="settings/*" element={<PageTransition><SettingsPage /></PageTransition>} />
         </Route>
+
+        {/* Print-optimized report (no sidebar, no transitions) */}
+        <Route path="/app/simulations/:id/report/print" element={<ProtectedRoute><ReportPrintPage /></ProtectedRoute>} />
 
         {/* Landing page */}
         <Route path="/" element={<LandingPage />} />
