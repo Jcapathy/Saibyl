@@ -766,7 +766,7 @@ export default function ReportViewerPage() {
             </div>
             <div className="bg-[#111820] border border-[#1B2433] rounded-2xl p-6">
               <div className="prose prose-sm prose-invert max-w-none">
-                <ReactMarkdown>{report.full_markdown || 'No raw data available.'}</ReactMarkdown>
+                <ReactMarkdown>{report.full_markdown || report.sections.map(s => `## ${s.title}\n\n${s.content}`).join('\n\n---\n\n') || 'No raw data available.'}</ReactMarkdown>
               </div>
             </div>
           </>

@@ -231,23 +231,18 @@ export default function ReportPrintPage() {
       s.section_type === 'executive_summary',
   ) ?? report?.sections[0] ?? null;
 
-  // Find conclusion section
+  // Find conclusion section — match the backend title "Strategic Implications & Recommended Actions"
   const conclusionSection = report?.sections.find(
     (s) =>
-      /conclusion|recommendation|strategic.*implication/i.test(s.title) ||
+      /strategic.*implication|recommended.*action|conclusion/i.test(s.title) ||
       s.section_type === 'conclusion' ||
       s.section_type === 'recommendations',
-  );
-  const conclusionFallback =
-    conclusionSection ??
-    (report?.sections.length
-      ? report.sections[report.sections.length - 1]
-      : null);
+  ) ?? null;
 
   // Remaining sections for detailed findings (exclude exec summary and conclusion)
   const detailedSections =
     report?.sections.filter(
-      (s) => s !== execSection && s !== conclusionFallback,
+      (s) => s !== execSection && s !== conclusionSection,
     ) ?? [];
 
   // Platform sentiment data for charts
@@ -938,7 +933,7 @@ export default function ReportPrintPage() {
             title="Strategic Implications &amp; Recommended Actions"
           />
 
-          {conclusionFallback ? (
+          {conclusionSection?.content ? (
             <div
               style={{
                 fontSize: 16,
@@ -946,11 +941,11 @@ export default function ReportPrintPage() {
                 color: '#1a1a1a',
               }}
             >
-              <SectionRenderer content={cleanContent(conclusionFallback.content)} printMode />
+              <SectionRenderer content={cleanContent(conclusionSection.content)} printMode />
             </div>
           ) : (
             <p style={{ fontSize: 14, color: '#666' }}>
-              No conclusions section available.
+              Strategic implications will appear once the report generation completes.
             </p>
           )}
         </div>
@@ -975,7 +970,9 @@ export default function ReportPrintPage() {
             }}
           >
             <ReactMarkdown>
-              {report.full_markdown || 'No raw data available.'}
+              {report.full_markdown
+                || report.sections.map(s => `## ${s.title}\n\n${s.content}`).join('\n\n---\n\n')
+                || 'No raw data available.'}
             </ReactMarkdown>
           </div>
         </div>

@@ -1,7 +1,7 @@
 import ReactMarkdown from 'react-markdown';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer, ReferenceLine, Cell,
+  ResponsiveContainer, Cell,
 } from 'recharts';
 import { CHART_PALETTE, PRINT_PALETTE, sentimentBarColor } from '@/lib/constants';
 
@@ -118,51 +118,6 @@ function isNumericColumn(rows: string[][], colIndex: number): boolean {
 /*  Annotation detection                                               */
 /* ------------------------------------------------------------------ */
 
-interface ChartAnnotation {
-  /** The x-axis label (e.g. "Round 3") where the annotation goes */
-  x: string;
-  /** Short label displayed on the chart */
-  label: string;
-}
-
-/** Detect inflection points in chart data.
- *  Looks for the row where the absolute change from the previous row is largest. */
-function detectInflections(
-  data: Array<Record<string, string | number>>,
-  numericKeys: string[],
-): ChartAnnotation[] {
-  if (data.length < 3 || numericKeys.length === 0) return [];
-
-  const key = numericKeys[0]; // use primary series
-  let maxDelta = 0;
-  let maxIdx = -1;
-
-  for (let i = 1; i < data.length; i++) {
-    const prev = data[i - 1][key];
-    const curr = data[i][key];
-    if (typeof prev === 'number' && typeof curr === 'number') {
-      const delta = Math.abs(curr - prev);
-      if (delta > maxDelta) {
-        maxDelta = delta;
-        maxIdx = i;
-      }
-    }
-  }
-
-  if (maxIdx < 1 || maxDelta < 0.05) return [];
-
-  const prev = data[maxIdx - 1][key] as number;
-  const curr = data[maxIdx][key] as number;
-  const direction = curr > prev ? '↑' : '↓';
-  const delta = (curr - prev).toFixed(2);
-  const sign = curr > prev ? '+' : '';
-
-  return [{
-    x: String(data[maxIdx].name),
-    label: `Inflection ${direction} ${sign}${delta}`,
-  }];
-}
-
 /** Check if a header name suggests sentiment data */
 function isSentimentHeader(header: string): boolean {
   return /sentiment|score|rating|polarity/i.test(header);
@@ -224,11 +179,6 @@ function TableChart({ table, printMode, headline: headlineProp }: TableChartProp
   // Check if any numeric columns represent sentiment — use semantic coloring
   const useSentimentColors = numericCols.length === 1 && isSentimentHeader(headers[numericCols[0]]);
 
-  // Detect inflection annotations
-  const numericKeys = numericCols.map(c => headers[c]);
-  const annotations = detectInflections(data, numericKeys);
-  const annotationColor = printMode ? '#dc2626' : '#F87171';
-
   return (
     <div style={{ marginBottom: 24 }}>
       {headline && <ChartHeadline text={headline} printMode={printMode} />}
@@ -260,7 +210,6 @@ function TableChart({ table, printMode, headline: headlineProp }: TableChartProp
             {numericCols.length > 1 && <Legend wrapperStyle={{ fontSize: 11, color: textColor }} />}
             {numericCols.map((c, idx) => {
               if (useSentimentColors) {
-                // Per-bar semantic coloring for sentiment data
                 return (
                   <Bar
                     key={headers[c]}
@@ -280,23 +229,6 @@ function TableChart({ table, printMode, headline: headlineProp }: TableChartProp
                 <Bar key={headers[c]} dataKey={headers[c]} fill={colors[idx % colors.length]} radius={[4, 4, 0, 0]} maxBarSize={40} />
               );
             })}
-            {/* Inflection annotations */}
-            {annotations.map((a, ai) => (
-              <ReferenceLine
-                key={ai}
-                x={a.x}
-                stroke={annotationColor}
-                strokeDasharray="4 3"
-                strokeWidth={2}
-                label={{
-                  value: a.label,
-                  position: 'top',
-                  fill: annotationColor,
-                  fontSize: 10,
-                  fontWeight: 600,
-                }}
-              />
-            ))}
           </BarChart>
         </ResponsiveContainer>
       </div>
