@@ -158,37 +158,28 @@ function TableChart({ table, printMode }: TableChartProps) {
           borderRadius: 12,
           padding: '20px 16px 8px',
           marginBottom: 12,
+          overflow: 'hidden',
+          width: '100%',
+          maxWidth: '100%',
         }}
       >
-        {printMode ? (
-          <BarChart width={680} height={280} data={data} margin={{ top: 8, right: 20, left: 0, bottom: 4 }}>
+        <ResponsiveContainer width="100%" height={280}>
+          <BarChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 4 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
             <XAxis dataKey="name" tick={{ fontSize: 11, fill: textColor }} axisLine={{ stroke: gridColor }} tickLine={false} />
             <YAxis tick={{ fontSize: 11, fill: textColor, fontFamily: "'JetBrains Mono', monospace" }} axisLine={false} tickLine={false} />
             <Tooltip
-              contentStyle={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 12 }}
+              contentStyle={printMode
+                ? { background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 12 }
+                : { background: '#111820', border: '1px solid #1B2433', borderRadius: 8, fontSize: 12, color: '#E8ECF2' }
+              }
             />
-            {numericCols.length > 1 && <Legend wrapperStyle={{ fontSize: 11 }} />}
+            {numericCols.length > 1 && <Legend wrapperStyle={{ fontSize: 11, color: textColor }} />}
             {numericCols.map((c, idx) => (
-              <Bar key={headers[c]} dataKey={headers[c]} fill={colors[idx % colors.length]} radius={[4, 4, 0, 0]} />
+              <Bar key={headers[c]} dataKey={headers[c]} fill={colors[idx % colors.length]} radius={[4, 4, 0, 0]} maxBarSize={40} />
             ))}
           </BarChart>
-        ) : (
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={data} margin={{ top: 8, right: 20, left: 0, bottom: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 11, fill: textColor }} axisLine={{ stroke: gridColor }} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: textColor, fontFamily: "'JetBrains Mono', monospace" }} axisLine={false} tickLine={false} />
-              <Tooltip
-                contentStyle={{ background: '#111820', border: '1px solid #1B2433', borderRadius: 8, fontSize: 12, color: '#E8ECF2' }}
-              />
-              {numericCols.length > 1 && <Legend wrapperStyle={{ fontSize: 11, color: textColor }} />}
-              {numericCols.map((c, idx) => (
-                <Bar key={headers[c]} dataKey={headers[c]} fill={colors[idx % colors.length]} radius={[4, 4, 0, 0]} />
-              ))}
-            </BarChart>
-          </ResponsiveContainer>
-        )}
+        </ResponsiveContainer>
       </div>
 
       {/* Data table below chart */}
