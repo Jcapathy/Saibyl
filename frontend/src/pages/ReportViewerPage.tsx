@@ -358,7 +358,7 @@ export default function ReportViewerPage() {
     setChatLoading(true);
     try {
       const { data } = await api.post(`/reports/${report.id}/chat`, { message: msg });
-      setChatMessages((prev) => [...prev, { role: 'assistant', content: data.response || data.message || 'No response received.' }]);
+      setChatMessages((prev) => [...prev, { role: 'assistant', content: data.answer || data.response || data.message || 'No response received.' }]);
     } catch {
       setChatMessages((prev) => [...prev, { role: 'assistant', content: 'Error getting response.' }]);
     } finally {
