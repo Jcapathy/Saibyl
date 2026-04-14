@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from app.core.auth import get_current_org
 from app.core.database import get_supabase_admin
+from app.services.engine.document_processor import _extract_text
 from app.services.intelligence.report_agent import clean_report_output, get_report_progress, strip_react_artifacts
 from app.services.intelligence.report_chat import chat_with_report
 from app.workers.report_tasks import run_generate_report
@@ -204,7 +205,7 @@ async def get_reports_by_simulation(sim_id: str, auth: dict = Depends(get_curren
         for doc in docs:
             try:
                 file_bytes = admin.storage.from_("project-media").download(doc["storage_path"])
-                text = file_bytes.decode("utf-8", errors="replace")
+                text, _encoding, _pages = _extract_text(file_bytes, doc["file_type"])
                 word_count = len(text.split())
                 # Truncate to first ~500 words if over 2000 chars
                 if len(text) > 2000:
