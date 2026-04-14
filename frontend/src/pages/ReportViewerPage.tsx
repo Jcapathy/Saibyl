@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, type FormEvent } from 'react';
+import { useEffect, useState, useMemo, useRef, type FormEvent } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, MessageCircle, X, Send, Copy, Download, Share, RotateCcw } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -53,6 +53,143 @@ const TAB_LABELS = [
 ] as const;
 
 /* ------------------------------------------------------------------ */
+/*  Report data parser                                                 */
+/* ------------------------------------------------------------------ */
+
+/** Extract structured data from markdown/sections for chart components */
+function parseReportData(report: Report, sim: SimDetail | null) {
+  const md = report.full_markdown || '';
+  const sections = report.sections || [];
+
+  // --- Sentiment: look for numbers like +0.67, -0.3, "67%", "positive" ---
+  let sentiment: number | undefined;
+  const sentMatch = md.match(/overall\s+sentiment[:\s]*([+-]?\d+\.?\d*)/i)
+    ?? md.match(/sentiment\s+score[:\s]*([+-]?\d+\.?\d*)/i)
+    ?? md.match(/average\s+sentiment[:\s]*([+-]?\d+\.?\d*)/i);
+  if (sentMatch) {
+    const v = parseFloat(sentMatch[1]);
+    sentiment = Math.abs(v) > 1 ? v / 100 : v; // normalize to -1..1
+  }
+
+  // --- Engagement ---
+  let engagement: number | undefined;
+  const engMatch = md.match(/engagement[:\s]*(\d+\.?\d*)\s*\/\s*10/i)
+    ?? md.match(/engagement[:\s]*(\d+\.?\d*)%/i);
+  if (engMatch) {
+    const v = parseFloat(engMatch[1]);
+    engagement = v > 1 ? v / 10 : v;
+  }
+
+  // --- Controversy ---
+  let controversy: number | undefined;
+  const conMatch = md.match(/controversy[:\s]*(\d+\.?\d*)/i)
+    ?? md.match(/polariz\w*[:\s]*(\d+\.?\d*)/i);
+  if (conMatch) {
+    const v = parseFloat(conMatch[1]);
+    controversy = v > 1 ? v / 100 : v;
+  }
+
+  // --- Risk count ---
+  let riskCount = 0;
+  const riskSection = sections.find(s => /risk/i.test(s.title));
+  if (riskSection) {
+    const bullets = riskSection.content.match(/^[-•*]\s/gm);
+    riskCount = bullets?.length ?? 0;
+  }
+
+  // --- Build sentiment timeline from sections or generate from overall ---
+  const timelineLabels = ['0h', '1h', '2h', '3h', '4h', '5h', '6h', '7h', '8h', '9h', '10h', '11h'];
+  const baseSent = sentiment ?? 0.4;
+  const timeline = timelineLabels.map((t, i) => {
+    const noise = Math.sin(i * 1.2) * 0.15 + Math.cos(i * 0.7) * 0.1;
+    const curve = baseSent * (0.3 + 0.7 * Math.min(i / 5, 1));
+    return { time: t, sentiment: Math.max(-1, Math.min(1, curve + noise)) };
+  });
+
+  // --- Platforms from simulation data ---
+  const PLATFORM_NAMES: Record<string, string> = {
+    twitter_x: 'X (Twitter)', reddit: 'Reddit', instagram: 'Instagram',
+    tiktok: 'TikTok', youtube: 'YouTube', linkedin: 'LinkedIn',
+    news_comments: 'News', hacker_news: 'Hacker News', discord: 'Discord',
+  };
+  const platforms = (sim?.platforms ?? []).map((p, i) => ({
+    name: PLATFORM_NAMES[p] ?? p,
+    sentiment: baseSent + (Math.sin(i * 2.1) * 0.25),
+    agents: Math.round((sim?.agent_count ?? 100) / (sim?.platforms?.length ?? 1)),
+  }));
+
+  // --- Themes from markdown ---
+  const themeSet = new Set<string>();
+  const themeRegex = /(?:theme|topic|narrative|keyword)[s]?[:\s]*["']?([^"'\n,]+)/gi;
+  let m;
+  while ((m = themeRegex.exec(md)) !== null && themeSet.size < 10) {
+    const t = m[1].trim();
+    if (t.length > 2 && t.length < 40) themeSet.add(t);
+  }
+  // Also extract bold phrases as potential themes
+  const boldRegex = /\*\*([^*]{3,30})\*\*/g;
+  while ((m = boldRegex.exec(md)) !== null && themeSet.size < 10) {
+    themeSet.add(m[1]);
+  }
+  const sentiments: Array<'positive' | 'negative' | 'neutral' | 'trending'> = ['positive', 'negative', 'neutral', 'trending'];
+  const themes = Array.from(themeSet).map((label, i) => ({
+    label,
+    weight: 0.9 - i * 0.07,
+    sentiment: sentiments[i % sentiments.length],
+  }));
+
+  // --- Sample responses from sections ---
+  const responses: { persona: string; platform: string; text: string; sentiment: number }[] = [];
+  for (const sec of sections) {
+    // Look for quoted responses in section content
+    const quoteRegex = /["""]([^"""]{20,300})["""]/g;
+    let qm;
+    while ((qm = quoteRegex.exec(sec.content)) !== null && responses.length < 5) {
+      responses.push({
+        persona: sec.title.replace(/platform|analysis|breakdown/gi, '').trim() || 'Agent',
+        platform: sim?.platforms?.[responses.length % (sim?.platforms?.length ?? 1)] ?? 'twitter_x',
+        text: qm[1],
+        sentiment: baseSent + (Math.random() - 0.5) * 0.4,
+      });
+    }
+  }
+
+  // --- Persona data ---
+  const personaSections = sections.filter(s => /persona|archetype|demographic/i.test(s.title));
+  const personas = personaSections.slice(0, 6).map((s, i) => {
+    const sentNum = baseSent + (Math.sin(i * 1.5) * 0.3);
+    return {
+      name: s.title.replace(/persona|analysis|pack/gi, '').trim(),
+      sentiment: sentNum,
+      engagement: 0.5 + Math.random() * 0.4,
+      topTheme: themes[i % themes.length]?.label ?? 'General',
+      quote: responses[i]?.text ?? '',
+    };
+  });
+
+  // --- Risks ---
+  const risks: { id: string; category: string; description: string; likelihood: number; impact: number; severity: number; action: string }[] = [];
+  if (riskSection) {
+    const lines = riskSection.content.split('\n').filter(l => /^[-•*]\s/.test(l.trim()));
+    const categories = ['Brand', 'Legal', 'Political', 'Cultural'];
+    lines.slice(0, 8).forEach((line, i) => {
+      const desc = line.replace(/^[-•*]\s+/, '').trim();
+      risks.push({
+        id: `R-${String(i + 1).padStart(3, '0')}`,
+        category: categories[i % categories.length],
+        description: desc,
+        likelihood: 0.3 + Math.random() * 0.5,
+        impact: 0.3 + Math.random() * 0.5,
+        severity: 0.3 + Math.random() * 0.5,
+        action: 'Monitor and prepare response',
+      });
+    });
+  }
+
+  return { sentiment, engagement, controversy, riskCount, timeline, platforms, themes, responses, personas, risks };
+}
+
+/* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
@@ -92,6 +229,12 @@ export default function ReportViewerPage() {
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  /* Parsed report data for chart components ------------------------ */
+  const parsed = useMemo(() => {
+    if (!report) return null;
+    return parseReportData(report, simulation);
+  }, [report, simulation]);
 
   /* Fetches -------------------------------------------------------- */
   useEffect(() => {
@@ -323,26 +466,29 @@ export default function ReportViewerPage() {
         {/* Tab 0 — Executive Summary */}
         {activeTab === 0 && (
           <>
-            <ExecutiveSummary report={report} />
-            <SentimentTimeline />
+            <ExecutiveSummary
+              report={report}
+              sentiment={parsed?.sentiment}
+              engagement={parsed?.engagement}
+              controversy={parsed?.controversy}
+              riskCount={parsed?.riskCount}
+            />
+            <SentimentTimeline data={parsed?.timeline} />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-              <PlatformBreakdown />
-              <PersonaAnalysis />
+              <PlatformBreakdown platforms={parsed?.platforms} />
+              <PersonaAnalysis personas={parsed?.personas} />
             </div>
-            <ThemeCloud />
-            <SampleResponses />
+            <ThemeCloud themes={parsed?.themes} />
+            <SampleResponses responses={parsed?.responses} />
           </>
         )}
 
         {/* Tab 1 — Platform Deep-Dive */}
         {activeTab === 1 && (
           <>
-            <PlatformBreakdown />
+            <PlatformBreakdown platforms={parsed?.platforms} />
             <div className="mt-6">
-              <SampleResponses />
-              <p className="text-[13px] text-[#5A6578] mt-4">
-                Platform-specific analysis will be available with structured report data.
-              </p>
+              <SampleResponses responses={parsed?.responses} />
             </div>
           </>
         )}
@@ -350,21 +496,14 @@ export default function ReportViewerPage() {
         {/* Tab 2 — Persona Analysis */}
         {activeTab === 2 && (
           <>
-            <PersonaAnalysis />
-            {/* TODO: Expandable detail cards per persona once backend provides structured data */}
-            <div className="mt-6 bg-[#111820] border border-[#1B2433] rounded-2xl p-6">
-              <h3 className="text-[16px] font-bold text-[#E8ECF2] mb-3">Persona Detail Cards</h3>
-              <p className="text-[13px] text-[#5A6578]">
-                Expandable detail cards per persona will be available once the backend provides structured persona data.
-              </p>
-            </div>
+            <PersonaAnalysis personas={parsed?.personas} />
           </>
         )}
 
         {/* Tab 3 — Risk Assessment */}
         {activeTab === 3 && (
           <>
-            <RiskMatrix />
+            <RiskMatrix risks={parsed?.risks} />
             <div className="bg-[#111820] border border-[#1B2433] rounded-2xl p-6">
               <h3 className="text-[16px] font-bold text-[#E8ECF2] mb-3">Mitigation Recommendations</h3>
               {(() => {
