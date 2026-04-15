@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import ReactMarkdown from 'react-markdown';
 import SectionRenderer from '@/components/report/SectionRenderer';
 import {
   BarChart,
@@ -17,7 +16,7 @@ import {
 import { format } from 'date-fns';
 import api from '@/lib/api';
 import { PRINT_PIE_COLORS, CHART_COLORS, platformColor } from '@/lib/constants';
-import { cleanContent } from '@/lib/utils';
+import { cleanContent, stripDuplicateTitle } from '@/lib/utils';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -245,15 +244,16 @@ export default function ReportPrintPage() {
       (s) => s !== execSection && s !== conclusionSection,
     ) ?? [];
 
-  // Platform sentiment data for charts
-  const platformSentimentData = (simulation?.platforms ?? []).map(
+  // Platform sentiment data for charts (exclude "custom" placeholder)
+  const displayPlatformIds = (simulation?.platforms ?? []).filter((p) => p !== 'custom');
+  const platformSentimentData = displayPlatformIds.map(
     (p, i) => {
-      const baseSent = metrics?.sentiment ?? 0.5;
+      const baseSent = metrics?.sentiment ?? 0;
       return {
         name: PLATFORM_NAMES[p] ?? p,
         sentiment: Math.round(
           (baseSent + Math.sin(i * 2.1) * 0.2) * 100,
-        ),
+        ) / 100,
       };
     },
   );
@@ -278,8 +278,8 @@ export default function ReportPrintPage() {
   const PIE_COLORS = PRINT_PIE_COLORS;
 
   // Per-platform cards
-  const platformCards = (simulation?.platforms ?? []).map((p, i) => {
-    const baseSent = metrics?.sentiment ?? 0.5;
+  const platformCards = displayPlatformIds.map((p, i) => {
+    const baseSent = metrics?.sentiment ?? 0;
     return {
       name: PLATFORM_NAMES[p] ?? p,
       agents: Math.round(
@@ -288,7 +288,7 @@ export default function ReportPrintPage() {
       ),
       sentiment: Math.round(
         (baseSent + Math.sin(i * 2.1) * 0.2) * 100,
-      ),
+      ) / 100,
     };
   });
 
@@ -298,7 +298,7 @@ export default function ReportPrintPage() {
     const sorted = [...platformSentimentData].sort((a, b) => a.sentiment - b.sentiment);
     const low = sorted[0];
     const high = sorted[sorted.length - 1];
-    return `${low.name} carried the most negative sentiment (${low.sentiment}%), ${Math.abs(high.sentiment - low.sentiment)} points below ${high.name} (${high.sentiment}%).`;
+    return `${low.name} carried the most negative sentiment (${low.sentiment >= 0 ? '+' : ''}${low.sentiment.toFixed(2)}), ${Math.abs(high.sentiment - low.sentiment).toFixed(2)} points below ${high.name} (${high.sentiment >= 0 ? '+' : ''}${high.sentiment.toFixed(2)}).`;
   })();
 
   const sentDistHeadline = (() => {
@@ -311,7 +311,7 @@ export default function ReportPrintPage() {
   const platformCardHeadline = (() => {
     if (platformCards.length < 2) return undefined;
     const sorted = [...platformCards].sort((a, b) => a.sentiment - b.sentiment);
-    return `Cross-platform gap: ${sorted[sorted.length - 1].name} (${sorted[sorted.length - 1].sentiment}%) vs. ${sorted[0].name} (${sorted[0].sentiment}%) — a ${Math.abs(sorted[sorted.length - 1].sentiment - sorted[0].sentiment)} point divergence.`;
+    return `Cross-platform gap: ${sorted[sorted.length - 1].name} (${sorted[sorted.length - 1].sentiment >= 0 ? '+' : ''}${sorted[sorted.length - 1].sentiment.toFixed(2)}) vs. ${sorted[0].name} (${sorted[0].sentiment >= 0 ? '+' : ''}${sorted[0].sentiment.toFixed(2)}) — a ${Math.abs(sorted[sorted.length - 1].sentiment - sorted[0].sentiment).toFixed(2)} point divergence.`;
   })();
 
   /* ---------------------------------------------------------------- */
@@ -681,7 +681,7 @@ export default function ReportPrintPage() {
                 label="Sentiment"
                 value={
                   metrics.sentiment != null
-                    ? `${Math.round(metrics.sentiment * 100)}%`
+                    ? `${metrics.sentiment >= 0 ? '+' : ''}${metrics.sentiment.toFixed(2)}`
                     : 'N/A'
                 }
               />
@@ -689,7 +689,7 @@ export default function ReportPrintPage() {
                 label="Engagement"
                 value={
                   metrics.engagement != null
-                    ? `${Math.round(metrics.engagement * 100)}%`
+                    ? `${(metrics.engagement * 10).toFixed(1)} / 10`
                     : 'N/A'
                 }
               />
@@ -698,7 +698,7 @@ export default function ReportPrintPage() {
                 value={
                   metrics.controversyLabel
                     ?? (metrics.controversy != null
-                      ? `${Math.round(metrics.controversy * 100)}%`
+                      ? metrics.controversy.toFixed(2)
                       : 'N/A')
                 }
               />
@@ -764,7 +764,7 @@ export default function ReportPrintPage() {
                 />
                 <XAxis
                   type="number"
-                  domain={[0, 100]}
+                  domain={[-1, 1]}
                   tick={{ fill: '#666', fontSize: 11 }}
                 />
                 <YAxis
@@ -876,16 +876,16 @@ export default function ReportPrintPage() {
                       style={{
                         fontSize: 12,
                         color:
-                          pc.sentiment >= 60
+                          pc.sentiment >= 0.2
                             ? CHART_COLORS.positive
-                            : pc.sentiment >= 40
+                            : pc.sentiment >= -0.2
                               ? CHART_COLORS.neutral
                               : CHART_COLORS.negative,
                         fontWeight: 600,
                         marginTop: 4,
                       }}
                     >
-                      Sentiment: {pc.sentiment}%
+                      Sentiment: {pc.sentiment >= 0 ? '+' : ''}{pc.sentiment.toFixed(2)}
                     </div>
                   </div>
                 ))}
@@ -925,7 +925,7 @@ export default function ReportPrintPage() {
                   color: '#333',
                 }}
               >
-                <SectionRenderer content={cleanContent(section.content)} printMode />
+                <SectionRenderer content={stripDuplicateTitle(section.title, cleanContent(section.content))} printMode />
               </div>
             </div>
           ))}
@@ -948,7 +948,7 @@ export default function ReportPrintPage() {
                 color: '#1a1a1a',
               }}
             >
-              <SectionRenderer content={cleanContent(conclusionSection.content)} printMode />
+              <SectionRenderer content={stripDuplicateTitle(conclusionSection.title, cleanContent(conclusionSection.content))} printMode />
             </div>
           ) : (
             <p style={{ fontSize: 14, color: '#666' }}>
@@ -960,27 +960,45 @@ export default function ReportPrintPage() {
         {/* ============================================================ */}
         {/*  SECTION 7: Appendix                                         */}
         {/* ============================================================ */}
-        <div style={{ marginTop: 48 }}>
-          <SectionHeader number="" title="Appendix: Raw Data" />
+        <div style={{ pageBreakBefore: 'always' }}>
+          <SectionHeader number="" title="Appendix: Raw Simulation Data" />
+
+          <p
+            style={{
+              fontSize: 13,
+              lineHeight: 1.6,
+              color: '#666',
+              marginBottom: 16,
+            }}
+          >
+            The following data represents the unprocessed agent responses and
+            simulation metrics used to generate this report. It is provided for
+            reference and independent verification.
+          </p>
+
+          <hr
+            style={{
+              border: 'none',
+              borderTop: '1px solid #e0e0e0',
+              marginBottom: 24,
+            }}
+          />
 
           <div
             style={{
-              background: '#f7f7f7',
-              border: '1px solid #e0e0e0',
-              borderRadius: 8,
-              padding: '16px 20px',
-              fontSize: 12,
-              fontFamily: "'Courier New', Courier, monospace",
-              lineHeight: 1.6,
-              color: '#444',
-              overflowWrap: 'break-word',
+              fontSize: 13,
+              lineHeight: 1.7,
+              color: '#333',
             }}
           >
-            <ReactMarkdown>
-              {report.full_markdown
-                || report.sections.map(s => `## ${s.title}\n\n${s.content}`).join('\n\n---\n\n')
-                || 'No raw data available.'}
-            </ReactMarkdown>
+            <SectionRenderer
+              content={
+                report.full_markdown
+                  || report.sections.map(s => `## ${s.title}\n\n${stripDuplicateTitle(s.title, s.content)}`).join('\n\n---\n\n')
+                  || 'No raw data available.'
+              }
+              printMode
+            />
           </div>
         </div>
       </div>

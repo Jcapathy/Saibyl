@@ -29,7 +29,7 @@ export default function SampleResponses({ responses, headline }: SampleResponses
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-[12px] font-semibold text-[#E8ECF2]">{r.persona}</span>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#1B2433] text-[#8B97A8]">{r.platform}</span>
-                <span className="ml-auto text-[10px] text-[#5A6578]">{(r.sentiment * 100).toFixed(0)}% sentiment</span>
+                <span className="ml-auto text-[10px] text-[#5A6578]">Sentiment: {r.sentiment >= 0 ? '+' : ''}{r.sentiment.toFixed(2)}</span>
               </div>
               <p className="text-[13px] text-[#8B97A8] leading-relaxed">{r.text}</p>
             </div>

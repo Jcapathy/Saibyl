@@ -394,7 +394,9 @@ async def export_report(id: str, body: ExportReportBody, auth: dict = Depends(ge
   table {{ border-collapse: collapse; width: 100%; margin: 16px 0; }}
   th, td {{ border: 1px solid #ddd; padding: 8px 12px; text-align: left; }}
   th {{ background: #f5f5ff; }}
-  code {{ background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }}
+  code {{ background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; font-family: inherit; }}
+  pre {{ font-family: inherit; white-space: pre-wrap; margin: 16px 0; }}
+  pre code {{ background: none; padding: 0; }}
 </style>
 </head><body>{html_body}</body></html>"""
         pdf_bytes = HTML(string=full_html).write_pdf()

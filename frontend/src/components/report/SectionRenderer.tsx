@@ -372,7 +372,15 @@ export default function SectionRenderer({ content, printMode, className }: Secti
         const trimmed = block.value.trim();
         if (!trimmed) return null;
         return (
-          <div key={i} className={printMode ? undefined : 'prose prose-sm prose-invert max-w-none'}>
+          <div
+            key={i}
+            className={printMode ? 'print-prose' : 'prose prose-sm prose-invert max-w-none'}
+            style={printMode ? {
+              fontSize: 'inherit',
+              lineHeight: 'inherit',
+              color: 'inherit',
+            } : undefined}
+          >
             <ReactMarkdown>{trimmed}</ReactMarkdown>
           </div>
         );

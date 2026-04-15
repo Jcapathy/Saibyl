@@ -1,6 +1,6 @@
 import SectionRenderer from '@/components/report/SectionRenderer';
 import { classifySentiment } from '@/lib/constants';
-import { cleanContent } from '@/lib/utils';
+import { cleanContent, stripDuplicateTitle } from '@/lib/utils';
 
 interface Report {
   id: string;
@@ -115,7 +115,7 @@ export default function ExecutiveSummary({
       <div className="bg-[#111820] border border-[#1B2433] rounded-2xl p-6">
         <h2 className="text-[16px] font-bold text-[#E8ECF2] mb-4">Executive Brief</h2>
         {execSection ? (
-          <SectionRenderer content={cleanContent(execSection.content)} className="text-[#8B97A8] leading-[1.75]" />
+          <SectionRenderer content={stripDuplicateTitle(execSection.title, cleanContent(execSection.content))} className="text-[#8B97A8] leading-[1.75]" />
         ) : fallbackContent ? (
           <SectionRenderer content={cleanContent(fallbackContent)} className="text-[#8B97A8] leading-[1.75]" />
         ) : (

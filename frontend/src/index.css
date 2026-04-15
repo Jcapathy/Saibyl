@@ -108,6 +108,33 @@
   50% { opacity: 0.5; }
 }
 
+/* ── Print-mode prose — matches SectionRenderer printMode output ── */
+.print-prose h1, .print-prose h2, .print-prose h3, .print-prose h4 {
+  font-family: inherit;
+  font-weight: 700;
+  margin-top: 1.2em;
+  margin-bottom: 0.4em;
+}
+.print-prose h2 { font-size: 1.25em; }
+.print-prose h3 { font-size: 1.1em; }
+.print-prose p { margin: 0.6em 0; }
+.print-prose ul, .print-prose ol { margin: 0.5em 0; padding-left: 1.5em; }
+.print-prose li { margin: 0.25em 0; }
+.print-prose strong { font-weight: 700; }
+.print-prose pre,
+.print-prose code {
+  font-family: inherit;
+  font-size: inherit;
+  background: none;
+  white-space: pre-wrap;
+}
+.print-prose blockquote {
+  border-left: 3px solid #5B5FEE;
+  padding-left: 1em;
+  margin: 0.8em 0;
+  color: #555;
+}
+
 /* ── Utility classes ── */
 .animate-breathe { animation: breathe 8s ease-in-out infinite; }
 .animate-float { animation: float 6s ease-in-out infinite; }

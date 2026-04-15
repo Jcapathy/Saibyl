@@ -4,7 +4,7 @@ import { ArrowLeft, MessageCircle, X, Send, Copy, Download, Share, RotateCcw } f
 import ReactMarkdown from 'react-markdown';
 import { formatDistanceToNow } from 'date-fns';
 import api from '@/lib/api';
-import { cleanContent } from '@/lib/utils';
+import { cleanContent, stripDuplicateTitle } from '@/lib/utils';
 import SectionRenderer from '@/components/report/SectionRenderer';
 import ExecutiveSummary from '@/components/report/ExecutiveSummary';
 import SentimentTimeline from '@/components/report/SentimentTimeline';
@@ -176,7 +176,8 @@ function parseReportData(report: Report, sim: SimDetail | null) {
     tiktok: 'TikTok', youtube: 'YouTube', linkedin: 'LinkedIn',
     news_comments: 'News', hacker_news: 'Hacker News', discord: 'Discord',
   };
-  const platforms = (sim?.platforms ?? []).map((p, i) => ({
+  const displayPlatformIds = (sim?.platforms ?? []).filter((p) => p !== 'custom');
+  const platforms = displayPlatformIds.map((p, i) => ({
     name: PLATFORM_NAMES[p] ?? p,
     sentiment: baseSent + (Math.sin(i * 2.1) * 0.25),
     agents: Math.round((sim?.agent_count ?? 100) / (sim?.platforms?.length ?? 1)),
@@ -308,7 +309,7 @@ function platformHeadline(platforms?: { name: string; sentiment: number; agents:
   const most = sorted[sorted.length - 1];
   const least = sorted[0];
   const gap = Math.abs(most.sentiment - least.sentiment);
-  return `${least.name} drove the most negative sentiment (${(least.sentiment * 100).toFixed(0)}%), ${gap > 0.1 ? `${(gap * 100).toFixed(0)} points below` : 'close to'} ${most.name} (${(most.sentiment * 100).toFixed(0)}%).`;
+  return `${least.name} drove the most negative sentiment (${least.sentiment >= 0 ? '+' : ''}${least.sentiment.toFixed(2)}), ${gap > 0.1 ? `${gap.toFixed(2)} points below` : 'close to'} ${most.name} (${most.sentiment >= 0 ? '+' : ''}${most.sentiment.toFixed(2)}).`;
 }
 
 function personaHeadline(personas?: { name: string; sentiment: number; engagement: number }[]): string | undefined {
@@ -316,7 +317,7 @@ function personaHeadline(personas?: { name: string; sentiment: number; engagemen
   const sorted = [...personas].sort((a, b) => b.engagement - a.engagement);
   const top = sorted[0];
   const mostNeg = [...personas].sort((a, b) => a.sentiment - b.sentiment)[0];
-  return `${top.name} showed the highest engagement (${(top.engagement * 100).toFixed(0)}%). ${mostNeg.name} held the most negative sentiment (${(mostNeg.sentiment * 100).toFixed(0)}%).`;
+  return `${top.name} showed the highest engagement (${(top.engagement * 100).toFixed(0)}%). ${mostNeg.name} held the most negative sentiment (${mostNeg.sentiment >= 0 ? '+' : ''}${mostNeg.sentiment.toFixed(2)}).`;
 }
 
 function themeHeadline(themes?: { label: string; weight: number; sentiment: string }[]): string | undefined {
@@ -339,7 +340,7 @@ function responsesHeadline(responses?: { persona: string; sentiment: number }[])
   if (!responses || responses.length === 0) return undefined;
   const avg = responses.reduce((s, r) => s + r.sentiment, 0) / responses.length;
   const mostNeg = [...responses].sort((a, b) => a.sentiment - b.sentiment)[0];
-  return `Average response sentiment: ${(avg * 100).toFixed(0)}%. Most critical voice: ${mostNeg.persona} (${(mostNeg.sentiment * 100).toFixed(0)}%).`;
+  return `Average response sentiment: ${avg >= 0 ? '+' : ''}${avg.toFixed(2)}. Most critical voice: ${mostNeg.persona} (${mostNeg.sentiment >= 0 ? '+' : ''}${mostNeg.sentiment.toFixed(2)}).`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -703,7 +704,7 @@ export default function ReportViewerPage() {
                 );
                 if (mitigationSection) {
                   return (
-                    <SectionRenderer content={cleanContent(mitigationSection.content)} />
+                    <SectionRenderer content={stripDuplicateTitle(mitigationSection.title, cleanContent(mitigationSection.content))} />
                   );
                 }
                 return (
@@ -730,7 +731,7 @@ export default function ReportViewerPage() {
                 return (
                   <div className="bg-[#111820] border border-[#1B2433] rounded-2xl p-6">
                     <h2 className="text-[16px] font-bold text-[#E8ECF2] mb-4">{stratSection.title}</h2>
-                    <SectionRenderer content={cleanContent(stratSection.content)} className="text-[#8B97A8] leading-[1.75]" />
+                    <SectionRenderer content={stripDuplicateTitle(stratSection.title, cleanContent(stratSection.content))} className="text-[#8B97A8] leading-[1.75]" />
                   </div>
                 );
               }
@@ -766,7 +767,7 @@ export default function ReportViewerPage() {
             </div>
             <div className="bg-[#111820] border border-[#1B2433] rounded-2xl p-6">
               <div className="prose prose-sm prose-invert max-w-none">
-                <ReactMarkdown>{report.full_markdown || report.sections.map(s => `## ${s.title}\n\n${s.content}`).join('\n\n---\n\n') || 'No raw data available.'}</ReactMarkdown>
+                <ReactMarkdown>{report.full_markdown || report.sections.map(s => `## ${s.title}\n\n${stripDuplicateTitle(s.title, s.content)}`).join('\n\n---\n\n') || 'No raw data available.'}</ReactMarkdown>
               </div>
             </div>
           </>

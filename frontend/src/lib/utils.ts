@@ -30,6 +30,10 @@ export function cleanContent(raw: string): string {
   // 2. Strip standalone ANSWER: markers
   text = text.replace(/^ANSWER:\s*/gm, '');
 
+  // Strip wrapping code fences (LLMs sometimes wrap output in ```markdown ... ```)
+  text = text.replace(/^```(?:markdown|md|text)?\s*\n/i, '');
+  text = text.replace(/\n```\s*$/, '');
+
   return text
     .split('\n')
     .filter(line => {
@@ -43,4 +47,14 @@ export function cleanContent(raw: string): string {
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+/** Strip a leading heading/bold line from content when it duplicates the section title.
+ *  Handles: `## Title`, `**Title**`, or bare `Title` on the first line. */
+export function stripDuplicateTitle(title: string, content: string): string {
+  const escaped = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return content.replace(
+    new RegExp(`^(?:#{1,6}\\s*)?(?:\\*{1,2})?\\s*${escaped}\\s*(?:\\*{1,2})?\\s*\\n+`, 'i'),
+    '',
+  );
 }

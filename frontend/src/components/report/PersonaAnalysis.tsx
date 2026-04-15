@@ -28,7 +28,7 @@ export default function PersonaAnalysis({ personas, headline }: PersonaAnalysisP
             <div className="space-y-1.5">
               <div className="flex justify-between text-[11px]">
                 <span className="text-[#5A6578]">Sentiment</span>
-                <span className="text-[#00D4FF]">{(p.sentiment * 100).toFixed(0)}%</span>
+                <span className="text-[#00D4FF]">{p.sentiment >= 0 ? '+' : ''}{p.sentiment.toFixed(2)}</span>
               </div>
               <div className="h-1.5 bg-[#111820] rounded-full overflow-hidden">
                 <div className="h-full bg-[#00D4FF] rounded-full" style={{ width: `${((p.sentiment + 1) / 2) * 100}%` }} />

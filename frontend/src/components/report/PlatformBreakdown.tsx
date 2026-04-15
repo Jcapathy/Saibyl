@@ -33,7 +33,7 @@ export default function PlatformBreakdown({ platforms, headline }: PlatformBreak
               <div className="flex justify-between text-[13px] mb-1">
                 <span className="text-[#E8ECF2] font-medium">{p.name}</span>
                 <span className="text-[#8B97A8]">
-                  {p.agents} agents · {(p.sentiment * 100).toFixed(0)}% sentiment
+                  {p.agents} agents · Sentiment: {p.sentiment >= 0 ? '+' : ''}{p.sentiment.toFixed(2)}
                 </span>
               </div>
               <div className="h-2 bg-[#0D1117] rounded-full overflow-hidden">

@@ -96,7 +96,10 @@ def clean_report_output(text: str) -> str:
     text = re.sub(r"^(?:Thought|Reasoning|Action|Observation):\s.*$", "", text, flags=re.MULTILINE)
     text = re.sub(r"^(?:Using tool|Calling tool|Tool call|Tool output|Tool result)\b.*$", "", text, flags=re.MULTILINE)
     text = re.sub(r"^(?:>?\s*)?(?:search_web|read_url|get_page)\b.*$", "", text, flags=re.MULTILINE)
-    # 5. Collapse triple+ blank lines to a single blank line
+    # 5. Strip wrapping code fences (LLMs sometimes wrap output in ```markdown ... ```)
+    text = re.sub(r"^```(?:markdown|md|text)?\s*\n", "", text.strip(), flags=re.IGNORECASE)
+    text = re.sub(r"\n```\s*$", "", text.strip())
+    # 6. Collapse triple+ blank lines to a single blank line
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
@@ -730,6 +733,16 @@ async def generate_report(
             )}],
         )
         exec_summary = clean_report_output(exec_summary_raw)
+
+        # Store exec summary as a section so the frontend can find it
+        admin.table("report_sections").insert({
+            "report_id": report_id,
+            "organization_id": org_id,
+            "section_index": -1,  # sorts before all ReACT sections
+            "title": "Executive Summary",
+            "content": exec_summary,
+            "status": "complete",
+        }).execute()
 
         full_markdown = f"# {sim['name']} — Intelligence Report\n\n## Executive Summary\n\n{exec_summary}\n\n{sections_text}"
         full_markdown = clean_report_output(full_markdown)  # sanitise before DB write
