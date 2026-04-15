@@ -173,8 +173,9 @@ function parseReportData(report: Report, sim: SimDetail | null) {
   // --- Platforms from simulation data ---
   const PLATFORM_NAMES: Record<string, string> = {
     twitter_x: 'X (Twitter)', reddit: 'Reddit', instagram: 'Instagram',
-    tiktok: 'TikTok', youtube: 'YouTube', linkedin: 'LinkedIn',
-    news_comments: 'News', hacker_news: 'Hacker News', discord: 'Discord',
+    tiktok: 'TikTok', youtube: 'YouTube', facebook: 'Facebook',
+    threads: 'Threads', linkedin: 'LinkedIn', news_comments: 'News',
+    hacker_news: 'Hacker News', discord: 'Discord',
   };
   const displayPlatformIds = (sim?.platforms ?? []).filter((p) => p !== 'custom');
   const platforms = displayPlatformIds.map((p, i) => ({

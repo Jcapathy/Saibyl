@@ -35,6 +35,11 @@ def format_for_platform(profile: AgentProfile, platform: str) -> dict:
         "instagram": format_for_instagram,
         "hacker_news": format_for_hacker_news,
         "discord": format_for_discord,
+        "news_comments": format_for_news_comments,
+        "tiktok": format_for_tiktok,
+        "youtube": format_for_youtube,
+        "facebook": format_for_facebook,
+        "threads": format_for_threads,
     }
     formatter = formatters.get(platform, format_for_custom)
     return formatter(profile)
@@ -140,6 +145,88 @@ def format_for_discord(profile: AgentProfile) -> dict:
         "roles": [profile.persona_type],
         "joined_at": _random_date(0, 3),
         "message_count": _random_in_range(50, 10000, profile.influence_weight),
+        "interests": profile.interests[:5],
+        "persona_type": profile.persona_type,
+        "sentiment_baseline": profile.sentiment_baseline,
+    }
+
+
+def format_for_news_comments(profile: AgentProfile) -> dict:
+    """Returns dict for News Comments agent spec."""
+    return {
+        "username": profile.username,
+        "display_name": profile.display_name,
+        "bio": profile.bio[:200],
+        "comment_count": _random_in_range(5, 2000, profile.influence_weight),
+        "account_age_days": random.randint(30, 3000),
+        "location": profile.country,
+        "interests": profile.interests[:5],
+        "persona_type": profile.persona_type,
+        "political_lean": profile.political_lean,
+        "sentiment_baseline": profile.sentiment_baseline,
+    }
+
+
+def format_for_tiktok(profile: AgentProfile) -> dict:
+    """Returns dict for TikTok agent spec."""
+    return {
+        "username": profile.username,
+        "display_name": profile.display_name,
+        "bio": profile.bio[:80],
+        "followers": _random_in_range(100, 500000, profile.influence_weight),
+        "following": _random_in_range(50, 5000, profile.influence_weight),
+        "likes_given": _random_in_range(500, 100000, profile.influence_weight),
+        "videos_count": _random_in_range(5, 500, profile.influence_weight),
+        "verified": profile.influence_weight > 0.85,
+        "interests": profile.interests[:5],
+        "persona_type": profile.persona_type,
+        "sentiment_baseline": profile.sentiment_baseline,
+    }
+
+
+def format_for_youtube(profile: AgentProfile) -> dict:
+    """Returns dict for YouTube agent spec."""
+    return {
+        "username": profile.username,
+        "channel_name": profile.display_name,
+        "bio": profile.bio[:1000],
+        "subscribers": _random_in_range(10, 100000, profile.influence_weight),
+        "total_views": _random_in_range(1000, 10000000, profile.influence_weight),
+        "videos_count": _random_in_range(5, 500, profile.influence_weight),
+        "joined": _random_date(1, 12),
+        "verified": profile.influence_weight > 0.8,
+        "interests": profile.interests[:5],
+        "persona_type": profile.persona_type,
+        "sentiment_baseline": profile.sentiment_baseline,
+    }
+
+
+def format_for_facebook(profile: AgentProfile) -> dict:
+    """Returns dict for Facebook agent spec."""
+    return {
+        "username": profile.username,
+        "name": profile.display_name,
+        "bio": profile.bio[:200],
+        "friends": _random_in_range(50, 5000, profile.influence_weight),
+        "groups": random.randint(1, 20),
+        "location": profile.country,
+        "joined": _random_date(2, 15),
+        "interests": profile.interests[:8],
+        "persona_type": profile.persona_type,
+        "political_lean": profile.political_lean,
+        "sentiment_baseline": profile.sentiment_baseline,
+    }
+
+
+def format_for_threads(profile: AgentProfile) -> dict:
+    """Returns dict for Threads agent spec."""
+    return {
+        "username": profile.username,
+        "name": profile.display_name,
+        "bio": profile.bio[:160],
+        "followers": _random_in_range(50, 50000, profile.influence_weight),
+        "following": _random_in_range(50, 5000, profile.influence_weight),
+        "verified": profile.influence_weight > 0.7,
         "interests": profile.interests[:5],
         "persona_type": profile.persona_type,
         "sentiment_baseline": profile.sentiment_baseline,

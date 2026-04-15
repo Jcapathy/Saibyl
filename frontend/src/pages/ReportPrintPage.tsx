@@ -71,6 +71,8 @@ const PLATFORM_NAMES: Record<string, string> = {
   instagram: 'Instagram',
   tiktok: 'TikTok',
   youtube: 'YouTube',
+  facebook: 'Facebook',
+  threads: 'Threads',
   linkedin: 'LinkedIn',
   news_comments: 'News',
   hacker_news: 'Hacker News',

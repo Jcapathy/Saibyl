@@ -38,6 +38,10 @@ PLATFORM_COLORS: dict[str, str] = {
     "hacker_news":   "#818CF8",
     "discord":       "#A78BFA",
     "news_comments": POSITIVE,
+    "tiktok":        "#EE1D52",
+    "youtube":       "#FF0000",
+    "facebook":      "#1877F2",
+    "threads":       "#000000",
     "custom":        "#94A3B8",
 }
 

@@ -50,6 +50,8 @@ const PLATFORM_MAP: Record<string, string> = {
   instagram: 'IG',
   tiktok: 'TT',
   youtube: '\u25B6',
+  facebook: 'FB',
+  threads: 'TH',
   linkedin: 'in',
   news_comments: 'N',
   hacker_news: 'HN',

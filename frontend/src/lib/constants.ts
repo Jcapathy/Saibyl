@@ -3,6 +3,10 @@ export const PLATFORM_NAMES: Record<string, string> = {
   reddit: 'Reddit',
   linkedin: 'LinkedIn',
   instagram: 'Instagram',
+  tiktok: 'TikTok',
+  youtube: 'YouTube',
+  facebook: 'Facebook',
+  threads: 'Threads',
   hacker_news: 'Hacker News',
   discord: 'Discord',
   news_comments: 'News Comments',
@@ -47,6 +51,10 @@ export const PLATFORM_COLORS: Record<string, string> = {
   reddit:        CHART_COLORS.negative,  // Red
   linkedin:      CHART_COLORS.neutral,   // Gold
   instagram:     CHART_COLORS.subjectB,  // Cyan
+  tiktok:        '#EE1D52',              // TikTok pink
+  youtube:       '#FF0000',              // YouTube red
+  facebook:      '#1877F2',              // Facebook blue
+  threads:       '#000000',              // Threads black
   hacker_news:   '#818CF8',              // Light purple
   discord:       '#A78BFA',              // Violet
   news_comments: CHART_COLORS.positive,  // Green
@@ -75,6 +83,10 @@ export const PRINT_PLATFORM_COLORS: Record<string, string> = {
   reddit:        '#dc2626',
   linkedin:      '#b8860b',
   instagram:     '#0891b2',
+  tiktok:        '#EE1D52',
+  youtube:       '#c00',
+  facebook:      '#1877F2',
+  threads:       '#333',
   hacker_news:   '#6d28d9',
   discord:       '#7c3aed',
   news_comments: '#059669',

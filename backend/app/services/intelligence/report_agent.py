@@ -169,21 +169,27 @@ markers, or processing notes in the final output.
 reveals.
 6. The executive summary must open with a plain-English situation brief, not data tables.
 7. The conclusion must include specific, actionable recommendations with timelines and \
-supporting data."""
+supporting data.
+8. PLATFORM FIDELITY: Only reference platforms that were actually simulated (listed in the \
+simulation context). NEVER mention, analyze, or recommend actions on platforms that were not \
+part of the simulation. If a platform was not simulated, it does not exist for this report."""
 
 OUTLINE_PROMPT = """You are a predictive intelligence analyst producing a comprehensive, evidence-rich report.
 
 Prediction goal: {prediction_goal}
-Platforms simulated: {platforms}
+Platforms simulated (ONLY these — no others exist for this report): {platforms}
 Agent count: {agent_count}
 Rounds completed: {rounds}
 Total events: {event_count}
 
 Generate a report outline with {section_count} sections. Each section must have a title and 3-5 research angles (specific questions to investigate with data).
 
+CRITICAL: Every research angle MUST reference ONLY the simulated platforms listed above. \
+Do NOT mention, hypothesize about, or reference any platform not in that list.
+
 REQUIRED: Every report must include sections covering:
 - Sentiment trajectories over time (round-by-round arc, inflection points, polarization)
-- Platform-specific dynamics (how each platform shaped discourse differently)
+- Platform-specific dynamics (how each simulated platform shaped discourse differently)
 - Agent/persona archetype analysis (cluster agents by behavior patterns, emotional signatures)
 - Key trigger events and viral moments (what caused sentiment spikes/shifts)
 - Predictive implications and forecast (what the trajectories suggest going forward)
@@ -195,6 +201,7 @@ Return JSON: {{"sections": [{{"title": str, "research_angles": [str]}}]}}"""
 REACT_PROMPT = """You are a ReACT (Reasoning-Action-Observation) intelligence analyst writing section "{section_title}" of a comprehensive predictive intelligence report.
 
 Prediction goal: {prediction_goal}
+Simulated platforms (ONLY these): {platforms}
 Research angles for this section: {research_angles}
 
 You have access to these tools (call by name):
@@ -228,7 +235,9 @@ table reveals (e.g., "**Twitter/X drove the sharpest negative shift, hitting -0.
 - Write 800-1500 words per section — comprehensive analysis, not summaries
 - Use direct quotes from agent interviews as supporting evidence
 
-Be analytical and data-driven. Synthesize across multiple data sources. Do NOT produce thin, surface-level summaries."""
+Be analytical and data-driven. Synthesize across multiple data sources. Do NOT produce thin, surface-level summaries.
+
+IMPORTANT: Only discuss the simulated platforms listed above. Do NOT reference any other platforms."""
 
 EXECUTIVE_SUMMARY_PROMPT = """\
 ╔══════════════════════════════════════════════════════════════════╗
@@ -353,7 +362,7 @@ decisive intelligence, not academic caution.
 
 === SIMULATION CONTEXT ===
 Prediction goal: {prediction_goal}
-Platforms: {platforms}
+Platforms (ONLY these were simulated): {platforms}
 Agent count: {agent_count}
 Rounds completed: {rounds}
 Total events: {event_count}
@@ -368,6 +377,9 @@ Controversy score (0-1): {controversy_score}
 Write the section titled "Strategic Implications & Recommended Actions" using EXACTLY the \
 sub-sections below. Do NOT add preamble, methodology notes, or throat-clearing. Start writing \
 the first sub-section immediately.
+
+CRITICAL: All recommendations MUST target ONLY the simulated platforms: {platforms}. \
+Do NOT recommend actions on platforms that were not part of the simulation.
 
 FORMATTING RULES:
 - Bold key findings and inflection points throughout.
@@ -385,13 +397,13 @@ Frame the situation as an opportunity or threat that demands specific action.
 
 Write 3-5 numbered recommendations. Each MUST follow this exact format:
 
-**[Action Verb]: [Specific recommendation naming the platform, audience segment, and timeframe]**
+**[Action Verb]: [Specific recommendation naming a SIMULATED platform, audience segment, and timeframe]**
 - **Evidence:** [Cite the specific simulation finding — cluster migration, platform sentiment delta, archetype behavior shift]
 - **Timeline:** [When to execute — must be within 7-14 days]
 - **Expected Impact:** [What the simulation data predicts will happen if this action is taken]
 
 Requirements for each recommendation:
-- Be SPECIFIC: name the platform (Twitter/X, Instagram, LinkedIn, etc.), the audience segment \
+- Be SPECIFIC: name the simulated platform, the audience segment \
 (e.g., "Conflicted Moderates", "Media Watchdogs"), and the timeframe
 - Be GROUNDED: cite the exact metric that supports it (sentiment score, percentage shift, \
 archetype migration rate)
@@ -434,6 +446,7 @@ async def _run_react_loop(
     graph_id: str | None,
     config: ReACTConfig,
     variant: str = "a",
+    platforms: str = "",
 ) -> str:
     """Run the ReACT loop for a single report section."""
     evidence: list[str] = []
@@ -443,6 +456,7 @@ async def _run_react_loop(
         prompt = REACT_PROMPT.format(
             section_title=section.title,
             prediction_goal=prediction_goal,
+            platforms=platforms,
             research_angles=", ".join(section.research_angles),
             evidence="\n".join(evidence) if evidence else "None yet.",
         )
@@ -472,6 +486,7 @@ async def _run_react_loop(
     final_prompt = REACT_PROMPT.format(
         section_title=section.title,
         prediction_goal=prediction_goal,
+        platforms=platforms,
         research_angles=", ".join(section.research_angles),
         evidence="\n".join(evidence),
     ) + "\n\nYou have used all available tool calls. You MUST now provide your ANSWER. Synthesize ALL evidence gathered into a comprehensive, data-rich section (800-1500 words) with specific metrics, tables, archetype analysis, and predictive implications:"
@@ -626,13 +641,16 @@ async def generate_report(
             }).execute()
 
         # Phase 2: Generate sections in parallel
+        platforms = ", ".join(sim.get("platforms") or ["twitter_x"])
+
         async def generate_section(idx: int, section: SectionPlan):
             r.publish(f"report:{report_id}:progress", json.dumps({
                 "section_index": idx, "status": "generating", "title": section.title,
             }))
 
             content = await _run_react_loop(
-                section, sim_id, sim["prediction_goal"], graph_id, config
+                section, sim_id, sim["prediction_goal"], graph_id, config,
+                platforms=platforms,
             )
             content = clean_report_output(content)  # sanitise before DB write
 
@@ -663,7 +681,6 @@ async def generate_report(
         polarization_ratio = pol_metrics["polarization_ratio"] or "N/A"
         controversy_score = str(pol_metrics["controversy_score"]) if pol_metrics["controversy_score"] is not None else "N/A"
 
-        platforms = ", ".join(sim.get("platforms") or ["twitter_x"])
         rounds = sim.get("max_rounds", 10)
 
         # Phase 3b: Generate conclusion — Strategic Implications & Recommended Actions

@@ -11,8 +11,13 @@ from pydantic import BaseModel
 class ReactionType(StrEnum):
     LIKE = "like"
     LOVE = "love"
+    HAHA = "haha"
+    WOW = "wow"
+    SAD = "sad"
     ANGRY = "angry"
+    DISLIKE = "dislike"
     REPOST = "repost"
+    SHARE = "share"
     UPVOTE = "upvote"
     DOWNVOTE = "downvote"
     AWARD = "award"

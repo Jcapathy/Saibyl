@@ -56,10 +56,14 @@ def load_all_adapters():
     from app.services.platforms.adapters import (  # noqa: F401
         custom,
         discord,
+        facebook,
         hacker_news,
         instagram,
         linkedin,
         news_comments,
         reddit,
+        threads,
+        tiktok,
         twitter_x,
+        youtube,
     )
