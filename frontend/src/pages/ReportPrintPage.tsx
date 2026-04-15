@@ -959,50 +959,6 @@ export default function ReportPrintPage() {
           )}
         </div>
 
-        {/* ============================================================ */}
-        {/*  SECTION 7: Appendix                                         */}
-        {/* ============================================================ */}
-        <div style={{ pageBreakBefore: 'always' }}>
-          <SectionHeader number="" title="Appendix: Raw Simulation Data" />
-
-          <p
-            style={{
-              fontSize: 13,
-              lineHeight: 1.6,
-              color: '#666',
-              marginBottom: 16,
-            }}
-          >
-            The following data represents the unprocessed agent responses and
-            simulation metrics used to generate this report. It is provided for
-            reference and independent verification.
-          </p>
-
-          <hr
-            style={{
-              border: 'none',
-              borderTop: '1px solid #e0e0e0',
-              marginBottom: 24,
-            }}
-          />
-
-          <div
-            style={{
-              fontSize: 13,
-              lineHeight: 1.7,
-              color: '#333',
-            }}
-          >
-            <SectionRenderer
-              content={
-                report.full_markdown
-                  || report.sections.map(s => `## ${s.title}\n\n${stripDuplicateTitle(s.title, s.content)}`).join('\n\n---\n\n')
-                  || 'No raw data available.'
-              }
-              printMode
-            />
-          </div>
-        </div>
       </div>
     </>
   );
