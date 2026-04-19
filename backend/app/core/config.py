@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     backend_url: str = "http://localhost:8000"
     cors_origins: str = "http://localhost:3000"
     llm_provider: str = "anthropic"
-    llm_model: str = "claude-opus-4-6"
+    llm_model: str = "claude-opus-4-7"
     llm_fast_model: str = "claude-haiku-4-5-20251001"
     llm_base_url: str = ""
     supabase_storage_bucket: str = "saibyl-uploads"
