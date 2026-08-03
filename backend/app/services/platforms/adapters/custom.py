@@ -10,7 +10,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
-from app.core.llm_client import llm_complete
+from app.core.llm_client import llm_fast
 from app.services.platforms.base_adapter import (
     BasePlatformAdapter,
     Comment,
@@ -181,7 +181,7 @@ class CustomAdapter(BasePlatformAdapter):
             memory=self.get_agent_memory(agent["username"]),
             round=round_number,
         )
-        raw = await llm_complete([{"role": "user", "content": prompt}], max_tokens=200)
+        raw = await llm_fast([{"role": "user", "content": prompt}], max_tokens=200)
         await asyncio.sleep(0)
 
         now = datetime.now(tz=UTC)

@@ -158,6 +158,43 @@ async def quick_search(
 
 # ── Tool 4: SimulationAnalytics ──────────────────────────
 
+_NO_ARTIFACT = (
+    "No analysis artifact exists for this simulation, so there are no measured "
+    "sentiment figures to report. Say so explicitly in the section rather than "
+    "describing sentiment from the raw post text."
+)
+
+
+def _artifact(sim_id: str) -> dict | None:
+    """The simulation's analysis artifact, or None.
+
+    Every measured figure a report cites comes from here. Reports used to
+    compute their own numbers from event metadata, which is how a formula
+    written in the runner ended up presented to customers as a finding.
+    """
+    from app.services.intelligence.analysis_builder import get_analysis
+
+    row = get_analysis(sim_id)
+    if not row or row.get("build_status") != "complete":
+        return None
+    return row.get("artifact") or None
+
+
+def _slice_row(slice_data: dict, key: str) -> dict:
+    return {
+        key: slice_data[key],
+        "mean_valence": slice_data["valence"]["mean"],
+        "ci_lower": slice_data["valence"]["lower"],
+        "ci_upper": slice_data["valence"]["upper"],
+        "agents": slice_data["valence"]["n"],
+        "events": slice_data["event_count"],
+        "support_pct": slice_data["stance"]["support_pct"],
+        "oppose_pct": slice_data["stance"]["oppose_pct"],
+        "mean_intensity": slice_data["mean_intensity"],
+        "top_objections": slice_data.get("top_objection_keys") or [],
+    }
+
+
 async def simulation_analytics(
     simulation_id: UUID,
     analysis_type: Literal[
@@ -167,6 +204,7 @@ async def simulation_analytics(
         "agent_activity",
         "platform_comparison",
         "persona_breakdown",
+        "measured_findings",
         "ab_comparison",
     ],
     variant: str = "a",
@@ -201,14 +239,36 @@ async def simulation_analytics(
         summary = f"Top {len(top)} posts by engagement out of {len(posts)} total"
 
     elif analysis_type == "sentiment_over_time":
-        by_round: dict[int, list] = {}
-        for e in events:
-            rn = e.get("round_number", 0)
-            sent = (e.get("metadata") or {}).get("sentiment", 0)
-            by_round.setdefault(rn, []).append(sent)
-        curve = {r: sum(v) / len(v) if v else 0 for r, v in sorted(by_round.items())}
-        data = {"sentiment_curve": curve}
-        summary = f"Sentiment tracked across {len(curve)} rounds"
+        # Read from the analysis artifact, never from event metadata. The
+        # metadata "sentiment" key was written by the removed drift formula and
+        # is absent on every run measured under Phase 1 — a report writer
+        # averaging it would silently produce a flat curve at zero.
+        artifact = _artifact(sim_id)
+        if artifact is None:
+            data = {}
+            summary = _NO_ARTIFACT
+        else:
+            timeline = artifact.get("sentiment_timeline") or []
+            data = {
+                "sentiment_curve": [
+                    {
+                        "round": p["round_number"],
+                        "mean_valence": p["valence"]["mean"],
+                        "ci_lower": p["valence"]["lower"],
+                        "ci_upper": p["valence"]["upper"],
+                        "agents": p["valence"]["n"],
+                        "support_pct": p["stance"]["support_pct"],
+                        "oppose_pct": p["stance"]["oppose_pct"],
+                    }
+                    for p in timeline
+                ],
+                "confidence": (artifact.get("quality") or {}).get("confidence"),
+            }
+            summary = (
+                f"Measured sentiment across {len(timeline)} rounds. Every value "
+                "carries a confidence interval computed from the number of "
+                "agents, not events — quote the interval, never the mean alone."
+            )
 
     elif analysis_type == "viral_moments":
         posts = [e for e in events if e["event_type"] == "post"]
@@ -227,24 +287,62 @@ async def simulation_analytics(
         summary = f"{len(by_agent)} unique agents, top agent has {top_agents[0][1] if top_agents else 0} events"
 
     elif analysis_type == "platform_comparison":
-        by_platform: dict[str, int] = {}
-        for e in events:
-            p = e.get("platform", "unknown")
-            by_platform[p] = by_platform.get(p, 0) + 1
-        data = {"platform_events": by_platform}
-        summary = f"Events across {len(by_platform)} platforms"
+        artifact = _artifact(sim_id)
+        if artifact is None:
+            data = {}
+            summary = _NO_ARTIFACT
+        else:
+            slices = artifact.get("by_platform") or []
+            data = {"platforms": [_slice_row(s, "platform") for s in slices]}
+            summary = (
+                f"{len(slices)} platforms, most negative first. Differences "
+                "smaller than the confidence intervals are not resolved."
+            )
 
     elif analysis_type == "persona_breakdown":
-        # Need to join with agents
-        agents = admin.table("simulation_agents").select("id, profile").eq(
-            "simulation_id", sim_id).execute().data
-        agent_types = {a["id"]: (a.get("profile") or {}).get("persona_type", "unknown") for a in agents}
-        by_type: dict[str, int] = {}
-        for e in events:
-            ptype = agent_types.get(e.get("agent_id"), "unknown")
-            by_type[ptype] = by_type.get(ptype, 0) + 1
-        data = {"persona_events": by_type}
-        summary = f"{len(by_type)} persona types active"
+        artifact = _artifact(sim_id)
+        if artifact is None:
+            data = {}
+            summary = _NO_ARTIFACT
+        else:
+            slices = artifact.get("by_archetype") or []
+            data = {"archetypes": [_slice_row(s, "archetype") for s in slices]}
+            summary = (
+                f"{len(slices)} archetypes, most negative first, each with the "
+                "objections its agents raised."
+            )
+
+    elif analysis_type == "measured_findings":
+        artifact = _artifact(sim_id)
+        if artifact is None:
+            data = {}
+            summary = _NO_ARTIFACT
+        else:
+            objections = artifact.get("objections") or []
+            data = {
+                "headline": artifact.get("headline"),
+                "objections": [
+                    {
+                        "key": o["key"],
+                        "label": o["label"],
+                        "summary": o["summary"],
+                        "load_bearing_score": o["load_bearing_score"],
+                        "agent_count": o["agent_count"],
+                        "first_round_seen": o["first_round_seen"],
+                        "originating_cohort": o["originating_cohort"],
+                        "cohort_spread": o["cohort_spread"],
+                        "quotes": [q["text"] for q in (o.get("quotes") or [])[:3]],
+                    }
+                    for o in objections[:10]
+                ],
+                "flashpoints": artifact.get("flashpoints") or [],
+                "quality": artifact.get("quality"),
+            }
+            summary = (
+                f"{len(objections)} canonical objections ranked by load-bearing "
+                "weight (reach x intensity x cohort spread), not by how often "
+                "they were repeated. Quotes are verbatim agent output."
+            )
 
     elif analysis_type == "ab_comparison":
         variant_a = [e for e in events if e.get("variant") == "a"]

@@ -204,7 +204,7 @@ export const SaibylHero: React.FC = () => {
   // each render. We also call renderCanvas directly here to ensure the canvas
   // is painted before Remotion captures the frame for video export.
   return (
-    <AbsoluteFill style={{ backgroundColor: '#070B14' }}>
+    <AbsoluteFill style={{ backgroundColor: '#0A0F1C' }}>
       <canvas
         ref={(el) => {
           canvasRef.current = el;

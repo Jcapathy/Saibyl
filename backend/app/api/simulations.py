@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
+from typing import Literal
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.core.auth import get_current_org
 from app.core.database import get_supabase_admin
@@ -56,6 +57,19 @@ class CreateSimulationBody(BaseModel):
     persona_pack_ids: list[str] = []
     agent_count: int | None = None
     description: str | None = None
+    variants: int = Field(default=1, ge=1, le=8)
+    depth: Literal["brief", "standard", "deep"] = "standard"
+
+
+class StartSimulationBody(BaseModel):
+    """The quote to redeem for this run.
+
+    Optional so an API client can start a run without configuring one in the
+    UI, but a run started without a quote is priced from the stored shape at
+    the same rate — there is no cheaper path.
+    """
+
+    quote_id: str | None = None
 
 
 class InterviewBody(BaseModel):
@@ -108,6 +122,8 @@ async def create_simulation(body: CreateSimulationBody, auth: dict = Depends(get
             "persona_pack_ids": body.persona_pack_ids,
             "agent_count": body.agent_count,
             "description": body.description,
+            "variants": body.variants,
+            "depth": body.depth,
             "status": "draft",
             "created_by": auth["user"]["id"],
             "created_at": datetime.now(UTC).isoformat(),
@@ -216,13 +232,17 @@ async def prepare_simulation(id: str, auth: dict = Depends(get_current_org)):
 
 
 @router.post("/{id}/start")
-async def start_simulation(id: str, auth: dict = Depends(get_current_org)):
-    """Start running a simulation."""
+async def start_simulation(
+    id: str,
+    body: StartSimulationBody | None = None,
+    auth: dict = Depends(get_current_org),
+):
+    """Start running a simulation, redeeming its quote."""
     log.info("start_simulation", simulation_id=id, org_id=auth["org_id"])
     admin = get_supabase_admin()
     sim = (
         admin.table("simulations")
-        .select("id, is_ab_test, status, agent_count, max_rounds")
+        .select("id, is_ab_test, status, agent_count, max_rounds, platforms, variants")
         .eq("id", id)
         .eq("organization_id", auth["org_id"])
         .single()
@@ -250,13 +270,37 @@ async def start_simulation(id: str, auth: dict = Depends(get_current_org)):
     if not await check_simulation_quota(auth["org_id"]):
         raise HTTPException(status_code=402, detail="Simulation quota exceeded for this billing period")
 
-    # Enforce agent budget
-    from app.services.billing.agent_pricing import check_agent_budget
-    agent_count = sim.data.get("agent_count") or 1000
+    from app.services.billing.agent_pricing import check_credit_budget, deduct_credits
+    from app.services.billing.run_quote import QuoteError, consume_quote
+
+    agent_count = sim.data.get("agent_count") or 1
     max_rounds = sim.data.get("max_rounds") or 10
-    budget = check_agent_budget(auth["org_id"], agent_count, max_rounds)
-    if not budget.allowed:
-        raise HTTPException(status_code=402, detail=budget.message)
+    platforms = len(sim.data.get("platforms") or ["twitter_x"])
+    variants = sim.data.get("variants") or 1
+
+    # Credits are charged at start, not at completion. Deducting on completion
+    # would let a user with one run's worth of credits start ten runs at once
+    # and have every balance check pass; a failed run still consumed compute.
+    quote_id = body.quote_id if body else None
+    if quote_id:
+        try:
+            quote = consume_quote(
+                quote_id, auth["org_id"], id,
+                (agent_count, max_rounds, platforms, variants),
+            )
+        except QuoteError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        deduct_credits(auth["org_id"], quote.credits)
+    else:
+        # No quote — a run started from the API or an older client. Priced the
+        # same way, just without the signed guarantee that the price shown is
+        # the price charged.
+        budget = check_credit_budget(
+            auth["org_id"], agent_count, max_rounds, platforms, variants
+        )
+        if not budget.allowed:
+            raise HTTPException(status_code=402, detail=budget.message)
+        deduct_credits(auth["org_id"], budget.credits_required)
 
     if sim.data.get("is_ab_test"):
         asyncio.create_task(_safe_task(run_simulation_ab(id), "run_simulation_ab", simulation_id=id))

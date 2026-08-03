@@ -7,14 +7,14 @@ import { supabase } from '@/lib/supabase';
 
 /* ── Particle data for the brand panel ── */
 const PARTICLES: { x: string; y: string; color: string; duration: string; delay: string }[] = [
-  { x: '12%', y: '18%', color: '#5B5FEE', duration: '14s', delay: '0s' },
-  { x: '78%', y: '24%', color: '#00D4FF', duration: '18s', delay: '-3s' },
-  { x: '34%', y: '65%', color: '#5B5FEE', duration: '16s', delay: '-7s' },
-  { x: '88%', y: '72%', color: '#00D4FF', duration: '20s', delay: '-2s' },
-  { x: '22%', y: '85%', color: '#5B5FEE', duration: '15s', delay: '-5s' },
-  { x: '62%', y: '42%', color: '#00D4FF', duration: '17s', delay: '-9s' },
-  { x: '48%', y: '12%', color: '#5B5FEE', duration: '19s', delay: '-4s' },
-  { x: '92%', y: '52%', color: '#00D4FF', duration: '13s', delay: '-6s' },
+  { x: '12%', y: '18%', color: '#8B5CF6', duration: '14s', delay: '0s' },
+  { x: '78%', y: '24%', color: '#2563EB', duration: '18s', delay: '-3s' },
+  { x: '34%', y: '65%', color: '#8B5CF6', duration: '16s', delay: '-7s' },
+  { x: '88%', y: '72%', color: '#2563EB', duration: '20s', delay: '-2s' },
+  { x: '22%', y: '85%', color: '#8B5CF6', duration: '15s', delay: '-5s' },
+  { x: '62%', y: '42%', color: '#2563EB', duration: '17s', delay: '-9s' },
+  { x: '48%', y: '12%', color: '#8B5CF6', duration: '19s', delay: '-4s' },
+  { x: '92%', y: '52%', color: '#2563EB', duration: '13s', delay: '-6s' },
 ];
 
 const NODE_POSITIONS = [
@@ -24,7 +24,7 @@ const NODE_POSITIONS = [
 
 /* ── Shared input class ── */
 const INPUT_CLASS =
-  'w-full px-4 py-[0.6875rem] rounded-[10px] border border-white/[0.06] bg-white/[0.025] text-[#E8ECF2] text-sm placeholder:text-[#94A3B8]/40 outline-none transition-all duration-200 focus:border-[rgba(91,95,238,0.5)] focus:shadow-[0_0_0_3px_rgba(91,95,238,0.1),0_0_20px_rgba(91,95,238,0.05)] focus:bg-white/[0.04]';
+  'w-full px-4 py-[0.6875rem] rounded-[10px] border border-white/[0.06] bg-white/[0.025] text-[#E8ECF2] text-sm placeholder:text-[#94A3B8]/40 outline-none transition-all duration-200 focus:border-[rgba(139,92,246,0.5)] focus:shadow-[0_0_0_3px_rgba(139,92,246,0.1),0_0_20px_rgba(139,92,246,0.05)] focus:bg-white/[0.04]';
 
 /* ── Stats data ── */
 const STATS: { value: string; label: string }[] = [
@@ -72,10 +72,10 @@ export default function LoginPage() {
       {/* ═══════════════════════════════════════════════════
           LEFT PANEL — Brand
          ═══════════════════════════════════════════════════ */}
-      <div className="hidden lg:flex relative flex-col justify-center px-16 xl:px-20 bg-[#070B14] overflow-hidden">
+      <div className="hidden lg:flex relative flex-col justify-center px-16 xl:px-20 bg-[#0A0F1C] overflow-hidden">
         {/* Radial gradient accents */}
         <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-[20%] left-[10%] w-[60%] h-[60%] rounded-full bg-[radial-gradient(ellipse,rgba(91,95,238,0.08)_0%,transparent_70%)]" />
+          <div className="absolute top-[20%] left-[10%] w-[60%] h-[60%] rounded-full bg-[radial-gradient(ellipse,rgba(139,92,246,0.08)_0%,transparent_70%)]" />
           <div className="absolute bottom-[10%] right-[5%] w-[50%] h-[50%] rounded-full bg-[radial-gradient(ellipse,rgba(0,212,255,0.06)_0%,transparent_70%)]" />
         </div>
 
@@ -105,7 +105,7 @@ export default function LoginPage() {
                 y1={`${y1}%`}
                 x2={`${x2}%`}
                 y2={`${y2}%`}
-                stroke="#5B5FEE"
+                stroke="#8B5CF6"
                 strokeWidth="1"
               />
             )),
@@ -170,7 +170,7 @@ export default function LoginPage() {
       {/* ═══════════════════════════════════════════════════
           RIGHT PANEL — Form
          ═══════════════════════════════════════════════════ */}
-      <div className="flex items-center justify-center bg-[#0D1117] lg:border-l lg:border-[#1B2433] px-6 py-12">
+      <div className="flex items-center justify-center bg-[#0D1424] lg:border-l lg:border-[#1E293B] px-6 py-12">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -311,7 +311,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-[0.6875rem] rounded-[10px] bg-[#C9A227] text-[#070B14] text-sm font-semibold transition-all duration-200 hover:bg-[#D4AF37] hover:shadow-[0_4px_20px_rgba(201,162,39,0.3)] hover:-translate-y-[1px] disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none flex items-center justify-center gap-2"
+              className="w-full py-[0.6875rem] rounded-[10px] bg-[#C9A227] text-[#0A0F1C] text-sm font-semibold transition-all duration-200 hover:bg-[#D4AF37] hover:shadow-[0_4px_20px_rgba(201,162,39,0.3)] hover:-translate-y-[1px] disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>

@@ -23,6 +23,21 @@ interface Simulation {
   error_message: string | null;
 }
 
+/**
+ * Redeem the quote the configurator stashed for this simulation, once.
+ *
+ * A quote is single-use server-side, so replaying one on a retry would fail the
+ * start with "already used" rather than falling back to a fresh price. Removing
+ * it here means a retry re-prices against the stored shape instead — the same
+ * cost, arrived at honestly.
+ */
+function takeQuoteId(simulationId: string): string | undefined {
+  const key = `saibyl_quote_${simulationId}`;
+  const quoteId = sessionStorage.getItem(key);
+  if (quoteId) sessionStorage.removeItem(key);
+  return quoteId ?? undefined;
+}
+
 export default function SimulationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [sim, setSim] = useState<Simulation | null>(null);
@@ -142,7 +157,7 @@ export default function SimulationDetailPage() {
     // Auto-start
     setRunning(true);
     setRunStatus('Starting simulation...');
-    api.post(`/simulations/${id}/start`).then(() => {
+    api.post(`/simulations/${id}/start`, { quote_id: takeQuoteId(id) }).then(() => {
       setRunStatus('Simulation running...');
       loadSim();
     }).catch(() => {
@@ -182,7 +197,7 @@ export default function SimulationDetailPage() {
       }
 
       setRunStatus('Starting simulation...');
-      await api.post(`/simulations/${id}/start`);
+      await api.post(`/simulations/${id}/start`, { quote_id: takeQuoteId(id) });
       setRunStatus('Simulation running — polling for updates...');
       // Poll until complete
       const poll = setInterval(async () => {
@@ -287,7 +302,7 @@ export default function SimulationDetailPage() {
             </div>
             <button
               onClick={handleRunNow}
-              className="px-8 py-3 rounded-xl bg-[#C9A227] text-[#070B14] font-semibold text-sm transition-all hover:bg-[#D4AF37] hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(201,162,39,0.3)]"
+              className="px-8 py-3 rounded-xl bg-[#C9A227] text-[#0A0F1C] font-semibold text-sm transition-all hover:bg-[#D4AF37] hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(201,162,39,0.3)]"
             >
               Run Simulation →
             </button>
@@ -321,7 +336,7 @@ export default function SimulationDetailPage() {
             </div>
             <Link
               to={`/app/simulations/${id}/report`}
-              className="px-6 py-2.5 rounded-xl bg-[#C9A227] text-[#070B14] font-semibold text-sm hover:bg-[#D4AF37] transition-all hover:-translate-y-0.5"
+              className="px-6 py-2.5 rounded-xl bg-[#C9A227] text-[#0A0F1C] font-semibold text-sm hover:bg-[#D4AF37] transition-all hover:-translate-y-0.5"
             >
               View Report →
             </Link>

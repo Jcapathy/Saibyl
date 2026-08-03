@@ -10,14 +10,14 @@ import { supabase } from '@/lib/supabase';
 /* ------------------------------------------------------------------ */
 
 const PARTICLES = [
-  { top: '12%', left: '18%', dur: '14s', delay: '0s', color: '#5B5FEE' },
-  { top: '28%', left: '72%', dur: '18s', delay: '-4s', color: '#00D4FF' },
-  { top: '55%', left: '25%', dur: '16s', delay: '-8s', color: '#5B5FEE' },
-  { top: '70%', left: '65%', dur: '20s', delay: '-2s', color: '#00D4FF' },
-  { top: '85%', left: '40%', dur: '15s', delay: '-6s', color: '#5B5FEE' },
-  { top: '40%', left: '85%', dur: '17s', delay: '-10s', color: '#00D4FF' },
-  { top: '18%', left: '50%', dur: '19s', delay: '-3s', color: '#5B5FEE' },
-  { top: '62%', left: '10%', dur: '13s', delay: '-7s', color: '#00D4FF' },
+  { top: '12%', left: '18%', dur: '14s', delay: '0s', color: '#8B5CF6' },
+  { top: '28%', left: '72%', dur: '18s', delay: '-4s', color: '#2563EB' },
+  { top: '55%', left: '25%', dur: '16s', delay: '-8s', color: '#8B5CF6' },
+  { top: '70%', left: '65%', dur: '20s', delay: '-2s', color: '#2563EB' },
+  { top: '85%', left: '40%', dur: '15s', delay: '-6s', color: '#8B5CF6' },
+  { top: '40%', left: '85%', dur: '17s', delay: '-10s', color: '#2563EB' },
+  { top: '18%', left: '50%', dur: '19s', delay: '-3s', color: '#8B5CF6' },
+  { top: '62%', left: '10%', dur: '13s', delay: '-7s', color: '#2563EB' },
 ];
 
 const CONNECTION_NODES = [
@@ -33,7 +33,7 @@ const STATS = [
 ];
 
 const INPUT_CLASS =
-  'w-full px-4 py-[0.6875rem] rounded-[10px] border border-white/[0.06] bg-white/[0.025] text-[#E8ECF2] text-sm placeholder:text-[#94A3B8]/40 outline-none transition-all duration-200 focus:border-[rgba(91,95,238,0.5)] focus:shadow-[0_0_0_3px_rgba(91,95,238,0.1),0_0_20px_rgba(91,95,238,0.05)] focus:bg-white/[0.04]';
+  'w-full px-4 py-[0.6875rem] rounded-[10px] border border-white/[0.06] bg-white/[0.025] text-[#E8ECF2] text-sm placeholder:text-[#94A3B8]/40 outline-none transition-all duration-200 focus:border-[rgba(139,92,246,0.5)] focus:shadow-[0_0_0_3px_rgba(139,92,246,0.1),0_0_20px_rgba(139,92,246,0.05)] focus:bg-white/[0.04]';
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -106,10 +106,10 @@ export default function SignupPage() {
       {/* ============================================================ */}
       {/*  LEFT PANEL — Brand                                          */}
       {/* ============================================================ */}
-      <div className="hidden lg:flex relative flex-col justify-center items-center bg-[#070B14] overflow-hidden px-12 py-16">
+      <div className="hidden lg:flex relative flex-col justify-center items-center bg-[#0A0F1C] overflow-hidden px-12 py-16">
         {/* Radial gradients */}
         <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-[-20%] left-[-10%] w-[70%] h-[70%] rounded-full bg-[radial-gradient(ellipse,rgba(91,95,238,0.08)_0%,transparent_65%)]" />
+          <div className="absolute top-[-20%] left-[-10%] w-[70%] h-[70%] rounded-full bg-[radial-gradient(ellipse,rgba(139,92,246,0.08)_0%,transparent_65%)]" />
           <div className="absolute bottom-[-15%] right-[-10%] w-[60%] h-[60%] rounded-full bg-[radial-gradient(ellipse,rgba(0,212,255,0.06)_0%,transparent_65%)]" />
         </div>
 
@@ -142,7 +142,7 @@ export default function SignupPage() {
                 y1={`${y1}%`}
                 x2={`${next[0]}%`}
                 y2={`${next[1]}%`}
-                stroke="#5B5FEE"
+                stroke="#8B5CF6"
                 strokeWidth="0.5"
                 opacity="0.06"
               />
@@ -211,7 +211,7 @@ export default function SignupPage() {
       {/* ============================================================ */}
       {/*  RIGHT PANEL — Form                                          */}
       {/* ============================================================ */}
-      <div className="flex flex-col items-center justify-center bg-[#0D1117] lg:border-l lg:border-[#1B2433] px-6 py-12">
+      <div className="flex flex-col items-center justify-center bg-[#0D1424] lg:border-l lg:border-[#1E293B] px-6 py-12">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -397,7 +397,7 @@ export default function SignupPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-[0.6875rem] rounded-[10px] bg-[#C9A227] text-[#070B14] text-sm font-semibold transition-all duration-200 hover:bg-[#D4AF37] hover:shadow-[0_4px_20px_rgba(201,162,39,0.3)] hover:-translate-y-[1px] disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none flex items-center justify-center gap-2"
+              className="w-full py-[0.6875rem] rounded-[10px] bg-[#C9A227] text-[#0A0F1C] text-sm font-semibold transition-all duration-200 hover:bg-[#D4AF37] hover:shadow-[0_4px_20px_rgba(201,162,39,0.3)] hover:-translate-y-[1px] disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none flex items-center justify-center gap-2"
             >
               {loading && (
                 <svg

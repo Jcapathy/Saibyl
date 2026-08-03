@@ -80,7 +80,7 @@ function GradientAvatar({ text, size }: { text: string; size: number }) {
         width: size,
         height: size,
         fontSize: size * 0.38,
-        background: 'linear-gradient(135deg, #5B5FEE, #00D4FF)',
+        background: 'linear-gradient(135deg, #8B5CF6, #2563EB)',
       }}
     >
       {getInitials(text)}
@@ -106,13 +106,13 @@ function NavLink({ item, pathname, onClick }: { item: NavItem; pathname: string;
       onClick={onClick}
       className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-all ${
         isActive
-          ? 'bg-[rgba(91,95,238,0.12)] text-[#E8ECF2]'
+          ? 'bg-[rgba(139,92,246,0.12)] text-[#E8ECF2]'
           : 'text-[#8B97A8] hover:bg-white/[0.04] hover:text-[#E8ECF2]'
       }`}
     >
       <Icon
         className={`w-4 h-4 shrink-0 ${
-          isActive ? 'text-[#5B5FEE]' : 'text-[#5A6578]'
+          isActive ? 'text-[#8B5CF6]' : 'text-[#5A6578]'
         }`}
       />
       {item.label}
@@ -141,7 +141,7 @@ function UsageBar({
       </div>
       <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
         <div
-          className="h-full rounded-full bg-gradient-to-r from-[#5B5FEE] to-[#00D4FF] transition-all"
+          className="h-full rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#2563EB] transition-all"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -210,7 +210,7 @@ export default function AppLayout() {
   const sidebarContent = (
     <div className="flex flex-col h-full">
       {/* Brand header */}
-      <div className="px-5 py-5 flex items-center gap-2.5 border-b border-[#1B2433]">
+      <div className="px-5 py-5 flex items-center gap-2.5 border-b border-[#1E293B]">
         <img src="/logo-mark.svg" alt="" className="w-8 h-8" />
         <span className="text-gradient-brand font-extrabold text-base select-none" style={{ letterSpacing: '-0.025em' }}>
           SAIBYL
@@ -254,7 +254,7 @@ export default function AppLayout() {
       </nav>
 
       {/* Usage bars */}
-      <div className="px-4 py-3 border-t border-[#1B2433] space-y-3">
+      <div className="px-4 py-3 border-t border-[#1E293B] space-y-3">
         {billingLoading ? (
           <UsageSkeleton />
         ) : billing ? (
@@ -276,7 +276,7 @@ export default function AppLayout() {
       </div>
 
       {/* User footer */}
-      <div className="px-4 py-3 border-t border-[#1B2433]">
+      <div className="px-4 py-3 border-t border-[#1E293B]">
         <div className="flex items-center gap-2.5">
           <GradientAvatar text={user?.email ?? '??'} size={32} />
           <div className="flex-1 min-w-0">
@@ -296,10 +296,10 @@ export default function AppLayout() {
   );
 
   return (
-    <div className="flex h-screen bg-[#070B14]">
+    <div className="flex h-screen bg-[#0A0F1C]">
       {/* Mobile toggle button */}
       <button
-        className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-[#0D1117] border border-[#1B2433] text-[#8B97A8] hover:text-[#E8ECF2] transition-colors"
+        className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-[#0D1424] border border-[#1E293B] text-[#8B97A8] hover:text-[#E8ECF2] transition-colors"
         onClick={() => setMobileOpen((o) => !o)}
       >
         {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -307,7 +307,7 @@ export default function AppLayout() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed top-0 left-0 h-screen w-[260px] bg-[#0D1117] border-r border-[#1B2433] z-40 transition-transform ${
+        className={`fixed top-0 left-0 h-screen w-[260px] bg-[#0D1424] border-r border-[#1E293B] z-40 transition-transform ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         } lg:translate-x-0`}
       >

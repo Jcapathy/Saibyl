@@ -173,8 +173,8 @@ function TableChart({ table, printMode, headline: headlineProp }: TableChartProp
 
   const colors = printMode ? PRINT_PALETTE : CHART_PALETTE;
   const textColor = printMode ? '#374151' : '#8B97A8';
-  const gridColor = printMode ? '#e5e7eb' : '#1B2433';
-  const bg = printMode ? '#f9fafb' : '#0D1117';
+  const gridColor = printMode ? '#e5e7eb' : '#1E293B';
+  const bg = printMode ? '#f9fafb' : '#0D1424';
 
   // Check if any numeric columns represent sentiment — use semantic coloring
   const useSentimentColors = numericCols.length === 1 && isSentimentHeader(headers[numericCols[0]]);
@@ -204,7 +204,7 @@ function TableChart({ table, printMode, headline: headlineProp }: TableChartProp
             <Tooltip
               contentStyle={printMode
                 ? { background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 12 }
-                : { background: '#111820', border: '1px solid #1B2433', borderRadius: 8, fontSize: 12, color: '#E8ECF2' }
+                : { background: '#111827', border: '1px solid #1E293B', borderRadius: 8, fontSize: 12, color: '#E8ECF2' }
               }
             />
             {numericCols.length > 1 && <Legend wrapperStyle={{ fontSize: 11, color: textColor }} />}
@@ -291,9 +291,9 @@ function ChartHeadline({ text, printMode }: { text: string; printMode?: boolean 
 
 /** Styled HTML table for data that can't be charted, or as a companion to charts */
 function MarkdownTable({ table, printMode, compact }: { table: ParsedTable; printMode?: boolean; compact?: boolean }) {
-  const borderColor = printMode ? '#e5e7eb' : '#1B2433';
-  const headerBg = printMode ? '#f3f4f6' : '#0D1117';
-  const cellBg = printMode ? '#ffffff' : '#111820';
+  const borderColor = printMode ? '#e5e7eb' : '#1E293B';
+  const headerBg = printMode ? '#f3f4f6' : '#0D1424';
+  const cellBg = printMode ? '#ffffff' : '#111827';
   const textColor = printMode ? '#374151' : '#8B97A8';
   const headerTextColor = printMode ? '#111827' : '#E8ECF2';
   const fontSize = compact ? 11 : 13;

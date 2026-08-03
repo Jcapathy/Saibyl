@@ -33,21 +33,21 @@ export default function ReportExport({ simulationId, simulationName, sections }:
     <div className="flex gap-2">
       <button
         onClick={exportPDF}
-        className="flex items-center gap-1.5 text-[12px] px-3 py-1.5 rounded-lg border border-[#1B2433] text-[#8B97A8] hover:text-[#E8ECF2] hover:border-[#5A6578] transition-colors"
+        className="flex items-center gap-1.5 text-[12px] px-3 py-1.5 rounded-lg border border-[#1E293B] text-[#8B97A8] hover:text-[#E8ECF2] hover:border-[#5A6578] transition-colors"
       >
         <Download className="w-3.5 h-3.5" />
         PDF
       </button>
       <button
         onClick={exportCSV}
-        className="flex items-center gap-1.5 text-[12px] px-3 py-1.5 rounded-lg border border-[#1B2433] text-[#8B97A8] hover:text-[#E8ECF2] hover:border-[#5A6578] transition-colors"
+        className="flex items-center gap-1.5 text-[12px] px-3 py-1.5 rounded-lg border border-[#1E293B] text-[#8B97A8] hover:text-[#E8ECF2] hover:border-[#5A6578] transition-colors"
       >
         <Download className="w-3.5 h-3.5" />
         CSV
       </button>
       <button
         onClick={exportJSON}
-        className="flex items-center gap-1.5 text-[12px] px-3 py-1.5 rounded-lg border border-[#1B2433] text-[#8B97A8] hover:text-[#E8ECF2] hover:border-[#5A6578] transition-colors"
+        className="flex items-center gap-1.5 text-[12px] px-3 py-1.5 rounded-lg border border-[#1E293B] text-[#8B97A8] hover:text-[#E8ECF2] hover:border-[#5A6578] transition-colors"
       >
         <Download className="w-3.5 h-3.5" />
         JSON

@@ -4,7 +4,8 @@ import json
 import structlog
 
 from app.core.database import get_supabase_admin
-from app.core.llm_client import _extract_json, llm_complete
+from app.core.llm_client import _extract_json, llm_fast
+from app.services.billing.usage_ledger import usage_context
 from app.services.engine.document_processor import process_document
 from app.services.engine.ontology_generator import generate_ontology
 
@@ -151,7 +152,7 @@ Return a JSON object:
 - "sentiment_baseline": float (use {archetype.behavior_traits.sentiment_baseline} as center, vary +/-0.15)
 - "backstory": 2-3 sentences about their perspective on the topic, informed by the domain context"""
 
-                raw = await llm_complete(
+                raw = await llm_fast(
                     messages=[{"role": "user", "content": prompt}],
                     max_tokens=400,
                 )
@@ -202,10 +203,15 @@ Return a JSON object:
         admin.table("simulations").update({"status": "failed"}).eq("id", simulation_id).execute()
         raise ValueError("No agents to generate — check persona pack archetypes and platform selection")
 
-    results = await asyncio.gather(
-        *[_gen_pack_agent(p, a, plat, idx) for p, a, plat, idx in agent_specs],
-        return_exceptions=True,
-    )
+    # Attributed to the agent_generation stage so the quote can be reconciled
+    # against measured spend per stage, not just per run.
+    with usage_context(
+        "agent_generation", simulation_id=simulation_id, organization_id=org_id
+    ):
+        results = await asyncio.gather(
+            *[_gen_pack_agent(p, a, plat, idx) for p, a, plat, idx in agent_specs],
+            return_exceptions=True,
+        )
     agents_to_create = [r for r in results if isinstance(r, dict)]
 
     # Guard: if zero agents were created, fail explicitly
@@ -282,11 +288,11 @@ async def run_simulation(simulation_id: str):
     platforms_list = sim.get("platforms") or ["twitter_x"]
     total_events = 0
 
-    # Build username -> (agent_id, sentiment_baseline) lookup for event enrichment
-    agent_lookup: dict[str, dict] = {
-        a["username"]: {"id": a["id"], "sentiment_baseline": a.get("profile", {}).get("sentiment_baseline", 0.0)}
-        for a in agents
-    }
+    # username -> agent_id, so an event can be attributed to the agent that
+    # produced it. The old lookup also carried sentiment_baseline, which existed
+    # only to feed the drift formula that has been removed — sentiment is now
+    # measured from event content by services/intelligence/event_measurement.py.
+    agent_lookup: dict[str, str] = {a["username"]: a["id"] for a in agents}
 
     # Initialize platform adapters
     from app.services.platforms.registry import get_adapter, load_all_adapters
@@ -330,35 +336,33 @@ async def run_simulation(simulation_id: str):
                 events = []
                 try:
                     async for event in adapter.run_round(round_num):
-                        agent_info = agent_lookup.get(event.agent_username, {})
-                        agent_id = agent_info.get("id")
-                        baseline = agent_info.get("sentiment_baseline", 0.0)
-                        # Echo-chamber drift: amplify baseline toward extremes as rounds progress
-                        drift_factor = 1.0 + (round_num / max_rounds) * 1.5
-                        sentiment = max(-1.0, min(1.0, baseline * drift_factor))
-
-                        meta = event.metadata or {}
-                        meta["sentiment"] = round(sentiment, 4)
-
+                        # Events are written unmeasured. Sentiment is scored
+                        # from content after the run, not synthesised here from
+                        # the agent's archetype preset and the round index.
                         events.append({
                             "simulation_id": simulation_id,
                             "organization_id": org_id,
                             "event_type": event.event_type,
-                            "agent_id": agent_id,
+                            "agent_id": agent_lookup.get(event.agent_username),
                             "platform": event.platform,
                             "variant": event.variant,
                             "round_number": event.round_number,
                             "content": event.content[:1000] if event.content else None,
-                            "metadata": meta,
+                            "metadata": event.metadata or {},
                         })
                 except Exception as e:
                     logger.warning("round_failed", platform=platform_id, round=round_num, error=str(e))
                 return events
 
-            platform_results = await asyncio.gather(
-                *[_run_platform_round(pid, adp) for pid, adp in adapters.items()],
-                return_exceptions=True,
-            )
+            with usage_context(
+                "agent_action",
+                simulation_id=simulation_id,
+                organization_id=org_id,
+            ):
+                platform_results = await asyncio.gather(
+                    *[_run_platform_round(pid, adp) for pid, adp in adapters.items()],
+                    return_exceptions=True,
+                )
 
             round_events = []
             for result in platform_results:
@@ -406,6 +410,17 @@ async def run_simulation(simulation_id: str):
     except Exception:
         pass
 
+    # Measure the events and build the analysis artifact before the run is
+    # marked complete. The report reads the artifact, and the UI renders only
+    # from it, so a run that is "complete" without one would show a customer an
+    # empty report and no explanation.
+    admin.table("simulations").update({"status": "analyzing"}).eq(
+        "id", simulation_id
+    ).execute()
+
+    from app.workers.analysis_tasks import run_analysis
+    analysis_summary = await run_analysis(simulation_id, org_id)
+
     admin.table("simulations").update({
         "status": "complete",
         "completed_at": datetime.now(UTC).isoformat(),
@@ -422,16 +437,22 @@ async def run_simulation(simulation_id: str):
             "status": "complete",
             "total_events": total_events,
             "agent_rounds": agent_rounds,
+            "measurement_coverage_pct": analysis_summary.get("coverage_pct", 0.0),
         })
     except Exception:
         pass
 
-    # Auto-trigger report generation after simulation completes
+    # Auto-trigger report generation after the artifact exists.
     from app.workers.report_tasks import run_generate_report
     asyncio.create_task(run_generate_report(simulation_id))
     logger.info("report_generation_triggered", simulation_id=simulation_id)
 
-    return {"simulation_id": simulation_id, "status": "complete", "total_events": total_events}
+    return {
+        "simulation_id": simulation_id,
+        "status": "complete",
+        "total_events": total_events,
+        "analysis": analysis_summary,
+    }
 
 
 async def run_simulation_ab(simulation_id: str):

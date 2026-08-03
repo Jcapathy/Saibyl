@@ -1,0 +1,427 @@
+# PUBLIC INTERFACE
+# ─────────────────────────────────────────────────────────
+# build_simulation_analysis(simulation_id, organization_id) -> SimulationAnalysis
+# get_analysis(simulation_id) -> dict | None
+# ─────────────────────────────────────────────────────────
+"""Builds the `simulation_analysis` artifact — the only source of rendered numbers.
+
+The pipeline is: measure every event from its content, cluster the objections,
+then aggregate both into one typed artifact. Everything downstream — the report
+viewer, the print page, the exporter, and from Phase 2 the Founder lens — reads
+this artifact and nothing else. That constraint is what makes it possible to
+state that a number is measured: there is exactly one place it could have come
+from.
+
+The aggregates here deliberately refuse to fill gaps. If a round produced no
+scored events, it is absent from the timeline rather than interpolated. If one
+agent carried a platform, that platform's interval spans the full scale. V1
+produced a smooth, plausible, entirely synthetic curve; a gap that is visibly a
+gap is worth more than a curve that is quietly invented.
+"""
+from __future__ import annotations
+
+from datetime import UTC, datetime
+
+import structlog
+
+from app.core.database import get_supabase_admin
+from app.services.intelligence.analysis_data import (
+    MeasuredEvent,
+    RunData,
+    load_run_data,
+    mean_intensity,
+    mean_interval,
+    stance_split,
+)
+from app.services.intelligence.analysis_schema import (
+    SCHEMA_VERSION,
+    ArchetypeSlice,
+    Flashpoint,
+    Headline,
+    ObjectionSummary,
+    PlatformSlice,
+    PropagationEdge,
+    QualityBlock,
+    SimulationAnalysis,
+    TimelinePoint,
+)
+from app.services.intelligence.objection_canonicalizer import (
+    canonicalize_objections,
+    persist_objections,
+)
+
+logger = structlog.get_logger()
+
+# A round-to-round move smaller than this is not called a flashpoint even when
+# it clears the confidence bands. Below it the shift is real but not actionable,
+# and a report that flags six of them flags nothing.
+FLASHPOINT_MIN_DELTA = 0.15
+
+# Interval widths that separate the three confidence labels. A 25-agent run
+# lands in "low" and is told so; that is the honest read, not a defect.
+_CI_WIDTH_MODERATE = 0.50
+_CI_WIDTH_HIGH = 0.25
+
+MAX_OBJECTIONS_IN_ARTIFACT = 20
+
+
+def _timeline(run: RunData) -> list[TimelinePoint]:
+    by_round: dict[int, list[MeasuredEvent]] = {}
+    for event in run.events:
+        by_round.setdefault(event.round_number, []).append(event)
+
+    points: list[TimelinePoint] = []
+    for round_number in sorted(by_round):
+        events = by_round[round_number]
+        scored = [e for e in events if e.scored]
+        if not scored:
+            # No measured opinion this round. Omitted rather than carried
+            # forward — a flat segment would read as "sentiment held steady".
+            continue
+        points.append(
+            TimelinePoint(
+                round_number=round_number,
+                valence=mean_interval(scored),
+                stance=stance_split(events),
+                mean_intensity=mean_intensity(events),
+                event_count=len(events),
+                agent_count=len({e.agent_id or e.agent_username for e in events}),
+                novel_claim_count=sum(1 for e in events if e.is_novel_claim),
+            )
+        )
+    return points
+
+
+def _objection_keys_for(
+    events: list[MeasuredEvent], objections: list[ObjectionSummary], limit: int = 3
+) -> list[str]:
+    """The load-bearing objections present in this slice, in global rank order."""
+    event_ids = {e.id for e in events}
+    return [
+        o.key for o in objections if event_ids.intersection(o.event_ids)
+    ][:limit]
+
+
+def _by_platform(
+    run: RunData, objections: list[ObjectionSummary]
+) -> list[PlatformSlice]:
+    grouped: dict[str, list[MeasuredEvent]] = {}
+    for event in run.events:
+        grouped.setdefault(event.platform, []).append(event)
+
+    slices = [
+        PlatformSlice(
+            platform=platform,
+            valence=mean_interval(events),
+            stance=stance_split(events),
+            mean_intensity=mean_intensity(events),
+            event_count=len(events),
+            agent_count=len({e.agent_id or e.agent_username for e in events}),
+            top_objection_keys=_objection_keys_for(events, objections),
+        )
+        for platform, events in grouped.items()
+    ]
+    # Most negative first: the platform where this is going worst is the one the
+    # reader needs on screen before they scroll.
+    slices.sort(key=lambda s: s.valence.mean)
+    return slices
+
+
+def _by_archetype(
+    run: RunData, objections: list[ObjectionSummary]
+) -> list[ArchetypeSlice]:
+    grouped: dict[str, list[MeasuredEvent]] = {}
+    for event in run.events:
+        grouped.setdefault(event.archetype, []).append(event)
+
+    slices = [
+        ArchetypeSlice(
+            archetype=archetype,
+            valence=mean_interval(events),
+            stance=stance_split(events),
+            mean_intensity=mean_intensity(events),
+            event_count=len(events),
+            agent_count=len({e.agent_id or e.agent_username for e in events}),
+            top_objection_keys=_objection_keys_for(events, objections),
+        )
+        for archetype, events in grouped.items()
+    ]
+    slices.sort(key=lambda s: s.valence.mean)
+    return slices
+
+
+def _flashpoints(
+    run: RunData, timeline: list[TimelinePoint], objections: list[ObjectionSummary]
+) -> list[Flashpoint]:
+    """Rounds where sentiment moved, with the events that moved it.
+
+    A move counts as significant only when the two rounds' confidence intervals
+    do not overlap. Non-overlapping intervals are a conservative test — they
+    imply a significant difference but can miss a real one — and being told
+    "this might be noise" about a true shift is a cheaper mistake than acting on
+    a shift that was noise.
+    """
+    events_by_round: dict[int, list[MeasuredEvent]] = {}
+    for event in run.events:
+        events_by_round.setdefault(event.round_number, []).append(event)
+
+    points: list[Flashpoint] = []
+    for prev, curr in zip(timeline, timeline[1:], strict=False):
+        delta = curr.valence.mean - prev.valence.mean
+        if abs(delta) < FLASHPOINT_MIN_DELTA:
+            continue
+
+        significant = (
+            curr.valence.lower > prev.valence.upper
+            or curr.valence.upper < prev.valence.lower
+        )
+
+        round_events = events_by_round.get(curr.round_number, [])
+        # The events that pushed it: the ones moving in the same direction as
+        # the shift, hardest first.
+        movers = [
+            e for e in round_events
+            if e.scored and ((e.valence < prev.valence.mean) == (delta < 0))
+        ]
+        movers.sort(key=lambda e: abs(e.valence - prev.valence.mean), reverse=True)
+        trigger_ids = [e.id for e in movers[:8]]
+
+        direction = "fell" if delta < 0 else "rose"
+        qualifier = "" if significant else " (within the confidence bands — treat as directional)"
+        points.append(
+            Flashpoint(
+                round_number=curr.round_number,
+                valence_before=prev.valence.mean,
+                valence_after=curr.valence.mean,
+                delta=round(delta, 4),
+                significant=significant,
+                trigger_event_ids=trigger_ids,
+                objection_keys=_objection_keys_for(movers[:8], objections),
+                description=(
+                    f"Sentiment {direction} {abs(delta):.2f} between round "
+                    f"{prev.round_number} and {curr.round_number}{qualifier}."
+                ),
+            )
+        )
+
+    points.sort(key=lambda f: (not f.significant, -abs(f.delta)))
+    return points
+
+
+def _propagation(objections: list[ObjectionSummary], run: RunData) -> list[PropagationEdge]:
+    """Where each objection started and which groups it reached later.
+
+    Escaping the originating cohort is the single most important thing an
+    objection can do — one confined to its cohort is a complaint, one that
+    reaches neutral buyers is a problem — so the graph is edges out of the
+    origin rather than a full co-occurrence mesh.
+    """
+    events_by_id = {e.id: e for e in run.events}
+    edges: list[PropagationEdge] = []
+
+    for objection in objections:
+        events = [events_by_id[eid] for eid in objection.event_ids if eid in events_by_id]
+        if not events:
+            continue
+
+        for kind, attr in (("archetype", "archetype"), ("platform", "platform")):
+            first_seen: dict[str, int] = {}
+            for event in events:
+                group = getattr(event, attr)
+                first_seen[group] = min(
+                    first_seen.get(group, event.round_number), event.round_number
+                )
+            if len(first_seen) < 2:
+                continue
+
+            origin = min(first_seen.items(), key=lambda kv: kv[1])
+            for group, round_number in sorted(first_seen.items(), key=lambda kv: kv[1]):
+                if group == origin[0]:
+                    continue
+                edges.append(
+                    PropagationEdge(
+                        objection_key=objection.key,
+                        from_group=origin[0],
+                        to_group=group,
+                        group_kind=kind,  # type: ignore[arg-type]
+                        first_round=round_number,
+                        event_ids=[
+                            e.id for e in events
+                            if getattr(e, attr) == group
+                            and e.round_number == round_number
+                        ][:5],
+                    )
+                )
+    return edges
+
+
+def _headline(
+    run: RunData, timeline: list[TimelinePoint], objections: list[ObjectionSummary]
+) -> Headline:
+    scored = run.scored_events
+    overall = mean_interval(scored)
+
+    polarization = 0.0
+    if scored:
+        opposite = sum(
+            1 for e in scored
+            if (e.valence < 0) != (overall.mean < 0) and e.valence != 0
+        )
+        polarization = round(opposite * 100 / len(scored), 2)
+
+    novel_pct = 0.0
+    if run.events:
+        novel_pct = round(
+            sum(1 for e in run.events if e.is_novel_claim) * 100 / len(run.events), 2
+        )
+
+    trajectory: str = "flat"
+    delta = 0.0
+    if len(timeline) >= 2:
+        first, last = timeline[0], timeline[-1]
+        delta = round(last.valence.mean - first.valence.mean, 4)
+        # Only called improving or declining when the endpoints' intervals do
+        # not overlap. Otherwise the run drifted inside its own noise and
+        # naming a direction would be a claim the data does not support.
+        if last.valence.lower > first.valence.upper:
+            trajectory = "improving"
+        elif last.valence.upper < first.valence.lower:
+            trajectory = "declining"
+
+    return Headline(
+        valence=overall,
+        stance=stance_split(run.events),
+        mean_intensity=mean_intensity(run.events),
+        polarization_pct=polarization,
+        novel_claim_pct=novel_pct,
+        trajectory=trajectory,  # type: ignore[arg-type]
+        trajectory_delta=delta,
+        top_objection_key=objections[0].key if objections else None,
+    )
+
+
+def _quality(run: RunData, timeline: list[TimelinePoint], overall_n: int) -> QualityBlock:
+    coverage = (
+        round(run.events_measured * 100 / run.events_total, 2)
+        if run.events_total
+        else 0.0
+    )
+    widths = [p.valence.upper - p.valence.lower for p in timeline]
+    mean_width = round(sum(widths) / len(widths), 4) if widths else 2.0
+
+    if mean_width <= _CI_WIDTH_HIGH:
+        confidence = "high"
+    elif mean_width <= _CI_WIDTH_MODERATE:
+        confidence = "moderate"
+    else:
+        confidence = "low"
+
+    caveats: list[str] = []
+    if coverage < 95:
+        caveats.append(
+            f"{round(100 - coverage, 1)}% of events could not be measured and are "
+            "excluded from every figure here."
+        )
+    if overall_n < 30:
+        caveats.append(
+            f"{overall_n} agents produced measurable opinions. Intervals are wide "
+            "at this swarm size — treat differences smaller than the bands as "
+            "unresolved."
+        )
+    if len(timeline) < 2:
+        caveats.append(
+            "Fewer than two rounds produced measurable opinion, so no trajectory "
+            "is reported."
+        )
+    contentless = run.events_measured - len(run.scored_events)
+    if contentless > 0 and run.events_measured:
+        caveats.append(
+            f"{contentless} events were reactions or off-topic; they count as "
+            "engagement but carry no sentiment."
+        )
+
+    return QualityBlock(
+        events_total=run.events_total,
+        events_measured=run.events_measured,
+        coverage_pct=coverage,
+        agents_total=run.agents_total,
+        agents_active=len({e.agent_id or e.agent_username for e in run.events}),
+        rounds=len(timeline),
+        measurement_model=run.measurement_model,
+        mean_ci_width=mean_width,
+        confidence=confidence,  # type: ignore[arg-type]
+        caveats=caveats,
+    )
+
+
+async def build_simulation_analysis(
+    simulation_id: str, organization_id: str
+) -> SimulationAnalysis:
+    """Build and persist the analysis artifact for a finished run."""
+    run = load_run_data(simulation_id)
+
+    objections = await canonicalize_objections(run)
+    persist_objections(run, objections)
+
+    timeline = _timeline(run)
+    headline = _headline(run, timeline, objections)
+
+    analysis = SimulationAnalysis(
+        schema_version=SCHEMA_VERSION,
+        simulation_id=simulation_id,
+        generated_at=datetime.now(UTC),
+        headline=headline,
+        sentiment_timeline=timeline,
+        by_platform=_by_platform(run, objections),
+        by_archetype=_by_archetype(run, objections),
+        objections=objections[:MAX_OBJECTIONS_IN_ARTIFACT],
+        flashpoints=_flashpoints(run, timeline, objections),
+        propagation=_propagation(objections[:MAX_OBJECTIONS_IN_ARTIFACT], run),
+        quality=_quality(run, timeline, headline.valence.n),
+    )
+
+    _persist(analysis, run, organization_id)
+    logger.info(
+        "analysis_built",
+        simulation_id=simulation_id,
+        rounds=len(timeline),
+        objections=len(objections),
+        flashpoints=len(analysis.flashpoints),
+        coverage_pct=analysis.quality.coverage_pct,
+        confidence=analysis.quality.confidence,
+    )
+    return analysis
+
+
+def _persist(
+    analysis: SimulationAnalysis, run: RunData, organization_id: str
+) -> None:
+    admin = get_supabase_admin()
+    payload = {
+        "simulation_id": analysis.simulation_id,
+        "organization_id": organization_id or run.organization_id,
+        "schema_version": analysis.schema_version,
+        "artifact": analysis.model_dump(mode="json"),
+        "events_total": analysis.quality.events_total,
+        "events_measured": analysis.quality.events_measured,
+        "agents_total": analysis.quality.agents_total,
+        "build_status": "complete",
+        "error_message": None,
+        "updated_at": datetime.now(UTC).isoformat(),
+    }
+    admin.table("simulation_analysis").upsert(
+        payload, on_conflict="simulation_id"
+    ).execute()
+
+
+def get_analysis(simulation_id: str) -> dict | None:
+    """Read a stored artifact. Returns None when the run has not been analysed."""
+    admin = get_supabase_admin()
+    rows = (
+        admin.table("simulation_analysis")
+        .select("*")
+        .eq("simulation_id", simulation_id)
+        .limit(1)
+        .execute()
+    ).data or []
+    return rows[0] if rows else None

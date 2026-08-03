@@ -22,17 +22,17 @@ const howItWorksSteps = [
 ];
 
 const featureCards = [
-  { title: 'Agent Swarms', desc: 'Deploy up to 1M synthetic agents with unique personalities, backstories, and behavioral fingerprints.', Icon: Zap, color: '#5B5FEE' },
-  { title: '8 Platforms', desc: 'X, Reddit, Instagram, TikTok, YouTube, LinkedIn, News, Hacker News.', Icon: Globe, color: '#00D4FF' },
+  { title: 'Agent Swarms', desc: 'Deploy up to 1M synthetic agents with unique personalities, backstories, and behavioral fingerprints.', Icon: Zap, color: '#8B5CF6' },
+  { title: '8 Platforms', desc: 'X, Reddit, Instagram, TikTok, YouTube, LinkedIn, News, Hacker News.', Icon: Globe, color: '#2563EB' },
   { title: 'Real-Time Sentiment', desc: 'Live sentiment tracking and consensus formation during simulation.', Icon: Activity, color: '#10B981' },
   { title: 'Actionable Reports', desc: 'Downloadable PDF/CSV with AI analysis, probability estimates, evidence chains.', Icon: FileText, color: '#C9A227' },
-  { title: 'Enterprise Security', desc: 'SOC 2 compliant, 256-bit encryption, private infrastructure.', Icon: Shield, color: '#5B5FEE' },
-  { title: 'API Access', desc: 'RESTful API to integrate predictions into your workflow.', Icon: Code, color: '#00D4FF' },
+  { title: 'Enterprise Security', desc: 'SOC 2 compliant, 256-bit encryption, private infrastructure.', Icon: Shield, color: '#8B5CF6' },
+  { title: 'API Access', desc: 'RESTful API to integrate predictions into your workflow.', Icon: Code, color: '#2563EB' },
 ];
 
 const useCases = [
-  { title: 'PR & Crisis', tag: 'PR & Comms', tagColor: '#5B5FEE', question: 'Will this announcement cause backlash?', desc: 'Test press releases, executive statements, and crisis responses before they go live.', result: '87% probability of negative sentiment spike' },
-  { title: 'Policy & Government', tag: 'Political Strategy', tagColor: '#00D4FF', question: 'How will voters react to this bill?', desc: 'Simulate constituent reactions across demographics and political leanings.', result: '62% support among swing demographics' },
+  { title: 'PR & Crisis', tag: 'PR & Comms', tagColor: '#8B5CF6', question: 'Will this announcement cause backlash?', desc: 'Test press releases, executive statements, and crisis responses before they go live.', result: '87% probability of negative sentiment spike' },
+  { title: 'Policy & Government', tag: 'Political Strategy', tagColor: '#2563EB', question: 'How will voters react to this bill?', desc: 'Simulate constituent reactions across demographics and political leanings.', result: '62% support among swing demographics' },
   { title: 'Sports & Betting', tag: 'Sports Analytics', tagColor: '#C9A227', question: "What's the fan reaction to this trade?", desc: 'Predict fan engagement and sentiment around trades, signings, and announcements.', result: '3.2x engagement spike predicted' },
   { title: 'Marketing', tag: 'Enterprise', tagColor: '#10B981', question: 'Will this campaign go viral or flop?', desc: 'Test campaign creative and messaging across target demographics before launch.', result: '91% positive reception probability' },
 ];
@@ -87,10 +87,10 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="scroll-smooth min-h-screen bg-[#070B14] text-[#E8ECF2] overflow-x-hidden">
+    <div className="scroll-smooth min-h-screen bg-[#0A0F1C] text-[#E8ECF2] overflow-x-hidden">
 
       {/* ═══ 1. STICKY NAVIGATION ═══ */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-[#070B14]/80 backdrop-blur-xl border-b border-[#1B2433]">
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0A0F1C]/80 backdrop-blur-xl border-b border-[#1E293B]">
         <div className="max-w-7xl mx-auto flex items-center justify-between px-6 h-16">
           {/* Left: Logo + brand */}
           <Link to="/" className="flex items-center gap-2.5">
@@ -109,7 +109,7 @@ export default function LandingPage() {
           {/* Right: Auth */}
           <div className="flex items-center gap-4">
             <Link to="/login" className="text-sm text-[#8B97A8] hover:text-[#E8ECF2] transition-colors">Sign In</Link>
-            <Link to="/signup" className="text-sm font-semibold px-5 py-2 rounded-lg bg-[#C9A227] text-[#070B14] hover:bg-[#D4AF37] transition-colors">
+            <Link to="/signup" className="text-sm font-semibold px-5 py-2 rounded-lg bg-[#C9A227] text-[#0A0F1C] hover:bg-[#D4AF37] transition-colors">
               Get Started
             </Link>
           </div>
@@ -123,11 +123,11 @@ export default function LandingPage() {
           <HeroAnimation />
         </div>
         {/* Radial gradient overlay */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(91,95,238,0.08)_0%,transparent_60%)] pointer-events-none" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(139,92,246,0.08)_0%,transparent_60%)] pointer-events-none" />
 
         <div className="relative z-10 max-w-3xl">
           {/* Beta badge */}
-          <motion.div {...stagger(0)} className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full border border-[#5B5FEE]/20 bg-[#5B5FEE]/10 mb-8">
+          <motion.div {...stagger(0)} className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full border border-[#8B5CF6]/20 bg-[#8B5CF6]/10 mb-8">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute h-full w-full rounded-full bg-green-400 opacity-75" />
               <span className="relative rounded-full h-2 w-2 bg-green-400" />
@@ -154,16 +154,16 @@ export default function LandingPage() {
 
           {/* CTAs */}
           <motion.div {...stagger(4)} className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
-            <Link to="/signup" className="px-8 py-3.5 rounded-xl font-semibold text-[#070B14] bg-[#C9A227] hover:bg-[#D4AF37] transition-colors text-base">
+            <Link to="/signup" className="px-8 py-3.5 rounded-xl font-semibold text-[#0A0F1C] bg-[#C9A227] hover:bg-[#D4AF37] transition-colors text-base">
               Start Free Trial &rarr;
             </Link>
-            <a href="#how-it-works" className="px-8 py-3.5 rounded-xl font-semibold text-[#E8ECF2] border border-[#1B2433] hover:border-[#5B5FEE]/30 transition-colors text-base">
+            <a href="#how-it-works" className="px-8 py-3.5 rounded-xl font-semibold text-[#E8ECF2] border border-[#1E293B] hover:border-[#8B5CF6]/30 transition-colors text-base">
               See how it works
             </a>
           </motion.div>
 
           {/* Stats bar */}
-          <motion.div {...stagger(5)} className="border-t border-[#1B2433] pt-8 grid grid-cols-2 md:grid-cols-4 gap-6 max-w-2xl mx-auto">
+          <motion.div {...stagger(5)} className="border-t border-[#1E293B] pt-8 grid grid-cols-2 md:grid-cols-4 gap-6 max-w-2xl mx-auto">
             {[
               { value: '1M+', label: 'Max Agents' },
               { value: '8', label: 'Platforms' },
@@ -180,12 +180,12 @@ export default function LandingPage() {
       </section>
 
       {/* ═══ 3. TRUST BAR ═══ */}
-      <section className="border-t border-b border-[#1B2433] py-6">
+      <section className="border-t border-b border-[#1E293B] py-6">
         <motion.div {...fadeUp} className="max-w-5xl mx-auto flex flex-wrap items-center justify-center gap-x-8 gap-y-3 px-6">
           {['PR & Comms', 'Political Strategy', 'FinTech', 'Sports Analytics', 'Enterprise'].map((label, i) => (
             <span key={label} className="flex items-center gap-8">
               <span className="font-mono text-xs uppercase tracking-[0.15em] text-[#5A6578]">{label}</span>
-              {i < 4 && <span className="hidden sm:block w-px h-4 bg-[#1B2433]" />}
+              {i < 4 && <span className="hidden sm:block w-px h-4 bg-[#1E293B]" />}
             </span>
           ))}
         </motion.div>
@@ -195,7 +195,7 @@ export default function LandingPage() {
       <section id="how-it-works" className="py-28 px-6">
         <div className="max-w-6xl mx-auto">
           <motion.div {...fadeUp} className="text-center mb-16">
-            <span className="font-mono text-xs tracking-[0.2em] uppercase text-[#00D4FF]">HOW IT WORKS</span>
+            <span className="font-mono text-xs tracking-[0.2em] uppercase text-[#2563EB]">HOW IT WORKS</span>
             <h2 className="font-display font-extrabold text-4xl sm:text-5xl text-[#E8ECF2] mt-4 leading-tight tracking-tight">
               From scenario to strategy in four steps
             </h2>
@@ -206,11 +206,11 @@ export default function LandingPage() {
               <motion.div
                 key={step.num}
                 {...stagger(i)}
-                className="bg-[#111820] border border-[#1B2433] rounded-2xl p-8 hover:border-[#5B5FEE]/20 hover:-translate-y-1 transition-all duration-300"
+                className="bg-[#111827] border border-[#1E293B] rounded-2xl p-8 hover:border-[#8B5CF6]/20 hover:-translate-y-1 transition-all duration-300"
               >
-                <span className="font-mono text-sm text-[#5B5FEE] font-semibold">{step.num}</span>
-                <div className="mt-4 mb-4 w-12 h-12 rounded-xl bg-[#5B5FEE]/10 flex items-center justify-center">
-                  <step.Icon className="w-6 h-6 text-[#5B5FEE]" />
+                <span className="font-mono text-sm text-[#8B5CF6] font-semibold">{step.num}</span>
+                <div className="mt-4 mb-4 w-12 h-12 rounded-xl bg-[#8B5CF6]/10 flex items-center justify-center">
+                  <step.Icon className="w-6 h-6 text-[#8B5CF6]" />
                 </div>
                 <h3 className="font-sans font-semibold text-lg text-[#E8ECF2] mb-2">{step.title}</h3>
                 <p className="text-sm text-[#8B97A8] leading-relaxed">{step.desc}</p>
@@ -221,10 +221,10 @@ export default function LandingPage() {
       </section>
 
       {/* ═══ 5. FEATURES ═══ */}
-      <section id="features" className="py-28 px-6 bg-[#0D1117] border-t border-b border-[#1B2433]">
+      <section id="features" className="py-28 px-6 bg-[#0D1424] border-t border-b border-[#1E293B]">
         <div className="max-w-6xl mx-auto">
           <motion.div {...fadeUp} className="text-center mb-16">
-            <span className="font-mono text-xs tracking-[0.2em] uppercase text-[#00D4FF]">CAPABILITIES</span>
+            <span className="font-mono text-xs tracking-[0.2em] uppercase text-[#2563EB]">CAPABILITIES</span>
             <h2 className="font-display font-extrabold text-4xl sm:text-5xl text-[#E8ECF2] mt-4 leading-tight tracking-tight">
               Everything you need to predict{' '}<span className="text-gradient-brand">the future</span>
             </h2>
@@ -235,7 +235,7 @@ export default function LandingPage() {
               <motion.div
                 key={f.title}
                 {...stagger(i)}
-                className="bg-[#111820] border border-[#1B2433] rounded-2xl p-8 hover:border-[#5B5FEE]/20 hover:-translate-y-1 transition-all duration-300"
+                className="bg-[#111827] border border-[#1E293B] rounded-2xl p-8 hover:border-[#8B5CF6]/20 hover:-translate-y-1 transition-all duration-300"
               >
                 <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-5" style={{ background: f.color + '15' }}>
                   <f.Icon className="w-6 h-6" style={{ color: f.color }} />
@@ -252,7 +252,7 @@ export default function LandingPage() {
       <section id="use-cases" className="py-28 px-6">
         <div className="max-w-6xl mx-auto">
           <motion.div {...fadeUp} className="text-center mb-16">
-            <span className="font-mono text-xs tracking-[0.2em] uppercase text-[#00D4FF]">USE CASES</span>
+            <span className="font-mono text-xs tracking-[0.2em] uppercase text-[#2563EB]">USE CASES</span>
             <h2 className="font-display font-extrabold text-4xl sm:text-5xl text-[#E8ECF2] mt-4 leading-tight tracking-tight">
               Intelligence for every industry
             </h2>
@@ -263,7 +263,7 @@ export default function LandingPage() {
               <motion.div
                 key={uc.title}
                 {...stagger(i)}
-                className="bg-[#111820] border border-[#1B2433] rounded-2xl overflow-hidden hover:border-[#5B5FEE]/20 transition-all duration-300"
+                className="bg-[#111827] border border-[#1E293B] rounded-2xl overflow-hidden hover:border-[#8B5CF6]/20 transition-all duration-300"
               >
                 {/* Gradient top border */}
                 <div className="h-0.5" style={{ background: `linear-gradient(90deg, ${uc.tagColor}, transparent)` }} />
@@ -287,10 +287,10 @@ export default function LandingPage() {
       </section>
 
       {/* ═══ 7. PRICING ═══ */}
-      <section id="pricing" className="py-28 px-6 bg-[#0D1117] border-t border-b border-[#1B2433]">
+      <section id="pricing" className="py-28 px-6 bg-[#0D1424] border-t border-b border-[#1E293B]">
         <div className="max-w-7xl mx-auto">
           <motion.div {...fadeUp} className="text-center mb-16">
-            <span className="font-mono text-xs tracking-[0.2em] uppercase text-[#00D4FF]">PRICING</span>
+            <span className="font-mono text-xs tracking-[0.2em] uppercase text-[#2563EB]">PRICING</span>
             <h2 className="font-display font-extrabold text-4xl sm:text-5xl text-[#E8ECF2] mt-4 leading-tight tracking-tight">
               Transparent pricing that scales
             </h2>
@@ -306,13 +306,13 @@ export default function LandingPage() {
                 {...stagger(i)}
                 className={`relative rounded-2xl p-8 flex flex-col ${
                   plan.featured
-                    ? 'bg-[#111820] border-2 border-[#5B5FEE] shadow-[0_0_40px_rgba(91,95,238,0.1)]'
-                    : 'bg-[#111820] border border-[#1B2433]'
+                    ? 'bg-[#111827] border-2 border-[#8B5CF6] shadow-[0_0_40px_rgba(139,92,246,0.1)]'
+                    : 'bg-[#111827] border border-[#1E293B]'
                 }`}
               >
                 {plan.featured && (
                   <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                    <span className="font-mono text-[10px] tracking-[0.15em] uppercase px-3 py-1.5 rounded-full bg-[#5B5FEE] text-white font-semibold">
+                    <span className="font-mono text-[10px] tracking-[0.15em] uppercase px-3 py-1.5 rounded-full bg-[#8B5CF6] text-white font-semibold">
                       MOST POPULAR
                     </span>
                   </div>
@@ -338,7 +338,7 @@ export default function LandingPage() {
                 {plan.ctaLink.startsWith('mailto:') ? (
                   <a
                     href={plan.ctaLink}
-                    className="block text-center py-3 rounded-xl font-semibold text-sm border border-[#1B2433] text-[#E8ECF2] hover:border-[#5B5FEE]/30 transition-colors"
+                    className="block text-center py-3 rounded-xl font-semibold text-sm border border-[#1E293B] text-[#E8ECF2] hover:border-[#8B5CF6]/30 transition-colors"
                   >
                     {plan.cta}
                   </a>
@@ -347,8 +347,8 @@ export default function LandingPage() {
                     to={plan.ctaLink}
                     className={`block text-center py-3 rounded-xl font-semibold text-sm transition-colors ${
                       plan.featured
-                        ? 'bg-[#C9A227] text-[#070B14] hover:bg-[#D4AF37]'
-                        : 'bg-[#C9A227] text-[#070B14] hover:bg-[#D4AF37]'
+                        ? 'bg-[#C9A227] text-[#0A0F1C] hover:bg-[#D4AF37]'
+                        : 'bg-[#C9A227] text-[#0A0F1C] hover:bg-[#D4AF37]'
                     }`}
                   >
                     {plan.cta}
@@ -361,7 +361,7 @@ export default function LandingPage() {
           {/* Enterprise note */}
           <motion.p {...fadeUp} className="text-center text-sm text-[#5A6578] mt-10 max-w-2xl mx-auto">
             Need more than 100K agents per simulation? Our Enterprise plan gives you dedicated infrastructure. Contact{' '}
-            <a href="mailto:info@saidolabs.com" className="text-[#00D4FF] hover:underline">info@saidolabs.com</a>
+            <a href="mailto:info@saidolabs.com" className="text-[#2563EB] hover:underline">info@saidolabs.com</a>
           </motion.p>
         </div>
       </section>
@@ -382,7 +382,7 @@ export default function LandingPage() {
                 <motion.div
                   key={i}
                   {...stagger(i)}
-                  className="bg-[#111820] border border-[#1B2433] rounded-2xl overflow-hidden"
+                  className="bg-[#111827] border border-[#1E293B] rounded-2xl overflow-hidden"
                 >
                   <button
                     onClick={() => toggleFaq(i)}
@@ -402,8 +402,8 @@ export default function LandingPage() {
       </section>
 
       {/* ═══ 9. CTA BANNER ═══ */}
-      <section className="py-28 px-6 bg-[#0D1117] relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(91,95,238,0.1)_0%,transparent_60%)] pointer-events-none" />
+      <section className="py-28 px-6 bg-[#0D1424] relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(139,92,246,0.1)_0%,transparent_60%)] pointer-events-none" />
         <motion.div {...fadeUp} className="relative z-10 max-w-2xl mx-auto text-center">
           <h2 className="font-display font-extrabold text-4xl sm:text-5xl text-[#E8ECF2] leading-tight tracking-tight mb-6">
             Ready to see what they'll say before they say it?
@@ -411,14 +411,14 @@ export default function LandingPage() {
           <p className="text-lg text-[#8B97A8] mb-10">
             Start your free trial today. No credit card required.
           </p>
-          <Link to="/signup" className="inline-block px-10 py-4 rounded-xl font-semibold text-[#070B14] bg-[#C9A227] hover:bg-[#D4AF37] transition-colors text-base">
+          <Link to="/signup" className="inline-block px-10 py-4 rounded-xl font-semibold text-[#0A0F1C] bg-[#C9A227] hover:bg-[#D4AF37] transition-colors text-base">
             Start Free Trial &rarr;
           </Link>
         </motion.div>
       </section>
 
       {/* ═══ 10. FOOTER ═══ */}
-      <footer className="border-t border-[#1B2433] py-16 px-6">
+      <footer className="border-t border-[#1E293B] py-16 px-6">
         <div className="max-w-6xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-5 gap-12">
             {/* Brand */}
@@ -464,7 +464,7 @@ export default function LandingPage() {
           </div>
 
           {/* Bottom row */}
-          <div className="border-t border-[#1B2433] mt-12 pt-8 text-center">
+          <div className="border-t border-[#1E293B] mt-12 pt-8 text-center">
             <p className="text-sm text-[#5A6578]">&copy; 2026 Saido Labs LLC. All rights reserved.</p>
           </div>
         </div>

@@ -190,32 +190,266 @@ Phase 0 end state: ruff clean, 43 tests passing, `tsc --noEmit` clean,
 
 ---
 
-## Known issues carried into Phase 1
+## [PHASE 1 | 2026-08-02] Sentiment is measured from content
 
-Recorded here so they are not rediscovered:
+**The defect.** `simulation_tasks.py` computed each event's sentiment as
+`sentiment_baseline × (1 + round/max_rounds × 1.5)` and wrote it into the event's
+`metadata` blob. Two agents of the same archetype posting *"this is exactly what
+we've needed for years"* and *"this will get someone fired"* received identical
+sentiment. Every downstream figure — timeline, platform breakdown, flashpoints —
+inherited that.
 
-1. **Sentiment is not measured.** `simulation_tasks.py:336-341` computes
-   `sentiment_baseline × (1 + round/max_rounds × 1.5)` — a function of the
-   archetype preset and round index, never of agent content. Phase 1 replaces it.
-2. **Frontend charts are fabricated.** `ReportViewerPage.tsx:156-253` regex-scrapes
-   one scalar from the report markdown and synthesizes the timeline, per-platform
-   sentiment, persona metrics, and risk matrix with `Math.sin()` and
-   `Math.random()`. Risk likelihood is `0.3 + Math.random() * 0.5`.
-3. **A/B never runs variant B.** `run_simulation_ab` in `workers/simulation_tasks.py`
-   calls `run_simulation` once. Real N-way testing is net-new in Phase 3.
-4. **The live WebSocket feed is empty.** The active runner publishes nothing to
+**Decision — a batched classifier, not a per-event call.** `services/intelligence/
+event_measurement.py` scores each event from its content: `valence`, `stance`,
+`intensity`, `objections[]`, `intent`, `is_novel_claim`, batched ~25 events per
+Haiku call. Per-event calls would make measurement cost comparable to the agent
+actions themselves; at 25 per call the stage is roughly 4% of a standard run.
+
+**Decision — reactions are engagement, never sentiment.** A like or repost has no
+text, so there is nothing to measure. They are marked measured with a *null*
+valence and excluded from every sentiment aggregate, rather than assigned an
+invented value like "like = +0.3". Inventing that constant would be the same
+class of mistake as the drift formula, only smaller.
+
+**Decision — a failed batch leaves events unmeasured.** It does not fall back to
+a default. A defaulted score silently drags every aggregate toward zero and is
+invisible; an unmeasured event shows up in the artifact's coverage figure.
+
+**Decision — measurement columns are typed, not JSON.** They are aggregated on
+every analysis build and joined for drill-down, and the database now enforces the
+−1..1 and 0..1 bounds. A model returning 3.7 for a valence must not be able to
+poison a number a customer will act on.
+
+---
+
+## [PHASE 1 | 2026-08-02] The analysis artifact, and one rule
+
+`simulation_analysis` holds one versioned JSON artifact per run, validated
+against `services/intelligence/analysis_schema.py` before it is written.
+
+**The rule: every number rendered in the UI or written into a report comes from
+this artifact.** It is enforceable only because the shape is declared in one
+place — a field that does not exist on the schema cannot be displayed, so there
+is nowhere for a `Math.random()` to hide.
+
+**Decision — confidence intervals are computed across agents, not events.** A
+25-agent run that produced 400 events has 25 independent observations, not 400:
+one agent posting ten times is one opinion repeated. Each agent's events are
+averaged first and the interval taken across the per-agent means. Treating events
+as independent would shrink the band by roughly √(events per agent) —
+manufacturing precision out of an agent's verbosity. The visible consequence is
+that a small swarm honestly reports a wide band, which is both true and the most
+credible argument for buying more agents.
+
+**Decision — gaps stay gaps.** A round with no measurable opinion is omitted from
+the timeline rather than interpolated; a flat segment would read as "sentiment
+held steady", which is a different claim from "nobody spoke". Groups whose
+intervals overlap are reported as unresolved rather than ranked.
+
+**Decision — objections rank by load-bearing weight, not frequency.** Reach ×
+intensity × cohort spread, on 0–100. The most-repeated objection is usually the
+most quotable one, not the one that decides the purchase. All three factors are
+shares, so any factor near zero collapses the score — a fiercely-held objection
+confined to one archetype is a niche complaint, and a widely-shrugged-at one is
+not an obstacle.
+
+**Decision — canonicalization runs on the main model.** Clustering is a judgment
+task whose failure mode is silent: over-merging collapses two distinct objections
+into a label that answers neither. It is also cheap — one call over the distinct
+strings, not per event. When clustering fails, each distinct phrasing becomes its
+own objection; unclustered real objections are worse than clustered ones, but
+fabricated clusters would be worse than both.
+
+---
+
+## [PHASE 1 | 2026-08-02] The fabricated frontend is gone
+
+`ReportViewerPage.tsx` regex-scraped one sentiment scalar out of the report
+markdown and generated the timeline, per-platform sentiment, persona metrics and
+risk matrix from it with `Math.sin()` and `Math.random()`; risk likelihood was
+`0.3 + Math.random() * 0.5`. `ReportPrintPage.tsx` carried its own copy —
+platform sentiment was `baseSent + Math.sin(i * 2.1) * 0.2`, and the sentiment
+distribution pie was a "plausible population split" derived from the same scalar.
+
+Both pages are rebuilt on the artifact, and the seven components that existed
+only to render generated data were deleted after grepping for direct references,
+type references, string literals, dynamic imports, re-exports, and tests:
+`SentimentTimeline`, `PlatformBreakdown`, `PersonaAnalysis`, `ThemeCloud`,
+`RiskMatrix`, `SampleResponses`, `ExecutiveSummary`, plus the unused
+`SentimentBar`. Their replacements live in `components/analysis/`.
+
+**Decision — an unknown schema version renders nothing.** The client checks
+`schema_version` and refuses an artifact it does not know, rather than rendering
+the fields it recognises. Partial rendering is how a chart quietly loses a series.
+
+**Decision — empty states are blunt.** "No round produced a measurable opinion"
+rather than a placeholder chart. An empty slot filled with plausible data is
+strictly worse than an empty slot: the reader cannot tell the difference, so
+every genuine chart inherits the doubt.
+
+**Decision — every finding drills down to quotes.** `GET /simulations/{id}/
+evidence` returns the events behind any `event_ids[]`, rendered in a drawer. A
+number that cannot be opened is an assertion regardless of how it was computed.
+
+---
+
+## [PHASE 1 | 2026-08-02] Agent actions moved to Haiku
+
+All twelve platform adapters now call `llm_fast` rather than `llm_complete`.
+`llm_complete` resolves to `settings.llm_model` (Opus), so the highest-volume,
+lowest-judgment stage was running on the most expensive model — the single
+largest line in every run.
+
+**Watch this**, per DECISIONS_V2 §14: if measured objection diversity drops
+against V1 baselines, the model tier is the first thing to check. The counter-
+argument is real — surprising minority opinions are where flashpoints come from,
+and a weaker model may produce blander agents.
+
+Agent generation moved to `llm_fast` for the same reason and is now wrapped in a
+`usage_context`, as are agent actions and the measurement pass, so the ledger
+attributes every call to a stage.
+
+---
+
+## [PHASE 1 | 2026-08-02] Report depth scales down
+
+The section-count formula was `min(7, max(4, event_count // 30 + 2))`. The floor
+of 4 meant a 25-agent free-trial run generated 6 Opus-written sections — 84% of
+that run's cost, on a run whose entire purpose is to be nearly free.
+
+`report_section_count(measured_events, depth)` now scales from 2 to 7 across
+threshold bands, with the depth preset shifting by one. A 25-agent run gets 2
+sections, a standard run 4, a 250-agent run 7.
+
+**Measured effect.** The free run drops from $1.27 to **$0.66**, and the report
+falls from 84% to 46% of its cost. That is short of the $0.35 the Phase 0 note
+projected: at two sections the report is $0.31 of the $0.66, and the remaining
+cost is the simulation itself. The free grant is sized at 700 credits from the
+measured figure rather than the estimate — a grant that does not cover one free
+run would make the tier unusable.
+
+The standard run also moved, $3.23 → **$2.78**, because it drops from 6 sections
+to 4. `PRICING_GUIDE.md` and `PRD_V2.md` §8 are regenerated from
+`scripts/quote.py` against the new model.
+
+---
+
+## [PHASE 1 | 2026-08-02] Credits replace the agent-round allowance
+
+**Decision — the metered unit is credits, at 1 credit = $0.001 of COGS.**
+DECISIONS_V2 §15b settles that grants are denominated in credits, not runs. This
+implements that: `check_agent_budget` and its `PLAN_ALLOWANCES` table (in
+agent-rounds) are replaced by `check_credit_budget` and `TIER_CREDIT_GRANTS`.
+
+An agent-round allowance cannot ration this product. A run varies 65× in cost at
+the tier caps — a standard run is $2.78, a 250-agent 8-variant run is $181.52 —
+so the same agent-round count buys wildly different amounts of compute depending
+on variants and platforms. Milli-dollars rather than dollars so the balance is an
+integer: a float balance that drifts by a cent per deduction produces support
+tickets nobody can reproduce. Conversion always rounds **up**, because at volume
+the rounding direction is the difference between the margin floor holding and not.
+
+**Divergence from the Phase 1 brief, recorded deliberately.** `HANDOFF.md` §3.6
+said "wire `deduct_agent_credits` on completion". That function deducts
+agent-rounds, which is the unit DECISIONS_V2 §15b retires. It is superseded by
+`deduct_credits`; the `deduct_agent_credits` RPC remains in the database
+untouched, and `organizations.agent_credits_balance` is no longer read.
+
+**Decision — credits are charged at start, not at completion.** Deducting on
+completion lets a user with one run's worth of credits start ten runs at once and
+have every balance check pass. A run that is started and then fails still
+consumed compute.
+
+**Decision — caps are reported, not clamped, in the quote.** `issue_quote`
+returns which tier limit a shape exceeds rather than silently shrinking it;
+quoting one run and executing another is worse than refusing. The *sliders* are
+capped, so the normal path cannot reach an unquotable shape.
+
+---
+
+## [PHASE 1 | 2026-08-02] Signed run quotes
+
+`POST /billing/quote` prices a shape server-side, HMACs the priced fields against
+`SECRET_KEY`, and stores the row. The client displays it and hands the id to
+`POST /simulations/{id}/start`.
+
+Without this the run shape that gets billed is whatever the browser posted: a
+user who edits `agent_count` in a request body gets a 250-agent run at a 25-agent
+price. `consume_quote` checks the signature, the owning org, the expiry, that the
+quote is unconsumed, **and that its shape matches the simulation row** — a quote
+for 25 agents cannot be redeemed against a 250-agent run, however the two were
+submitted. Quotes are single-use with a 30-minute TTL, so one cheap quote cannot
+fund unlimited runs or outlive a recalibration of the token profiles.
+
+`POST /billing/estimate-cost` returns the same figures unsigned, for display
+while sliders move. Issuing a signed quote per slider tick would leave hundreds
+of unconsumed rows per configured run.
+
+**Cost-integrity gate.** `workers/analysis_tasks.py::reconcile_run_cost` compares
+the quote against measured `llm_usage` after every run, charges any shortfall
+rather than absorbing it, and logs `margin_floor_breached` when the retail price
+falls under measured cost × the 70% floor. The stage token profiles behind every
+quote are still estimates; this is what surfaces a bad one on the first run
+instead of in a month's P&L.
+
+---
+
+## [PHASE 1 | 2026-08-02] PostgREST truncation
+
+`fetch_all` in `core/database.py` pages past PostgREST's 1,000-row cap. An
+unbounded select returns the truncated set *without erroring*, and a 250-agent,
+10-round run produces well over 1,000 events — an aggregate computed over the
+first 1,000 of 2,500 events looks entirely plausible and is wrong. Every query
+that reads a whole simulation now pages.
+
+---
+
+## [PHASE 1 | 2026-08-02] Sovereign palette
+
+Obsidian `#0A0F1C` · Graphite `#111827` · Sovereign Gold `#C9A227` · Signal Blue
+`#2563EB` · Insight Violet `#8B5CF6`. Replaces Indigo `#5B5FEE` / Neon Cyan
+`#00D4FF`. `saibyl.purple` and `saibyl.cyan` survive as aliases onto the new
+accents so a straggling class name renders in-palette rather than falling back to
+an undefined colour.
+
+---
+
+## Known issues carried into Phase 2
+
+Recorded here so they are not rediscovered. Items 1, 2 and 7 from the Phase 1
+list are resolved above.
+
+1. **A/B never runs variant B.** `run_simulation_ab` in `workers/simulation_tasks.py`
+   calls `run_simulation` once. The `simulations.variants` column now exists and
+   is priced, but nothing executes more than one arena. Real N-way is Phase 3.
+2. **The live WebSocket feed is empty.** The active runner publishes nothing to
    Redis, and `SimulationRunPage` filters on `event_type === 'agent_action'` while
-   the backend schema emits `agent_post`/`agent_comment`. The UI silently falls
-   back to 5-second polling.
-5. **No org switcher.** `core/auth.py::get_current_org` takes the user's *first*
+   the backend schema emits `post`/`comment`/`react`. The UI silently falls back
+   to 5-second polling. Not addressed in Phase 1 — the measurement layer took
+   priority and the streaming contract is unchanged.
+3. **No org switcher.** `core/auth.py::get_current_org` takes the user's *first*
    organization membership, so multi-org users are silently locked to one.
-6. **Background jobs are not durable.** Every job is `asyncio.create_task` inside
+4. **Background jobs are not durable.** Every job is `asyncio.create_task` inside
    the API process, with no queue and no worker service in `render.yaml`.
-   Restarting the backend kills in-flight simulations with no resume.
-7. **Report depth does not scale down** — see the cost-model entry above.
-8. **Model upgrade available, deliberately deferred.** Config pins
-   `claude-opus-4-7`; Opus 5 is available at the same $5/$25 rate. The upgrade is
-   not free: on Opus 5 thinking is *on by default*, and agent action calls set
-   `max_tokens=160`, so thinking would consume the budget and truncate every
-   action. Migrating requires setting `thinking` explicitly and re-tuning
-   `max_tokens` — Phase 1 work, not a config edit.
+   Restarting the backend kills in-flight simulations with no resume. Phase 1
+   made this worse in one respect: measurement and analysis now run inside the
+   same task, so a restart late in a run loses the artifact as well as the run.
+5. **Stripe tiers still carry V1 names and prices.** `PLAN_PRICE_MAP` maps
+   `starter`/`pro` to $149/$499 Price IDs. `TIER_CREDIT_GRANTS` and `TIER_CAPS`
+   map both the V1 names and the V2 ones (`founder`/`growth`/`agency`) so nothing
+   breaks, but the actual tier migration — new Stripe Products, regional Price
+   IDs, `pricing_region` gating on card country — is unbuilt.
+6. **Model upgrade available, deliberately deferred.** Config pins
+   `claude-opus-4-7`; Opus 5 is available at the same $5/$25 rate. On Opus 5
+   thinking is *on by default*, and agent action calls set `max_tokens=160`, so
+   thinking would consume the budget and truncate every action. Migrating
+   requires setting `thinking` explicitly and re-tuning `max_tokens`. Less urgent
+   now that actions run on Haiku, but the report stages would benefit.
+7. **The measurement classifier is unvalidated against human judgment.** Nothing
+   yet checks that Haiku's valence agrees with what a person would say. The
+   calibration loop (Phase 4) is the eventual answer; a smaller interim check
+   would be hand-scoring 50 events from a real run and correlating.
+8. **`simulations.metadata.sentiment` still exists on 10,236 historical events.**
+   Written by the removed drift formula. Nothing reads it — `react_tools` was
+   switched to the artifact — but it is stale data that will read as real to
+   anyone querying the table directly.

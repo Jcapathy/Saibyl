@@ -9,17 +9,28 @@ export default {
         mono: ["'JetBrains Mono'", 'monospace'],
       },
       colors: {
+        // Sovereign palette. Obsidian and Graphite carry the surfaces; Gold is
+        // the single brand accent; Signal Blue and Insight Violet are the two
+        // data accents. The V1 Indigo (#5B5FEE) / Neon Cyan (#00D4FF) pairing
+        // is retired — `purple` and `cyan` are kept as aliases only so a
+        // straggling class name renders in-palette rather than falling back to
+        // an undefined colour.
         saibyl: {
-          void: '#070B14',
-          deep: '#0D1117',
-          surface: '#111820',
-          elevated: '#161E28',
+          obsidian: '#0A0F1C',
+          graphite: '#111827',
+          'signal-blue': '#2563EB',
+          'insight-violet': '#8B5CF6',
+
+          void: '#0A0F1C',      // page background — Obsidian
+          deep: '#0D1424',      // panel background, one step up from the page
+          surface: '#111827',   // cards — Graphite
+          elevated: '#1A2233',  // cards on cards
           gold: '#C9A227',
           'gold-hover': '#D4AF37',
-          purple: '#5B5FEE',
-          cyan: '#00D4FF',
-          blue: '#3B82F6',
-          violet: '#818CF8',
+          purple: '#8B5CF6',    // alias → Insight Violet
+          cyan: '#2563EB',      // alias → Signal Blue
+          blue: '#2563EB',
+          violet: '#8B5CF6',
           platinum: '#E8ECF2',
           silver: '#8B97A8',
           muted: '#5A6578',
@@ -27,9 +38,9 @@ export default {
           negative: '#EF4444',
           warning: '#F59E0B',
           neutral: '#64748B',
-          border: '#1B2433',
-          'border-light': '#243044',
-          'border-active': 'rgba(91,95,238,0.5)',
+          border: '#1E293B',
+          'border-light': '#2A3A55',
+          'border-active': 'rgba(139,92,246,0.5)',
         },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

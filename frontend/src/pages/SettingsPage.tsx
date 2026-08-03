@@ -197,12 +197,12 @@ const WEBHOOK_EVENTS = [
 
 // Shared styling tokens
 const inputClass =
-  'w-full bg-white/[0.03] border border-[#1B2433] rounded-lg px-4 py-2.5 text-sm text-[#E8ECF2] placeholder:text-[#5A6578]/60 focus:border-[#5B5FEE]/50 focus:ring-[#5B5FEE]/10 focus:outline-none transition';
-const cardClass = 'bg-[#111820] border border-[#1B2433] rounded-2xl';
+  'w-full bg-white/[0.03] border border-[#1E293B] rounded-lg px-4 py-2.5 text-sm text-[#E8ECF2] placeholder:text-[#5A6578]/60 focus:border-[#8B5CF6]/50 focus:ring-[#8B5CF6]/10 focus:outline-none transition';
+const cardClass = 'bg-[#111827] border border-[#1E293B] rounded-2xl';
 const goldBtnClass =
-  'bg-[#C9A227] text-[#070B14] font-semibold px-4 py-2 rounded-lg text-sm hover:bg-[#D4AF37] disabled:opacity-50 transition';
+  'bg-[#C9A227] text-[#0A0F1C] font-semibold px-4 py-2 rounded-lg text-sm hover:bg-[#D4AF37] disabled:opacity-50 transition';
 const outlineBtnClass =
-  'bg-transparent border border-[#1B2433] text-[#8B97A8] px-4 py-2 rounded-lg text-sm hover:text-[#E8ECF2] hover:border-[#8B97A8]/40 transition';
+  'bg-transparent border border-[#1E293B] text-[#8B97A8] px-4 py-2 rounded-lg text-sm hover:text-[#E8ECF2] hover:border-[#8B97A8]/40 transition';
 
 // ---------------------------------------------------------------------------
 // Usage Meter
@@ -246,12 +246,12 @@ function UsageMeter({
         {formatCount(used)}{' '}
         <span className="text-sm font-normal text-[#5A6578]">/ {formatCount(limit)}</span>
       </div>
-      <div className="mt-3 h-2 bg-[#070B14] rounded-full overflow-hidden">
+      <div className="mt-3 h-2 bg-[#0A0F1C] rounded-full overflow-hidden">
         <div
           className={`h-full rounded-full transition-all ${
             overThreshold
               ? 'bg-gradient-to-r from-[#F59E0B] to-[#EF4444]'
-              : 'bg-gradient-to-r from-[#5B5FEE] to-[#00D4FF]'
+              : 'bg-gradient-to-r from-[#8B5CF6] to-[#2563EB]'
           }`}
           style={{ width: `${Math.min(pct, 100)}%` }}
         />
@@ -337,7 +337,7 @@ function BillingTab() {
       <div className={`${cardClass} p-6`}>
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div>
-            <span className="inline-block mb-3 text-[11px] font-bold tracking-wider uppercase px-3 py-1 rounded-full bg-gradient-to-r from-[#5B5FEE] to-[#00D4FF] text-white">
+            <span className="inline-block mb-3 text-[11px] font-bold tracking-wider uppercase px-3 py-1 rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#2563EB] text-white">
               Current Plan
             </span>
             <h2 className="font-extrabold text-[28px] text-[#E8ECF2] capitalize">
@@ -355,7 +355,7 @@ function BillingTab() {
           </div>
 
           <div className="flex gap-3 items-start">
-            <button onClick={handleCancel} className="bg-transparent border border-[#1B2433] text-[#8B97A8] px-4 py-2 rounded-lg text-sm hover:text-[#EF4444] hover:border-[#EF4444]/30 transition">
+            <button onClick={handleCancel} className="bg-transparent border border-[#1E293B] text-[#8B97A8] px-4 py-2 rounded-lg text-sm hover:text-[#EF4444] hover:border-[#EF4444]/30 transition">
               Cancel Plan
             </button>
             {nextPlan && (
@@ -420,11 +420,11 @@ function BillingTab() {
               <div
                 key={tier.slug}
                 className={`${cardClass} p-5 flex flex-col relative ${
-                  tier.featured ? 'border-[#5B5FEE]/40' : ''
+                  tier.featured ? 'border-[#8B5CF6]/40' : ''
                 }`}
               >
                 {tier.featured && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-[10px] font-bold tracking-wider uppercase px-3 py-1 rounded-full bg-gradient-to-r from-[#5B5FEE] to-[#00D4FF] text-white whitespace-nowrap">
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-[10px] font-bold tracking-wider uppercase px-3 py-1 rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#2563EB] text-white whitespace-nowrap">
                     Most Popular
                   </span>
                 )}
@@ -447,7 +447,7 @@ function BillingTab() {
                 </div>
 
                 {isCurrent ? (
-                  <button disabled className="w-full py-2 rounded-lg text-sm font-semibold bg-[#1B2433] text-[#5A6578] cursor-not-allowed">
+                  <button disabled className="w-full py-2 rounded-lg text-sm font-semibold bg-[#1E293B] text-[#5A6578] cursor-not-allowed">
                     Current Plan
                   </button>
                 ) : tier.slug === 'enterprise' ? (
@@ -494,7 +494,7 @@ function BillingTab() {
         ) : paymentMethod ? (
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-7 rounded bg-[#070B14] flex items-center justify-center">
+              <div className="w-10 h-7 rounded bg-[#0A0F1C] flex items-center justify-center">
                 <CreditCard size={16} className="text-[#8B97A8]" />
               </div>
               <div>
@@ -510,7 +510,7 @@ function BillingTab() {
               {/* TODO: open Stripe Customer Portal for update */}
               <button className={outlineBtnClass}>Update</button>
               {/* TODO: open Stripe Customer Portal for remove */}
-              <button className="bg-transparent border border-[#1B2433] text-[#8B97A8] px-4 py-2 rounded-lg text-sm hover:text-[#EF4444] hover:border-[#EF4444]/30 transition">
+              <button className="bg-transparent border border-[#1E293B] text-[#8B97A8] px-4 py-2 rounded-lg text-sm hover:text-[#EF4444] hover:border-[#EF4444]/30 transition">
                 Remove
               </button>
             </div>
@@ -533,7 +533,7 @@ function BillingTab() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[#1B2433]">
+                <tr className="border-b border-[#1E293B]">
                   <th className="text-left py-2 pr-4 text-[#5A6578] font-medium text-xs uppercase tracking-wider">Date</th>
                   <th className="text-left py-2 pr-4 text-[#5A6578] font-medium text-xs uppercase tracking-wider">Description</th>
                   <th className="text-left py-2 pr-4 text-[#5A6578] font-medium text-xs uppercase tracking-wider">Amount</th>
@@ -543,7 +543,7 @@ function BillingTab() {
               </thead>
               <tbody>
                 {invoices.map((inv) => (
-                  <tr key={inv.id} className="border-b border-[#1B2433]/50">
+                  <tr key={inv.id} className="border-b border-[#1E293B]/50">
                     <td className="py-3 pr-4 text-[#E8ECF2]">{inv.date}</td>
                     <td className="py-3 pr-4 text-[#8B97A8]">{inv.description}</td>
                     <td className="py-3 pr-4 text-[#E8ECF2] font-mono">{inv.amount}</td>
@@ -665,12 +665,12 @@ function TeamTab() {
       </div>
 
       <div className={`${cardClass} overflow-hidden`}>
-        <div className="px-5 py-3 border-b border-[#1B2433]">
+        <div className="px-5 py-3 border-b border-[#1E293B]">
           <h3 className="font-bold text-[#E8ECF2] text-sm">Members</h3>
         </div>
-        <ul className="divide-y divide-[#1B2433]">
+        <ul className="divide-y divide-[#1E293B]">
           {members.map((m) => (
-            <li key={m.id} className="px-5 py-3 flex items-center justify-between hover:bg-[#161E28] transition">
+            <li key={m.id} className="px-5 py-3 flex items-center justify-between hover:bg-[#1A2233] transition">
               <span className="text-sm text-[#E8ECF2]">{m.email}</span>
               <span className="text-xs text-[#5A6578] capitalize">{m.role}</span>
             </li>
@@ -749,9 +749,9 @@ function ApiKeysTab() {
       </div>
 
       <div className={`${cardClass} overflow-hidden`}>
-        <ul className="divide-y divide-[#1B2433]">
+        <ul className="divide-y divide-[#1E293B]">
           {keys.map((k) => (
-            <li key={k.id} className="px-5 py-3 flex items-center justify-between hover:bg-[#161E28] transition">
+            <li key={k.id} className="px-5 py-3 flex items-center justify-between hover:bg-[#1A2233] transition">
               <div>
                 <span className="text-sm font-medium text-[#E8ECF2]">{k.name}</span>
                 <span className="text-xs text-[#5A6578] ml-2 font-mono">{k.prefix}...</span>
@@ -773,14 +773,14 @@ function ApiKeysTab() {
       {/* Create Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-[#0D1117] rounded-2xl p-6 w-full max-w-md border border-[#1B2433]">
+          <div className="bg-[#0D1424] rounded-2xl p-6 w-full max-w-md border border-[#1E293B]">
             <h2 className="text-lg font-semibold text-[#E8ECF2] mb-4">Create API Key</h2>
             {newKeyValue ? (
               <div className="space-y-4">
                 <p className="text-sm text-[#5A6578]">
                   Copy this key now. It will not be shown again.
                 </p>
-                <div className="bg-[#070B14] p-3 rounded-lg font-mono text-sm break-all text-[#E8ECF2]">
+                <div className="bg-[#0A0F1C] p-3 rounded-lg font-mono text-sm break-all text-[#E8ECF2]">
                   {newKeyValue}
                 </div>
                 <button
@@ -904,7 +904,7 @@ function IntegrationsTab() {
           </span>
         </div>
 
-        <div className="border-t border-[#1B2433] pt-4">
+        <div className="border-t border-[#1E293B] pt-4">
           <div className="flex items-start gap-4 mb-3">
             <div className="flex-1">
               <p className="text-sm font-medium text-[#E8ECF2]">Kalshi</p>
@@ -926,7 +926,7 @@ function IntegrationsTab() {
                 </button>
               </div>
             ) : (
-              <span className="text-xs px-2 py-1 rounded bg-[#161E28] text-[#5A6578]">
+              <span className="text-xs px-2 py-1 rounded bg-[#1A2233] text-[#5A6578]">
                 Not connected
               </span>
             )}
@@ -1051,8 +1051,8 @@ function WebhooksTab() {
                   onClick={() => toggleEvent(evt)}
                   className={`text-xs px-3 py-1.5 rounded-lg border transition ${
                     selectedEvents.includes(evt)
-                      ? 'bg-[#C9A227] text-[#070B14] border-[#C9A227] font-semibold'
-                      : 'border-[#1B2433] text-[#5A6578] hover:border-[#8B97A8]/40 hover:text-[#8B97A8]'
+                      ? 'bg-[#C9A227] text-[#0A0F1C] border-[#C9A227] font-semibold'
+                      : 'border-[#1E293B] text-[#5A6578] hover:border-[#8B97A8]/40 hover:text-[#8B97A8]'
                   }`}
                 >
                   {evt}
@@ -1071,9 +1071,9 @@ function WebhooksTab() {
       </div>
 
       <div className={`${cardClass} overflow-hidden`}>
-        <ul className="divide-y divide-[#1B2433]">
+        <ul className="divide-y divide-[#1E293B]">
           {hooks.map((h) => (
-            <li key={h.id} className="px-5 py-3 flex items-center justify-between hover:bg-[#161E28] transition">
+            <li key={h.id} className="px-5 py-3 flex items-center justify-between hover:bg-[#1A2233] transition">
               <div>
                 <div className="text-sm font-medium text-[#E8ECF2]">{h.url}</div>
                 <div className="text-xs text-[#5A6578] mt-0.5">{h.events.join(', ')}</div>
@@ -1166,14 +1166,14 @@ export default function SettingsPage() {
       </div>
 
       {/* Tab Bar */}
-      <div className="flex gap-0 border-b border-[#1B2433] mb-6 overflow-x-auto">
+      <div className="flex gap-0 border-b border-[#1E293B] mb-6 overflow-x-auto">
         {TABS.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`px-5 py-3 text-[13px] font-semibold transition-all whitespace-nowrap ${
               tab === t.key
-                ? 'text-[#E8ECF2] border-b-2 border-[#00D4FF]'
+                ? 'text-[#E8ECF2] border-b-2 border-[#2563EB]'
                 : 'text-[#5A6578] hover:text-[#8B97A8]'
             }`}
           >

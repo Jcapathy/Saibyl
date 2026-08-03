@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Lightbulb, Clock } from 'lucide-react';
+import { Lightbulb } from 'lucide-react';
 import api from '@/lib/api';
-import { getErrorMessage } from '../lib/errors';
+import { getErrorMessage } from '@/lib/errors';
+import RunConfigurator, { type RunShape } from '@/components/RunConfigurator';
 
 interface Project {
   id: string;
@@ -35,8 +36,7 @@ const PLATFORMS = [
   { id: 'custom', name: 'Custom', desc: 'Your own rules' },
 ];
 
-const STEPS = ['Setup', 'Platforms', 'Personas', 'Settings', 'Review'];
-const DEPTH_LABELS: Record<number, string> = { 1: 'Shallow', 2: 'Standard', 3: 'Standard', 4: 'Deep', 5: 'Exhaustive' };
+const STEPS = ['Setup', 'Platforms', 'Personas', 'Configure', 'Review'];
 
 const inputClass = 'w-full rounded-xl px-4 py-3 text-[14px] text-saibyl-platinum placeholder-saibyl-muted/50 focus:outline-none focus:ring-2 focus:ring-saibyl-gold/50 focus:border-transparent transition';
 const inputBg = 'bg-[#0B1120] border border-white/[0.08]';
@@ -46,21 +46,6 @@ function Hint({ children }: { children: React.ReactNode }) {
     <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-saibyl-gold/5 border border-saibyl-gold/15 mb-5">
       <Lightbulb className="w-3.5 h-3.5 text-saibyl-gold mt-0.5 shrink-0" />
       <p className="text-[12px] text-saibyl-muted leading-relaxed">{children}</p>
-    </div>
-  );
-}
-
-function EstimatedTime({ agents, rounds, platforms }: { agents: number; rounds: number; platforms: number }) {
-  const platformCount = Math.max(platforms, 1);
-  const minutes = Math.max(1, Math.round((agents * rounds * platformCount) / 200));
-  const label = minutes <= 3 ? 'text-saibyl-positive' : minutes <= 10 ? 'text-saibyl-blue' : 'text-saibyl-muted';
-  return (
-    <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-white/[0.02] border border-white/[0.06] mt-5">
-      <Clock className="w-3.5 h-3.5 text-saibyl-muted shrink-0" />
-      <p className="text-[12px] text-saibyl-muted">
-        Estimated run time: <span className={`font-medium ${label}`}>~{minutes} minute{minutes !== 1 ? 's' : ''}</span>
-        <span className="text-saibyl-muted/50 ml-1">— still a fraction of what focus groups cost</span>
-      </p>
     </div>
   );
 }
@@ -89,12 +74,17 @@ export default function NewSimulationPage() {
   const [customDesc, setCustomDesc] = useState('');
   const [creatingCustom, setCreatingCustom] = useState(false);
 
-  // Step 4
-  const [agentCount, setAgentCount] = useState(20);
-  const [rounds, setRounds] = useState(5);
+  // Step 4 — the priced run shape. `platforms` is derived from step 2 rather
+  // than set here, so there is exactly one place a platform gets chosen.
+  const [shape, setShape] = useState<RunShape>({
+    agent_count: 25,
+    rounds: 5,
+    platforms: 1,
+    variants: 1,
+    depth: 'standard',
+  });
   const [timezone, setTimezone] = useState('America/New_York');
-  const [abEnabled, setAbEnabled] = useState(false);
-  const [reactDepth, setReactDepth] = useState(2);
+  const [quoteError, setQuoteError] = useState('');
 
   useEffect(() => {
     api.get('/projects').then((r) => {
@@ -134,22 +124,42 @@ export default function NewSimulationPage() {
     }
   };
 
+  /* Fired whenever the configurator re-prices. An estimate is not a quote —
+     it exists so the parent can invalidate anything stale, and so the Review
+     step can refuse to launch a shape that could not be priced at all. */
+  const handleQuote = useCallback((estimate: { credits: number } | null) => {
+    setQuoteError(estimate ? '' : 'This run could not be priced.');
+  }, []);
+
   const handleSubmit = async () => {
     setSubmitting(true);
     setError('');
+    const platforms = selectedPlatforms.length > 0 ? selectedPlatforms : ['twitter_x'];
+
     try {
+      // Issue the signed quote before creating anything. If the price cannot be
+      // established the run does not start — the alternative is a run whose
+      // cost the customer never agreed to.
+      const { data: quote } = await api.post('/billing/quote', {
+        ...shape,
+        platforms: platforms.length,
+      });
+
       const { data: sim } = await api.post('/simulations', {
         name,
         project_id: projectId,
         prediction_goal: predictionGoal,
-        platforms: selectedPlatforms.length > 0 ? selectedPlatforms : ['twitter_x'],
-        max_rounds: rounds,
-        is_ab_test: abEnabled,
+        platforms,
+        max_rounds: shape.rounds,
         persona_pack_ids: selectedPacks,
-        agent_count: agentCount,
+        agent_count: shape.agent_count,
+        variants: shape.variants,
+        depth: shape.depth,
       });
 
-      // Kick off prepare in background, then navigate
+      // The quote id travels to /start, where it is redeemed against the stored
+      // shape. Prepare runs first; the credits are charged when the run starts.
+      sessionStorage.setItem(`saibyl_quote_${sim.id}`, quote.id);
       api.post(`/simulations/${sim.id}/prepare`).catch(() => {});
       navigate(`/app/simulations/${sim.id}`);
     } catch (err) {
@@ -384,7 +394,7 @@ export default function NewSimulationPage() {
                       <button
                         onClick={handleCreateCustomPack}
                         disabled={creatingCustom || !customName.trim() || !customDesc.trim()}
-                        className="px-6 py-2.5 rounded-xl bg-[#C9A227] text-[#070B14] font-medium text-sm disabled:opacity-50 transition-all hover:bg-[#D4AF37] hover:-translate-y-0.5"
+                        className="px-6 py-2.5 rounded-xl bg-[#C9A227] text-[#0A0F1C] font-medium text-sm disabled:opacity-50 transition-all hover:bg-[#D4AF37] hover:-translate-y-0.5"
                       >
                         {creatingCustom ? 'Generating...' : 'Create Persona'}
                       </button>
@@ -395,27 +405,22 @@ export default function NewSimulationPage() {
             </div>
           )}
 
-          {/* ── Step 4: Settings ── */}
+          {/* ── Step 4: Configure ── */}
           {step === 3 && (
             <div className="space-y-6">
               <Hint>
-                More agents and rounds produce richer analysis but take longer. Start with 20 agents and 5 rounds for fast iteration (~3 min).
-                Scale up to 50-100 agents with 10+ rounds when you find an interesting signal and want the full picture.
+                More agents narrow the confidence bands on every finding; more rounds
+                let objections propagate between cohorts. Both cost credits, and the
+                exact cost is shown below before you commit to anything.
               </Hint>
-              <div>
-                <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-3">
-                  Agent Count: <span className="text-saibyl-gold font-bold">{agentCount}</span>
-                </label>
-                <input type="range" min={5} max={100} value={agentCount} onChange={(e) => setAgentCount(Number(e.target.value))} className="w-full accent-saibyl-gold" />
-                <div className="flex justify-between text-[10px] text-saibyl-muted/50 mt-1"><span>5</span><span>50</span><span>100</span></div>
-              </div>
-              <div>
-                <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-3">
-                  Simulation Rounds: <span className="text-saibyl-gold font-bold">{rounds}</span>
-                </label>
-                <input type="range" min={1} max={20} value={rounds} onChange={(e) => setRounds(Number(e.target.value))} className="w-full accent-saibyl-gold" />
-                <div className="flex justify-between text-[10px] text-saibyl-muted/50 mt-1"><span>1</span><span>10</span><span>20</span></div>
-              </div>
+
+              <RunConfigurator
+                shape={shape}
+                platformCount={selectedPlatforms.length}
+                onChange={setShape}
+                onQuote={handleQuote}
+              />
+
               <div>
                 <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-2">Timezone</label>
                 <select
@@ -425,50 +430,47 @@ export default function NewSimulationPage() {
                   style={{ colorScheme: 'dark' }}
                 >
                   {['America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'UTC', 'Europe/London', 'Europe/Berlin', 'Asia/Tokyo', 'Asia/Shanghai'].map((tz) => (
-                    <option key={tz} value={tz} className="bg-[#0B1120] text-saibyl-platinum">{tz}</option>
+                    <option key={tz} value={tz} className="bg-saibyl-deep text-saibyl-platinum">{tz}</option>
                   ))}
                 </select>
               </div>
-              <div className="flex items-center gap-3 p-4 rounded-xl bg-white/[0.02] border border-white/[0.06]">
-                <input type="checkbox" id="ab-toggle" checked={abEnabled} onChange={(e) => setAbEnabled(e.target.checked)} className="accent-saibyl-gold w-4 h-4" />
-                <div>
-                  <label htmlFor="ab-toggle" className="text-[14px] text-saibyl-platinum font-medium cursor-pointer">Enable A/B Testing</label>
-                  <p className="text-[11px] text-saibyl-muted mt-0.5">Run two variants simultaneously and compare results</p>
-                </div>
-              </div>
-              <div>
-                <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-3">
-                  ReACT Report Depth: <span className="text-saibyl-gold font-bold">{DEPTH_LABELS[reactDepth] || reactDepth}</span>
-                </label>
-                <input type="range" min={1} max={5} value={reactDepth} onChange={(e) => setReactDepth(Number(e.target.value))} className="w-full accent-saibyl-gold" />
-                <div className="flex justify-between text-[10px] text-saibyl-muted/50 mt-1"><span>Shallow</span><span>Standard</span><span>Exhaustive</span></div>
-              </div>
-              <EstimatedTime agents={agentCount} rounds={rounds} platforms={selectedPlatforms.length} />
             </div>
           )}
 
           {/* ── Step 5: Review ── */}
           {step === 4 && (
             <div>
-              <h2 className="text-[18px] font-semibold text-saibyl-white mb-5">Review &amp; Launch</h2>
+              <h2 className="text-[18px] font-semibold text-saibyl-platinum mb-5">Review &amp; Launch</h2>
               <div className="space-y-3">
                 {[
                   ['Name', name],
                   ['Project', projects.find((p) => p.id === projectId)?.name || '—'],
-                  ['Prediction Goal', predictionGoal || '—'],
-                  ['Platforms', selectedPlatforms.map((id) => PLATFORMS.find((p) => p.id === id)?.name || id).join(', ')],
-                  ['Persona Packs', `${selectedPacks.length} selected`],
-                  ['Agent Count', String(agentCount)],
-                  ['Rounds', String(rounds)],
+                  ['Prediction goal', predictionGoal || '—'],
+                  ['Platforms', selectedPlatforms.map((id) => PLATFORMS.find((p) => p.id === id)?.name || id).join(', ') || 'Twitter / X'],
+                  ['Persona packs', `${selectedPacks.length} selected`],
+                  ['Agents', String(shape.agent_count)],
+                  ['Rounds', String(shape.rounds)],
+                  ['Variants', String(shape.variants)],
+                  ['Report depth', shape.depth],
                   ['Timezone', timezone],
-                  ['A/B Testing', abEnabled ? 'Enabled' : 'Disabled'],
-                  ['Report Depth', DEPTH_LABELS[reactDepth] || String(reactDepth)],
                 ].map(([label, value]) => (
                   <div key={label} className="flex items-start gap-4 py-2 border-b border-white/[0.04] last:border-0">
                     <span className="text-[13px] text-saibyl-muted w-36 shrink-0">{label}</span>
-                    <span className="text-[13px] text-saibyl-platinum flex-1">{value}</span>
+                    <span className="text-[13px] text-saibyl-platinum flex-1 capitalize">{value}</span>
                   </div>
                 ))}
+              </div>
+
+              {/* Re-priced here rather than echoing the figure from step 4: a
+                  run is never started without its current cost on screen. */}
+              <div className="mt-6">
+                <RunConfigurator
+                  shape={shape}
+                  platformCount={selectedPlatforms.length}
+                  onChange={setShape}
+                  onQuote={handleQuote}
+                  readOnly
+                />
               </div>
             </div>
           )}
@@ -493,8 +495,9 @@ export default function NewSimulationPage() {
             ) : (
               <button
                 onClick={handleSubmit}
-                disabled={submitting}
-                className="px-8 py-2.5 rounded-xl bg-[#C9A227] text-[#070B14] font-semibold text-[14px] disabled:opacity-50 transition-all hover:bg-[#D4AF37] hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(201,162,39,0.3)]"
+                disabled={submitting || !!quoteError}
+                title={quoteError || undefined}
+                className="px-8 py-2.5 rounded-xl bg-saibyl-gold text-saibyl-void font-semibold text-[14px] disabled:opacity-50 transition-all hover:bg-saibyl-gold-hover hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(201,162,39,0.3)]"
               >
                 {submitting ? 'Launching...' : 'Start Simulation →'}
               </button>

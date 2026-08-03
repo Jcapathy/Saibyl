@@ -1,32 +1,34 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import SectionRenderer from '@/components/report/SectionRenderer';
 import {
-  BarChart,
   Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ErrorBar,
+  Legend,
+  Pie,
+  PieChart,
+  ReferenceLine,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
 } from 'recharts';
 import { format } from 'date-fns';
 import api from '@/lib/api';
-import { PRINT_PIE_COLORS, CHART_COLORS, platformColor } from '@/lib/constants';
+import SectionRenderer from '@/components/report/SectionRenderer';
+import { PRINT_PIE_COLORS, PRINT_PLATFORM_COLORS } from '@/lib/constants';
 import { cleanContent, stripDuplicateTitle } from '@/lib/utils';
+import {
+  formatSigned,
+  isSupportedSchema,
+  type AnalysisResponse,
+  type SimulationAnalysis,
+} from '@/lib/analysis';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
-
-interface Polarization {
-  controversy_score: number | null;
-  polarization_ratio: string | null;
-  valence_switching_pct: number | null;
-}
 
 interface SourceDocument {
   filename: string;
@@ -41,7 +43,6 @@ interface Report {
   status?: string;
   sections: { section_type?: string; title: string; content: string }[];
   full_markdown: string;
-  polarization?: Polarization;
   source_documents?: SourceDocument[];
 }
 
@@ -59,12 +60,6 @@ interface SimDetail {
   completed_at: string | null;
 }
 
-/* ------------------------------------------------------------------ */
-/*  Helpers                                                            */
-/* ------------------------------------------------------------------ */
-
-// cleanContent imported from @/lib/utils
-
 const PLATFORM_NAMES: Record<string, string> = {
   twitter_x: 'X (Twitter)',
   reddit: 'Reddit',
@@ -77,103 +72,43 @@ const PLATFORM_NAMES: Record<string, string> = {
   news_comments: 'News',
   hacker_news: 'Hacker News',
   discord: 'Discord',
+  custom: 'Custom',
 };
 
-/** Try to parse sentiment/engagement/controversy from markdown text */
-function parseMetrics(md: string, polarization?: Polarization) {
-  let sentiment: number | null = null;
-  let engagement: number | null = null;
-  let controversy: number | null = null;
-  let controversyLabel: string | null = null;
-
-  // Sentiment
-  const sentPatterns = [
-    /overall\s+sentiment[:\s]*([+-]?\d+\.?\d*)/i,
-    /sentiment\s+score[:\s]*([+-]?\d+\.?\d*)/i,
-    /average\s+sentiment[:\s]*([+-]?\d+\.?\d*)/i,
-    /(\d+\.?\d*)%?\s*positive/i,
-    /positive[:\s]*(\d+\.?\d*)%/i,
-  ];
-  for (const pat of sentPatterns) {
-    const m = md.match(pat);
-    if (m) {
-      const v = parseFloat(m[1]);
-      sentiment = Math.abs(v) > 1 ? v / 100 : v;
-      break;
-    }
-  }
-  if (sentiment == null) {
-    const posCount = (md.match(/\bpositive\b/gi) || []).length;
-    const negCount = (md.match(/\bnegative\b/gi) || []).length;
-    if (posCount + negCount > 2) {
-      sentiment =
-        ((posCount - negCount) / (posCount + negCount)) * 0.7;
-    }
-  }
-
-  // Engagement
-  const engPatterns = [
-    /engagement[:\s]*(\d+\.?\d*)\s*\/\s*10/i,
-    /engagement[:\s]*(\d+\.?\d*)%/i,
-    /engagement[:\s\w]*?(\d+\.?\d*)/i,
-  ];
-  for (const pat of engPatterns) {
-    const m = md.match(pat);
-    if (m) {
-      const v = parseFloat(m[1]);
-      engagement = v > 10 ? v / 100 : v > 1 ? v / 10 : v;
-      break;
-    }
-  }
-
-  // Controversy: prefer API-computed polarization
-  if (polarization?.controversy_score != null) {
-    controversy = polarization.controversy_score;
-    controversyLabel = polarization.polarization_ratio ?? `${polarization.valence_switching_pct ?? 0}%`;
-  } else {
-    const conPatterns = [
-      /controversy[:\s]*(\d+\.?\d*)/i,
-      /polariz\w*[:\s]*(\d+\.?\d*)/i,
-    ];
-    for (const pat of conPatterns) {
-      const m = md.match(pat);
-      if (m) {
-        const v = parseFloat(m[1]);
-        controversy = v > 1 ? v / 100 : v;
-        break;
-      }
-    }
-  }
-
-  // Sentiment Trajectory: parse from LLM-generated stat cards table
-  let sentimentTrajectory: string | null = null;
-  const trajPatterns = [
-    /Sentiment\s+Trajectory\s*\|\s*([^|]+)\|/i,
-    /Sentiment\s+Trajectory[:\s]+(.+?)(?:\n|$)/i,
-  ];
-  for (const pat of trajPatterns) {
-    const tm = md.match(pat);
-    if (tm) {
-      sentimentTrajectory = tm[1].trim().replace(/^<|>$/g, '');
-      break;
-    }
-  }
-
-  return { sentiment, engagement, controversy, controversyLabel, sentimentTrajectory };
-}
+const INK = '#1a1a1a';
+const MUTED = '#666';
+const RULE = '#e0e0e0';
+const BRAND = '#8B5CF6';
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
+/**
+ * The print / PDF view, rebuilt on the `simulation_analysis` artifact.
+ *
+ * This page previously carried its own copy of the report viewer's markdown
+ * scraping, plus its own fabrications: platform sentiment was
+ * `baseSent + Math.sin(i * 2.1) * 0.2` and the sentiment distribution pie was a
+ * "plausible population split" derived from one scraped scalar. Both are gone.
+ *
+ * The exported document is where a fabricated number does the most damage — it
+ * leaves the product, gets forwarded, and is quoted back months later with no
+ * way to check it. So this page renders the artifact or it renders nothing, and
+ * it states its own measurement coverage on the page.
+ *
+ * The V1 section structure (Source Material → Executive Summary → Data &
+ * Analysis → Detailed Findings → Strategic Implications) is preserved; only the
+ * charts inside it changed.
+ */
 export default function ReportPrintPage() {
   const { id: simId } = useParams<{ id: string }>();
 
   const [report, setReport] = useState<Report | null>(null);
   const [simulation, setSimulation] = useState<SimDetail | null>(null);
+  const [analysis, setAnalysis] = useState<SimulationAnalysis | null>(null);
   const [loading, setLoading] = useState(true);
 
-  /* Fetch data on mount */
   useEffect(() => {
     if (!simId) return;
     let cancelled = false;
@@ -188,10 +123,21 @@ export default function ReportPrintPage() {
         setReport(reportRes.data as Report);
         setSimulation(simRes.data as SimDetail);
       } catch {
-        // silently fail — page will show loading forever
-      } finally {
-        if (!cancelled) setLoading(false);
+        // Falls through to the "could not be loaded" state below.
       }
+
+      try {
+        const res = await api.get(`/simulations/${simId}/analysis`);
+        if (cancelled) return;
+        const payload = res.data as AnalysisResponse;
+        if (isSupportedSchema(payload.schema_version)) {
+          setAnalysis(payload.artifact);
+        }
+      } catch {
+        // An unanalysed run prints without charts and says so.
+      }
+
+      if (!cancelled) setLoading(false);
     })();
 
     return () => {
@@ -199,7 +145,6 @@ export default function ReportPrintPage() {
     };
   }, [simId]);
 
-  /* Set document title so browser print-to-PDF uses the sim name as filename */
   useEffect(() => {
     if (simulation?.name) {
       document.title = `${simulation.name} — Saibyl Report`;
@@ -209,130 +154,20 @@ export default function ReportPrintPage() {
     }
   }, [simulation?.name]);
 
-  /* Auto-trigger print after render */
+  /* Print once the artifact has had its chance to arrive, so the PDF is never
+     missing charts that were one tick from rendering. */
   useEffect(() => {
-    if (report && simulation) {
+    if (!loading && report && simulation) {
       const timer = setTimeout(() => window.print(), 1500);
       return () => clearTimeout(timer);
     }
-  }, [report, simulation]);
+  }, [loading, report, simulation]);
 
-  /* ---------------------------------------------------------------- */
-  /*  Derived data                                                     */
-  /* ---------------------------------------------------------------- */
-
-  const metrics = report
-    ? parseMetrics(report.full_markdown || '', report.polarization)
-    : null;
-
-  // Find executive summary section
-  const execSection = report?.sections.find(
-    (s) =>
-      /executive|summary|overview/i.test(s.title) ||
-      s.section_type === 'executive_summary',
-  ) ?? report?.sections[0] ?? null;
-
-  // Find conclusion section — match the backend title "Strategic Implications & Recommended Actions"
-  const conclusionSection = report?.sections.find(
-    (s) =>
-      /strategic.*implication|recommended.*action|conclusion/i.test(s.title) ||
-      s.section_type === 'conclusion' ||
-      s.section_type === 'recommendations',
-  ) ?? null;
-
-  // Remaining sections for detailed findings (exclude exec summary and conclusion)
-  const detailedSections =
-    report?.sections.filter(
-      (s) => s !== execSection && s !== conclusionSection,
-    ) ?? [];
-
-  // Platform sentiment data for charts (exclude "custom" placeholder)
-  const displayPlatformIds = (simulation?.platforms ?? []).filter((p) => p !== 'custom');
-  const platformSentimentData = displayPlatformIds.map(
-    (p, i) => {
-      const baseSent = metrics?.sentiment ?? 0;
-      return {
-        name: PLATFORM_NAMES[p] ?? p,
-        sentiment: Math.round(
-          (baseSent + Math.sin(i * 2.1) * 0.2) * 100,
-        ) / 100,
-      };
-    },
-  );
-
-  // Sentiment distribution for pie chart
-  // Map overall sentiment (-1..+1) to a plausible population split
-  const sentVal = metrics?.sentiment ?? 0;
-  // Positive share rises with sentiment, negative share rises as sentiment drops
-  const rawPos = Math.round(Math.max(5, 50 + sentVal * 40));
-  const rawNeg = Math.round(Math.max(5, 50 - sentVal * 40));
-  const rawNeu = Math.max(5, 100 - rawPos - rawNeg);
-  // Normalize to 100%
-  const total = rawPos + rawNeg + rawNeu;
-  const positivePct = Math.round((rawPos / total) * 100);
-  const negativePct = Math.round((rawNeg / total) * 100);
-  const neutralPct = 100 - positivePct - negativePct;
-  const sentimentDistribution = [
-    { name: 'Positive', value: positivePct },
-    { name: 'Moderate/Undecided', value: neutralPct },
-    { name: 'Negative', value: negativePct },
-  ];
-  const PIE_COLORS = PRINT_PIE_COLORS;
-
-  // Per-platform cards
-  const platformCards = displayPlatformIds.map((p, i) => {
-    const baseSent = metrics?.sentiment ?? 0;
-    return {
-      name: PLATFORM_NAMES[p] ?? p,
-      agents: Math.round(
-        (simulation?.agent_count ?? 100) /
-          (simulation?.platforms.length ?? 1),
-      ),
-      sentiment: Math.round(
-        (baseSent + Math.sin(i * 2.1) * 0.2) * 100,
-      ) / 100,
-    };
-  });
-
-  // --- Insight headlines for charts ---
-  const platformSentHeadline = (() => {
-    if (platformSentimentData.length < 2) return undefined;
-    const sorted = [...platformSentimentData].sort((a, b) => a.sentiment - b.sentiment);
-    const low = sorted[0];
-    const high = sorted[sorted.length - 1];
-    return `${low.name} carried the most negative sentiment (${low.sentiment >= 0 ? '+' : ''}${low.sentiment.toFixed(2)}), ${Math.abs(high.sentiment - low.sentiment).toFixed(2)} points below ${high.name} (${high.sentiment >= 0 ? '+' : ''}${high.sentiment.toFixed(2)}).`;
-  })();
-
-  const sentDistHeadline = (() => {
-    const sorted = [...sentimentDistribution].sort((a, b) => b.value - a.value);
-    const top = sorted[0];
-    const runner = sorted[1];
-    return `${top.name} sentiment led at ${top.value}%, with ${runner.name} at ${runner.value}%.`;
-  })();
-
-  const platformCardHeadline = (() => {
-    if (platformCards.length < 2) return undefined;
-    const sorted = [...platformCards].sort((a, b) => a.sentiment - b.sentiment);
-    return `Cross-platform gap: ${sorted[sorted.length - 1].name} (${sorted[sorted.length - 1].sentiment >= 0 ? '+' : ''}${sorted[sorted.length - 1].sentiment.toFixed(2)}) vs. ${sorted[0].name} (${sorted[0].sentiment >= 0 ? '+' : ''}${sorted[0].sentiment.toFixed(2)}) — a ${Math.abs(sorted[sorted.length - 1].sentiment - sorted[0].sentiment).toFixed(2)} point divergence.`;
-  })();
-
-  /* ---------------------------------------------------------------- */
-  /*  Loading                                                          */
   /* ---------------------------------------------------------------- */
 
   if (loading) {
     return (
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '100vh',
-          fontFamily: "'Aktiv Grotesk', system-ui, sans-serif",
-          color: '#666',
-          background: '#fff',
-        }}
-      >
+      <div style={centeredStyle}>
         <p style={{ fontSize: 18 }}>Preparing report for export...</p>
       </div>
     );
@@ -340,31 +175,73 @@ export default function ReportPrintPage() {
 
   if (!report || !simulation) {
     return (
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '100vh',
-          fontFamily: "'Aktiv Grotesk', system-ui, sans-serif",
-          color: '#666',
-          background: '#fff',
-        }}
-      >
-        <p style={{ fontSize: 18 }}>
-          Report data could not be loaded.
-        </p>
+      <div style={centeredStyle}>
+        <p style={{ fontSize: 18 }}>Report data could not be loaded.</p>
       </div>
     );
   }
 
-  /* ---------------------------------------------------------------- */
-  /*  Render                                                           */
-  /* ---------------------------------------------------------------- */
+  const execSection =
+    report.sections.find(
+      (s) =>
+        /executive|summary|overview/i.test(s.title) ||
+        s.section_type === 'executive_summary',
+    ) ??
+    report.sections[0] ??
+    null;
+
+  const conclusionSection =
+    report.sections.find(
+      (s) =>
+        /strategic.*implication|recommended.*action|conclusion/i.test(s.title) ||
+        s.section_type === 'conclusion' ||
+        s.section_type === 'recommendations',
+    ) ?? null;
+
+  const detailedSections = report.sections.filter(
+    (s) => s !== execSection && s !== conclusionSection,
+  );
+
+  /* Chart data — read straight off the artifact, never derived here. */
+  const arcData =
+    analysis?.sentiment_timeline.map((point) => ({
+      round: `R${point.round_number}`,
+      mean: point.valence.mean,
+      // ErrorBar takes offsets from the value, not absolute bounds.
+      error: [
+        point.valence.mean - point.valence.lower,
+        point.valence.upper - point.valence.mean,
+      ] as [number, number],
+      agents: point.valence.n,
+    })) ?? [];
+
+  const platformData =
+    analysis?.by_platform.map((slice) => ({
+      key: slice.platform,
+      name: PLATFORM_NAMES[slice.platform] ?? slice.platform,
+      mean: slice.valence.mean,
+      error: [
+        slice.valence.mean - slice.valence.lower,
+        slice.valence.upper - slice.valence.mean,
+      ] as [number, number],
+      agents: slice.valence.n,
+    })) ?? [];
+
+  /* The stance split is measured, not modelled. The old pie mapped one scraped
+     scalar onto an invented positive/neutral/negative population. */
+  const stanceData = analysis
+    ? [
+        { name: 'Support', value: Math.round(analysis.headline.stance.support_pct) },
+        { name: 'Undecided', value: Math.round(analysis.headline.stance.undecided_pct) },
+        { name: 'Oppose', value: Math.round(analysis.headline.stance.oppose_pct) },
+        { name: 'Off-topic', value: Math.round(analysis.headline.stance.off_topic_pct) },
+      ].filter((slice) => slice.value > 0)
+    : [];
+
+  const stanceColors = [...PRINT_PIE_COLORS, '#94a3b8'];
 
   return (
     <>
-      {/* Print & screen styles */}
       <style
         dangerouslySetInnerHTML={{
           __html: `
@@ -385,7 +262,7 @@ export default function ReportPrintPage() {
         className="print-page"
         style={{
           fontFamily: "'Aktiv Grotesk', system-ui, sans-serif",
-          color: '#1a1a1a',
+          color: INK,
           background: '#ffffff',
           maxWidth: 800,
           margin: '0 auto',
@@ -393,23 +270,16 @@ export default function ReportPrintPage() {
           lineHeight: 1.6,
         }}
       >
-        {/* ============================================================ */}
-        {/*  SECTION 1: Cover Page                                       */}
-        {/* ============================================================ */}
+        {/* ================= Cover ================= */}
         <div style={{ pageBreakAfter: 'always' }}>
-          {/* Logo */}
           <div style={{ textAlign: 'center', marginTop: 60 }}>
-            <img
-              src="/logo-mark.svg"
-              alt="Saibyl"
-              style={{ width: 96, height: 96, margin: '0 auto' }}
-            />
+            <img src="/logo-mark.svg" alt="Saibyl" style={{ width: 96, height: 96, margin: '0 auto' }} />
             <div
               style={{
                 fontWeight: 800,
                 fontSize: 28,
                 letterSpacing: '0.35em',
-                color: '#5B5FEE',
+                color: BRAND,
                 marginTop: 16,
               }}
             >
@@ -417,42 +287,15 @@ export default function ReportPrintPage() {
             </div>
           </div>
 
-          {/* Divider */}
-          <hr
-            style={{
-              border: 'none',
-              borderTop: '2px solid #5B5FEE',
-              margin: '32px 0',
-            }}
-          />
+          <hr style={{ border: 'none', borderTop: `2px solid ${BRAND}`, margin: '32px 0' }} />
 
-          {/* Title */}
-          <h1
-            style={{
-              fontSize: 32,
-              fontWeight: 800,
-              color: '#1a1a1a',
-              margin: '40px 0 8px',
-              lineHeight: 1.2,
-            }}
-          >
+          <h1 style={{ fontSize: 32, fontWeight: 800, margin: '40px 0 8px', lineHeight: 1.2 }}>
             {simulation.name}
           </h1>
-
-          {/* Subtitle */}
-          <p
-            style={{
-              fontSize: 14,
-              color: '#666',
-              fontWeight: 500,
-              margin: '0 0 40px',
-            }}
-          >
-            SIM-{simId?.slice(0, 4).toUpperCase()} &middot; Intelligence
-            Report
+          <p style={{ fontSize: 14, color: MUTED, fontWeight: 500, margin: '0 0 40px' }}>
+            SIM-{simId?.slice(0, 4).toUpperCase()} &middot; Intelligence Report
           </p>
 
-          {/* Metadata */}
           <div
             style={{
               display: 'grid',
@@ -462,42 +305,42 @@ export default function ReportPrintPage() {
               color: '#333',
             }}
           >
-            <div>
-              <span style={{ color: '#999', fontWeight: 600 }}>
-                Date Generated
-              </span>
-              <br />
-              {format(new Date(), 'MMMM d, yyyy')}
-            </div>
-            <div>
-              <span style={{ color: '#999', fontWeight: 600 }}>
-                Platforms
-              </span>
-              <br />
-              {simulation.platforms
-                .map((p) => PLATFORM_NAMES[p] ?? p)
-                .join(', ')}
-            </div>
-            <div>
-              <span style={{ color: '#999', fontWeight: 600 }}>
-                Agent Count
-              </span>
-              <br />
-              {simulation.agent_count}
-            </div>
-            <div>
-              <span style={{ color: '#999', fontWeight: 600 }}>
-                Total Rounds
-              </span>
-              <br />
-              {simulation.max_rounds}
-            </div>
+            <Field label="Date Generated" value={format(new Date(), 'MMMM d, yyyy')} />
+            <Field
+              label="Platforms"
+              value={simulation.platforms.map((p) => PLATFORM_NAMES[p] ?? p).join(', ')}
+            />
+            <Field label="Agents" value={String(simulation.agent_count)} />
+            <Field label="Rounds" value={String(simulation.max_rounds)} />
           </div>
 
-          {/* Confidential footer */}
+          {/* Measurement provenance belongs on the cover of an exported
+              document: it is the first thing a reader forwarding this to a
+              board should be able to see. */}
+          {analysis && (
+            <p
+              style={{
+                marginTop: 32,
+                fontSize: 11,
+                color: MUTED,
+                lineHeight: 1.7,
+                borderLeft: `3px solid ${RULE}`,
+                paddingLeft: 12,
+              }}
+            >
+              Every figure in this document is measured from what the simulated
+              agents wrote. {analysis.quality.events_measured.toLocaleString()} of{' '}
+              {analysis.quality.events_total.toLocaleString()} events were scored (
+              {analysis.quality.coverage_pct.toFixed(1)}% coverage) across{' '}
+              {analysis.quality.agents_active} active agents and{' '}
+              {analysis.quality.rounds} rounds. Confidence intervals are computed
+              across agents. Overall confidence: {analysis.quality.confidence}.
+            </p>
+          )}
+
           <p
             style={{
-              marginTop: 120,
+              marginTop: analysis ? 60 : 120,
               fontSize: 10,
               color: '#999',
               textAlign: 'center',
@@ -505,101 +348,46 @@ export default function ReportPrintPage() {
               textTransform: 'uppercase',
             }}
           >
-            CONFIDENTIAL — Prepared by Saibyl Intelligence Platform
+            CONFIDENTIAL — Prepared by Saibyl · Saido Labs LLC
           </p>
         </div>
 
-        {/* ============================================================ */}
-        {/*  SECTION 2: Source Material                                   */}
-        {/* ============================================================ */}
+        {/* ================= 1. Source Material ================= */}
         <div style={{ pageBreakAfter: 'always' }}>
           <SectionHeader number="1" title="Source Material" />
 
-          {/* A) Scenario / Question */}
-          <p
-            style={{
-              fontSize: 14,
-              fontWeight: 600,
-              color: '#333',
-              marginBottom: 8,
-            }}
-          >
+          <p style={{ fontSize: 14, fontWeight: 600, color: '#333', marginBottom: 8 }}>
             Scenario / Question Analyzed
           </p>
-
           {simulation.prediction_goal.length > 300 ? (
-            <div
-              style={{
-                background: '#f7f7f7',
-                border: '1px solid #e0e0e0',
-                borderRadius: 8,
-                padding: '16px 20px',
-                fontSize: 12,
-                color: '#444',
-                lineHeight: 1.7,
-                whiteSpace: 'pre-wrap',
-                marginBottom: 20,
-              }}
-            >
-              {simulation.prediction_goal}
-            </div>
+            <div style={quoteBlockStyle}>{simulation.prediction_goal}</div>
           ) : (
-            <p
-              style={{
-                fontSize: 16,
-                lineHeight: 1.7,
-                color: '#1a1a1a',
-                marginBottom: 20,
-              }}
-            >
+            <p style={{ fontSize: 16, lineHeight: 1.7, marginBottom: 20 }}>
               {simulation.prediction_goal}
             </p>
           )}
 
-          {/* B) Input Article / Document */}
           {report.source_documents && report.source_documents.length > 0 && (
             <>
-              <p
-                style={{
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: '#333',
-                  marginBottom: 8,
-                }}
-              >
+              <p style={{ fontSize: 14, fontWeight: 600, color: '#333', marginBottom: 8 }}>
                 Input Article / Document
               </p>
-              {report.source_documents.map((doc, i) => (
-                <div
-                  key={i}
-                  style={{
-                    background: '#f7f7f7',
-                    border: '1px solid #e0e0e0',
-                    borderRadius: 8,
-                    padding: '16px 20px',
-                    marginBottom: 12,
-                  }}
-                >
+              {report.source_documents.map((doc) => (
+                <div key={doc.filename} style={{ ...quoteBlockStyle, marginBottom: 12 }}>
                   <p
                     style={{
                       fontSize: 11,
                       fontWeight: 600,
-                      color: '#666',
+                      color: MUTED,
                       textTransform: 'uppercase',
                       letterSpacing: '0.05em',
                       marginBottom: 8,
                     }}
                   >
-                    {doc.filename} ({doc.file_type.toUpperCase()}{doc.word_count > 0 ? ` — ${doc.word_count.toLocaleString()} words` : ''})
+                    {doc.filename} ({doc.file_type.toUpperCase()}
+                    {doc.word_count > 0 ? ` — ${doc.word_count.toLocaleString()} words` : ''})
                   </p>
-                  <div
-                    style={{
-                      fontSize: 12,
-                      color: '#444',
-                      lineHeight: 1.7,
-                      whiteSpace: 'pre-wrap',
-                    }}
-                  >
+                  <div style={{ fontSize: 12, color: '#444', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
                     {doc.text}
                   </div>
                 </div>
@@ -607,384 +395,460 @@ export default function ReportPrintPage() {
             </>
           )}
 
-          {/* C) Simulation Parameters */}
-          <p
-            style={{
-              fontSize: 14,
-              fontWeight: 600,
-              color: '#333',
-              marginBottom: 8,
-              marginTop: 20,
-            }}
-          >
+          <p style={{ fontSize: 14, fontWeight: 600, color: '#333', margin: '20px 0 8px' }}>
             Simulation Parameters
           </p>
-          <table
-            style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              fontSize: 13,
-            }}
-          >
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <tbody>
               {[
-                ['Agent Count', String(simulation.agent_count)],
+                ['Agents generated', String(simulation.agent_count)],
                 ['Rounds', String(simulation.max_rounds)],
-                ['Platforms', simulation.platforms.map(p => PLATFORM_NAMES[p] ?? p).join(', ')],
-                ...(simulation.persona_pack_ids && simulation.persona_pack_ids.length > 0
-                  ? [['Persona Packs', simulation.persona_pack_ids.join(', ')]]
+                ['Platforms', simulation.platforms.map((p) => PLATFORM_NAMES[p] ?? p).join(', ')],
+                ...(simulation.persona_pack_ids?.length
+                  ? [['Persona packs', simulation.persona_pack_ids.join(', ')]]
                   : []),
-                ['Date Run', new Date(simulation.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })],
+                ...(analysis
+                  ? [
+                      [
+                        'Events measured',
+                        `${analysis.quality.events_measured.toLocaleString()} of ${analysis.quality.events_total.toLocaleString()} (${analysis.quality.coverage_pct.toFixed(1)}%)`,
+                      ],
+                      ['Measurement model', analysis.quality.measurement_model || '—'],
+                    ]
+                  : []),
+                [
+                  'Date run',
+                  new Date(simulation.created_at).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                  }),
+                ],
               ].map(([label, value]) => (
                 <tr key={label}>
-                  <td
-                    style={{
-                      padding: '6px 12px',
-                      fontWeight: 600,
-                      color: '#555',
-                      borderBottom: '1px solid #eee',
-                      width: '35%',
-                    }}
-                  >
+                  <td style={{ ...cellStyle, fontWeight: 600, color: '#555', width: '35%' }}>
                     {label}
                   </td>
-                  <td
-                    style={{
-                      padding: '6px 12px',
-                      color: '#1a1a1a',
-                      borderBottom: '1px solid #eee',
-                    }}
-                  >
-                    {value}
-                  </td>
+                  <td style={cellStyle}>{value}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
 
-        {/* ============================================================ */}
-        {/*  SECTION 3: Executive Summary                                */}
-        {/* ============================================================ */}
+        {/* ================= 2. Executive Summary ================= */}
         <div style={{ pageBreakAfter: 'always' }}>
           <SectionHeader number="2" title="Executive Summary" />
 
-          {/* Metrics row */}
-          {metrics && (
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(5, 1fr)',
-                gap: 12,
-                marginBottom: 24,
-              }}
-            >
-              <MetricBox
-                label="Sentiment"
-                value={
-                  metrics.sentiment != null
-                    ? `${metrics.sentiment >= 0 ? '+' : ''}${metrics.sentiment.toFixed(2)}`
-                    : 'N/A'
-                }
-              />
-              <MetricBox
-                label="Engagement"
-                value={
-                  metrics.engagement != null
-                    ? `${(metrics.engagement * 10).toFixed(1)} / 10`
-                    : 'N/A'
-                }
-              />
-              <MetricBox
-                label="Polarization Ratio"
-                value={
-                  metrics.controversyLabel
-                    ?? (metrics.controversy != null
-                      ? metrics.controversy.toFixed(2)
-                      : 'N/A')
-                }
-              />
-              <MetricBox
-                label="Platforms"
-                value={String(simulation.platforms.length)}
-              />
-              <MetricBox
-                label="Sentiment Trajectory"
-                value={metrics.sentimentTrajectory ?? 'N/A'}
-                small
-              />
-            </div>
+          {analysis ? (
+            <>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(4, 1fr)',
+                  gap: 12,
+                  marginBottom: 16,
+                }}
+              >
+                <MetricBox
+                  label="Overall sentiment"
+                  value={
+                    analysis.headline.valence.n > 0
+                      ? formatSigned(analysis.headline.valence.mean)
+                      : 'N/A'
+                  }
+                  sub={
+                    analysis.headline.valence.n > 1
+                      ? `95% CI ${formatSigned(analysis.headline.valence.lower)} to ${formatSigned(analysis.headline.valence.upper)}`
+                      : 'not resolvable'
+                  }
+                />
+                <MetricBox
+                  label="Opposed"
+                  value={`${analysis.headline.stance.oppose_pct.toFixed(0)}%`}
+                  sub={`${analysis.headline.stance.support_pct.toFixed(0)}% support`}
+                />
+                <MetricBox
+                  label="Trajectory"
+                  value={
+                    analysis.headline.trajectory === 'flat'
+                      ? 'Flat'
+                      : formatSigned(analysis.headline.trajectory_delta)
+                  }
+                  sub={analysis.headline.trajectory}
+                />
+                <MetricBox
+                  label="Agents measured"
+                  value={String(analysis.headline.valence.n)}
+                  sub={`of ${analysis.quality.agents_total} generated`}
+                />
+              </div>
+
+              {analysis.quality.caveats.length > 0 && (
+                <div
+                  style={{
+                    border: `1px solid ${RULE}`,
+                    borderRadius: 8,
+                    padding: '12px 16px',
+                    marginBottom: 24,
+                    fontSize: 11,
+                    color: MUTED,
+                    lineHeight: 1.7,
+                  }}
+                >
+                  <strong style={{ color: '#333' }}>What this run can and cannot show</strong>
+                  <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+                    {analysis.quality.caveats.map((caveat) => (
+                      <li key={caveat}>{caveat}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          ) : (
+            <p style={{ ...noticeStyle, marginBottom: 24 }}>
+              This run has not been analysed, so no measured figures are included.
+              Nothing in this document is estimated from the narrative text.
+            </p>
           )}
 
           {execSection && (
-            <div
-              style={{
-                fontSize: 16,
-                lineHeight: 1.7,
-                color: '#1a1a1a',
-              }}
-            >
+            <div style={{ fontSize: 16, lineHeight: 1.7 }}>
               <SectionRenderer content={cleanContent(execSection.content)} printMode />
             </div>
           )}
         </div>
 
-        {/* ============================================================ */}
-        {/*  SECTION 4: Data & Analysis                                  */}
-        {/* ============================================================ */}
+        {/* ================= 3. Data & Analysis ================= */}
         <div style={{ pageBreakBefore: 'always' }}>
           <SectionHeader number="3" title="Data &amp; Analysis" />
 
-          {/* Platform Sentiment Bar Chart */}
-          {platformSentimentData.length > 0 && (
+          {!analysis && (
+            <p style={noticeStyle}>
+              No analysis artifact exists for this run, so there are no charts.
+              Charts are only drawn from measured data.
+            </p>
+          )}
+
+          {analysis && arcData.length > 0 && (
             <div style={{ marginBottom: 32 }}>
-              <h4
-                style={{
-                  fontSize: 14,
-                  fontWeight: 700,
-                  color: '#333',
-                  marginBottom: 12,
-                }}
-              >
-                Platform Sentiment
-              </h4>
-              {platformSentHeadline && (
-                <p style={{ fontSize: 13, fontWeight: 700, color: '#1a1a1a', marginBottom: 8 }}>
-                  {platformSentHeadline}
-                </p>
-              )}
+              <ChartTitle>Sentiment by round</ChartTitle>
+              <ChartNote>
+                Bars are the mean valence per round; whiskers are the 95% confidence
+                interval computed across agents. Rounds with no measurable opinion
+                are omitted rather than interpolated.
+              </ChartNote>
               <BarChart
                 width={700}
-                height={300}
-                data={platformSentimentData}
+                height={280}
+                data={arcData}
+                margin={{ left: 10, right: 20, top: 10, bottom: 10 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke={RULE} />
+                <XAxis dataKey="round" tick={{ fill: '#333', fontSize: 12 }} />
+                <YAxis domain={[-1, 1]} tick={{ fill: MUTED, fontSize: 11 }} />
+                <ReferenceLine y={0} stroke="#999" />
+                <Tooltip
+                  formatter={(value: number) => formatSigned(value)}
+                  labelFormatter={(label: string) => {
+                    const point = arcData.find((d) => d.round === label);
+                    return `${label} — ${point?.agents ?? 0} agents`;
+                  }}
+                />
+                <Bar dataKey="mean" radius={[3, 3, 0, 0]}>
+                  {arcData.map((entry) => (
+                    <Cell
+                      key={entry.round}
+                      fill={entry.mean >= 0 ? PRINT_PIE_COLORS[0] : PRINT_PIE_COLORS[2]}
+                    />
+                  ))}
+                  <ErrorBar dataKey="error" width={6} strokeWidth={1.5} stroke="#555" />
+                </Bar>
+              </BarChart>
+            </div>
+          )}
+
+          {analysis && platformData.length > 0 && (
+            <div style={{ marginBottom: 32 }}>
+              <ChartTitle>Sentiment by platform</ChartTitle>
+              <ChartNote>
+                Ordered most negative first. Where whiskers overlap, this run does
+                not resolve a difference between those platforms.
+              </ChartNote>
+              <BarChart
+                width={700}
+                height={280}
+                data={platformData}
                 layout="vertical"
                 margin={{ left: 100, right: 20, top: 10, bottom: 10 }}
               >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="#e0e0e0"
-                />
-                <XAxis
-                  type="number"
-                  domain={[-1, 1]}
-                  tick={{ fill: '#666', fontSize: 11 }}
-                />
+                <CartesianGrid strokeDasharray="3 3" stroke={RULE} />
+                <XAxis type="number" domain={[-1, 1]} tick={{ fill: MUTED, fontSize: 11 }} />
                 <YAxis
                   dataKey="name"
                   type="category"
                   tick={{ fill: '#333', fontSize: 12 }}
                   width={90}
                 />
-                <Tooltip />
-                <Bar dataKey="sentiment" radius={[0, 4, 4, 0]}>
-                  {platformSentimentData.map((entry, idx) => (
-                    <Cell key={idx} fill={platformColor(entry.name)} />
+                <ReferenceLine x={0} stroke="#999" />
+                <Tooltip
+                  formatter={(value: number) => formatSigned(value)}
+                  labelFormatter={(label: string) => {
+                    const row = platformData.find((d) => d.name === label);
+                    return `${label} — ${row?.agents ?? 0} agents`;
+                  }}
+                />
+                <Bar dataKey="mean" radius={[0, 3, 3, 0]}>
+                  {platformData.map((entry) => (
+                    <Cell key={entry.key} fill={PRINT_PLATFORM_COLORS[entry.key] ?? '#64748b'} />
                   ))}
+                  <ErrorBar dataKey="error" width={6} strokeWidth={1.5} stroke="#555" />
                 </Bar>
               </BarChart>
             </div>
           )}
 
-          {/* Sentiment Distribution Pie Chart */}
-          <div style={{ marginBottom: 32 }}>
-            <h4
-              style={{
-                fontSize: 14,
-                fontWeight: 700,
-                color: '#333',
-                marginBottom: 12,
-              }}
-            >
-              Sentiment Distribution
-            </h4>
-            {sentDistHeadline && (
-              <p style={{ fontSize: 13, fontWeight: 700, color: '#1a1a1a', marginBottom: 8 }}>
-                {sentDistHeadline}
-              </p>
-            )}
-            <PieChart width={700} height={300}>
-              <Pie
-                data={sentimentDistribution}
-                cx={350}
-                cy={150}
-                outerRadius={110}
-                dataKey="value"
-                label={({ name, value }: { name?: string; value?: number }) =>
-                  (value ?? 0) >= 3 ? `${name ?? ''}: ${value ?? 0}%` : ''
-                }
-              >
-                {sentimentDistribution.map((_, index) => (
-                  <Cell
-                    key={`cell-${index}`}
-                    fill={PIE_COLORS[index % PIE_COLORS.length]}
-                  />
-                ))}
-              </Pie>
-              <Tooltip />
-              <Legend />
-            </PieChart>
-          </div>
-
-          {/* Per-platform breakdown cards */}
-          {platformCards.length > 0 && (
+          {analysis && stanceData.length > 0 && (
             <div style={{ marginBottom: 32 }}>
-              <h4
-                style={{
-                  fontSize: 14,
-                  fontWeight: 700,
-                  color: '#333',
-                  marginBottom: 12,
-                }}
-              >
-                Per-Platform Breakdown
-              </h4>
-              {platformCardHeadline && (
-                <p style={{ fontSize: 13, fontWeight: 700, color: '#1a1a1a', marginBottom: 8 }}>
-                  {platformCardHeadline}
-                </p>
-              )}
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(3, 1fr)',
-                  gap: 12,
-                }}
-              >
-                {platformCards.map((pc) => (
-                  <div
-                    key={pc.name}
-                    style={{
-                      border: '1px solid #e0e0e0',
-                      borderRadius: 8,
-                      padding: '12px 16px',
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: '#1a1a1a',
-                        marginBottom: 4,
-                      }}
-                    >
-                      {pc.name}
-                    </div>
-                    <div
-                      style={{ fontSize: 12, color: '#666' }}
-                    >
-                      {pc.agents} agents
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 12,
-                        color:
-                          pc.sentiment >= 0.2
-                            ? CHART_COLORS.positive
-                            : pc.sentiment >= -0.2
-                              ? CHART_COLORS.neutral
-                              : CHART_COLORS.negative,
-                        fontWeight: 600,
-                        marginTop: 4,
-                      }}
-                    >
-                      Sentiment: {pc.sentiment >= 0 ? '+' : ''}{pc.sentiment.toFixed(2)}
-                    </div>
+              <ChartTitle>Stance distribution</ChartTitle>
+              <ChartNote>
+                Share of measured events taking each position on the subject.
+                Off-topic events are shown rather than dropped — a swarm that
+                never engaged is a different result from one that disagreed.
+              </ChartNote>
+              <PieChart width={700} height={280}>
+                <Pie
+                  data={stanceData}
+                  cx={350}
+                  cy={140}
+                  outerRadius={100}
+                  dataKey="value"
+                  label={({ name, value }: { name?: string; value?: number }) =>
+                    (value ?? 0) >= 3 ? `${name ?? ''}: ${value ?? 0}%` : ''
+                  }
+                >
+                  {stanceData.map((entry, index) => (
+                    <Cell key={entry.name} fill={stanceColors[index % stanceColors.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </div>
+          )}
+
+          {analysis && analysis.objections.length > 0 && (
+            <div style={{ marginBottom: 32 }}>
+              <ChartTitle>Objections, ranked by load-bearing weight</ChartTitle>
+              <ChartNote>
+                Weight is reach × intensity × cohort spread — not how often an
+                objection was repeated. Quotes are verbatim agent output.
+              </ChartNote>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    {['Objection', 'Weight', 'Agents', 'First seen', 'Originating cohort'].map(
+                      (heading) => (
+                        <th
+                          key={heading}
+                          style={{
+                            textAlign: 'left',
+                            padding: '6px 8px',
+                            borderBottom: `2px solid ${RULE}`,
+                            color: MUTED,
+                            fontSize: 11,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                          }}
+                        >
+                          {heading}
+                        </th>
+                      ),
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {analysis.objections.slice(0, 10).map((objection) => (
+                    <tr key={objection.key}>
+                      <td style={{ ...cellStyle, fontWeight: 600 }}>{objection.label}</td>
+                      <td style={cellStyle}>{objection.load_bearing_score.toFixed(1)}</td>
+                      <td style={cellStyle}>{objection.agent_count}</td>
+                      <td style={cellStyle}>R{objection.first_round_seen ?? '—'}</td>
+                      <td style={cellStyle}>{objection.originating_cohort ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {analysis.objections.slice(0, 3).map((objection) =>
+                objection.quotes.length > 0 ? (
+                  <div key={objection.key} style={{ marginTop: 16 }}>
+                    <p style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>
+                      {objection.label}
+                    </p>
+                    {objection.quotes.slice(0, 2).map((quote) => (
+                      <blockquote
+                        key={quote.event_id}
+                        style={{
+                          borderLeft: `3px solid ${BRAND}`,
+                          paddingLeft: 12,
+                          margin: '6px 0',
+                          fontSize: 12,
+                          color: '#444',
+                          fontStyle: 'italic',
+                        }}
+                      >
+                        “{quote.text}”
+                        <span style={{ display: 'block', fontStyle: 'normal', fontSize: 10, color: MUTED, marginTop: 2 }}>
+                          @{quote.agent_username}
+                          {quote.archetype ? ` · ${quote.archetype}` : ''}
+                          {quote.round_number != null ? ` · round ${quote.round_number}` : ''}
+                        </span>
+                      </blockquote>
+                    ))}
                   </div>
+                ) : null,
+              )}
+            </div>
+          )}
+
+          {analysis && analysis.flashpoints.length > 0 && (
+            <div style={{ marginBottom: 32 }}>
+              <ChartTitle>Flashpoints</ChartTitle>
+              <ChartNote>
+                Round-to-round shifts larger than 0.15. Only shifts whose intervals
+                separate are marked as measured; the rest are directional.
+              </ChartNote>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, lineHeight: 1.8 }}>
+                {analysis.flashpoints.slice(0, 6).map((flash) => (
+                  <li key={`${flash.round_number}-${flash.delta}`}>
+                    <strong>Round {flash.round_number}:</strong>{' '}
+                    {formatSigned(flash.valence_before)} → {formatSigned(flash.valence_after)}{' '}
+                    ({flash.significant ? 'measured shift' : 'within the bands'})
+                  </li>
                 ))}
-              </div>
+              </ul>
             </div>
           )}
         </div>
 
-        {/* ============================================================ */}
-        {/*  SECTION 5: Detailed Findings                                */}
-        {/* ============================================================ */}
+        {/* ================= 4. Detailed Findings ================= */}
         <div>
           <SectionHeader number="4" title="Detailed Findings" />
-
           {detailedSections.length === 0 && (
-            <p style={{ fontSize: 14, color: '#666' }}>
-              No additional sections available.
-            </p>
+            <p style={{ fontSize: 14, color: MUTED }}>No additional sections available.</p>
           )}
-
-          {detailedSections.map((section, idx) => (
-            <div key={idx} style={{ marginBottom: 24 }}>
-              <h3
-                style={{
-                  fontSize: 18,
-                  fontWeight: 700,
-                  color: '#1a1a1a',
-                  marginBottom: 8,
-                }}
-              >
-                {section.title}
-              </h3>
-              <div
-                style={{
-                  fontSize: 14,
-                  lineHeight: 1.7,
-                  color: '#333',
-                }}
-              >
-                <SectionRenderer content={stripDuplicateTitle(section.title, cleanContent(section.content))} printMode />
+          {detailedSections.map((section) => (
+            <div key={section.title} style={{ marginBottom: 24 }}>
+              <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>{section.title}</h3>
+              <div style={{ fontSize: 14, lineHeight: 1.7, color: '#333' }}>
+                <SectionRenderer
+                  content={stripDuplicateTitle(section.title, cleanContent(section.content))}
+                  printMode
+                />
               </div>
             </div>
           ))}
         </div>
 
-        {/* ============================================================ */}
-        {/*  SECTION 6: Strategic Implications & Recommended Actions      */}
-        {/* ============================================================ */}
+        {/* ================= 5. Strategic Implications ================= */}
         <div>
-          <SectionHeader
-            number="5"
-            title="Strategic Implications &amp; Recommended Actions"
-          />
-
+          <SectionHeader number="5" title="Strategic Implications &amp; Recommended Actions" />
           {conclusionSection?.content ? (
-            <div
-              style={{
-                fontSize: 16,
-                lineHeight: 1.7,
-                color: '#1a1a1a',
-              }}
-            >
-              <SectionRenderer content={stripDuplicateTitle(conclusionSection.title, cleanContent(conclusionSection.content))} printMode />
+            <div style={{ fontSize: 16, lineHeight: 1.7 }}>
+              <SectionRenderer
+                content={stripDuplicateTitle(
+                  conclusionSection.title,
+                  cleanContent(conclusionSection.content),
+                )}
+                printMode
+              />
             </div>
           ) : (
-            <p style={{ fontSize: 14, color: '#666' }}>
+            <p style={{ fontSize: 14, color: MUTED }}>
               Strategic implications will appear once the report generation completes.
             </p>
           )}
         </div>
-
       </div>
     </>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/*  Sub-components                                                     */
+/*  Sub-components and shared styles                                   */
 /* ------------------------------------------------------------------ */
 
-function SectionHeader({
-  number,
-  title,
-}: {
-  number: string;
-  title: string;
-}) {
+const centeredStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  minHeight: '100vh',
+  fontFamily: "'Aktiv Grotesk', system-ui, sans-serif",
+  color: MUTED,
+  background: '#fff',
+};
+
+const quoteBlockStyle: React.CSSProperties = {
+  background: '#f7f7f7',
+  border: `1px solid ${RULE}`,
+  borderRadius: 8,
+  padding: '16px 20px',
+  fontSize: 12,
+  color: '#444',
+  lineHeight: 1.7,
+  whiteSpace: 'pre-wrap',
+  marginBottom: 20,
+};
+
+const cellStyle: React.CSSProperties = {
+  padding: '6px 8px',
+  borderBottom: '1px solid #eee',
+  color: INK,
+  verticalAlign: 'top',
+};
+
+const noticeStyle: React.CSSProperties = {
+  fontSize: 13,
+  color: MUTED,
+  lineHeight: 1.7,
+  border: `1px dashed ${RULE}`,
+  borderRadius: 8,
+  padding: '12px 16px',
+};
+
+function Field({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <span style={{ color: '#999', fontWeight: 600 }}>{label}</span>
+      <br />
+      {value}
+    </div>
+  );
+}
+
+function ChartTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <h4 style={{ fontSize: 14, fontWeight: 700, color: '#333', marginBottom: 4 }}>{children}</h4>
+  );
+}
+
+function ChartNote({ children }: { children: React.ReactNode }) {
+  return (
+    <p style={{ fontSize: 11, color: MUTED, marginBottom: 12, lineHeight: 1.6 }}>{children}</p>
+  );
+}
+
+function SectionHeader({ number, title }: { number: string; title: string }) {
   return (
     <div style={{ marginBottom: 20, marginTop: 32 }}>
       <h2
         style={{
           fontSize: 22,
           fontWeight: 800,
-          color: '#1a1a1a',
           margin: 0,
           paddingBottom: 8,
-          borderBottom: '3px solid #5B5FEE',
+          borderBottom: `3px solid ${BRAND}`,
           display: 'inline-block',
         }}
       >
@@ -995,27 +859,12 @@ function SectionHeader({
   );
 }
 
-function MetricBox({
-  label,
-  value,
-  small,
-}: {
-  label: string;
-  value: string;
-  small?: boolean;
-}) {
+function MetricBox({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div
-      style={{
-        border: '1px solid #e0e0e0',
-        borderRadius: 8,
-        padding: '12px 16px',
-        textAlign: 'center',
-      }}
-    >
+    <div style={{ border: `1px solid ${RULE}`, borderRadius: 8, padding: '12px 14px', textAlign: 'center' }}>
       <div
         style={{
-          fontSize: 11,
+          fontSize: 10,
           color: '#999',
           fontWeight: 600,
           textTransform: 'uppercase',
@@ -1025,15 +874,8 @@ function MetricBox({
       >
         {label}
       </div>
-      <div
-        style={{
-          fontSize: small ? 12 : 22,
-          fontWeight: 800,
-          color: '#1a1a1a',
-        }}
-      >
-        {value}
-      </div>
+      <div style={{ fontSize: 20, fontWeight: 800 }}>{value}</div>
+      {sub && <div style={{ fontSize: 10, color: MUTED, marginTop: 4 }}>{sub}</div>}
     </div>
   );
 }

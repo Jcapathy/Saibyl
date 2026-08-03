@@ -36,11 +36,11 @@ const STATUS_FILTERS = ['all', 'running', 'complete', 'queued', 'draft', 'failed
 type StatusFilter = (typeof STATUS_FILTERS)[number];
 
 const STATUS_COLOR: Record<string, string> = {
-  running: '#3B82F6',
+  running: '#2563EB',
   complete: '#22C55E',
   completed: '#22C55E',
   queued: '#F59E0B',
-  draft: '#818CF8',
+  draft: '#8B5CF6',
   failed: '#EF4444',
 };
 
@@ -242,11 +242,11 @@ export default function SimulationsPage() {
           <div className="h-7 w-40 bg-white/[0.05] rounded animate-pulse" />
           <div className="h-9 w-36 bg-white/[0.05] rounded-lg animate-pulse" />
         </div>
-        <div className="bg-[#111820] border border-[#1B2433] rounded-2xl overflow-hidden">
+        <div className="bg-[#111827] border border-[#1E293B] rounded-2xl overflow-hidden">
           {Array.from({ length: 5 }).map((_, i) => (
             <div
               key={i}
-              className="flex items-center gap-4 px-5 py-4 border-b border-[#1B2433] last:border-b-0"
+              className="flex items-center gap-4 px-5 py-4 border-b border-[#1E293B] last:border-b-0"
             >
               <div className="h-4 w-4 bg-white/[0.04] rounded animate-pulse" />
               <div className="h-4 w-48 bg-white/[0.04] rounded animate-pulse" />
@@ -274,7 +274,7 @@ export default function SimulationsPage() {
           </p>
           <Link
             to="/app/simulations/new"
-            className="inline-flex items-center gap-2 bg-[#C9A227] text-[#070B14] font-semibold px-5 py-2.5 rounded-lg hover:bg-[#D4AF37] transition-colors text-sm"
+            className="inline-flex items-center gap-2 bg-[#C9A227] text-[#0A0F1C] font-semibold px-5 py-2.5 rounded-lg hover:bg-[#D4AF37] transition-colors text-sm"
           >
             <Plus className="w-4 h-4" /> Create Simulation
           </Link>
@@ -298,7 +298,7 @@ export default function SimulationsPage() {
         </div>
         <Link
           to="/app/simulations/new"
-          className="inline-flex items-center gap-2 bg-[#C9A227] text-[#070B14] font-semibold px-4 py-2 rounded-lg hover:bg-[#D4AF37] transition-colors text-sm"
+          className="inline-flex items-center gap-2 bg-[#C9A227] text-[#0A0F1C] font-semibold px-4 py-2 rounded-lg hover:bg-[#D4AF37] transition-colors text-sm"
         >
           <Plus className="w-4 h-4" /> New Simulation
         </Link>
@@ -314,7 +314,7 @@ export default function SimulationsPage() {
             placeholder="Search simulations..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="bg-white/[0.03] border border-[#1B2433] rounded-lg pl-9 pr-4 py-2 text-sm text-[#E8ECF2] placeholder:text-[#5A6578] focus:outline-none focus:border-[#5B5FEE]/50 transition-colors w-64"
+            className="bg-white/[0.03] border border-[#1E293B] rounded-lg pl-9 pr-4 py-2 text-sm text-[#E8ECF2] placeholder:text-[#5A6578] focus:outline-none focus:border-[#8B5CF6]/50 transition-colors w-64"
           />
         </div>
 
@@ -351,7 +351,7 @@ export default function SimulationsPage() {
             exit={{ opacity: 0, height: 0 }}
             className="overflow-hidden mb-4"
           >
-            <div className="bg-[#5B5FEE]/10 border border-[#5B5FEE]/20 rounded-xl px-4 py-2 flex items-center gap-3">
+            <div className="bg-[#8B5CF6]/10 border border-[#8B5CF6]/20 rounded-xl px-4 py-2 flex items-center gap-3">
               <span className="text-sm text-[#E8ECF2] font-medium">
                 {selected.size} selected
               </span>
@@ -383,16 +383,16 @@ export default function SimulationsPage() {
       </AnimatePresence>
 
       {/* ---- Data Table ---- */}
-      <div className="bg-[#111820] border border-[#1B2433] rounded-2xl overflow-hidden">
+      <div className="bg-[#111827] border border-[#1E293B] rounded-2xl overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-[#1B2433]">
+            <tr className="border-b border-[#1E293B]">
               <th className="w-10 px-4 py-3">
                 <input
                   type="checkbox"
                   checked={selected.size === filteredSims.length && filteredSims.length > 0}
                   onChange={toggleSelectAll}
-                  className="accent-[#5B5FEE] w-3.5 h-3.5 cursor-pointer"
+                  className="accent-[#8B5CF6] w-3.5 h-3.5 cursor-pointer"
                 />
               </th>
               {(
@@ -416,7 +416,7 @@ export default function SimulationsPage() {
                   <span className="inline-flex items-center gap-1">
                     {label}
                     {field && sortField === field && (
-                      <ArrowUpDown className="w-3 h-3 text-[#5B5FEE]" />
+                      <ArrowUpDown className="w-3 h-3 text-[#8B5CF6]" />
                     )}
                   </span>
                 </th>
@@ -437,8 +437,8 @@ export default function SimulationsPage() {
                 return (
                   <tr
                     key={sim.id}
-                    className={`border-b border-[#1B2433] last:border-b-0 hover:bg-white/[0.02] transition-colors cursor-pointer ${
-                      selected.has(sim.id) ? 'bg-[#5B5FEE]/5' : ''
+                    className={`border-b border-[#1E293B] last:border-b-0 hover:bg-white/[0.02] transition-colors cursor-pointer ${
+                      selected.has(sim.id) ? 'bg-[#8B5CF6]/5' : ''
                     }`}
                     onClick={(e) => {
                       /* don't navigate when clicking checkbox or actions */
@@ -457,7 +457,7 @@ export default function SimulationsPage() {
                         type="checkbox"
                         checked={selected.has(sim.id)}
                         onChange={() => toggleSelect(sim.id)}
-                        className="accent-[#5B5FEE] w-3.5 h-3.5 cursor-pointer"
+                        className="accent-[#8B5CF6] w-3.5 h-3.5 cursor-pointer"
                       />
                     </td>
 
@@ -546,7 +546,7 @@ export default function SimulationsPage() {
 
                       {openMenu === sim.id && (
                         <div
-                          className="absolute right-4 top-10 z-50 w-40 bg-[#1B2433] border border-[#2A3545] rounded-xl shadow-xl py-1 text-xs"
+                          className="absolute right-4 top-10 z-50 w-40 bg-[#1E293B] border border-[#2A3545] rounded-xl shadow-xl py-1 text-xs"
                         >
                           <button
                             className="w-full text-left px-3 py-2 text-[#E8ECF2] hover:bg-white/[0.06] transition-colors"
@@ -604,7 +604,7 @@ export default function SimulationsPage() {
           <button
             disabled={page <= 1}
             onClick={() => goToPage((p) => p - 1)}
-            className="px-3 py-1.5 rounded-lg border border-[#1B2433] text-xs text-[#8B97A8] hover:bg-white/[0.04] disabled:opacity-30 transition-colors"
+            className="px-3 py-1.5 rounded-lg border border-[#1E293B] text-xs text-[#8B97A8] hover:bg-white/[0.04] disabled:opacity-30 transition-colors"
           >
             Previous
           </button>
@@ -624,7 +624,7 @@ export default function SimulationsPage() {
           <button
             disabled={page >= totalPages}
             onClick={() => goToPage((p) => p + 1)}
-            className="px-3 py-1.5 rounded-lg border border-[#1B2433] text-xs text-[#8B97A8] hover:bg-white/[0.04] disabled:opacity-30 transition-colors"
+            className="px-3 py-1.5 rounded-lg border border-[#1E293B] text-xs text-[#8B97A8] hover:bg-white/[0.04] disabled:opacity-30 transition-colors"
           >
             Next
           </button>

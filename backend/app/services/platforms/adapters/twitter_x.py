@@ -6,7 +6,7 @@ import uuid
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 
-from app.core.llm_client import llm_complete
+from app.core.llm_client import llm_fast
 from app.services.platforms.base_adapter import (
     BasePlatformAdapter,
     Comment,
@@ -134,7 +134,7 @@ class TwitterXAdapter(BasePlatformAdapter):
             memory=self.get_agent_memory(agent["username"]),
             round=round_number,
         )
-        raw = await llm_complete([{"role": "user", "content": prompt}], max_tokens=160)
+        raw = await llm_fast([{"role": "user", "content": prompt}], max_tokens=160)
         await asyncio.sleep(0)
 
         now = datetime.now(tz=UTC)

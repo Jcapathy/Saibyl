@@ -1,11 +1,16 @@
 # PUBLIC INTERFACE
 # ─────────────────────────────────────────────────────────
 # estimate_simulation_cost(agent_count, rounds, platforms=1, variants=1,
-#                          action_model=None) -> SimulationCostEstimate
-# check_agent_budget(org_id, agent_count, rounds, ...) -> BudgetCheck
-# deduct_agent_credits(org_id, agent_rounds) -> None
+#                          depth="standard", action_model=None)
+#                                              -> SimulationCostEstimate
+# report_section_count(measured_events, depth="standard") -> int
+# credits_for(cost_usd) -> int
+# tier_caps(plan) -> RunCaps
+# check_credit_budget(org_id, agent_count, rounds, ...) -> BudgetCheck
+# deduct_credits(org_id, credits) -> None
+# CREDITS_PER_USD, TIER_CREDIT_GRANTS, STANDARD_RUN
 # ─────────────────────────────────────────────────────────
-"""Run cost estimation and budget enforcement.
+"""Run cost estimation, credit accounting, and budget enforcement.
 
 Cost is derived from a per-stage token profile priced against the real model
 rates in model_pricing, not from a single flat per-agent-round constant. The
@@ -13,13 +18,20 @@ previous constant (0.000017 USD) understated the true cost of an Opus-backed
 agent action by roughly 440x, which meant every run was quoted far below what
 it cost to serve.
 
+**Credits, not agent-rounds, are the metered unit** (DECISIONS_V2 §15b). An
+agent-round allowance rations nothing: a run varies by 56x in cost across the
+tier caps, so "30 runs" is anywhere from $65 to $5,445 of COGS. One credit is
+$0.001 of measured COGS, which makes the balance an integer and makes a grant
+mean the same thing at every run shape.
+
 The token profiles below are conservative starting estimates. Once llm_usage
 has real data, recalibrate them from measured medians — that is the whole
 point of the ledger.
 """
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import ROUND_CEILING, Decimal
+from functools import lru_cache
 from uuid import UUID
 
 import structlog
@@ -41,6 +53,86 @@ TARGET_MARGIN_PCT = Decimal("80")
 # Retained for backwards compatibility with existing callers/tests. Derived
 # from the real profile rather than hardcoded.
 MARKUP_MULTIPLIER = Decimal("100") / (Decimal("100") - TARGET_MARGIN_PCT)  # 5.0x at 80%
+
+# One credit is $0.001 of COGS. Milli-dollars rather than dollars so a balance
+# is an integer: a float balance that drifts by a cent per deduction produces
+# support tickets nobody can reproduce.
+CREDITS_PER_USD = 1_000
+
+# The reference run every advertised run count is quoted against. Never print a
+# run count without this definition attached — PRICING_GUIDE.md §1.5.
+STANDARD_RUN = (100, 5, 2, 1)  # agents, rounds, platforms, variants
+
+# Monthly grants, in credits. These are the PRD §8 COGS grants converted at
+# CREDITS_PER_USD: Founder $19.80, Growth $59.80, Agency $199.80. Both the V1
+# plan names still in the database and the V2 tier names are mapped, because
+# the Stripe tier migration is separate work — see ARCHITECTURE_V2.md.
+#
+# The free grant is 700 credits ($0.70), not the $0.35 the PRD projected. That
+# projection assumed a 2-section report would bring a 25-agent run to $0.35;
+# with depth scaling actually implemented the run measures $0.66, because the
+# report is now 46% of a very small run's cost rather than 84% of it. A grant
+# that does not cover one free run would make the free tier unusable, so the
+# grant follows the measured cost rather than the estimate.
+TIER_CREDIT_GRANTS = {
+    "free": 700,
+    "trial": 700,
+    "founder": 19_800,
+    "starter": 19_800,
+    "growth": 59_800,
+    "pro": 59_800,
+    "agency": 199_800,
+    "enterprise": 199_800,
+}
+
+
+class RunCaps(BaseModel):
+    """Maximum run shape a tier may configure.
+
+    Caps exist to stop accidents, not to ration — the credit balance rations.
+    Rationing by caps would punish the user for the system's inability to price,
+    and the Run Configurator prices every shape before commit.
+    """
+
+    max_agents: int
+    max_rounds: int
+    max_platforms: int
+    max_variants: int
+
+
+TIER_CAPS = {
+    "free": RunCaps(max_agents=25, max_rounds=3, max_platforms=2, max_variants=1),
+    "trial": RunCaps(max_agents=25, max_rounds=3, max_platforms=2, max_variants=1),
+    "founder": RunCaps(max_agents=100, max_rounds=8, max_platforms=3, max_variants=3),
+    "starter": RunCaps(max_agents=100, max_rounds=8, max_platforms=3, max_variants=3),
+    "growth": RunCaps(max_agents=150, max_rounds=10, max_platforms=4, max_variants=5),
+    "pro": RunCaps(max_agents=150, max_rounds=10, max_platforms=4, max_variants=5),
+    "agency": RunCaps(max_agents=250, max_rounds=12, max_platforms=6, max_variants=8),
+    "enterprise": RunCaps(max_agents=1_000, max_rounds=20, max_platforms=12, max_variants=8),
+}
+
+_DEFAULT_PLAN = "starter"
+
+
+def tier_caps(plan: str | None) -> RunCaps:
+    return TIER_CAPS.get((plan or _DEFAULT_PLAN).lower(), TIER_CAPS[_DEFAULT_PLAN])
+
+
+def tier_grant(plan: str | None) -> int:
+    return TIER_CREDIT_GRANTS.get(
+        (plan or _DEFAULT_PLAN).lower(), TIER_CREDIT_GRANTS[_DEFAULT_PLAN]
+    )
+
+
+def credits_for(cost_usd: Decimal | float) -> int:
+    """Convert COGS dollars to credits, always rounding up.
+
+    Rounding up rather than to nearest: a run that costs a fraction of a credit
+    more than it charges is a run served at a loss, and at volume the rounding
+    direction is the difference between the margin floor holding and not.
+    """
+    amount = Decimal(str(cost_usd)) * CREDITS_PER_USD
+    return int(amount.to_integral_value(rounding=ROUND_CEILING))
 
 
 # ---------------------------------------------------------------------------
@@ -81,31 +173,61 @@ class SimulationCostEstimate(BaseModel):
     rounds: int
     platforms: int
     variants: int
+    depth: str
     agent_rounds: int
     llm_calls: int
+    report_sections: int
     actual_cost_usd: float
     retail_cost_usd: float
+    credits: int
     margin_pct: float
     breakdown: dict[str, float]
+    # How many standard runs' worth of capacity this shape consumes. Required
+    # by PRICING_GUIDE.md §1.3 — the honesty line that stops a user who bought
+    # "18 runs" from discovering afterwards that one run ate nine of them.
+    standard_run_equivalents: float
 
 
 class BudgetCheck(BaseModel):
     allowed: bool
-    agent_rounds_requested: int
-    plan_allowance_remaining: int
+    credits_required: int
     credits_remaining: int
-    covered_by_plan: bool
-    covered_by_credits: bool
+    credits_after: int
+    # Share of the remaining balance this run consumes; drives the >30% warning.
+    balance_share_pct: float
     estimated_cost_usd: float
+    retail_price_usd: float
     message: str
 
 
-# Plan allowances, in agent-rounds per month.
-PLAN_ALLOWANCES = {
-    "starter": 150_000,
-    "pro": 7_500_000,
-    "enterprise": 50_000_000,
-}
+DEPTH_PRESETS = ("brief", "standard", "deep")
+
+# Events below which a report gets N sections. V1 used
+# `min(7, max(4, event_count // 30 + 2))`; the floor of 4 meant a 25-agent free
+# run still generated 6 Opus-written sections — $1.07 of that run's $1.27 total,
+# 84% of the cost of a run whose whole purpose is to be nearly free. Depth now
+# scales down as well as up.
+_SECTION_THRESHOLDS = ((150, 2), (400, 3), (900, 4), (1800, 5), (3500, 6))
+_MAX_SECTIONS = 7
+_MIN_SECTIONS = 2
+
+
+def report_section_count(measured_events: int, depth: str = "standard") -> int:
+    """Sections a report should have for a run of this size.
+
+    A 25-agent run has 2 sections' worth to say. Writing 6 does not make it
+    say more; it makes the same finding restated at Opus prices.
+    """
+    sections = _MAX_SECTIONS
+    for threshold, count in _SECTION_THRESHOLDS:
+        if measured_events < threshold:
+            sections = count
+            break
+    if depth == "brief":
+        sections -= 1
+    elif depth == "deep":
+        sections += 1
+    return max(_MIN_SECTIONS, min(_MAX_SECTIONS, sections))
 
 
 def estimate_simulation_cost(
@@ -113,6 +235,7 @@ def estimate_simulation_cost(
     rounds: int,
     platforms: int = 1,
     variants: int = 1,
+    depth: str = "standard",
     action_model: str | None = None,
 ) -> SimulationCostEstimate:
     """Estimate what a run will cost to serve, and what to charge for it.
@@ -126,6 +249,8 @@ def estimate_simulation_cost(
         raise ValueError("Agent count and rounds must be positive")
     if platforms <= 0 or variants <= 0:
         raise ValueError("Platforms and variants must be positive")
+    if depth not in DEPTH_PRESETS:
+        raise ValueError(f"depth must be one of {DEPTH_PRESETS}")
 
     fast_model = action_model or settings.llm_fast_model
     main_model = settings.llm_model
@@ -137,7 +262,7 @@ def estimate_simulation_cost(
     generation_units = agent_count
     # Not every action produces an event; roughly 80% do (some yield NOTHING).
     measurement_units = int(action_units * 0.8)
-    section_units = min(7, max(4, measurement_units // 30 + 2))
+    section_units = report_section_count(measurement_units, depth)
 
     action_cost = _stage_cost(AGENT_ACTION, action_units, fast_model)
     generation_cost = _stage_cost(AGENT_GENERATION, generation_units, fast_model)
@@ -155,15 +280,21 @@ def estimate_simulation_cost(
         (retail - actual) / retail * Decimal("100") if retail > 0 else Decimal("0")
     )
 
+    credits = credits_for(actual)
+    standard_credits = _standard_run_credits()
+
     return SimulationCostEstimate(
         agent_count=agent_count,
         rounds=rounds,
         platforms=platforms,
         variants=variants,
+        depth=depth,
         agent_rounds=agent_count * rounds,
         llm_calls=action_units + generation_units + section_units,
+        report_sections=section_units,
         actual_cost_usd=float(actual),
         retail_cost_usd=float(retail),
+        credits=credits,
         margin_pct=float(round(margin, 2)),
         breakdown={
             "agent_actions": float(action_cost),
@@ -171,98 +302,141 @@ def estimate_simulation_cost(
             "event_measurement": float(measurement_cost),
             "report": float(report_cost),
         },
+        standard_run_equivalents=round(credits / standard_credits, 2)
+        if standard_credits
+        else 0.0,
     )
 
 
-def check_agent_budget(
+@lru_cache(maxsize=1)
+def _standard_run_credits() -> int:
+    """Credit cost of the reference run, computed once from the same model.
+
+    Derived rather than hardcoded: if the token profiles are recalibrated from
+    measured usage, the "worth N standard runs" line moves with them instead of
+    quietly describing a run shape that no longer costs that.
+    """
+    agents, rounds, platforms, variants = STANDARD_RUN
+    action_units = agents * rounds * platforms * variants
+    measurement_units = int(action_units * 0.8)
+    sections = report_section_count(measurement_units, "standard")
+    total = (
+        _stage_cost(AGENT_ACTION, action_units, settings.llm_fast_model)
+        + _stage_cost(AGENT_GENERATION, agents, settings.llm_fast_model)
+        + _stage_cost(EVENT_MEASUREMENT, measurement_units, settings.llm_fast_model)
+        + _stage_cost(REPORT_SECTION, sections, settings.llm_model)
+    )
+    return credits_for(total)
+
+
+def get_credit_balance(org_id: UUID) -> tuple[int, int, str]:
+    """Return (balance, granted, plan) for an org."""
+    admin = get_supabase_admin()
+    org = (
+        admin.table("organizations")
+        .select("plan, credits_balance, credits_granted")
+        .eq("id", str(org_id))
+        .single()
+        .execute()
+    ).data or {}
+
+    plan = org.get("plan") or _DEFAULT_PLAN
+    granted = int(org.get("credits_granted") or 0) or tier_grant(plan)
+    return int(org.get("credits_balance") or 0), granted, plan
+
+
+def check_credit_budget(
     org_id: UUID,
     agent_count: int,
     rounds: int,
     platforms: int = 1,
     variants: int = 1,
+    depth: str = "standard",
 ) -> BudgetCheck:
-    """Check whether an org can afford a run.
+    """Check whether an org can afford a run, in credits.
 
-    Both sides of the allowance comparison are agent-rounds. The previous
-    implementation compared requested agent-rounds against
-    usage_records.simulations_run — a count of simulations — so the check was
-    meaningless: an org that had run 3 simulations was treated as having
-    consumed 3 agent-rounds.
+    This replaces the agent-round allowance check. That check compared two
+    incompatible quantities — requested agent-rounds against
+    `usage_records.simulations_run`, a count of *simulations* — so an org that
+    had run 3 simulations was treated as having consumed 3 of its 150,000
+    agent-rounds. Even with that arithmetic corrected, an agent-round allowance
+    could not price a run whose cost varies 56x at constant agent-rounds
+    depending on variants and platforms.
     """
-    admin = get_supabase_admin()
+    balance, _granted, _plan = get_credit_balance(org_id)
+    estimate = estimate_simulation_cost(
+        agent_count, rounds, platforms, variants, depth
+    )
 
-    org = admin.table("organizations").select(
-        "plan, agent_credits_balance"
-    ).eq("id", str(org_id)).single().execute().data
-
-    plan = org.get("plan", "starter")
-    credits = org.get("agent_credits_balance", 0) or 0
-    allowance = PLAN_ALLOWANCES.get(plan, 0)
-
-    agent_rounds = agent_count * rounds
-    estimate = estimate_simulation_cost(agent_count, rounds, platforms, variants)
-
-    used_this_month = _agent_rounds_used_this_month(org_id)
-    remaining_allowance = max(0, allowance - used_this_month)
-
-    covered_by_plan = agent_rounds <= remaining_allowance
-    covered_by_credits = (not covered_by_plan) and credits >= agent_rounds
-    allowed = covered_by_plan or covered_by_credits
+    required = estimate.credits
+    allowed = balance >= required
+    after = max(0, balance - required)
+    share = round(required * 100 / balance, 2) if balance > 0 else 100.0
 
     if allowed:
-        msg = "Covered by your plan" if covered_by_plan else "Will use agent credits"
+        msg = f"This run uses {required:,} of your {balance:,} credits."
     else:
         msg = (
-            f"Insufficient budget. Need {agent_rounds:,} agent-rounds, "
-            f"have {remaining_allowance + credits:,} available."
+            f"Not enough credits. This run needs {required:,}; "
+            f"you have {balance:,}."
         )
 
     return BudgetCheck(
         allowed=allowed,
-        agent_rounds_requested=agent_rounds,
-        plan_allowance_remaining=remaining_allowance,
-        credits_remaining=credits,
-        covered_by_plan=covered_by_plan,
-        covered_by_credits=covered_by_credits,
-        estimated_cost_usd=estimate.retail_cost_usd,
+        credits_required=required,
+        credits_remaining=balance,
+        credits_after=after,
+        balance_share_pct=share,
+        estimated_cost_usd=estimate.actual_cost_usd,
+        retail_price_usd=estimate.retail_cost_usd,
         message=msg,
     )
 
 
-def _agent_rounds_used_this_month(org_id: UUID) -> int:
-    """Sum agent-rounds consumed by this org's simulations in the current month."""
-    from datetime import datetime
+def largest_affordable_run(
+    org_id: UUID,
+    agent_count: int,
+    rounds: int,
+    platforms: int,
+    variants: int,
+    depth: str = "standard",
+) -> tuple[int, int, int, int] | None:
+    """Biggest version of this shape that fits the balance, or None.
 
-    admin = get_supabase_admin()
-    month_start = datetime.now().replace(
-        day=1, hour=0, minute=0, second=0, microsecond=0
-    ).isoformat()
+    Backs the "Reduce to fit my balance" action in PRICING_GUIDE §1.4, which
+    turns a dead end into a run. Agents are shed first because they are the
+    cheapest dimension to lose: halving the swarm widens the confidence bands
+    but preserves the round structure and every variant comparison, whereas
+    dropping a variant deletes a question the user asked.
+    """
+    balance, _granted, _plan = get_credit_balance(org_id)
+    if balance <= 0:
+        return None
 
-    try:
-        rows = (
-            admin.table("simulations")
-            .select("agent_rounds_consumed")
-            .eq("organization_id", str(org_id))
-            .gte("created_at", month_start)
-            .execute()
-        ).data or []
-    except Exception:
-        logger.exception("agent_rounds_lookup_failed", org_id=str(org_id))
-        # Fail closed on the allowance side rather than granting free capacity.
-        return 0
+    for candidate_variants in range(variants, 0, -1):
+        for candidate_rounds in range(rounds, 0, -1):
+            for candidate_agents in range(agent_count, 4, -5):
+                estimate = estimate_simulation_cost(
+                    candidate_agents, candidate_rounds, platforms,
+                    candidate_variants, depth,
+                )
+                if estimate.credits <= balance:
+                    return (
+                        candidate_agents, candidate_rounds, platforms,
+                        candidate_variants,
+                    )
+    return None
 
-    return sum(int(r.get("agent_rounds_consumed") or 0) for r in rows)
 
-
-def deduct_agent_credits(org_id: UUID, agent_rounds: int) -> None:
-    """Deduct agent-rounds from an org's credit balance atomically."""
-    if agent_rounds <= 0:
+def deduct_credits(org_id: UUID, credits: int) -> None:
+    """Deduct credits from an org's balance atomically."""
+    if credits <= 0:
         return
 
     admin = get_supabase_admin()
-    admin.rpc("deduct_agent_credits", {
+    admin.rpc("deduct_credits", {
         "org_uuid": str(org_id),
-        "amount": agent_rounds,
+        "amount": credits,
     }).execute()
 
-    logger.info("agent_credits_deducted", org_id=str(org_id), deducted=agent_rounds)
+    logger.info("credits_deducted", org_id=str(org_id), deducted=credits)

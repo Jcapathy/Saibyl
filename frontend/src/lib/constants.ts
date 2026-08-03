@@ -21,8 +21,8 @@ export function formatPlatforms(platforms: string[]): string {
 
 /** Semantic chart colors — used consistently across all report charts */
 export const CHART_COLORS = {
-  subjectA: '#6C63FF',   // Purple — Primary entity
-  subjectB: '#00D4FF',   // Cyan — Secondary entity
+  subjectA: '#8B5CF6',   // Purple — Primary entity
+  subjectB: '#2563EB',   // Cyan — Secondary entity
   neutral:  '#D4A84B',   // Gold — Moderate / Undecided
   positive: '#34D399',   // Green — Positive movement
   negative: '#F87171',   // Red — Negative movement
@@ -35,7 +35,7 @@ export const CHART_PALETTE = [
   CHART_COLORS.neutral,
   CHART_COLORS.positive,
   CHART_COLORS.negative,
-  '#818CF8', // Light purple — overflow series
+  '#8B5CF6', // Light purple — overflow series
 ];
 
 /** High-contrast print-safe palette (same order as CHART_PALETTE) */
@@ -55,7 +55,7 @@ export const PLATFORM_COLORS: Record<string, string> = {
   youtube:       '#FF0000',              // YouTube red
   facebook:      '#1877F2',              // Facebook blue
   threads:       '#000000',              // Threads black
-  hacker_news:   '#818CF8',              // Light purple
+  hacker_news:   '#8B5CF6',              // Light purple
   discord:       '#A78BFA',              // Violet
   news_comments: CHART_COLORS.positive,  // Green
   custom:        '#94A3B8',              // Slate

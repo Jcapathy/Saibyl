@@ -332,7 +332,7 @@ export default function GuidePage() {
         >
           <Link
             to="/app/projects"
-            className="inline-flex items-center gap-2 px-8 py-3 rounded-xl bg-[#C9A227] text-[#070B14] font-semibold text-[15px] hover:bg-[#D4AF37] transition-all hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(201,162,39,0.3)]"
+            className="inline-flex items-center gap-2 px-8 py-3 rounded-xl bg-[#C9A227] text-[#0A0F1C] font-semibold text-[15px] hover:bg-[#D4AF37] transition-all hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(201,162,39,0.3)]"
           >
             <FlaskConical className="w-4 h-4" />
             Start a New Project

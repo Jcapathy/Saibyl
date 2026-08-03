@@ -9,6 +9,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api import (
     accuracy,
+    analysis,
     api_keys,
     auth,
     billing,
@@ -134,6 +135,11 @@ def create_app() -> FastAPI:
     app.include_router(webhooks.router, prefix="/api/webhooks")
     app.include_router(billing.router, prefix="/api/billing")
     app.include_router(api_keys.router, prefix="/api/api-keys")
+    # Mounted at /api because its paths are nested under /simulations/{id}/…
+    # but it is a separate module from the simulation lifecycle router.
+    # Registered after simulations.router so no path can shadow one of its
+    # routes — the collision that made the export path unreachable in V1.
+    app.include_router(analysis.router, prefix="/api")
     app.include_router(exports.router, prefix="/api")
     app.include_router(uploads.router, prefix="/api/uploads")
     app.include_router(markets.router, prefix="/api/markets")

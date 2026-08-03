@@ -22,6 +22,7 @@ from pydantic import BaseModel
 from app.core.config import settings
 from app.core.database import get_supabase_admin
 from app.core.llm_client import llm_complete, llm_structured
+from app.services.billing.agent_pricing import report_section_count
 from app.services.intelligence.react_tools import (
     agent_interview_tool,
     insight_forge,
@@ -132,6 +133,21 @@ class ReACTConfig(BaseModel):
         preset = DEPTH_PRESETS.get(self.evidence_depth, {})
         return self.model_copy(update=preset)
 
+    def evidence_depth_preset(self) -> str:
+        """Map the four ReACT depths onto the three pricing depths.
+
+        The ReACT depth controls how hard the agent researches each section;
+        the pricing depth controls how many sections there are. They are
+        different knobs, but a user who asked for exhaustive research and got a
+        two-section report would reasonably feel short-changed, so the deeper
+        two ReACT settings also buy a section.
+        """
+        if self.evidence_depth == "shallow":
+            return "brief"
+        if self.evidence_depth in ("deep", "exhaustive"):
+            return "deep"
+        return "standard"
+
 
 class ReportOutline(BaseModel):
     sections: list[SectionPlan]
@@ -207,7 +223,7 @@ Research angles for this section: {research_angles}
 You have access to these tools (call by name):
 1. insight_forge(query) — Deep semantic search of knowledge graph for entities, relationships, facts
 2. quick_search(query) — Fast keyword search for specific facts and data points
-3. simulation_analytics(type) — Analyze simulation data. Types: top_posts, sentiment_over_time, viral_moments, agent_activity, platform_comparison, persona_breakdown
+3. simulation_analytics(type) — Analyze simulation data. Types: measured_findings, sentiment_over_time, platform_comparison, persona_breakdown, top_posts, viral_moments, agent_activity
 4. agent_interview(prompt) — Interview simulation agents in-character about their experiences and reactions
 
 Evidence gathered so far:
@@ -220,6 +236,18 @@ Instructions:
 - Call simulation_analytics with DIFFERENT types to get varied data dimensions
 - Use agent_interview to get qualitative quotes and persona-specific reactions
 - Use insight_forge or quick_search for contextual knowledge beyond the simulation data
+
+MEASUREMENT RULES — these are not style guidance:
+- Every sentiment, stance, intensity, or objection figure you state MUST come
+  from simulation_analytics. Do not estimate one from reading post text, and do
+  not carry a number over from a previous section from memory.
+- Sentiment figures arrive with a confidence interval. Quote it. "-0.42
+  (95% CI -0.61 to -0.23, 47 agents)" is the format. A bare mean overstates what
+  a synthetic swarm can support.
+- If two groups' intervals overlap, say the difference is not resolved. Do not
+  rank them.
+- If a tool reports that no analysis artifact exists, write that the run has no
+  measured sentiment. Do not substitute your own reading of the posts.
 
 QUALITY REQUIREMENTS for your ANSWER:
 - Lead with the key insight — answer "so what?" in the first sentence before presenting data
@@ -602,8 +630,13 @@ async def generate_report(
     ).eq("build_status", "complete").limit(1).execute().data
     graph_id = kg[0]["id"] if kg else None
 
-    # Create report record
-    section_count = config.section_count or min(7, max(4, event_count // 30 + 2))
+    # Report depth scales with run size in both directions. The old formula,
+    # min(7, max(4, event_count // 30 + 2)), had a floor of 4 — so a 25-agent
+    # free-trial run generated 6 Opus-written sections, $1.07 of that run's
+    # $1.27 total cost, on a run whose entire purpose is to be nearly free.
+    section_count = config.section_count or report_section_count(
+        event_count, config.evidence_depth_preset()
+    )
     report = admin.table("reports").insert({
         "simulation_id": sim_id,
         "organization_id": org_id,

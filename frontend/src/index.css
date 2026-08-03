@@ -29,7 +29,7 @@
   * { border-color: hsl(var(--border)); }
 
   body {
-    background-color: #070B14;
+    background-color: #0A0F1C;
     color: #E8ECF2;
     font-family: 'Aktiv Grotesk', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
@@ -37,18 +37,29 @@
   }
 }
 
-/* ── Custom props ── */
+/* ── Sovereign palette ──
+   Obsidian and Graphite are the surfaces. Gold is the one brand accent.
+   Signal Blue and Insight Violet are the two data accents, used for series
+   and states — never for chrome, so a coloured element in the UI always
+   means something. */
 :root {
-  --grad-brand: linear-gradient(135deg, #5B5FEE 0%, #00D4FF 100%);
-  --grad-arc: linear-gradient(135deg, #C9A227 0%, #2563EB 100%);
-  --grad-violet: linear-gradient(135deg, #8B5CF6 0%, #C9A227 100%);
-  --brand-purple: #5B5FEE;
-  --brand-cyan: #00D4FF;
+  --obsidian: #0A0F1C;
+  --graphite: #111827;
   --gold: #C9A227;
   --gold-hover: #D4AF37;
+  --signal-blue: #2563EB;
+  --insight-violet: #8B5CF6;
+
+  --grad-brand: linear-gradient(135deg, #8B5CF6 0%, #2563EB 100%);
+  --grad-arc: linear-gradient(135deg, #C9A227 0%, #2563EB 100%);
+  --grad-violet: linear-gradient(135deg, #8B5CF6 0%, #C9A227 100%);
+
+  /* Retained so any straggling reference resolves in-palette. */
+  --brand-purple: #8B5CF6;
+  --brand-cyan: #2563EB;
 }
 
-/* ── Gradient text (purple → cyan brand) ── */
+/* ── Gradient text (violet → blue brand) ── */
 .text-gradient-brand {
   background: var(--grad-brand);
   -webkit-background-clip: text;
@@ -129,7 +140,7 @@
   white-space: pre-wrap;
 }
 .print-prose blockquote {
-  border-left: 3px solid #5B5FEE;
+  border-left: 3px solid #8B5CF6;
   padding-left: 1em;
   margin: 0.8em 0;
   color: #555;
@@ -152,8 +163,8 @@
 
 .bg-grid-brand {
   background-image:
-    linear-gradient(rgba(91,95,238,0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(91,95,238,0.02) 1px, transparent 1px);
+    linear-gradient(rgba(139,92,246,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(139,92,246,0.02) 1px, transparent 1px);
   background-size: 48px 48px;
 }
 

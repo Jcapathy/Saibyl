@@ -31,12 +31,12 @@ function formatCount(n: number | undefined | null): string {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  running: '#3B82F6',
+  running: '#2563EB',
   completed: '#22C55E',
   complete: '#22C55E',
   queued: '#F59E0B',
   failed: '#EF4444',
-  draft: '#818CF8',
+  draft: '#8B5CF6',
 };
 
 function StatusDot({ status }: { status: string }) {
@@ -59,7 +59,7 @@ function StatusDot({ status }: { status: string }) {
 }
 
 function Skeleton({ className }: { className: string }) {
-  return <div className={`animate-pulse bg-[#111820] rounded-2xl ${className}`} />;
+  return <div className={`animate-pulse bg-[#111827] rounded-2xl ${className}`} />;
 }
 
 function StatCard({
@@ -86,7 +86,7 @@ function StatCard({
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35 }}
-      className="bg-[#111820] border border-[#1B2433] rounded-2xl p-5 relative overflow-hidden"
+      className="bg-[#111827] border border-[#1E293B] rounded-2xl p-5 relative overflow-hidden"
     >
       <div
         className="absolute top-0 left-0 right-0 h-[2px]"
@@ -160,7 +160,7 @@ export default function DashboardPage() {
       dotColor = '#22C55E';
     } else if (sim.status === 'running') {
       action = 'started running';
-      dotColor = '#3B82F6';
+      dotColor = '#2563EB';
     } else if (sim.status === 'failed') {
       action = 'failed';
       dotColor = '#EF4444';
@@ -169,7 +169,7 @@ export default function DashboardPage() {
       dotColor = '#F59E0B';
     } else {
       action = 'created';
-      dotColor = '#818CF8';
+      dotColor = '#8B5CF6';
     }
     return {
       id: sim.id,
@@ -210,7 +210,7 @@ export default function DashboardPage() {
         <h1 className="font-extrabold text-[22px] text-[#E8ECF2]">Dashboard</h1>
         <Link
           to="/app/projects"
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#C9A227] text-[#070B14] font-semibold text-sm hover:bg-[#D4AF37] transition-all hover:-translate-y-0.5"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#C9A227] text-[#0A0F1C] font-semibold text-sm hover:bg-[#D4AF37] transition-all hover:-translate-y-0.5"
         >
           Start a New Project
         </Link>
@@ -230,10 +230,10 @@ export default function DashboardPage() {
             </>
           }
           meta="this billing period"
-          gradientFrom="#5B5FEE"
-          gradientTo="#00D4FF"
-          iconBg="rgba(91,95,238,0.1)"
-          iconColor="#5B5FEE"
+          gradientFrom="#8B5CF6"
+          gradientTo="#2563EB"
+          iconBg="rgba(139,92,246,0.1)"
+          iconColor="#8B5CF6"
         />
         <StatCard
           icon={<Users className="w-5 h-5" />}
@@ -249,10 +249,10 @@ export default function DashboardPage() {
             </>
           }
           meta={billing?.plan ?? '—'}
-          gradientFrom="#00D4FF"
-          gradientTo="#5B5FEE"
+          gradientFrom="#2563EB"
+          gradientTo="#8B5CF6"
           iconBg="rgba(0,212,255,0.1)"
-          iconColor="#00D4FF"
+          iconColor="#2563EB"
         />
         <StatCard
           icon={<FileText className="w-5 h-5" />}
@@ -260,7 +260,7 @@ export default function DashboardPage() {
           value={completedSims.length}
           meta="completed simulations"
           gradientFrom="#22C55E"
-          gradientTo="#00D4FF"
+          gradientTo="#2563EB"
           iconBg="rgba(34,197,94,0.1)"
           iconColor="#22C55E"
         />
@@ -270,7 +270,7 @@ export default function DashboardPage() {
           value={avgSentiment ?? '—'}
           meta="across completed sims"
           gradientFrom="#C9A227"
-          gradientTo="#5B5FEE"
+          gradientTo="#8B5CF6"
           iconBg="rgba(201,162,39,0.1)"
           iconColor="#C9A227"
         />
@@ -283,9 +283,9 @@ export default function DashboardPage() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, delay: 0.1 }}
-          className="lg:col-span-3 bg-[#111820] border border-[#1B2433] rounded-2xl overflow-hidden"
+          className="lg:col-span-3 bg-[#111827] border border-[#1E293B] rounded-2xl overflow-hidden"
         >
-          <div className="px-5 py-4 border-b border-[#1B2433] flex items-center justify-between">
+          <div className="px-5 py-4 border-b border-[#1E293B] flex items-center justify-between">
             <h2 className="font-semibold text-[#E8ECF2] text-sm">Recent Simulations</h2>
             <Link
               to="/app/simulations"
@@ -312,7 +312,7 @@ export default function DashboardPage() {
                   key={sim.id}
                   to={`/app/simulations/${sim.id}`}
                   className={`flex items-center justify-between px-5 py-3.5 hover:bg-white/[0.02] transition-colors ${
-                    i < recentSims.length - 1 ? 'border-b border-[#1B2433]/50' : ''
+                    i < recentSims.length - 1 ? 'border-b border-[#1E293B]/50' : ''
                   }`}
                 >
                   <div className="flex items-center gap-3 min-w-0">
@@ -349,12 +349,12 @@ export default function DashboardPage() {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, delay: 0.15 }}
-            className="bg-gradient-to-r from-[#5B5FEE] to-[#00D4FF] p-px rounded-2xl"
+            className="bg-gradient-to-r from-[#8B5CF6] to-[#2563EB] p-px rounded-2xl"
           >
-            <div className="bg-[#111820] rounded-2xl p-6">
+            <div className="bg-[#111827] rounded-2xl p-6">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-[#5B5FEE]/10 flex items-center justify-center">
-                  <Zap className="w-5 h-5 text-[#5B5FEE]" />
+                <div className="w-10 h-10 rounded-xl bg-[#8B5CF6]/10 flex items-center justify-center">
+                  <Zap className="w-5 h-5 text-[#8B5CF6]" />
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold text-[#E8ECF2]">Start a New Project</h3>
@@ -363,7 +363,7 @@ export default function DashboardPage() {
               </div>
               <Link
                 to="/app/projects"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#C9A227] text-[#070B14] font-semibold text-sm hover:bg-[#D4AF37] transition-all hover:-translate-y-0.5 mt-2"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#C9A227] text-[#0A0F1C] font-semibold text-sm hover:bg-[#D4AF37] transition-all hover:-translate-y-0.5 mt-2"
               >
                 Start a Project <ArrowRight className="w-4 h-4" />
               </Link>
@@ -375,9 +375,9 @@ export default function DashboardPage() {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, delay: 0.2 }}
-            className="bg-[#111820] border border-[#1B2433] rounded-2xl overflow-hidden"
+            className="bg-[#111827] border border-[#1E293B] rounded-2xl overflow-hidden"
           >
-            <div className="px-5 py-4 border-b border-[#1B2433]">
+            <div className="px-5 py-4 border-b border-[#1E293B]">
               <h2 className="font-semibold text-[#E8ECF2] text-sm">Recent Activity</h2>
             </div>
             {activityEntries.length === 0 ? (
@@ -385,7 +385,7 @@ export default function DashboardPage() {
                 <p className="text-[#5A6578] text-sm">No recent activity</p>
               </div>
             ) : (
-              <div className="divide-y divide-[#1B2433]/50">
+              <div className="divide-y divide-[#1E293B]/50">
                 {activityEntries.map((entry) => (
                   <div key={entry.id} className="px-5 py-3 flex items-start gap-3">
                     <span

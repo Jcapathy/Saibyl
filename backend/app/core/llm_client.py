@@ -2,6 +2,7 @@
 # ─────────────────────────────────────────────────────────
 # llm_complete(messages, model=None, temperature=0.7, max_tokens=4096,
 #              response_format=None) -> str
+# llm_fast(messages, temperature=0.7, max_tokens=4096) -> str
 # llm_structured(messages, schema: Type[BaseModel], model=None) -> BaseModel
 # llm_stream(messages, model=None) -> AsyncGenerator[str, None]
 # ─────────────────────────────────────────────────────────
@@ -71,6 +72,43 @@ async def llm_complete(
     usage = response.usage
     logger.info(
         "llm_complete",
+        model=resolved,
+        prompt_tokens=usage.prompt_tokens,
+        completion_tokens=usage.completion_tokens,
+    )
+    _record(resolved, usage)
+    return response.choices[0].message.content
+
+
+async def llm_fast(
+    messages: list[dict[str, str]],
+    temperature: float = 0.7,
+    max_tokens: int = 4096,
+    **kwargs: Any,
+) -> str:
+    """Complete on the fast model (`settings.llm_fast_model`).
+
+    This is the model policy from DECISIONS_V2 §14 expressed as a call site:
+    Haiku for the high-volume, low-judgment stages — agent actions and per-event
+    measurement — and the main model for the stages that need judgment: ICP
+    synthesis, objection canonicalization, variant scoring, report writing.
+
+    Agent actions are ~5x cheaper here, which is the entire reason an 8-variant
+    matched-swarm run is affordable. Routing them through `llm_complete` sends
+    them to Opus and multiplies the dominant cost line by five.
+    """
+    resolved = _resolve_model(None, fast=True)
+    response = await acompletion(
+        model=resolved,
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        api_key=_api_key(),
+        **kwargs,
+    )
+    usage = response.usage
+    logger.info(
+        "llm_fast",
         model=resolved,
         prompt_tokens=usage.prompt_tokens,
         completion_tokens=usage.completion_tokens,
