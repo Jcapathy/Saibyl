@@ -39,8 +39,9 @@ them rather than repeating them.
 | Cost model | **Measured, not estimated.** Estimate vs measurement at the reference shape: **1.02×** |
 | Working tree | `.~lock.*` and `test_flow.py` are pre-existing untracked. Ignore them. |
 
-Commit list: `git log --oneline master..v2`. The four Phase 1 commits are
-`fdcab71`, `138c336`, `2c170a9`, `2726070`.
+Commit list: `git log --oneline master..v2` — deliberately not enumerated here,
+because a hardcoded list goes stale on the next commit and a stale list is worse
+than none. Phase 0 ends at `6c67509`; everything after it is Phase 1.
 
 ### Migrations applied to production (`txmvwuekkiedgxwovorp`)
 
@@ -53,6 +54,9 @@ RLS; the credit ledger on `organizations` plus `deduct_credits` /
 `grant_credits`; `simulations.variants` and `simulations.depth`;
 `simulation_measurement_coverage`. Verified after applying: 63 simulations and
 10,236 events unchanged, 8 organizations seeded with credit balances.
+
+**019 — WRITTEN BUT NOT APPLIED.** Agent-username uniqueness. It would break the
+live `master` deployment if applied now; it goes in at the merge. See §1a.
 
 **Standing lesson (from 017):** `IF NOT EXISTS` guards hide type drift. Before
 adding a column that may already exist by hand, check
