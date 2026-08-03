@@ -1,4 +1,5 @@
-type EventHandler = (event: Record<string, unknown>) => void;
+type RawEvent = Record<string, unknown>;
+type EventHandler = (event: RawEvent) => void;
 
 export class SimulationSocket {
   private ws: WebSocket | null = null;
@@ -34,15 +35,21 @@ export class SimulationSocket {
     }, 30000);
   }
 
-  on(eventType: string, handler: EventHandler) {
+  /**
+   * Subscribe to an event type. `T` narrows the payload for the caller; the
+   * socket itself only ever sees parsed JSON, so the assertion is contained
+   * here rather than repeated at every call site.
+   */
+  on<T = RawEvent>(eventType: string, handler: (event: T) => void) {
     const list = this.handlers.get(eventType) || [];
-    list.push(handler);
+    list.push(handler as unknown as EventHandler);
     this.handlers.set(eventType, list);
   }
 
-  off(eventType: string, handler: EventHandler) {
+  off<T = RawEvent>(eventType: string, handler: (event: T) => void) {
     const list = this.handlers.get(eventType) || [];
-    this.handlers.set(eventType, list.filter((h) => h !== handler));
+    const target = handler as unknown as EventHandler;
+    this.handlers.set(eventType, list.filter((h) => h !== target));
   }
 
   disconnect() {

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '@/lib/api';
 import { formatPlatforms } from '@/lib/constants';
 import StatusBadge from '@/components/StatusBadge';
+import { getErrorMessage } from '../lib/errors';
 
 interface Project {
   id: string;
@@ -83,8 +84,8 @@ export default function ProjectDetailPage() {
         });
       }
       loadDocuments();
-    } catch (err: any) {
-      setUploadError(err.response?.data?.detail || 'Upload failed');
+    } catch (err) {
+      setUploadError(getErrorMessage(err, 'Upload failed'));
     } finally {
       setUploading(false);
       if (fileInput.current) fileInput.current.value = '';

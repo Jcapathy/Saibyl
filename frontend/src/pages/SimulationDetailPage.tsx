@@ -4,6 +4,8 @@ import { motion } from 'framer-motion';
 import api from '@/lib/api';
 import { PLATFORM_NAMES, TERMINAL_STATUSES, ACTIVE_STATUSES, IDLE_STATUSES } from '@/lib/constants';
 import StatusBadge from '@/components/StatusBadge';
+import { getErrorMessage } from '../lib/errors';
+import type { SimulationAgent } from '../lib/types';
 
 interface Simulation {
   id: string;
@@ -38,7 +40,7 @@ export default function SimulationDetailPage() {
   const [accuracyResult, setAccuracyResult] = useState<{ accuracy_score: number; predicted_sentiment: number; actual_sentiment: number; analysis: string } | null>(null);
 
   // Interview panel state
-  const [agents, setAgents] = useState<Record<string, unknown>[]>([]);
+  const [agents, setAgents] = useState<SimulationAgent[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState('');
   const [interviewPrompt, setInterviewPrompt] = useState('');
   const [interviewLoading, setInterviewLoading] = useState(false);
@@ -81,7 +83,7 @@ export default function SimulationDetailPage() {
       } else {
         // Interview all agents
         const { data } = await api.post(`/simulations/${id}/interview/batch`, {
-          agent_ids: agents.slice(0, 5).map((a: any) => a.id),
+          agent_ids: agents.slice(0, 5).map((a) => a.id),
           prompt: interviewPrompt,
         });
         for (const r of data) {
@@ -94,8 +96,8 @@ export default function SimulationDetailPage() {
         }
       }
       setInterviewPrompt('');
-    } catch (err: any) {
-      const msg = err.response?.data?.detail || 'Interview failed';
+    } catch (err) {
+      const msg = getErrorMessage(err, 'Interview failed');
       setInterviewResponses((prev) => [...prev, { agent: 'System', persona: 'error', response: msg, sentiment: 0 }]);
     } finally {
       setInterviewLoading(false);
@@ -195,8 +197,8 @@ export default function SimulationDetailPage() {
         } catch { /* keep polling */ }
       }, 4000);
       setTimeout(() => { clearInterval(poll); setRunning(false); setRunStatus(''); }, 300000);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to run simulation');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Failed to run simulation'));
       setRunning(false);
       setRunStatus('');
     }
@@ -377,7 +379,7 @@ export default function SimulationDetailPage() {
               style={{ colorScheme: 'dark' }}
             >
               <option value="">All agents (top 5)</option>
-              {agents.map((a: any) => (
+              {agents.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.profile?.display_name || a.username} — {a.profile?.persona_type || 'agent'}
                 </option>

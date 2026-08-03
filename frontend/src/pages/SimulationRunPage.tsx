@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SimulationSocket } from '@/lib/websocket';
 import { useSimulationLiveStore } from '@/store/simulation';
+import type { SimulationStreamEvent, VisualizerSnapshot } from '@/store/simulation';
 import { TERMINAL_STATUSES } from '@/lib/constants';
 import api from '@/lib/api';
 
@@ -89,10 +90,10 @@ function SentimentTimeline({ events }: { events: { sentiment_score?: number | nu
 }
 
 /* ── Event Card ── */
-function EventCard({ evt }: { evt: any }) {
-  const platform = evt.platform as string | undefined;
+function EventCard({ evt }: { evt: SimulationStreamEvent }) {
+  const platform = evt.platform ?? undefined;
   const style = platform ? PLATFORM_STYLES[platform] : null;
-  const score = evt.sentiment_score as number | null | undefined;
+  const score = evt.sentiment_score;
 
   return (
     <motion.div
@@ -148,10 +149,10 @@ export default function SimulationRunPage() {
     const socket = new SimulationSocket();
     socketRef.current = socket;
 
-    socket.on('agent_action', (event) => addEvent(event as any));
-    socket.on('round_start', (event) => addEvent(event as any));
-    socket.on('round_end', (event) => addEvent(event as any));
-    socket.on('snapshot', (event) => updateSnapshot(event as any));
+    socket.on<SimulationStreamEvent>('agent_action', addEvent);
+    socket.on<SimulationStreamEvent>('round_start', addEvent);
+    socket.on<SimulationStreamEvent>('round_end', addEvent);
+    socket.on<VisualizerSnapshot>('snapshot', updateSnapshot);
     socket.on('simulation_started', () => setRunning(true));
     socket.on('simulation_completed', () => setRunning(false));
     socket.on('simulation_failed', () => setRunning(false));

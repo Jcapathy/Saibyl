@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import api from '@/lib/api';
 import StatusBadge from '@/components/StatusBadge';
+import { getErrorMessage } from '../lib/errors';
 
 interface Prediction {
   id: string;
@@ -27,6 +28,7 @@ interface Market {
   closes_at: string;
   external_url: string;
   predictions: Prediction[];
+  market_context?: string;
 }
 
 export default function MarketDetailPage() {
@@ -38,6 +40,20 @@ export default function MarketDetailPage() {
   const [error, setError] = useState('');
   const [predictionStatus, setPredictionStatus] = useState('');
   const [predictionStart, setPredictionStart] = useState<Date | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  // Tick the elapsed-time readout. Reading Date.now() during render would only
+  // update when the component happened to re-render for some other reason.
+  // The counter is reset alongside setPredictionStart, not here, to keep this
+  // effect a pure subscription.
+  useEffect(() => {
+    if (!predictionStart) return;
+    const timer = setInterval(
+      () => setElapsedSeconds(Math.floor((Date.now() - predictionStart.getTime()) / 1000)),
+      1000,
+    );
+    return () => clearInterval(timer);
+  }, [predictionStart]);
 
   const load = () => {
     api.get(`/markets/${id}`).then((r) => { setMarket(r.data); setLoading(false); }).catch(() => setLoading(false));
@@ -49,6 +65,7 @@ export default function MarketDetailPage() {
     setPredicting(true);
     setError('');
     setPredictionStatus('Starting prediction...');
+    setElapsedSeconds(0);
     setPredictionStart(new Date());
     const existingCount = market?.predictions?.length || 0;
     try {
@@ -87,8 +104,8 @@ export default function MarketDetailPage() {
         setPredictionStart(null);
         setError('Prediction timed out. The result may still appear — refresh the page in a minute.');
       }, 300000);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Prediction failed to start');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Prediction failed to start'));
       setPredicting(false);
       setPredictionStatus('');
       setPredictionStart(null);
@@ -101,8 +118,8 @@ export default function MarketDetailPage() {
     try {
       await api.post(`/markets/${id}/refresh`);
       load();
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Refresh failed');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Refresh failed'));
     }
     setRefreshing(false);
   };
@@ -227,7 +244,7 @@ export default function MarketDetailPage() {
                 <span className="text-[13px] text-saibyl-platinum">{predictionStatus}</span>
                 {predictionStart && (
                   <span className="text-[11px] font-mono text-saibyl-muted ml-auto">
-                    {Math.floor((Date.now() - predictionStart.getTime()) / 1000)}s
+                    {elapsedSeconds}s
                   </span>
                 )}
               </div>
@@ -236,10 +253,10 @@ export default function MarketDetailPage() {
         </div>
 
         {/* Market Context */}
-        {(market as any).market_context && (
+        {market.market_context && (
           <div className="glass rounded-2xl p-6 mb-6">
             <h3 className="font-mono text-[11px] tracking-[0.18em] uppercase text-saibyl-muted mb-3">Market Context</h3>
-            <p className="text-[14px] text-saibyl-platinum leading-relaxed">{(market as any).market_context}</p>
+            <p className="text-[14px] text-saibyl-platinum leading-relaxed">{market.market_context}</p>
           </div>
         )}
 

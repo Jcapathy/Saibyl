@@ -55,4 +55,6 @@ function Button({
   )
 }
 
-export { Button, buttonVariants }
+// buttonVariants stays module-private: exporting a non-component from a
+// component file breaks React Fast Refresh, and nothing imports it.
+export { Button }

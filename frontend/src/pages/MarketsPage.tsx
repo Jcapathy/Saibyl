@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '@/lib/api';
 import StatusBadge from '@/components/StatusBadge';
+import { getErrorMessage } from '../lib/errors';
 
 interface Market {
   id: string;
@@ -39,8 +40,8 @@ export default function MarketsPage() {
     try {
       const r = await api.get('/markets/search', { params: { query: searchQuery, platform: searchPlatform, limit: 12 } });
       setSearchResults(r.data);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Search failed');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Search failed'));
     }
     setSearching(false);
   };
@@ -54,8 +55,8 @@ export default function MarketsPage() {
       setImportUrl('');
       const r = await api.get('/markets');
       setMarkets(r.data);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Import failed');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Import failed'));
     }
     setImporting(false);
   };

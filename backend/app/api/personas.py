@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import re
 
@@ -10,7 +9,7 @@ from pydantic import BaseModel
 
 from app.core.auth import get_current_org
 from app.core.database import get_supabase_admin
-from app.core.llm_client import llm_complete, _extract_json
+from app.core.llm_client import _extract_json, llm_complete
 from app.services.engine.personas.pack_loader import (
     PersonaPack,
     get_pack,

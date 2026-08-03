@@ -39,7 +39,7 @@ async def _get_org_id(
     if credentials:
         supabase = get_supabase()
         try:
-            response = supabase.auth.get_user(token)
+            response = supabase.auth.get_user(credentials.credentials)
             if response.user is None:
                 raise HTTPException(status_code=401, detail="Invalid token")
         except HTTPException:
@@ -97,10 +97,12 @@ async def _compute_score(simulation_id: str, org_id: str) -> ScoreResponse:
         raise HTTPException(status_code=404, detail=f"Simulation {simulation_id} not found")
     sim = sim[0]
 
-    if sim["status"] not in ("completed", "running"):
+    # NOTE: the engine writes status 'complete' (see workers/simulation_tasks.py);
+    # 'completed' is accepted too for forward/backward compatibility.
+    if sim["status"] not in ("complete", "completed", "running"):
         raise HTTPException(
             status_code=422,
-            detail=f"Simulation is '{sim['status']}' — score requires 'running' or 'completed'",
+            detail=f"Simulation is '{sim['status']}' — score requires 'running' or 'complete'",
         )
 
     # Pull sentiment values from events
@@ -163,7 +165,7 @@ async def _compute_score(simulation_id: str, org_id: str) -> ScoreResponse:
     try:
         summary = await llm_complete(
             messages=[{"role": "user", "content": summary_prompt}],
-            model=f"anthropic/claude-haiku-4-5-20251001",
+            model="anthropic/claude-haiku-4-5-20251001",
             max_tokens=150,
             temperature=0.6,
         )

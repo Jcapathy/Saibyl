@@ -1,14 +1,23 @@
+from pathlib import Path
+
 from app.services.engine.personas.pack_loader import (
-    load_all_packs,
     get_pack,
     list_available_packs,
     reload_packs,
 )
 
+PACK_DIR = Path(__file__).resolve().parents[1] / "data" / "persona_packs"
 
-def test_load_all_packs_returns_13():
+
+def _pack_files_on_disk() -> list[Path]:
+    return sorted(PACK_DIR.glob("*.json"))
+
+
+def test_load_all_packs_matches_files_on_disk():
+    """Pack count is derived from disk so adding a pack doesn't break the suite."""
     packs = reload_packs()
-    assert len(packs) == 13
+    assert len(packs) == len(_pack_files_on_disk())
+    assert len(packs) > 0
 
 
 def test_each_pack_has_archetypes():
@@ -41,7 +50,7 @@ def test_get_pack_unknown_raises():
 def test_list_available_packs_returns_summaries():
     reload_packs()
     summaries = list_available_packs()
-    assert len(summaries) == 13
+    assert len(summaries) == len(_pack_files_on_disk())
     for s in summaries:
         assert s.id
         assert s.name

@@ -105,6 +105,7 @@ async def upload_asset(
 
     # Dispatch processing task
     import asyncio
+
     from app.workers.asset_tasks import run_process_asset
 
     async def _safe_task(coro, name: str):

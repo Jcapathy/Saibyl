@@ -1,11 +1,10 @@
 import asyncio
 import json
-import random
 
 import structlog
 
 from app.core.database import get_supabase_admin
-from app.core.llm_client import llm_complete, _extract_json
+from app.core.llm_client import _extract_json, llm_complete
 from app.services.engine.document_processor import process_document
 from app.services.engine.ontology_generator import generate_ontology
 
@@ -235,6 +234,7 @@ def _check_stop_signal(simulation_id: str) -> bool:
     """Check Redis for a stop signal."""
     try:
         import redis
+
         from app.core.config import settings
         r = redis.from_url(settings.redis_url, decode_responses=True)
         return bool(r.get(f"simulation:{simulation_id}:stop"))
@@ -244,7 +244,7 @@ def _check_stop_signal(simulation_id: str) -> bool:
 
 async def run_simulation(simulation_id: str):
     """Run simulation using platform adapters."""
-    from datetime import datetime, UTC
+    from datetime import UTC, datetime
 
     admin = get_supabase_admin()
     sim = admin.table("simulations").select("*").eq("id", simulation_id).single().execute().data

@@ -25,7 +25,6 @@ class LoginRequest(BaseModel):
 async def signup(body: SignupRequest, request: Request):
     """Create a new user, organization, and link them."""
     await check_rate_limit(request, "signup", max_attempts=5, window_seconds=300, fail_open=False)
-    supabase = get_supabase()
     admin = get_supabase_admin()
 
     # Create user via Supabase Admin Auth (auto-confirms email)

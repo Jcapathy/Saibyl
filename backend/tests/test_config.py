@@ -22,7 +22,8 @@ def test_settings_accepts_production():
 
     s = Settings(
         environment="production",
-        secret_key="prod-key",
+        # Production requires a SECRET_KEY of at least 32 characters.
+        secret_key="p" * 32,
         anthropic_api_key="sk-prod",
         supabase_url="https://prod.supabase.co",
         supabase_anon_key="prod-anon",
@@ -30,3 +31,20 @@ def test_settings_accepts_production():
         database_url="postgresql://prod@db/saibyl",
     )
     assert s.environment == "production"
+
+
+def test_settings_rejects_short_secret_key_in_production():
+    import pytest
+
+    from app.core.config import Settings
+
+    with pytest.raises(ValueError):
+        Settings(
+            environment="production",
+            secret_key="too-short",
+            anthropic_api_key="sk-prod",
+            supabase_url="https://prod.supabase.co",
+            supabase_anon_key="prod-anon",
+            supabase_service_role_key="prod-service",
+            database_url="postgresql://prod@db/saibyl",
+        )

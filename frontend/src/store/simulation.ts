@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-interface SimulationStreamEvent {
+export interface SimulationStreamEvent {
   event_type: string;
   simulation_id: string;
   timestamp: string;
@@ -13,7 +13,7 @@ interface SimulationStreamEvent {
   [key: string]: unknown;
 }
 
-interface VisualizerSnapshot {
+export interface VisualizerSnapshot {
   simulation_id: string;
   round_number: number;
   total_events: number;

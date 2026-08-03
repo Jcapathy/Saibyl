@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Lightbulb, Clock } from 'lucide-react';
 import api from '@/lib/api';
+import { getErrorMessage } from '../lib/errors';
 
 interface Project {
   id: string;
@@ -126,8 +127,8 @@ export default function NewSimulationPage() {
       setShowCustomModal(false);
       setCustomName('');
       setCustomDesc('');
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to create custom persona');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Failed to create custom persona'));
     } finally {
       setCreatingCustom(false);
     }
@@ -151,8 +152,8 @@ export default function NewSimulationPage() {
       // Kick off prepare in background, then navigate
       api.post(`/simulations/${sim.id}/prepare`).catch(() => {});
       navigate(`/app/simulations/${sim.id}`);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || JSON.stringify(err.response?.data) || 'Failed to create simulation');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Failed to create simulation'));
     } finally {
       setSubmitting(false);
     }

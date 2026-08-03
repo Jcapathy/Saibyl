@@ -89,7 +89,7 @@ def _extract_json(text: str) -> str:
     # Strip markdown code fences
     if text.startswith("```"):
         lines = text.split("\n")
-        lines = [l for l in lines if not l.strip().startswith("```")]
+        lines = [ln for ln in lines if not ln.strip().startswith("```")]
         text = "\n".join(lines).strip()
     # Find the first { and match to its closing }
     start = text.find("{")

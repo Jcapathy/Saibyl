@@ -120,8 +120,8 @@ def _extract_docx(file_bytes: bytes) -> str:
 
     # Method 2: stdlib zipfile + XML text extraction (guaranteed for valid DOCX)
     try:
-        import zipfile
         import xml.etree.ElementTree as ET
+        import zipfile
 
         with zipfile.ZipFile(_io.BytesIO(file_bytes)) as zf:
             if "word/document.xml" not in zf.namelist():

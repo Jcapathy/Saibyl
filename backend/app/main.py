@@ -2,7 +2,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -10,9 +10,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.api import (
     accuracy,
     api_keys,
-    comparison,
     auth,
     billing,
+    comparison,
     documents,
     exports,
     markets,
@@ -30,6 +30,9 @@ from app.api import (
 )
 from app.core.config import settings
 from app.core.logging import setup_logging
+
+# Maximum accepted request body (50 MB) — enforced by LimitRequestBodyMiddleware.
+MAX_BODY_SIZE = 50 * 1024 * 1024
 
 
 @asynccontextmanager
@@ -58,9 +61,6 @@ def create_app() -> FastAPI:
         redirect_slashes=False,
         lifespan=lifespan,
     )
-
-    # 50MB request body limit
-    MAX_BODY_SIZE = 50 * 1024 * 1024
 
     logger = logging.getLogger(__name__)
 

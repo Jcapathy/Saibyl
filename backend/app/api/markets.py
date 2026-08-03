@@ -109,6 +109,7 @@ async def refresh(market_id: str, auth: dict = Depends(get_current_org)):
 async def run_prediction(market_id: str, auth: dict = Depends(get_current_org)):
     """Run a new prediction simulation for a market."""
     import asyncio
+
     from app.workers.market_tasks import run_market_prediction
 
     async def _safe_task(coro, name: str):

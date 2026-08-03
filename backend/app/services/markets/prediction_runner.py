@@ -11,7 +11,6 @@ from pydantic import BaseModel
 
 from app.core.database import get_supabase_admin
 from app.core.llm_client import llm_complete, llm_structured
-from app.services.intelligence.report_agent import ReACTConfig, generate_report
 from app.workers.simulation_tasks import run_prepare_agents, run_simulation
 
 # Persona packs by market category
@@ -39,10 +38,6 @@ POLITICS_KEYWORDS = [
 
 async def _research_market(title: str, resolution_rules: str, closes_at: str) -> str:
     """Web search for current data relevant to the market, then summarize."""
-    import httpx
-
-    # Build search query from market title
-    search_query = f"{title} preview stats predictions {closes_at[:10] if closes_at else '2026'}"
 
     try:
         # Use Anthropic web search via the LLM — ask Claude to research
