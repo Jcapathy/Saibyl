@@ -14,19 +14,26 @@
 
 -- Written by workers/simulation_tasks.py (multiple packs per simulation).
 -- The singular persona_pack_id from migration 012 is retained for existing rows.
+--
+-- TYPE NOTE: jsonb, not text[]. Production created this column by hand as jsonb
+-- and has run on it since; a fresh database must match or the two diverge —
+-- which is the exact drift this migration exists to end. Note that the sibling
+-- `platforms` column IS text[], so this table genuinely mixes both conventions.
+-- Do not "normalize" this to text[] without a deliberate data migration.
 ALTER TABLE simulations
-    ADD COLUMN IF NOT EXISTS persona_pack_ids TEXT[] DEFAULT '{}';
+    ADD COLUMN IF NOT EXISTS persona_pack_ids JSONB DEFAULT '[]'::jsonb;
 
 -- Written by the _safe_task error handler in api/simulations.py.
 ALTER TABLE simulations
     ADD COLUMN IF NOT EXISTS error_message TEXT;
 
 -- Backfill the array from the singular column so existing simulations keep
--- their pack selection under the new field.
+-- their pack selection under the new field. A no-op on production (checked:
+-- 0 rows match), but required for any database restored from an older dump.
 UPDATE simulations
-SET persona_pack_ids = ARRAY[persona_pack_id]
+SET persona_pack_ids = jsonb_build_array(persona_pack_id)
 WHERE persona_pack_id IS NOT NULL
-  AND (persona_pack_ids IS NULL OR persona_pack_ids = '{}');
+  AND (persona_pack_ids IS NULL OR persona_pack_ids = '[]'::jsonb);
 
 -- Called by api/documents.py after a successful upload.
 CREATE OR REPLACE FUNCTION increment_asset_count(project_uuid UUID, delta INT)
