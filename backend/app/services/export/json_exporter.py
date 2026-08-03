@@ -18,6 +18,24 @@ from app.services.intelligence.report_agent import clean_report_output
 logger = structlog.get_logger()
 
 
+def _adversarial_block(simulation_id: str) -> dict:
+    """The run's adversarial disclosure, read from the artifact.
+
+    Read rather than recomputed. The sentence is composed once in
+    `analysis_builder._adversarial_disclosure` so that the viewer, the print
+    page, the PDF and this export all say the same thing — a disclosure
+    re-derived per renderer is a disclosure that will differ per renderer.
+
+    Absent artifact returns `{"enabled": False}`, which is correct for every run
+    made before Phase 2 and for any run whose analysis failed.
+    """
+    from app.services.intelligence.analysis_builder import get_analysis
+
+    stored = get_analysis(simulation_id) or {}
+    artifact = stored.get("artifact") or {}
+    return artifact.get("adversarial") or {"enabled": False}
+
+
 async def export_report_json(report_id: UUID) -> bytes:
     """Export report as gzipped JSON."""
     admin = get_supabase_admin()
@@ -35,10 +53,15 @@ async def export_report_json(report_id: UUID) -> bytes:
     ).order("section_index").execute().data
 
     agents = admin.table("simulation_agents").select(
-        "id, entity_name, username, platform, profile"
+        "id, entity_name, username, platform, profile, is_adversarial, adversarial_role"
     ).eq("simulation_id", report["simulation_id"]).execute().data
 
     export_data = {
+        # PRD §4: adversarial agents are labelled synthetic in every report
+        # **and export**. An export is the artefact that leaves Saibyl and gets
+        # forwarded, so it is the one that most needs to carry the label — the
+        # recipient never saw the Run Configurator.
+        "adversarial_cohort": _adversarial_block(report["simulation_id"]),
         "meta": {
             "report_id": report["id"],
             "title": report.get("title"),
@@ -72,6 +95,8 @@ async def export_report_json(report_id: UUID) -> bytes:
                 "username": a["username"],
                 "platform": a["platform"],
                 "persona_type": (a.get("profile") or {}).get("persona_type"),
+                "is_adversarial": bool(a.get("is_adversarial")),
+                "adversarial_role": a.get("adversarial_role"),
             }
             for a in agents
         ],
@@ -102,6 +127,7 @@ async def export_simulation_json(simulation_id: UUID) -> bytes:
     ).order("created_at").execute().data
 
     export_data = {
+        "adversarial_cohort": _adversarial_block(str(simulation_id)),
         "meta": {
             "simulation_id": sim["id"],
             "name": sim["name"],

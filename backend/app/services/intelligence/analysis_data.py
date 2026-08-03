@@ -56,6 +56,12 @@ class MeasuredEvent:
     intent: str | None
     is_novel_claim: bool
     objections: list[str]
+    # Which side of the room the agent that produced this is on. Read from the
+    # agent row rather than inferred from the archetype label — a
+    # label-matching rule would break the first time a founder renames an
+    # archetype in their ICP.
+    is_adversarial: bool = False
+    adversarial_role: str | None = None
 
     @property
     def scored(self) -> bool:
@@ -79,6 +85,23 @@ class RunData:
     events_measured: int = 0
     measurement_model: str = ""
 
+    # ── The adversarial cohort, as it actually ran ──────────────────────
+    # Agents allocated to the cohort, not events produced by it. A cohort that
+    # was allocated 40 agents and spoke twice is a finding, and it is only
+    # visible if the denominator is the allocation.
+    agents_adversarial: int = 0
+    adversarial_archetypes: list[str] = field(default_factory=list)
+    # adversarial_role -> agent count.
+    adversarial_roles: dict[str, int] = field(default_factory=dict)
+    # What the run was configured with, before weight rounding.
+    adversarial_share_configured: float = 0.0
+    # Competitors named in this run's ICP, grounded in uploaded material. Empty
+    # when the cohort ran with no named entity, which is the normal case.
+    named_competitors: list[str] = field(default_factory=list)
+
+    lens: str | None = None
+    founder_stage: str | None = None
+
     @property
     def scored_events(self) -> list[MeasuredEvent]:
         return [e for e in self.events if e.scored]
@@ -86,6 +109,10 @@ class RunData:
     @property
     def rounds_seen(self) -> list[int]:
         return sorted({e.round_number for e in self.events if e.round_number})
+
+    @property
+    def has_adversarial_cohort(self) -> bool:
+        return self.agents_adversarial > 0
 
 
 def _archetype_of(profile: dict[str, Any]) -> str:
@@ -96,13 +123,50 @@ def _archetype_of(profile: dict[str, Any]) -> str:
     return "Unclassified"
 
 
+def _named_competitors(icp_profile_id: str | None) -> list[str]:
+    """Competitors this run's ICP named, and only the grounded ones.
+
+    Read back from `icp_profiles` rather than from the agents, because the
+    disclosure has to name what the run was *entitled* to name. An ungrounded
+    competitor never reaches an agent — `_ground_adversarial` strips it — so
+    filtering on `mentioned_in` here reproduces the same rule at the point where
+    the run is described to a reader.
+    """
+    if not icp_profile_id:
+        return []
+    try:
+        rows = (
+            get_supabase_admin()
+            .table("icp_profiles")
+            .select("competitors")
+            .eq("id", icp_profile_id)
+            .limit(1)
+            .execute()
+        ).data or []
+    except Exception:
+        logger.warning("named_competitors_lookup_failed", icp_profile_id=icp_profile_id)
+        return []
+    if not rows:
+        return []
+
+    competitors = rows[0].get("competitors") or []
+    return sorted({
+        str(c.get("name")).strip()
+        for c in competitors
+        if isinstance(c, dict) and c.get("name") and c.get("mentioned_in")
+    })
+
+
 def load_run_data(simulation_id: str) -> RunData:
     """Load a run's agents and measured events."""
     admin = get_supabase_admin()
 
     sim = (
         admin.table("simulations")
-        .select("id, organization_id, prediction_goal, max_rounds")
+        .select(
+            "id, organization_id, prediction_goal, max_rounds, lens, "
+            "founder_stage, adversarial_share, icp_profile_id"
+        )
         .eq("id", simulation_id)
         .single()
         .execute()
@@ -110,17 +174,34 @@ def load_run_data(simulation_id: str) -> RunData:
 
     agents = fetch_all(
         admin.table("simulation_agents")
-        .select("id, username, platform, profile")
+        .select("id, username, platform, profile, is_adversarial, adversarial_role")
         .eq("simulation_id", simulation_id)
         .order("id")
     )
 
-    agent_index: dict[str, dict[str, str]] = {}
+    agent_index: dict[str, dict[str, Any]] = {}
+    adversarial_archetypes: set[str] = set()
+    adversarial_roles: dict[str, int] = {}
+    agents_adversarial = 0
     for agent in agents:
         profile = agent.get("profile") or {}
+        archetype = _archetype_of(profile)
+        # The column is authoritative; the profile copy is a fallback for agents
+        # created before migration 020, which are all non-adversarial anyway.
+        is_adversarial = bool(
+            agent.get("is_adversarial") or profile.get("is_adversarial")
+        )
+        role = agent.get("adversarial_role") or profile.get("adversarial_role")
+        if is_adversarial:
+            agents_adversarial += 1
+            adversarial_archetypes.add(archetype)
+            if role:
+                adversarial_roles[role] = adversarial_roles.get(role, 0) + 1
         agent_index[agent["id"]] = {
             "username": agent.get("username") or "unknown",
-            "archetype": _archetype_of(profile),
+            "archetype": archetype,
+            "is_adversarial": is_adversarial,
+            "adversarial_role": role,
         }
 
     rows = fetch_all(
@@ -167,6 +248,8 @@ def load_run_data(simulation_id: str) -> RunData:
                 intent=row.get("intent"),
                 is_novel_claim=bool(row.get("is_novel_claim")),
                 objections=raw_objections if isinstance(raw_objections, list) else [],
+                is_adversarial=bool(agent.get("is_adversarial")),
+                adversarial_role=agent.get("adversarial_role"),
             )
         )
 
@@ -182,6 +265,13 @@ def load_run_data(simulation_id: str) -> RunData:
         events_total=len(rows),
         events_measured=measured,
         measurement_model=model,
+        agents_adversarial=agents_adversarial,
+        adversarial_archetypes=sorted(adversarial_archetypes),
+        adversarial_roles=adversarial_roles,
+        adversarial_share_configured=float(sim.get("adversarial_share") or 0.0),
+        named_competitors=_named_competitors(sim.get("icp_profile_id")),
+        lens=sim.get("lens"),
+        founder_stage=sim.get("founder_stage"),
     )
     logger.info(
         "run_data_loaded",

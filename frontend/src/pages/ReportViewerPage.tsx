@@ -15,6 +15,7 @@ import SectionRenderer from '@/components/report/SectionRenderer';
 import ReportExport from '@/components/report/ReportExport';
 import HeadlineStats from '@/components/analysis/HeadlineStats';
 import QualityNotice from '@/components/analysis/QualityNotice';
+import AdversarialNotice from '@/components/analysis/AdversarialNotice';
 import SentimentArc from '@/components/analysis/SentimentArc';
 import GroupBreakdown from '@/components/analysis/GroupBreakdown';
 import ObjectionMap from '@/components/analysis/ObjectionMap';
@@ -418,6 +419,11 @@ export default function ReportViewerPage() {
           (analysis ? (
             <>
               <HeadlineStats headline={analysis.headline} quality={analysis.quality} />
+              {/* Above the quality notice, not below it. The headline mixes
+                  both cohorts, so a reader who has just looked at a negative
+                  number needs to know a share of the swarm was constructed to
+                  produce one before they scroll on. */}
+              <AdversarialNotice adversarial={analysis.adversarial} />
               <QualityNotice quality={analysis.quality} />
               <div className="mb-6">
                 <SentimentArc
@@ -447,18 +453,33 @@ export default function ReportViewerPage() {
         {/* Tab 2 — Audience */}
         {activeTab === 2 &&
           (analysis ? (
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-              <GroupBreakdown
-                title="By platform"
-                slices={analysis.by_platform}
-                objectionLabels={objectionLabels}
-              />
-              <GroupBreakdown
-                title="By archetype"
-                slices={analysis.by_archetype}
-                objectionLabels={objectionLabels}
-              />
-            </div>
+            <>
+              <AdversarialNotice adversarial={analysis.adversarial} />
+              {/* Full width and first. A −0.4 headline means something
+                  different depending on which side of the room produced it,
+                  and no archetype table makes that legible. */}
+              {analysis.by_cohort.length > 0 && (
+                <div className="mb-6">
+                  <GroupBreakdown
+                    title="Buyers vs. incumbent-aligned"
+                    slices={analysis.by_cohort}
+                    objectionLabels={objectionLabels}
+                  />
+                </div>
+              )}
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <GroupBreakdown
+                  title="By platform"
+                  slices={analysis.by_platform}
+                  objectionLabels={objectionLabels}
+                />
+                <GroupBreakdown
+                  title="By archetype"
+                  slices={analysis.by_archetype}
+                  objectionLabels={objectionLabels}
+                />
+              </div>
+            </>
           ) : (
             measurementMissing
           ))}

@@ -33,6 +33,17 @@ SUBTITLE_SIZE = Pt(18)
 BODY_SIZE = Pt(14)
 
 
+def _adversarial_disclosure(simulation_id: str) -> dict:
+    """The run's adversarial disclosure, read from the artifact.
+
+    Read, never recomposed — see `analysis_builder._adversarial_disclosure`.
+    """
+    from app.services.intelligence.analysis_builder import get_analysis
+
+    artifact = (get_analysis(simulation_id) or {}).get("artifact") or {}
+    return artifact.get("adversarial") or {"enabled": False}
+
+
 def _add_title_slide(prs: Presentation, title: str, subtitle: str) -> None:
     layout = prs.slide_layouts[0]  # Title slide
     slide = prs.slides.add_slide(layout)
@@ -173,7 +184,23 @@ async def export_report_pptx(report_id: UUID) -> bytes:
     except Exception as e:
         logger.warning("pptx_chart_error", error=str(e))
 
-    # 6. Methodology
+    # 6. Adversarial cohort disclosure (PRD §4 — every report and export)
+    #
+    # Its own slide, before methodology rather than buried inside it: a deck
+    # gets presented one slide at a time, and a disclosure that shares a slide
+    # with the platform list is a disclosure that gets skipped past.
+    disclosure = _adversarial_disclosure(report["simulation_id"])
+    if disclosure.get("enabled"):
+        roles = disclosure.get("roles") or {}
+        bullets = [disclosure.get("disclosure", "")]
+        if roles:
+            bullets.append(
+                "Roles: "
+                + ", ".join(f"{k.replace('_', ' ')} ({v})" for k, v in sorted(roles.items()))
+            )
+        _add_content_slide(prs, "Adversarial cohort disclosure", bullets)
+
+    # 7. Methodology
     _add_content_slide(prs, "Methodology", [
         f"Prediction Goal: {sim.get('prediction_goal', 'N/A')}",
         f"Platforms: {', '.join(sim.get('platforms') or [])}",

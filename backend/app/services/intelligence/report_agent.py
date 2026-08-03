@@ -2,6 +2,7 @@
 # ─────────────────────────────────────────────────────────
 # generate_report(simulation_id, config) -> dict
 # generate_ab_comparison_report(simulation_id, config) -> dict
+# build_lens_context(sim, analysis) -> str
 # get_report_progress(report_id) -> ReportProgress
 # clean_report_output(text) -> str
 # strip_react_artifacts(text) -> str   (alias for clean_report_output)
@@ -23,6 +24,8 @@ from app.core.config import settings
 from app.core.database import get_supabase_admin
 from app.core.llm_client import llm_complete, llm_structured
 from app.services.billing.agent_pricing import report_section_count
+from app.services.engine.founder_stages import stage_spec
+from app.services.intelligence.analysis_builder import get_analysis
 from app.services.intelligence.react_tools import (
     agent_interview_tool,
     insight_forge,
@@ -149,6 +152,83 @@ class ReACTConfig(BaseModel):
         return "standard"
 
 
+def build_lens_context(sim: dict, analysis: dict | None) -> str:
+    """Stage questions and the adversarial disclosure, as prompt text.
+
+    Two things the writer cannot infer from the data and must not be left to
+    guess at.
+
+    **The stage's questions.** A pre-launch positioning run and a fundraise run
+    produce the same events and want different reports. The questions come from
+    `founder_stages`, the same registry the stage picker and the Run Configurator
+    read, so the report cannot answer a different question from the one the
+    founder was shown when they chose the stage.
+
+    **What the run cannot conclude.** A concept-validation run has no product to
+    adopt and therefore no adoption intent to measure; a fundraise run models
+    how a story reads, not whether the round closes. Stated as prohibitions
+    rather than caveats, because a model given a caveat writes the claim and
+    then hedges it.
+
+    **The adversarial disclosure.** PRD §4 requires incumbent-aligned agents to
+    be labelled synthetic wherever the run is presented. The sentence is composed
+    in the artifact and passed through verbatim so the report, the viewer and
+    every export say the same thing.
+
+    Returns an empty string for a run with no lens and no cohort, which is every
+    run made before Phase 2 — those reports are unchanged.
+    """
+    blocks: list[str] = []
+
+    spec = stage_spec(sim.get("founder_stage"))
+    if spec is not None:
+        questions = "\n".join(f"  - {q}" for q in spec.report_questions)
+        limits = "\n".join(f"  - {c}" for c in spec.cannot_conclude)
+        blocks.append(
+            f"""
+FOUNDER LENS — stage: {spec.label}
+The founder ran this at the "{spec.label}" stage. The report exists to answer:
+{questions}
+
+THIS RUN CANNOT CONCLUDE — do not state or imply any of these, in any section:
+{limits}
+"""
+        )
+
+    disclosure = (analysis or {}).get("adversarial") or {}
+    if disclosure.get("enabled"):
+        named = disclosure.get("named_competitors") or []
+        naming_rule = (
+            f"""  - {', '.join(named)} appear in this run only because the user uploaded
+    material naming them. You may report what agents said about them. You MUST
+    NOT state any fact about their product, pricing, roadmap, or customers —
+    the uploaded material grounded the name, not the claims."""
+            if named
+            else """  - No competitor was named in this run. Do not name one. If a section
+    needs a comparison, describe the category or the status quo."""
+        )
+        blocks.append(
+            f"""
+ADVERSARIAL COHORT — this run included incumbent-aligned agents
+{disclosure.get('disclosure', '')}
+
+RULES — these are disclosure obligations, not style preferences:
+  - Wherever you report a figure that mixes both cohorts, say so. The cohort
+    breakdown in the measured analysis separates them; use it.
+  - Never present an incumbent-aligned agent's argument as independent market
+    reaction. It is a constructed position, and saying so is what makes the
+    finding usable.
+  - An objection that originated with the adversarial cohort AND spread to
+    buyers is the most important thing in this report. An objection that stayed
+    inside the adversarial cohort is a competitor talking to themselves — say
+    which is which.
+{naming_rule}
+"""
+        )
+
+    return "\n".join(blocks)
+
+
 class ReportOutline(BaseModel):
     sections: list[SectionPlan]
 
@@ -198,6 +278,7 @@ Agent count: {agent_count}
 Rounds completed: {rounds}
 Total events: {event_count}
 
+{lens_context}
 Generate a report outline with {section_count} sections. Each section must have a title and 3-5 research angles (specific questions to investigate with data).
 
 CRITICAL: Every research angle MUST reference ONLY the simulated platforms listed above. \
@@ -219,7 +300,7 @@ REACT_PROMPT = """You are a ReACT (Reasoning-Action-Observation) intelligence an
 Prediction goal: {prediction_goal}
 Simulated platforms (ONLY these): {platforms}
 Research angles for this section: {research_angles}
-
+{lens_context}
 You have access to these tools (call by name):
 1. insight_forge(query) — Deep semantic search of knowledge graph for entities, relationships, facts
 2. quick_search(query) — Fast keyword search for specific facts and data points
@@ -492,6 +573,7 @@ async def _run_react_loop(
     config: ReACTConfig,
     variant: str = "a",
     platforms: str = "",
+    lens_context: str = "",
 ) -> str:
     """Run the ReACT loop for a single report section.
 
@@ -523,6 +605,7 @@ async def _run_react_loop(
             prediction_goal=prediction_goal,
             platforms=platforms,
             research_angles=", ".join(section.research_angles),
+            lens_context=lens_context,
             evidence="\n".join(evidence) if evidence else "None yet.",
         )
 
@@ -553,6 +636,7 @@ async def _run_react_loop(
         prediction_goal=prediction_goal,
         platforms=platforms,
         research_angles=", ".join(section.research_angles),
+        lens_context=lens_context,
         evidence="\n".join(evidence),
     ) + "\n\nYou have used all available tool calls. You MUST now provide your ANSWER. Synthesize ALL evidence gathered into a comprehensive, data-rich section (800-1500 words) with specific metrics, tables, archetype analysis, and predictive implications:"
 
@@ -687,6 +771,13 @@ async def generate_report(
 
     try:
         # Phase 1: Planning
+        #
+        # The lens context is built once and reused for the outline and every
+        # section. Rebuilding it per section would be one artifact read per
+        # section for a string that cannot change mid-report.
+        stored = get_analysis(sim_id) or {}
+        lens_context = build_lens_context(sim, stored.get("artifact"))
+
         outline_prompt = OUTLINE_PROMPT.format(
             prediction_goal=sim["prediction_goal"],
             platforms=", ".join(sim.get("platforms") or ["twitter_x"]),
@@ -694,6 +785,7 @@ async def generate_report(
             rounds=sim.get("max_rounds", 10),
             event_count=event_count,
             section_count=section_count,
+            lens_context=lens_context,
         )
         outline = await llm_structured(
             messages=[{"role": "user", "content": outline_prompt}],
@@ -720,7 +812,7 @@ async def generate_report(
 
             content = await _run_react_loop(
                 section, sim_id, sim["prediction_goal"], graph_id, config,
-                platforms=platforms,
+                platforms=platforms, lens_context=lens_context,
             )
             content = clean_report_output(content)  # sanitise before DB write
 

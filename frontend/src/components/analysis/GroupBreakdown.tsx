@@ -3,14 +3,21 @@ import {
   differsSignificantly,
   formatSigned,
   type ArchetypeSlice,
+  type CohortSlice,
   type PlatformSlice,
 } from '@/lib/analysis';
 import Panel, { NoData } from './Panel';
 
-type Slice = PlatformSlice | ArchetypeSlice;
+type Slice = PlatformSlice | ArchetypeSlice | CohortSlice;
+
+const COHORT_LABELS: Record<string, string> = {
+  buyer: 'Buyers',
+  adversarial: 'Incumbent-aligned',
+};
 
 function labelOf(slice: Slice): string {
   if ('platform' in slice) return PLATFORM_NAMES[slice.platform] ?? slice.platform;
+  if ('cohort' in slice) return COHORT_LABELS[slice.cohort] ?? slice.cohort;
   return slice.archetype;
 }
 
@@ -119,6 +126,15 @@ export default function GroupBreakdown({
                   {slice.stance.support_pct.toFixed(0)}% support
                 </span>
                 <span>{slice.event_count} events</span>
+                {/* A cohort that was allocated agents and barely spoke is a
+                    finding, not a rounding error — but only if the allocation
+                    is the denominator. Platform and archetype slices carry no
+                    allocation, so this appears on cohorts alone. */}
+                {'agents_total' in slice && slice.agents_total > slice.agent_count && (
+                  <span>
+                    {slice.agent_count} of {slice.agents_total} agents spoke
+                  </span>
+                )}
                 {objections.map((key) => (
                   <button
                     key={key}

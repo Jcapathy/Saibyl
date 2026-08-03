@@ -27,6 +27,20 @@ def _b64_img(png_bytes: bytes) -> str:
     return f"data:image/png;base64,{base64.b64encode(png_bytes).decode()}"
 
 
+def _adversarial_disclosure(simulation_id: str) -> dict:
+    """The run's adversarial disclosure, read from the artifact.
+
+    Read, never recomposed. The sentence is written once in
+    `analysis_builder._adversarial_disclosure` so the viewer, the print page,
+    the JSON export and this PDF cannot say four slightly different things about
+    the same cohort.
+    """
+    from app.services.intelligence.analysis_builder import get_analysis
+
+    artifact = (get_analysis(simulation_id) or {}).get("artifact") or {}
+    return artifact.get("adversarial") or {"enabled": False}
+
+
 async def export_report_pdf(report_id: UUID) -> bytes:
     """Generate PDF from a completed report."""
     admin = get_supabase_admin()
@@ -89,6 +103,28 @@ async def export_report_pdf(report_id: UUID) -> bytes:
         </div>
         """
 
+    # PRD §4: adversarial agents are labelled synthetic in every report and
+    # export. A PDF is the artefact that gets forwarded to a board or an
+    # investor, so it is the one where an unlabelled hostile cohort does the
+    # most damage — the recipient never saw the run being configured.
+    adversarial_html = ""
+    disclosure = _adversarial_disclosure(report["simulation_id"])
+    if disclosure.get("enabled"):
+        roles = disclosure.get("roles") or {}
+        roles_line = (
+            "<p><strong>Roles:</strong> "
+            + ", ".join(f"{k.replace('_', ' ')} ({v})" for k, v in sorted(roles.items()))
+            + "</p>"
+            if roles
+            else ""
+        )
+        adversarial_html = f"""
+    <div class="section adversarial">
+        <h2>Adversarial cohort disclosure</h2>
+        <p>{disclosure.get('disclosure', '')}</p>
+        {roles_line}
+    </div>"""
+
     charts_html = ""
     if sentiment_chart:
         charts_html += f'<div class="chart"><img src="{sentiment_chart}"></div>'
@@ -113,6 +149,7 @@ async def export_report_pdf(report_id: UUID) -> bytes:
     .chart {{ text-align: center; margin: 20px 0; page-break-inside: avoid; }}
     .chart img {{ max-width: 100%; height: auto; }}
     .methodology {{ background: #F0F4FA; padding: 16px; border-radius: 6px; font-size: 10pt; }}
+    .adversarial {{ background: #FDF6E3; border-left: 4px solid #C9A227; padding: 16px; border-radius: 6px; font-size: 10pt; }}
 </style>
 </head>
 <body>
@@ -126,6 +163,8 @@ async def export_report_pdf(report_id: UUID) -> bytes:
     {sections_html}
 
     {charts_html}
+
+    {adversarial_html}
 
     <div class="section methodology">
         <h2>Methodology</h2>

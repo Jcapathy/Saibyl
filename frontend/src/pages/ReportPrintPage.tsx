@@ -338,6 +338,27 @@ export default function ReportPrintPage() {
             </p>
           )}
 
+          {/* On the cover page, alongside the measurement statement. PRD §4
+              requires adversarial agents to be labelled synthetic in every
+              report and export, and a printed report is the artefact most
+              likely to be forwarded to someone who never saw the run being
+              configured. The sentence is composed on the server so this page,
+              the viewer, the PDF and the JSON export cannot disagree. */}
+          {analysis?.adversarial?.enabled && (
+            <p
+              style={{
+                marginTop: 16,
+                fontSize: 11,
+                color: MUTED,
+                lineHeight: 1.7,
+                borderLeft: '3px solid #C9A227',
+                paddingLeft: 12,
+              }}
+            >
+              {analysis.adversarial.disclosure}
+            </p>
+          )}
+
           <p
             style={{
               marginTop: analysis ? 60 : 120,

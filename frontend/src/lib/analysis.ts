@@ -13,12 +13,21 @@
  * not get rendered.
  */
 
-/** Schema version this client knows how to render. */
-export const SUPPORTED_SCHEMA_VERSION = 1;
+/**
+ * Schema version this client knows how to render.
+ *
+ * 2 — Phase 2 adds `by_cohort` and `adversarial`. Both are additive, but the
+ *     version still moved: a client that renders a Founder-lens run without the
+ *     adversarial disclosure presents incumbent-aligned synthetic agents as
+ *     ordinary market voices, which is the one thing PRD §4 forbids. Refusing to
+ *     render is the correct failure there.
+ */
+export const SUPPORTED_SCHEMA_VERSION = 2;
 
 export type Stance = 'support' | 'oppose' | 'undecided' | 'off_topic';
 export type Confidence = 'low' | 'moderate' | 'high';
 export type Trajectory = 'improving' | 'declining' | 'flat';
+export type Cohort = 'buyer' | 'adversarial';
 
 /** A mean with its 95% interval. `n` is agents — never events. */
 export interface Interval {
@@ -63,6 +72,41 @@ export interface ArchetypeSlice extends GroupSlice {
   archetype: string;
 }
 
+/**
+ * One side of the room: buyers, or incumbent-aligned agents.
+ *
+ * Separate from the archetype breakdown because it answers a different
+ * question. An archetype table says which kind of person reacted how; this says
+ * how much of the negativity came from agents constructed to argue against the
+ * switch. A founder reading a −0.4 headline needs to know whether that is the
+ * market or the 40% of the swarm they configured to be hostile.
+ */
+export interface CohortSlice extends GroupSlice {
+  cohort: Cohort;
+  /** Agents allocated to this cohort, whether or not they spoke. */
+  agents_total: number;
+  archetypes: string[];
+}
+
+/**
+ * What the adversarial cohort was, stated wherever the run is presented.
+ *
+ * `disclosure` is composed once on the server so the viewer, the print page,
+ * the PDF and the JSON export say the same words. Render it verbatim — do not
+ * rewrite it here.
+ */
+export interface AdversarialDisclosure {
+  enabled: boolean;
+  share_configured: number;
+  share_realised: number;
+  agents_total: number;
+  agents_active: number;
+  archetypes: string[];
+  roles: Record<string, number>;
+  named_competitors: string[];
+  disclosure: string;
+}
+
 export interface ObjectionQuote {
   event_id: string;
   agent_username: string;
@@ -92,6 +136,20 @@ export interface ObjectionSummary {
   propagation: PropagationPoint[];
   mean_intensity: number;
   load_bearing_score: number;
+  /**
+   * Did this objection start on the incumbent's side of the room, and did it
+   * get out? One that starts adversarial and stays there is a competitor
+   * talking to themselves. One that crosses into buyers is the thing the
+   * inoculation loop exists to answer.
+   */
+  originated_adversarial: boolean;
+  adversarial_agent_count: number;
+  buyer_agent_count: number;
+}
+
+/** Mirrors ObjectionSummary.crossed_into_buyers on the server. */
+export function crossedIntoBuyers(objection: ObjectionSummary): boolean {
+  return objection.originated_adversarial && objection.buyer_agent_count > 0;
 }
 
 export interface Flashpoint {
@@ -147,9 +205,12 @@ export interface SimulationAnalysis {
   sentiment_timeline: TimelinePoint[];
   by_platform: PlatformSlice[];
   by_archetype: ArchetypeSlice[];
+  /** Empty when the run had no adversarial cohort — a one-sided split is noise. */
+  by_cohort: CohortSlice[];
   objections: ObjectionSummary[];
   flashpoints: Flashpoint[];
   propagation: PropagationEdge[];
+  adversarial: AdversarialDisclosure;
   quality: QualityBlock;
 }
 

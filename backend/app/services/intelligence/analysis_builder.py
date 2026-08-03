@@ -35,7 +35,9 @@ from app.services.intelligence.analysis_data import (
 )
 from app.services.intelligence.analysis_schema import (
     SCHEMA_VERSION,
+    AdversarialDisclosure,
     ArchetypeSlice,
+    CohortSlice,
     Flashpoint,
     Headline,
     ObjectionSummary,
@@ -148,6 +150,136 @@ def _by_archetype(
     ]
     slices.sort(key=lambda s: s.valence.mean)
     return slices
+
+
+def _by_cohort(
+    run: RunData, objections: list[ObjectionSummary]
+) -> list[CohortSlice]:
+    """Buyers versus incumbent-aligned agents.
+
+    Empty when the run had no adversarial cohort: a one-sided split is not a
+    split, and rendering "buyers: 100%" is noise a reader has to skip past.
+    """
+    if not run.has_adversarial_cohort:
+        return []
+
+    grouped: dict[str, list[MeasuredEvent]] = {"buyer": [], "adversarial": []}
+    for event in run.events:
+        grouped["adversarial" if event.is_adversarial else "buyer"].append(event)
+
+    totals = {
+        "adversarial": run.agents_adversarial,
+        "buyer": max(0, run.agents_total - run.agents_adversarial),
+    }
+    archetypes = {
+        "adversarial": run.adversarial_archetypes,
+        "buyer": [a for a in run.archetypes if a not in set(run.adversarial_archetypes)],
+    }
+
+    return [
+        CohortSlice(
+            cohort=cohort,  # type: ignore[arg-type]
+            valence=mean_interval(events),
+            stance=stance_split(events),
+            mean_intensity=mean_intensity(events),
+            event_count=len(events),
+            agent_count=len({e.agent_id or e.agent_username for e in events}),
+            agents_total=totals[cohort],
+            archetypes=archetypes[cohort],
+            top_objection_keys=_objection_keys_for(events, objections),
+        )
+        for cohort, events in (("buyer", grouped["buyer"]), ("adversarial", grouped["adversarial"]))
+    ]
+
+
+def _attribute_objection_cohorts(
+    run: RunData, objections: list[ObjectionSummary]
+) -> None:
+    """Record, per objection, which side of the room raised it and who repeated it.
+
+    "Competitor advocates start the narrative decline" is the second argument
+    for the cohort existing at all (PRD §4). It is a claim about origin and
+    spread, so it is only checkable if the artifact records both — and an
+    objection that starts adversarial and never leaves that cohort is a
+    competitor talking to themselves, which is a very different finding from one
+    that crosses into buyers.
+
+    Mutates in place: these fields belong to the objection, and returning
+    copies would leave the canonicalizer's list and the artifact's list as two
+    objects that have to be kept in step.
+    """
+    if not run.has_adversarial_cohort:
+        return
+
+    events_by_id = {e.id: e for e in run.events}
+    for objection in objections:
+        events = [events_by_id[eid] for eid in objection.event_ids if eid in events_by_id]
+        if not events:
+            continue
+
+        adversarial_agents = {
+            e.agent_id or e.agent_username for e in events if e.is_adversarial
+        }
+        buyer_agents = {
+            e.agent_id or e.agent_username for e in events if not e.is_adversarial
+        }
+        objection.adversarial_agent_count = len(adversarial_agents)
+        objection.buyer_agent_count = len(buyer_agents)
+
+        first_round = min(e.round_number for e in events)
+        first_voices = [e for e in events if e.round_number == first_round]
+        # Originated adversarial only when *every* first-round voice was
+        # adversarial. A mixed first round means the objection was already in
+        # the market's mouth, and crediting the incumbent for it would
+        # overstate the cohort's influence — which is the direction this
+        # feature is most likely to be wrong in.
+        objection.originated_adversarial = all(e.is_adversarial for e in first_voices)
+
+
+def _adversarial_disclosure(run: RunData) -> AdversarialDisclosure:
+    """The standing synthetic-agent label, composed once for every renderer.
+
+    PRD §4 requires adversarial agents to be labelled synthetic in every report
+    and export. Composing the sentence here rather than in each renderer is the
+    difference between one obligation and four opportunities to forget it.
+    """
+    if not run.has_adversarial_cohort:
+        return AdversarialDisclosure()
+
+    realised = (
+        round(run.agents_adversarial / run.agents_total, 4) if run.agents_total else 0.0
+    )
+    active = len({
+        e.agent_id or e.agent_username for e in run.events if e.is_adversarial
+    })
+
+    named = (
+        f" Competitor names appear only where the material uploaded to this "
+        f"project named them ({', '.join(run.named_competitors)}); no claim about "
+        f"a real company originates from the model."
+        if run.named_competitors
+        else " No competitor was named: the cohort argues about the category and "
+        "the cost of switching, with no real company involved."
+    )
+
+    return AdversarialDisclosure(
+        enabled=True,
+        share_configured=run.adversarial_share_configured,
+        share_realised=realised,
+        agents_total=run.agents_adversarial,
+        agents_active=active,
+        archetypes=run.adversarial_archetypes,
+        roles=run.adversarial_roles,
+        named_competitors=run.named_competitors,
+        disclosure=(
+            f"{run.agents_adversarial} of {run.agents_total} agents "
+            f"({realised * 100:.0f}%) were configured as incumbent-aligned: they "
+            f"argue against adopting the subject by construction. They are "
+            f"synthetic, like every agent in this run, and their reactions are "
+            f"reported separately from buyers' so the headline can be read "
+            f"either way.{named}"
+        ),
+    )
 
 
 def _flashpoints(
@@ -339,6 +471,17 @@ def _quality(run: RunData, timeline: list[TimelinePoint], overall_n: int) -> Qua
             f"{contentless} events were reactions or off-topic; they count as "
             "engagement but carry no sentiment."
         )
+    if run.has_adversarial_cohort and run.agents_total:
+        # The headline mixes both cohorts, which is the right default — a real
+        # thread contains both — but a reader who does not know that will read a
+        # configured hostility share as a market measurement. Said here because
+        # this is the block the viewer puts next to the headline number.
+        share = run.agents_adversarial * 100 / run.agents_total
+        caveats.append(
+            f"{share:.0f}% of this swarm was configured as incumbent-aligned and "
+            "argues against adoption by construction. The headline includes them; "
+            "the cohort breakdown separates them."
+        )
 
     return QualityBlock(
         events_total=run.events_total,
@@ -361,6 +504,9 @@ async def build_simulation_analysis(
     run = load_run_data(simulation_id)
 
     objections = await canonicalize_objections(run)
+    # Cohort attribution runs before persistence so the stored objections and
+    # the artifact's copies agree on where each objection started.
+    _attribute_objection_cohorts(run, objections)
     persist_objections(run, objections)
 
     timeline = _timeline(run)
@@ -374,9 +520,11 @@ async def build_simulation_analysis(
         sentiment_timeline=timeline,
         by_platform=_by_platform(run, objections),
         by_archetype=_by_archetype(run, objections),
+        by_cohort=_by_cohort(run, objections),
         objections=objections[:MAX_OBJECTIONS_IN_ARTIFACT],
         flashpoints=_flashpoints(run, timeline, objections),
         propagation=_propagation(objections[:MAX_OBJECTIONS_IN_ARTIFACT], run),
+        adversarial=_adversarial_disclosure(run),
         quality=_quality(run, timeline, headline.valence.n),
     )
 
@@ -389,6 +537,10 @@ async def build_simulation_analysis(
         flashpoints=len(analysis.flashpoints),
         coverage_pct=analysis.quality.coverage_pct,
         confidence=analysis.quality.confidence,
+        adversarial_agents=run.agents_adversarial,
+        objections_crossing_from_adversarial=sum(
+            1 for o in analysis.objections if o.crossed_into_buyers
+        ),
     )
     return analysis
 

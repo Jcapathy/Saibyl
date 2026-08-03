@@ -876,6 +876,72 @@ This is deliberately unlike 019, which still waits for the merge.
 
 ---
 
+## [PHASE 2 | 2026-08-03] The headline is not the market, and the artifact says so
+
+A run with 40% incumbent-aligned agents produces a negative headline **by
+construction**. That is the point of the cohort — but a founder reading −0.4
+without knowing the swarm was configured to argue against them is being misled
+by a number that is, technically, measured. Phase 1's rule was that every number
+is measured; this is the corollary, that a measured number still needs to say
+what it measured.
+
+**Decision — a cohort split, separate from the archetype breakdown.** They
+answer different questions. `by_archetype` says which *kind of person* reacted
+how; `by_cohort` says how much of the negativity came from agents constructed to
+oppose. No archetype table makes the second legible, because a founder does not
+know which of their six archetypes were the adversarial ones. Empty on a run
+with no cohort — a one-sided split is not a split.
+
+**Decision — the disclosure sentence is composed once, in the artifact.** PRD §4
+requires adversarial agents to be labelled synthetic in every report and export.
+There are five renderers — the viewer, the print page, the PDF, the PPTX, the
+JSON export — and a rule re-implemented in five places is a rule that will be
+missing from one of them. `AdversarialDisclosure.disclosure` holds the sentence;
+all five read it. The PPTX gets its own slide rather than a methodology bullet,
+because a deck is presented one slide at a time and a disclosure sharing a slide
+with the platform list is a disclosure that gets skipped.
+
+**Decision — a cohort slice reports allocation, not only participation.** A
+cohort allocated 40 agents that spoke twice is a finding. It is only visible if
+the denominator is the allocation, so `agents_total` sits next to `agent_count`
+and the UI shows "3 of 40 agents spoke" when they differ.
+
+**Decision — an objection originated adversarial only when *every* first-round
+voice was adversarial.** A mixed first round means the objection was already in
+the market's mouth, and crediting the incumbent for it overstates the cohort's
+influence — which is the direction this feature is most likely to be wrong in.
+The pair (`originated_adversarial`, `buyer_agent_count`) is what makes argument 2
+for the cohort — "competitor advocates start the narrative decline" — checkable
+rather than asserted. An objection that starts adversarial and stays adversarial
+is a competitor talking to themselves; one that crosses into buyers is the thing
+the inoculation loop exists to answer.
+
+**Decision — `SCHEMA_VERSION` moves to 2 even though both additions are
+additive.** A client that renders a Founder-lens run without the disclosure
+presents incumbent-aligned synthetic agents as ordinary market voices, which is
+the one thing PRD §4 forbids. The frontend's refusal to render an unknown
+version is the correct failure there, so `SUPPORTED_SCHEMA_VERSION` moves with
+it in the same commit — a version bump shipped without the frontend mirror would
+blank every report in the product.
+
+**Decision — the report's lens context is prohibitions, not caveats.** A stage's
+`cannot_conclude` list reaches the outline prompt and every section prompt as
+"do not state or imply", because a model handed a caveat writes the claim and
+then hedges it. The stage's `report_questions` come from the same registry the
+stage picker reads, so the report cannot answer a different question from the
+one the founder was shown when they chose the stage.
+
+The naming rule is in the same block: with a grounded competitor, the writer may
+report what agents said about them and may not state a fact about their product,
+pricing, roadmap or customers — the uploaded material grounded the *name*, not
+the claims. With none, it may not name one at all.
+
+Legacy runs — no lens, no cohort — get an empty lens context and an unchanged
+report. That is checked by a test, because "the new feature does not alter old
+output" is the kind of property that quietly stops being true.
+
+---
+
 ## Known issues carried into Phase 2
 
 Recorded here so they are not rediscovered. Items 1, 2 and 7 from the Phase 1
