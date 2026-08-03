@@ -1,0 +1,407 @@
+# Saibyl V2 — Decision Record
+
+**Saido Labs LLC** · Reasoning captured 2026-08-02
+
+`PRD_V2.md` says *what* V2 is. This says *why*, including the alternatives that
+were rejected and what would justify reopening each decision.
+
+It exists so a future session can push back intelligently instead of either
+following the spec blindly or overturning a considered decision because the
+reasoning wasn't written down. **If you are about to change something here,
+read that decision's "What would change this" row first.**
+
+---
+
+## 1. Rebuild the measurement layer before shipping any V2 feature
+
+**Chose:** Phase 1 replaces formulaic sentiment with per-event measurement
+before the Founder, Marketing, or Crisis lens is built.
+
+**Why.** V1's event sentiment was `sentiment_baseline × (1 + round/max_rounds ×
+1.5)` — a function of the archetype preset and the round index that never read
+what the agent said. The frontend then scraped one scalar out of the report
+markdown and *generated* the timeline, per-platform sentiment, persona metrics,
+and risk matrix with `Math.sin()` and `Math.random()`.
+
+The severity is a function of what the customer does with the number. For
+crisis-PR narrative texture, a plausible-looking arc was survivable. For a
+founder reallocating $200K of ad spend or delaying a launch because Saibyl
+flagged a flashpoint, it is not. Every V2 promise — "the synthetic audience
+flagged the specific claims that turn discourse negative" — is a claim that the
+flagging is *measured*. Building three lenses on top of a formula would mean
+three products making a false claim instead of one.
+
+**Rejected — ship tabs first, fix numbers after.** Faster to demo, and the
+argument for it is real: customer feedback beats internal correctness work. It
+was rejected because the early founder cohort is exactly the audience that would
+act on the numbers hardest and churn loudest, and because retrofitting
+measurement under three shipped report formats is strictly more work than
+building them on it.
+
+**Rejected — fix only the surfaces founders touch.** Would leave two truth
+systems in one codebase. Every shared component would need to know which one it
+was rendering.
+
+**What would change this:** nothing short of the numbers already being measured.
+This is the load-bearing decision in V2.
+
+---
+
+## 2. Three lenses over one workspace, not three products
+
+**Chose:** One org, one project, one set of ingested assets. A lens changes the
+intake form, audience routing, computed metrics, and report template — all three
+read the same simulation and analysis objects.
+
+**Why.** The scenario that motivated V2 is a founder who launches, takes
+narrative damage, and needs crisis work. If Crisis is a separate product, that
+founder re-onboards, re-uploads, and loses their history at the exact moment
+they are most stressed and most likely to churn. Sharing the workspace also
+means calibration history and ICP profiles accumulate per account rather than
+per product.
+
+**Rejected — separate SKUs sharing an engine.** Cleaner pricing story and easier
+to market each vertical independently. Rejected because it makes the
+founder→crisis path a second purchase decision, which is where it would die.
+
+**What would change this:** if Crisis is ever sold to a genuinely different
+buyer (agencies of record, not founders) with no account overlap, the shared
+workspace stops paying for itself.
+
+---
+
+## 3. Derive the ICP from uploaded material, don't pick from packs
+
+**Chose:** An Opus pass reads the founder's PRD/landing page/deck and synthesizes
+buyer archetypes — role, budget authority, incumbent tooling, switching cost,
+evaluation criteria, skepticism triggers. The 16 built-in packs become priors
+and blend targets, not the answer.
+
+**Why.** This is the single biggest quality lever in the Founder lens. Sixteen
+generic packs cannot represent "developers evaluating an observability tool who
+already pay for Datadog." A simulation run against the wrong audience produces
+confidently wrong output, which is worse than no output.
+
+**Rejected — expand the pack library to 40.** Cheapest to build, and packs are
+already data-not-code so it scales. Rejected because no fixed library covers the
+long tail of B2B niches, and the founder is the wrong person to ask which of 40
+packs matches their buyer — that judgment is what they're paying for.
+
+**Rejected — founder fills in a structured ICP form.** More control, less magic,
+and a real option if synthesis proves unreliable. Kept as the editing surface:
+synthesis proposes, the founder corrects.
+
+**What would change this:** if synthesis quality proves unreliable in Phase 2
+testing, fall back to form-first with synthesis as a suggestion.
+
+---
+
+## 4. The inoculation loop must re-simulate, not just recommend
+
+**Chose:** detect → draft counter-asset → **re-simulate with the asset
+pre-seeded** → report the measured before/after delta per objection.
+
+**Why.** Step 3 is the entire product. Without it, "here's what to pre-position"
+is an LLM opinion — which every competitor can generate and no founder should
+trust. With it, Saibyl can say *this specific disclosure moved this specific
+objection from 34% of the swarm to 9%, and here are the agents who changed their
+mind.* Nobody else has that, and it cannot be faked without the measurement
+layer from decision #1.
+
+It is also the cleanest conversion trigger in the product: detect-then-verify is
+structurally two runs. The free tier gets one.
+
+**Rejected — detect and recommend only.** Much cheaper. Rejected because it
+throws away the defensibility *and* the natural second-run trigger in one move.
+
+**What would change this:** if re-simulation cost makes the loop unsellable —
+but at ~$3.23 per standard run, two runs is $6.46 of COGS against a $99/mo tier.
+It is not close to being the constraint.
+
+---
+
+## 5. N-way matched swarms, not a repair of the 2-way A/B
+
+**Chose:** 2–8 variants judged by the *same* generated audience — identical
+agents, identical seeds — each in an isolated arena.
+
+**Why.** Two reasons. First, V1's A/B never ran variant B at all
+(`run_simulation_ab` calls `run_simulation` once), so there is nothing to
+repair — it is net-new either way. Second, matched audiences are what make the
+comparison valid: if each variant faces a differently-drawn swarm, differences
+are confounded by audience draw and the scoreboard is noise dressed as signal.
+
+Nobody tests two headlines. They test six.
+
+**Consequence to preserve:** agent generation cost does **not** scale with
+variant count, because the audience is shared. The cost model reflects this. If
+someone "fixes" that by regenerating per variant, cost rises 8× on an 8-variant
+run *and* the results stop being comparable.
+
+**What would change this:** nothing foreseeable. Seed-locking is table stakes
+for the claim being made.
+
+---
+
+## 6. Per-objective intent metrics, with virality on a separate axis
+
+**Chose:** The objective chosen at setup determines the headline metric (click
+intent, visit intent, purchase intent, …). Sentiment demotes to a supporting
+metric. Virality Potential Score is reported *separately*, never blended into
+the objective score.
+
+**Why.** "Not all marketing is the same" was the founding observation — an ad
+meant to drive foot traffic and an ad meant to sell a service succeed
+differently, and scoring both on sentiment measures neither. Sentiment is a
+proxy that stopped being needed once intent could be measured directly.
+
+Virality stays a separate axis because **a variant can spread widely and convert
+terribly.** Blending them into one score hides exactly the two cases a marketer
+must act on: *viral but off-message* (it will spread as something you didn't
+say) and *converts but won't travel* (good copy that needs paid distribution).
+
+**Cross-archetype reach carries the heaviest weight** inside the virality score.
+Content that spreads only within its originating cohort is an echo chamber, not
+virality, and a naive share-count metric cannot tell the difference.
+
+**What would change this:** if users find two axes confusing, present a combined
+headline — but keep both computed and drillable underneath. Do not collapse the
+underlying measurement.
+
+---
+
+## 7. The adversarial/incumbent cohort is core to the Founder lens
+
+**Chose:** A configurable share of the swarm is incumbent-aligned — incumbent
+employee, incumbent power user, sunk-cost consultant, category skeptic,
+free-alternative advocate.
+
+**Why.** Three arguments, in order of strength:
+
+1. **The most common objection is invisible without it.** A B2B buyer never
+   evaluates a product in isolation; they evaluate it net of switching cost. A
+   swarm of pure buyers reacts to the pitch on its merits and systematically
+   misses *"we already use X and it's good enough"* — which is why most SaaS
+   deals actually die.
+2. **Competitor advocates start the narrative decline.** On HN, Product Hunt,
+   Reddit, and LinkedIn the loudest early responders skew toward incumbent
+   employees, sunk-cost consultants, and OSS-alternative maintainers. They
+   arrive first and arrive credentialed; neutral buyers read the thread *after*
+   those replies have set the tone.
+3. **The inoculation loop is mostly counter-competitive.** Migration paths,
+   pricing rationale, security posture, "why not just use X" — all answers to
+   competitive attack. Testing whether a defense works requires the attacker in
+   the room, or you are only measuring whether it reassures people who were
+   never going to attack.
+
+**Guardrails are load-bearing, not decoration.** A model asked about a named
+competitor will confabulate. So: grounded only in competitor material the user
+uploads, never model memory; adversarial agents labeled synthetic in every
+report and export; no model-generated claim about a real company presented as
+fact; generic no-named-entity skeptic when no material is uploaded. **Do not
+relax these to improve output quality.**
+
+**What would change this:** if the guardrails prove insufficient in practice —
+i.e. confabulated competitor claims reach a report — narrow the cohort to
+unnamed category skeptics rather than removing it.
+
+---
+
+## 8. Stage-aware founder workflows, not one general flow
+
+**Chose:** Five entry points — concept validation, pre-launch positioning,
+launch/GTM, growth, fundraise.
+
+**Why — this is the retention mechanism, not a UX nicety.** A validation tool is
+a one-time purchase; a positioning system is a subscription. One general "validate
+my product" flow gets used once and churns. Five stages are five purchase
+occasions for the same account, and the answer legitimately changes every time
+the founder ships a feature, changes pricing, rewrites the landing page, or
+hears a new objection in a sales call.
+
+**What would change this:** if usage data shows founders only ever use one or
+two stages, consolidate — but consolidate toward the stages actually used, not
+back to a single generic flow.
+
+---
+
+## 9. Free tier limited by scope, never by hiding content
+
+**Chose:** The free run is capped on agents/rounds/variants/platforms. Everything
+the founder receives is complete and honest: sentiment arc plus top 3 objections
+with verbatim quotes. What's withheld is *more simulation* — which objection is
+load-bearing, cohort attribution, pre-positioning assets, the re-simulation
+proof.
+
+**Why.** Blurred text and "upgrade to see" breeds resentment and gets
+screenshotted uncharitably. Scope-limiting gives the right asymmetry: the founder
+walks away knowing they have a problem and having no plan. That is a real,
+honest reason to pay.
+
+A 25-agent run also genuinely has wide confidence bands. Showing those honestly
+is both truthful *and* a reason to buy more agents.
+
+**The free run should close with a specific quantified gap**, not a generic
+upsell — e.g. *"3 of your 5 objections originate in the incumbent-advocate
+cohort and reach neutral buyers by round 3."*
+
+**What would change this:** nothing. Content-gating is a trust decision, not a
+conversion-optimization one.
+
+---
+
+## 10. Calibration is the moat
+
+**Chose:** Users report actuals post-launch; Saibyl scores its own prediction and
+shows a per-account accuracy record.
+
+**Why.** It is the only real answer to "why should I believe synthetic people,"
+it compounds per account (leaving means restarting at zero credibility), and a
+competitor cannot copy an accuracy history. Everything else in V2 is replicable
+given enough engineering.
+
+**What would change this:** sequencing only — it needs run volume to mean
+anything, which is why it is Phase 4 rather than Phase 1.
+
+---
+
+## 11. Additive build with a Step-0 purge, not a rewrite
+
+**Chose:** Keep FastAPI/Supabase/adapters/auth/billing. Delete dead duplicates
+first, in separate commits, before any feature work.
+
+**Why.** The solid parts are genuinely solid — 12 platform adapters behind a
+clean ABC, RLS multi-tenancy, Stripe, the persona pack format. But the codebase
+carried three competing implementations of the simulation runner and two of the
+exporter. Building V2 on top would mean every future change asking "which one is
+real?"
+
+The purge paid for itself immediately: it surfaced a route collision that had
+made the entire chart-rendering export path unreachable, and a `NameError` that
+broke `/api/score` on every JWT request.
+
+**What would change this:** nothing. This is complete.
+
+---
+
+## 12. Structured artifacts first, narrative second
+
+**Chose:** The report becomes typed data (`simulation_analysis`) first and prose
+second. Every finding carries `event_ids[]`.
+
+**Why.** It is what permanently kills the regex-scraping architecture, and it is
+what makes "show me the evidence" possible — a claim that drills down to the
+agent quotes that produced it is defensible in a way prose never is. It also
+unlocks real charts, CSV/JSON/API export, and the GTM brief as views over one
+artifact rather than four parallel generators.
+
+**What would change this:** nothing. Prose-first is what produced the
+`Math.random()` charts.
+
+---
+
+## 13. Cost priced per stage, not per agent-round
+
+**Chose:** Four independently priced stages (agent generation, agent actions,
+event measurement, report), against real per-model rates.
+
+**Why.** A single flat constant cannot express a pipeline whose stages differ by
+an order of magnitude in both volume and model tier. The V1 constant
+(`0.000017`) understated an Opus-backed agent action by ~440×. Per-stage pricing
+also makes matched-swarm runs price correctly: action cost scales with variants,
+generation cost does not.
+
+**Design details worth preserving:**
+- Unknown model IDs price at the *highest* known rate. A pricing table that
+  fails toward under-charging silently loses money.
+- The 70% margin floor is enforced in the quote calculator, not just targeted.
+  The stage token profiles are estimates until `llm_usage` has real data; the
+  floor bounds the damage if one is wrong.
+- Usage attribution uses a contextvar, not a threaded parameter — agent actions
+  are issued inside platform adapters that have no reason to know about billing.
+
+**What would change this:** recalibrate the token profiles from measured
+`llm_usage` medians once there is data. That is the ledger's whole purpose.
+
+---
+
+## 14. Haiku for volume, Opus for judgment
+
+**Chose:** Haiku for agent actions and per-event measurement; Opus for ICP
+synthesis, objection canonicalization, variant scoring rationale, report writing.
+
+**Why.** Agent actions are ~5× cheaper on Haiku and are the highest-volume,
+lowest-judgment stage. This is what makes 8-variant runs affordable at all.
+
+**The counter-argument, which is real:** surprising minority opinions are where
+flashpoints come from, and a weaker model may produce blander agents. Mitigation
+is the depth preset — a premium run can promote agent actions to a stronger
+model. **Watch for this in Phase 1**: if measured objection diversity drops
+versus V1 baselines, the model tier is the first thing to check.
+
+**What would change this:** measured evidence that Haiku agents produce
+materially less diverse objections. Test it rather than assuming either way.
+
+---
+
+## 15. Regional pricing scales the grant with the price
+
+**Chose:** $99/mo US anchor. Regional tiers discount the subscription *and*
+proportionally scale the included credit grant. Discount eligibility is gated on
+the card's billing country.
+
+**Why.** Saibyl is not typical SaaS: marginal cost is real and
+location-independent. An LLM call costs the same in Mumbai as in Manhattan, so a
+PPP discount comes straight out of margin rather than being nearly free. Holding
+the grant constant at a 60% discount drops margin to 50% — below the floor.
+Scaling the grant keeps every region above 70% and is honest: less compute for
+less money, not the same compute at a loss.
+
+| Region | Price | Runs | COGS | Margin |
+|---|---:|---:|---:|---:|
+| US / EU anchor | $99 | 6 | $19.41 | 80.4% |
+| Tier 2 (−40%) | $59 | 4 | $12.94 | 78.1% |
+| Tier 3 / India (−60%) | $39 | 3 | $9.70 | 75.1% |
+| *India at US grant* | *$39* | *6* | *$19.41* | *50.2% ✗* |
+
+**Card-country gating is the one control that matters.** IP geolocation is for
+display only — a VPN defeats it instantly, and letting the client assert its own
+region means no pricing integrity at all. Store the region on the org at
+subscription time and re-validate on renewal.
+
+**What would change this:** if LLM costs fall enough that COGS stops being
+material, the grant could stay constant and the discount become a pure
+land-grab lever.
+
+---
+
+## 16. Sequencing: truth → founder → marketing → crisis
+
+**Chose:** Phase 1 measurement, Phase 2 Founder, Phase 3 Marketing, Phase 4
+Crisis + calibration.
+
+**Why.** Founder before Marketing because the underserved-market thesis is the
+reason for V2 at all, and Phase 2 is the first sellable milestone. Crisis last
+because it is the only lens with an existing (if flawed) product, so it is the
+one that can wait.
+
+**Rejected — Marketing first.** A defensible alternative: ad-copy testing is the
+most concrete, most easily priced, and closest to an existing budget line, and
+agencies may be easier to reach than founders. Reconsider if founder outreach
+proves slow — the engine work in Phase 1 serves both.
+
+---
+
+## 17. Open questions deliberately left unresolved
+
+Do not treat these as settled:
+
+- **Founder tier is $99 anchor; Growth ($499) and Agency ($1,499) are inherited
+  from V1 strategy docs and have not been re-derived** against the V2 cost model.
+- **Which countries fall in which regional tier** is unspecified. Use a published
+  PPP band list rather than inventing one.
+- **Whether the adversarial cohort share should default to a fixed percentage or
+  scale with detected market maturity** — a founder in a brand-new category has
+  no incumbent to model.
+- **Report depth scaling** (Phase 1 fix) needs a curve, not just a lower floor.
+  2 sections at 25 agents and 7 at 250 is a starting point, not a validated one.

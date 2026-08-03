@@ -5,9 +5,17 @@
 Read this first in a new session. It is the current state, the standing rules,
 and the next phase's scope. Update it at every phase boundary.
 
-**Read in this order:** this file → `docs/PRD_V2.md` (what we're building and
-why) → `docs/ARCHITECTURE_V2.md` (decisions made, and the known-issues list at
-the bottom, which is Phase 1's real backlog).
+**Read in this order:**
+
+1. This file — state, rules, next phase.
+2. `docs/PRD_V2.md` — *what* V2 is.
+3. `docs/DECISIONS_V2.md` — ***why***, with the alternatives that were rejected
+   and, for each decision, what would justify reopening it. **Read this before
+   proposing any change to the product design.** It exists so you can disagree
+   from an informed position rather than either following the spec blindly or
+   overturning a considered decision whose reasoning wasn't recorded.
+4. `docs/ARCHITECTURE_V2.md` — implementation decisions and the known-issues
+   list at the bottom, which is Phase 1's real backlog.
 
 ---
 
@@ -21,15 +29,23 @@ the bottom, which is Phase 1's real backlog).
 | Verification | ruff clean · pytest 43 passed · `tsc --noEmit` clean · `eslint --quiet` clean · `vite build` OK · 79 routes, no duplicate registrations |
 | Working tree | Clean (`.~lock.*` and `test_flow.py` are pre-existing untracked, ignore them) |
 
-### Blocking item
+### Migration 017 — applied ✅
 
-**Migration `017_schema_drift_and_llm_usage.sql` has NOT been applied to
-production Supabase.** It creates `llm_usage` plus three objects the application
-already writes but no migration ever created (`simulations.persona_pack_ids`,
-`simulations.error_message`, the `increment_asset_count` RPC). Apply it before
-merging `v2` to `master`. The usage ledger silently records nothing until then —
-it logs and swallows the failure by design, so absence of errors is not evidence
-it is working.
+Applied to production (`txmvwuekkiedgxwovorp`) on 2026-08-02 and verified:
+`llm_usage` created with RLS + org-isolation policy, 2 explicit indexes,
+`simulation_llm_cost` callable. 63 simulations and 8 organizations unchanged;
+the backfill touched 0 rows.
+
+Applying it surfaced a type mismatch worth remembering: `persona_pack_ids` is
+**`jsonb`** in production, not `text[]`. `ADD COLUMN IF NOT EXISTS` made the
+ALTER a silent no-op, so only the backfill failed. The migration file now
+matches production. The sibling `platforms` column *is* `text[]` — this table
+genuinely mixes both conventions, so don't "normalize" it without a data
+migration.
+
+**Standing lesson:** `IF NOT EXISTS` guards hide type drift. When adding a
+column that may already exist by hand, check `information_schema.columns` for
+its actual type first.
 
 ---
 
@@ -125,6 +141,11 @@ clamp the maxima. Server-side signed quote so the client can't tamper with
 price. Replaces the fake estimator at `NewSimulationPage.tsx:52`
 (`agents*rounds*platforms/200`, shows no cost at all). Wire
 `deduct_agent_credits` on completion — it exists and has never been called.
+
+Billing decisions already made: **Founder tier is $99/mo (US anchor)**;
+statement descriptor is `SAIDO LABS LLC`; regional tiers discount the price
+*and* scale the grant proportionally, gated on the card's billing country, never
+IP. Bands and margin math are in `docs/PRD_V2.md` §8 and `DECISIONS_V2.md` §15.
 
 ### 3.7 Sovereign palette
 

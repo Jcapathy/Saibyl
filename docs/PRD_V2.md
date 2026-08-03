@@ -144,12 +144,39 @@ Measured output at 80% margin:
 
 **Billing.** Subscription with a monthly credit grant; every run quoted before it starts and deducted on completion; overage buys more credits.
 
-| Tier | Price | Grant | Caps |
+| Tier | Price (US anchor) | Grant | Caps |
 |---|---|---|---|
 | Free trial | $0, one run | ~$0.35 raw | 25 agents / 3 rounds / 1 variant / 2 platforms, no adversarial cohort, no re-simulation |
-| Founder | $99–149/mo | ~6 standard runs | 100 agents / 8 rounds / 3 variants |
+| Founder | **$99/mo** | ~6 standard runs | 100 agents / 8 rounds / 3 variants |
 | Growth | $499/mo | ~30 standard runs | 250 agents / 12 rounds / 8 variants |
 | Agency / War Room | $1,499/mo | ~100 standard runs | Uncapped within credit balance, client layer, white-label |
+
+*Growth and Agency prices are inherited from V1 strategy docs and have not been
+re-derived against the V2 cost model. Do that before launch.*
+
+### Regional pricing
+
+Saibyl's marginal cost is real and location-independent — an LLM call costs the
+same in Mumbai as in Manhattan — so a purchasing-power discount comes out of
+margin rather than being nearly free. **Regional tiers therefore discount the
+subscription and scale the included grant proportionally**, keeping every region
+above the 70% floor.
+
+| Region band | Price | Runs | COGS | Margin |
+|---|---:|---:|---:|---:|
+| Tier 1 — US / EU / UK / AU / CA / JP | $99 | 6 | $19.41 | 80.4% |
+| Tier 2 — −40% | $59 | 4 | $12.94 | 78.1% |
+| Tier 3 — −60% (incl. India) | $39 | 3 | $9.70 | 75.1% |
+
+Holding the US grant at the Tier 3 price would yield 50.2% margin — below the
+floor — which is why the grant scales.
+
+**Implementation.** Separate Stripe Price IDs per band on one Product; store
+`organization.pricing_region` at subscription time and re-validate on renewal.
+**Eligibility is gated on the card's billing country** (`payment_method.card.
+country`), never on IP or a client-asserted value — IP geolocation is for
+display only and a VPN defeats it instantly. Band membership should follow a
+published PPP list rather than an invented one.
 
 Billing appears on customer statements as **SAIDO LABS LLC**.
 
