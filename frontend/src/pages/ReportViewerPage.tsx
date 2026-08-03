@@ -22,6 +22,7 @@ import ObjectionMap from '@/components/analysis/ObjectionMap';
 import FlashpointList from '@/components/analysis/FlashpointList';
 import EvidenceDrawer from '@/components/analysis/EvidenceDrawer';
 import Panel, { NoData } from '@/components/analysis/Panel';
+import InoculationWorkbench from '@/components/founder/InoculationWorkbench';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -43,6 +44,8 @@ interface SimDetail {
   completed_at?: string | null;
   platforms?: string[];
   agent_count?: number;
+  /** Set when this run is an inoculation re-simulation of another. */
+  parent_simulation_id?: string | null;
 }
 
 interface ChatMessage {
@@ -54,9 +57,16 @@ const TAB_LABELS = [
   'Findings',
   'Objections',
   'Audience',
+  // Sits next to Objections because that is where the founder already is when
+  // they decide to do something about one. Appended rather than inserted:
+  // `activeTab` is an index, and renumbering the existing tabs would silently
+  // change what any bookmarked or linked position points at.
   'Narrative',
   'Raw data',
+  'Inoculate',
 ] as const;
+
+const INOCULATE_TAB = 5;
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -553,6 +563,16 @@ export default function ReportViewerPage() {
             )}
           </>
         )}
+
+        {/* Tab 5 — Inoculate */}
+        {activeTab === INOCULATE_TAB &&
+          (simId ? (
+            <InoculationWorkbench
+              simulationId={simId}
+              parentSimulationId={simulation?.parent_simulation_id}
+              objections={analysis?.objections ?? []}
+            />
+          ) : null)}
       </div>
 
       {evidence && simId && (

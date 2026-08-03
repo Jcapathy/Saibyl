@@ -1025,6 +1025,50 @@ to recover from.
 
 ---
 
+## [PHASE 2 | 2026-08-03] The Founder lens on screen
+
+**Decision — the stage list is fetched, never duplicated in the frontend.**
+`GET /api/simulations/founder-stages` serves the same registry the report
+planner reads. A copy in the picker would eventually disagree with the report,
+and the disagreement would be invisible: the founder would choose a stage whose
+described limits are not the limits the report was written under.
+
+**Decision — the stage's `cannot_conclude` list is shown at intake.** Before the
+run, not as a footnote afterwards. The point of stating a limit is to stop
+somebody asking a question the run cannot answer, and by the time they are
+reading the report they have already asked it.
+
+**Decision — choosing a stage adopts its audience default.** Concept validation
+sets the adversarial share to 0 and growth to 40%. A picker that changed the
+label and nothing else would be decoration; that difference is the substance of
+stage-awareness.
+
+**Decision — the adversarial slider is disabled without an ICP, with the reason
+on screen.** The share is expressed as archetype weight and the built-in packs
+carry none, so a share applied to them silently does nothing. The API rejects it
+too; the UI says why rather than leaving the user to discover a 400.
+
+**Decision — `lens` is null unless a stage was chosen.** The UI never defaults
+to `'founder'`. A run with no stage is an unlensed run, which is what every
+simulation before Phase 2 was, and stamping one with a lens the user did not
+choose is inventing an attribute — the failure mode migration 020 avoided in the
+backfill and this avoids at the point of creation.
+
+**Decision — the Inoculate tab is appended, not inserted.** `activeTab` is an
+index, and renumbering the existing tabs would silently change what a linked or
+remembered position points at. It sits at index 5 with the label between
+Objections and the rest, which is where the founder already is when they decide
+to act on one.
+
+**The workbench never renders an unsupported improvement.** A delta whose
+intervals overlap says so in the row, next to the number. This is the one place
+in the product where the temptation to show green is strongest — the founder
+just paid for a second run — and it is the place where doing so would destroy
+the only thing the loop sells: that it can come back and say the asset did
+nothing.
+
+---
+
 ## Known issues carried into Phase 2
 
 Recorded here so they are not rediscovered. Items 1, 2 and 7 from the Phase 1

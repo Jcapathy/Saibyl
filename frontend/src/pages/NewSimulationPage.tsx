@@ -5,6 +5,7 @@ import { Lightbulb } from 'lucide-react';
 import api from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
 import RunConfigurator, { type RunShape } from '@/components/RunConfigurator';
+import FounderLensStep, { type FounderConfig } from '@/components/founder/FounderLensStep';
 
 interface Project {
   id: string;
@@ -36,7 +37,8 @@ const PLATFORMS = [
   { id: 'custom', name: 'Custom', desc: 'Your own rules' },
 ];
 
-const STEPS = ['Setup', 'Platforms', 'Personas', 'Configure', 'Review'];
+const STEPS = ['Setup', 'Platforms', 'Personas', 'Lens', 'Configure', 'Review'];
+const LAST_STEP = STEPS.length - 1;
 
 const inputClass = 'w-full rounded-xl px-4 py-3 text-[14px] text-saibyl-platinum placeholder-saibyl-muted/50 focus:outline-none focus:ring-2 focus:ring-saibyl-gold/50 focus:border-transparent transition';
 const inputBg = 'bg-[#0B1120] border border-white/[0.08]';
@@ -85,6 +87,16 @@ export default function NewSimulationPage() {
   });
   const [timezone, setTimezone] = useState('America/New_York');
   const [quoteError, setQuoteError] = useState('');
+
+  // Step 4 — the Founder lens. A run with no stage and no ICP is an unlensed
+  // run, which is what every simulation made before Phase 2 was: `lens` stays
+  // null rather than being defaulted to 'founder', because a lens the user
+  // never chose is an attribute nobody recorded.
+  const [founder, setFounder] = useState<FounderConfig>({
+    stage: null,
+    icpProfileId: null,
+    adversarialShare: 0,
+  });
 
   useEffect(() => {
     api.get('/projects').then((r) => {
@@ -155,6 +167,15 @@ export default function NewSimulationPage() {
         agent_count: shape.agent_count,
         variants: shape.variants,
         depth: shape.depth,
+        // A stage is only valid on a Founder-lens run, so the two travel
+        // together or not at all — the API rejects a stage without the lens.
+        lens: founder.stage ? 'founder' : null,
+        founder_stage: founder.stage,
+        icp_profile_id: founder.icpProfileId,
+        // Only sent with an ICP. The share is expressed as archetype weight and
+        // the built-in packs carry no adversarial archetypes, so sending it
+        // without one is rejected rather than silently doing nothing.
+        adversarial_share: founder.icpProfileId ? founder.adversarialShare : 0,
       });
 
       // The quote id travels to /start, where it is redeemed against the stored
@@ -405,8 +426,26 @@ export default function NewSimulationPage() {
             </div>
           )}
 
-          {/* ── Step 4: Configure ── */}
+          {/* ── Step 4: Lens ── */}
           {step === 3 && (
+            <div>
+              <Hint>
+                The Founder lens changes what the run is asked to answer and who it
+                asks. Skip it for a general run — a simulation with no lens behaves
+                exactly as it did before, which is what every run made before this
+                feature existed did.
+              </Hint>
+              <FounderLensStep
+                projectId={projectId}
+                platforms={selectedPlatforms}
+                value={founder}
+                onChange={setFounder}
+              />
+            </div>
+          )}
+
+          {/* ── Step 5: Configure ── */}
+          {step === 4 && (
             <div className="space-y-6">
               <Hint>
                 More agents narrow the confidence bands on every finding; more rounds
@@ -437,8 +476,8 @@ export default function NewSimulationPage() {
             </div>
           )}
 
-          {/* ── Step 5: Review ── */}
-          {step === 4 && (
+          {/* ── Step 6: Review ── */}
+          {step === LAST_STEP && (
             <div>
               <h2 className="text-[18px] font-semibold text-saibyl-platinum mb-5">Review &amp; Launch</h2>
               <div className="space-y-3">
@@ -448,6 +487,15 @@ export default function NewSimulationPage() {
                   ['Prediction goal', predictionGoal || '—'],
                   ['Platforms', selectedPlatforms.map((id) => PLATFORMS.find((p) => p.id === id)?.name || id).join(', ') || 'Twitter / X'],
                   ['Persona packs', `${selectedPacks.length} selected`],
+                  ['Lens', founder.stage ? 'Founder' : 'None'],
+                  ['Stage', founder.stage ? founder.stage.replace(/_/g, ' ') : '—'],
+                  ['Synthesized ICP', founder.icpProfileId ? 'Selected' : '—'],
+                  [
+                    'Incumbent-aligned',
+                    founder.icpProfileId
+                      ? `${(founder.adversarialShare * 100).toFixed(0)}% of the swarm`
+                      : '—',
+                  ],
                   ['Agents', String(shape.agent_count)],
                   ['Rounds', String(shape.rounds)],
                   ['Variants', String(shape.variants)],
@@ -484,7 +532,7 @@ export default function NewSimulationPage() {
             >
               ← Back
             </button>
-            {step < 4 ? (
+            {step < LAST_STEP ? (
               <button
                 onClick={() => setStep((s) => s + 1)}
                 disabled={!canNext()}
