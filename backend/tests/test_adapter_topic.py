@@ -121,3 +121,47 @@ def test_agent_generation_has_room_for_a_full_profile():
     source = inspect.getsource(simulation_tasks.run_prepare_agents)
     assert "max_tokens=400" not in source
     assert "max_tokens=900" in source
+
+
+def test_agent_usernames_are_deduped_before_insert():
+    """Adapters address agents by username and nothing else.
+
+    Asked for 100 handles the model produced 45 distinct ones — nine agents
+    named `mchen_itdir`. Those nine shared memory and all their events were
+    attributed to one row, so nine independent observations counted as one and
+    every confidence interval was drawn from a swarm less than half its size.
+    """
+    from app.workers import simulation_tasks
+
+    source = inspect.getsource(simulation_tasks.run_prepare_agents)
+    assert "seen_usernames" in source
+    assert 'agent["profile"]["username"] = name' in source
+
+
+def test_dedup_logic_produces_unique_names():
+    """The exact loop used in run_prepare_agents, exercised on a collision."""
+    agents = [{"username": u} for u in ["mchen", "mchen", "mchen", "sarah", "mchen2"]]
+    seen: set[str] = set()
+    for agent in agents:
+        base = agent["username"]
+        name, suffix = base, 2
+        while name in seen:
+            name = f"{base}{suffix}"
+            suffix += 1
+        seen.add(name)
+        agent["username"] = name
+
+    names = [a["username"] for a in agents]
+    assert len(set(names)) == len(names), names
+    assert names[0] == "mchen"
+    # "mchen2" is taken by the second collision, so the pre-existing literal
+    # "mchen2" must move rather than collide.
+    assert "mchen2" in names and names.count("mchen2") == 1
+
+
+def test_runner_detects_duplicate_usernames():
+    """A run prepared before the fix must not fail silently."""
+    from app.workers import simulation_tasks
+
+    source = inspect.getsource(simulation_tasks.run_simulation)
+    assert "duplicate_agent_usernames" in source

@@ -137,36 +137,40 @@ Measured output at 80% margin:
 
 | Preset | Agent-rounds | LLM calls | Cost | Price |
 |---|---:|---:|---:|---:|
-| Free trial (25 agents / 3 rounds / 2 platforms) | 75 | 177 | $0.75 | $3.75 |
-| Standard (100 / 5 / 2) | 500 | 1,104 | $2.87 | $14.34 |
-| Marketing 8-variant (100 / 5 / 1 platform) | 500 | 4,106 | $8.79 | $43.94 |
-| Deep (250 / 10 / 4) | 2,500 | 10,257 | $20.62 | $103.08 |
+| Free trial (25 agents / 3 rounds / 2 platforms) | 75 | 102 | $0.75 | $3.75 |
+| Standard (100 / 5 / 2) | 500 | 604 | $2.26 | $11.32 |
+| Marketing 8-variant (100 / 5 / 1 platform)* | 4,000 | 4,107 | $10.06 | $50.32 |
+| Deep (250 / 10 / 4) | 2,500 | 3,006 | $7.46 | $37.29 |
+
+\* Multi-variant runs are priced but **not runnable** until Phase 3.
 
 Recalculated at the end of Phase 1, when report depth started scaling down as
 well as up: a free run dropped from 6 Opus-written sections to 2 and a standard
-run from 6 to 4; and objection canonicalization, a Phase 1 stage that had not
-been priced at all, was added. The Deep preset also fell sharply because its
-earlier LLM-call count double-counted per-variant report sections. **These
-remain estimated token profiles** — the first live run cost $0.31 against a
-$0.66 quote, and recalibration from measured medians is what will move them.
+run from 6 to 4; objection canonicalization, a Phase 1 stage that had not been
+priced at all, was added; and the profiles were then **recalibrated from
+measured `llm_usage`** across two live runs. That recalibration found the model
+had been multiplying agent-action cost by the platform count — the swarm is
+split across platforms, not duplicated onto each — which inflated the largest
+stage of every quote. Estimate against measurement on the reference run is now
+1.02x. Margins are unchanged; the cost base was wrong, not the margin policy.
 
 **Billing.** Subscription with a monthly credit grant; every run quoted before it starts and deducted on completion; overage buys more credits.
 
 **Credits are the metered unit; runs are the sales language.** All advertised run
 counts are quoted against a defined reference:
 
-> **Standard run** = 100 agents × 5 rounds × 2 platforms × 1 variant → $2.87 COGS
+> **Standard run** = 100 agents × 5 rounds × 2 platforms × 1 variant → $2.26 COGS
 
-One credit is **$0.001 of COGS**, so a standard run is 2,867 credits. Grants are
+One credit is **$0.001 of COGS**, so a standard run is 2,265 credits. Grants are
 denominated in credits because a run varies 65× in cost across the tier caps —
 an allowance denominated in runs or agent-rounds rations nothing.
 
 | Tier | Price (US anchor) | COGS grant | Credits | ≈ std runs | ≈ 8-var runs | Margin |
 |---|---:|---:|---:|---:|---:|---:|
 | Free trial | $0, one run | $0.80 | 800 | 1 (capped) | — | — |
-| Founder | **$99/mo** | $19.80 | 19,800 | 6 | 2 | 80% |
-| Growth | **$299/mo** | $59.80 | 59,800 | 20 | 6 | 80% |
-| Agency | **$999/mo** | $199.80 | 199,800 | 69 | 22 | 80% |
+| Founder | **$99/mo** | $19.80 | 19,800 | 8 | 2 | 80% |
+| Growth | **$299/mo** | $59.80 | 59,800 | 26 | 6 | 80% |
+| Agency | **$999/mo** | $199.80 | 199,800 | 88 | 20 | 80% |
 | Enterprise | Custom annual | see `PRICING_GUIDE.md` | | | | 68–78% |
 
 Growth and Agency were re-derived from the cost model on 2026-08-02, replacing
@@ -195,7 +199,7 @@ above the 70% floor.
 
 | Region band | Price | Runs | COGS | Margin |
 |---|---:|---:|---:|---:|
-| Tier 1 — US / EU / UK / AU / CA / JP | $99 | 6 | $19.41 | 80.4% |
+| Tier 1 — US / EU / UK / AU / CA / JP | $99 | 8 | $19.41 | 80.4% |
 | Tier 2 — −40% | $59 | 4 | $12.94 | 78.1% |
 | Tier 3 — −60% (incl. India) | $39 | 3 | $9.70 | 75.1% |
 

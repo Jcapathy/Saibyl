@@ -32,7 +32,8 @@ That is the whole doc set — five files in `docs/`, nothing else to hunt for.
 | `master` | Untouched, still deployed to Render. **Do not merge without approval.** |
 | Phase 0 | Complete |
 | Phase 1 | Complete and verified end to end — for the commit list: `git log --oneline master..v2` |
-| Verification | ruff clean · pytest 75 passed · `tsc --noEmit` clean · `eslint --quiet` clean · `vite build` OK · 101 routes, no duplicate registrations · **live run `05f1d879` passed** |
+| Verification | ruff clean · pytest 93 passed · `tsc --noEmit` clean · `eslint --quiet` clean · `vite build` OK · 101 routes, no duplicate registrations · **two live runs passed** (`05f1d879` 25-agent, `03de92ef` standard) |
+| Cost model | **Measured, not estimated.** Estimate vs measurement at the reference shape: 1.02x |
 
 ### Migrations applied to production (`txmvwuekkiedgxwovorp`)
 
@@ -61,7 +62,7 @@ Simulation `05f1d879-a121-4bca-a00c-1aac9949ea43` (Beta Test Org, 24 agents,
 3 rounds, twitter_x + reddit) is the run that validated the phase. Full detail in
 `ARCHITECTURE_V2.md`.
 
-**It found four bugs, all now fixed.** The first attempt produced **zero events**:
+**It found six bugs, all now fixed.** The first attempt produced **zero events**:
 
 1. **No adapter told its agents what the simulation was about.** All twelve
    stored `prediction_goal` and none read it; the subject reached agents only via
@@ -103,10 +104,40 @@ high" (7 agents, 4 cohorts). Frequency alone would have ranked them level; cohor
 spread is what separated them. That is the ranking rule working as intended, and
 it is worth sanity-checking again on the next few runs.
 
+### The standard run (`03de92ef`) — four more defects
+
+A second run at the reference shape (100 / 5 / 2 / 1) produced 497 events at 100%
+coverage, confidence `high`. It found four things the small run could not:
+
+7. **Objection canonicalization collapsed at scale.** The clustering call hit its
+   `max_tokens` exactly, truncated its JSON, and fell back to one "objection" per
+   phrasing — **300 objections, 265 with a single event**. Invisible at 25 agents
+   where the output still fitted. Members are now indices rather than echoed
+   strings, so output scales with groups not inputs. Rebuilt: **300 → 17, zero
+   single-event.**
+8. **Agent usernames collided** — 100 agents, 45 distinct handles, nine called
+   `mchen_itdir`. Adapters address agents by username, so nine agents shared one
+   memory, their events all attributed to one row, and nine independent
+   observations counted as one in every confidence interval. Now deduped at
+   generation. **The two existing runs cannot be repaired** — their `n` values
+   stay understated, so their intervals are wider than truth.
+9. **The report ignored the configured depth** — `run_generate_report` defaults
+   to "deep" and nothing passed `simulations.depth`, so a run quoted at 4
+   sections was written at 6.
+10. **Report spend was not metered at all.** Fired via `create_task` after the
+    usage contexts exited, so every report call was dropped by the ledger — and
+    the report is the largest main-model stage. Reconciliation also ran *before*
+    the report; it now runs after, against a complete ledger.
+
 **Existing runs are not backfilled.** 63 simulations and 10,236 events have no
 `measured_at`, so the viewer correctly shows "this run has not been analysed" for
 all of them. Their `metadata.sentiment` values are the old formula's output and
 are read by nothing.
+
+**A pattern worth carrying into Phase 2:** every one of these ten defects was
+invisible to static verification, and four of them only appeared at the reference
+scale. Small runs are not a proxy for real ones. Run the standard shape before
+believing anything.
 
 ---
 
@@ -145,7 +176,7 @@ These came from the user directly and persist across sessions.
 
 ## 4. What Phase 1 delivered
 
-Full rationale in `docs/ARCHITECTURE_V2.md` — the six Phase 1 entries. Summary:
+Full rationale in `docs/ARCHITECTURE_V2.md`. Summary:
 
 | §3 item | State |
 |---|---|
@@ -157,7 +188,7 @@ Full rationale in `docs/ARCHITECTURE_V2.md` — the six Phase 1 entries. Summary
 | 3.6 Run Configurator + signed quote | Done — `RunConfigurator.tsx`, `run_quote.py`, credits replace agent-rounds |
 | 3.7 Sovereign palette | Done |
 | 3.8 Report depth scaling | Done — free run $1.27 → $0.66, standard $3.23 → $2.78 |
-| 3.9 Recalibrate from measured data | **Not done — needs a live run first. See §5.** |
+| 3.9 Recalibrate from measured data | Done — measured across two live runs. See §5 |
 
 Two deliberate divergences from the §3 brief, both argued in
 `ARCHITECTURE_V2.md`:
@@ -172,47 +203,49 @@ Two deliberate divergences from the §3 brief, both argued in
 
 ---
 
-## 5. Phase 1's own unfinished item — recalibrate the cost model
+## 5. The cost model is now measured, not estimated
 
-Every price in `PRICING_GUIDE.md` rests on the stage token profiles in
-`agent_pricing.py` (`AGENT_ACTION`, `AGENT_GENERATION`, `EVENT_MEASUREMENT`,
-`OBJECTION_CANONICALIZATION`, `REPORT_SECTION`). **Those are conservative
-estimates, not measurements.**
+**Done.** The stage profiles in `agent_pricing.py` were recalibrated from the
+`llm_usage` ledger across both live runs. Estimate against measurement on the
+reference shape is now **1.02x** (it was 2.1x over-quoting). Full table and
+reasoning in `ARCHITECTURE_V2.md`.
 
-The live run gave the first data point: it was quoted $0.6595 and actually cost
-**$0.3144**. The floor held (90.5% actual margin) and the direction is the safe
-one, but a 2× over-quote means a customer's grant buys half the runs it should.
+Recalibration found two errors in the model itself, not just stale numbers:
 
-The profiles were deliberately **not** recalibrated from that single run:
-per-call input scales with feed size, which scales with agent count and round
-depth, so a 25-agent/3-round run is a bad basis for pricing a 100-agent/5-round
-one. Extrapolating from it would swap a conservative estimate for a confidently
-wrong one. Measured baselines are tabulated in `ARCHITECTURE_V2.md`.
+- **Platforms were multiplying agent-action cost.** `agent_count` is the whole
+  swarm split across platforms, not duplicated onto each, so a 100-agent
+  2-platform run makes 500 action calls and not 1,000. **Adding a platform is
+  close to cost-neutral** — it spreads the same swarm thinner. Do not sell
+  platforms as volume.
+- Only ~80% of actions were assumed to produce events; measured 497 from 500.
 
-What is needed is several runs across shapes — at minimum one standard
-(100/5/2/1) and one multi-variant. Then:
+Standard run COGS $3.23 -> **$2.26**; blended agency mix $11.77 -> **$6.88**.
+Margins are unchanged, so tier run counts rise (Founder 6 -> 8, Growth 20 -> 26,
+Agency 69 -> 88) and enterprise quotes fall by ~40%. `PRICING_GUIDE.md` and
+`PRD_V2.md` are regenerated.
 
-1. Query measured medians per stage:
-   `SELECT stage, model, percentile_cont(0.5) WITHIN GROUP (ORDER BY input_tokens),
-   percentile_cont(0.5) WITHIN GROUP (ORDER BY output_tokens), count(*)
-   FROM llm_usage GROUP BY stage, model;`
-2. Update the four profiles from those medians.
-3. Re-run `python scripts/quote.py` and update `docs/PRICING_GUIDE.md` Parts 1
-   and 2, plus the tier table in `PRD_V2.md` §8.
-4. Note the delta in `ARCHITECTURE_V2.md` — if COGS moved materially, the
-   $99/$299/$999 grants need re-sizing to hold 80%.
+**Re-derive whenever prompts change** — every prompt edit moves these:
 
-Also replace the **blended agency run mix** (currently 55/30/13/2, an assumption)
-with the observed distribution of run shapes. It drives every enterprise quote,
-and the 2% "heavy" slice contributes 31% of blended COGS — the single most
-sensitive input in the quoting table.
+```sql
+SELECT stage, model,
+       percentile_cont(0.5) WITHIN GROUP (ORDER BY input_tokens)  AS med_in,
+       percentile_cont(0.5) WITHIN GROUP (ORDER BY output_tokens) AS med_out,
+       count(*)
+FROM llm_usage GROUP BY stage, model;
+```
 
-**Watch for this too** (DECISIONS_V2 §14): agent actions now run on Haiku. If
-measured objection diversity is materially lower than V1 runs on the same input,
-the model tier is the first thing to check. Surprising minority opinions are
-where flashpoints come from.
+Remember the units differ: `agent_action` and `agent_generation` are per call,
+`event_measurement` is per *event* (batched ~25 per call), `report` is per
+*section* (several calls each), and canonicalization is once per run.
 
----
+**Still open — the blended agency run mix** (55/30/13/2) behind the enterprise
+quoting table is an assumption, not observed data. It matters less than it did
+now that the heavy slice is 15% rather than 31% of blended COGS, but it is still
+the most sensitive input in Part 2.
+
+**Also watch** (DECISIONS_V2 §14): agent actions run on Haiku. Two runs is not
+enough to judge objection diversity against V1. If it looks bland, the model
+tier is the first thing to check.
 
 ## 6. Do not rediscover these
 

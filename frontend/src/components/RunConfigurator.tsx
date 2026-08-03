@@ -246,15 +246,32 @@ export default function RunConfigurator({
             planLabel={planLabel}
             onChange={(rounds) => onChange({ ...shape, rounds })}
           />
-          <Slider
-            label="Variants"
-            value={shape.variants}
-            min={1}
-            max={8}
-            cap={caps.max_variants}
-            planLabel={planLabel}
-            onChange={(variants) => onChange({ ...shape, variants })}
-          />
+          {/* A slider that cannot move is worse than an explanation. The
+              engine runs one variant arena; the cap comes from the server, so
+              this reappears on its own when N-way matched swarms ship. */}
+          {caps.max_variants > 1 ? (
+            <Slider
+              label="Variants"
+              value={shape.variants}
+              min={1}
+              max={8}
+              cap={caps.max_variants}
+              planLabel={planLabel}
+              onChange={(variants) => onChange({ ...shape, variants })}
+            />
+          ) : (
+            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+              <p className="text-[12px] text-saibyl-silver">
+                <span className="text-saibyl-muted uppercase tracking-wide text-[11px]">
+                  Variants
+                </span>
+                <br />
+                One message per run for now. Testing several messages against the
+                same audience — same agents, same seed — arrives with the
+                Marketing lens.
+              </p>
+            </div>
+          )}
 
           <div>
             <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-2">

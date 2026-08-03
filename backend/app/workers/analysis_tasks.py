@@ -30,8 +30,6 @@ logger = structlog.get_logger()
 
 async def run_analysis(simulation_id: str, organization_id: str) -> dict[str, Any]:
     """Measure a finished run's events and build its analysis artifact."""
-    admin = get_supabase_admin()
-
     try:
         measurement = await measure_simulation_events(simulation_id, organization_id)
         analysis = await build_simulation_analysis(simulation_id, organization_id)
@@ -40,9 +38,12 @@ async def run_analysis(simulation_id: str, organization_id: str) -> dict[str, An
         _record_failure(simulation_id, organization_id, exc)
         return {"available": False, "error": f"{type(exc).__name__}: {exc}"}
 
-    reconciliation = reconcile_run_cost(simulation_id, organization_id)
-
-    summary = {
+    # Cost reconciliation deliberately does NOT happen here. The report is the
+    # largest main-model stage and has not run yet at this point, so a
+    # reconciliation now would compare the quote against a measured figure
+    # missing roughly a fifth of the run. `run_simulation` calls
+    # `reconcile_run_cost` once, after the report, when the ledger is complete.
+    return {
         "available": True,
         "coverage_pct": analysis.quality.coverage_pct,
         "events_measured": measurement.events_measured,
@@ -50,14 +51,7 @@ async def run_analysis(simulation_id: str, organization_id: str) -> dict[str, An
         "objections": len(analysis.objections),
         "flashpoints": len(analysis.flashpoints),
         "confidence": analysis.quality.confidence,
-        **reconciliation,
     }
-
-    admin.table("simulations").update({
-        "retail_cost_usd": reconciliation.get("measured_cost_usd", 0.0),
-    }).eq("id", simulation_id).execute()
-
-    return summary
 
 
 def _record_failure(simulation_id: str, organization_id: str, exc: BaseException) -> None:

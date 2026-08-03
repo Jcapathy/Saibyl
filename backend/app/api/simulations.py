@@ -109,6 +109,20 @@ async def create_simulation(body: CreateSimulationBody, auth: dict = Depends(get
     if not project.data:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    # Guarded here as well as in the quote: `POST /simulations/{id}/start`
+    # without a quote prices from this stored shape, so a simulation created
+    # with variants > 1 would be charged for arenas the engine never runs.
+    from app.services.billing.agent_pricing import MAX_RUNNABLE_VARIANTS
+    if body.variants > MAX_RUNNABLE_VARIANTS:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Multi-variant runs are not available yet — the engine runs "
+                f"{MAX_RUNNABLE_VARIANTS} arena. Matched-swarm variant testing "
+                f"arrives with the Marketing lens."
+            ),
+        )
+
     result = (
         admin.table("simulations")
         .insert({

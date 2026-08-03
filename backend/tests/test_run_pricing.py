@@ -172,3 +172,77 @@ def test_extending_the_expiry_invalidates_the_signature():
 
 def test_a_quote_cannot_be_replayed_against_another_org():
     assert _sign(_payload()) != _sign(_payload(org_id="org-2"))
+
+
+# ── Variants: priced but not yet runnable ────────────────
+
+def test_engine_runs_exactly_one_arena():
+    """Guards a billing gap, not a feature.
+
+    The cost model scales agent-action cost with variants, but nothing executes
+    more than one arena: every agent is assigned variant "a", the runner never
+    branches on variant, and run_simulation_ab calls run_simulation once. A
+    4-variant quote would charge 4x for one arena's work.
+
+    Phase 3 raises MAX_RUNNABLE_VARIANTS to 8 when N-way matched swarms ship.
+    """
+    from app.services.billing.agent_pricing import MAX_RUNNABLE_VARIANTS
+
+    assert MAX_RUNNABLE_VARIANTS == 1
+
+
+def test_no_tier_can_configure_more_variants_than_the_engine_runs():
+    from app.services.billing.agent_pricing import MAX_RUNNABLE_VARIANTS
+
+    for plan in ("free", "founder", "starter", "growth", "pro", "agency", "enterprise"):
+        assert tier_caps(plan).max_variants <= MAX_RUNNABLE_VARIANTS
+
+
+def test_tier_caps_still_differ_on_the_dimensions_that_do_work():
+    """The clamp must not flatten the tier ladder everywhere."""
+    assert tier_caps("free").max_agents < tier_caps("founder").max_agents
+    assert tier_caps("founder").max_rounds < tier_caps("growth").max_rounds
+
+
+def test_multi_variant_quote_is_refused():
+    from app.services.billing.run_quote import QuoteError, _validate_shape
+
+    _validate_shape(100, 5, 2, 1)  # single arena is fine
+    with pytest.raises(QuoteError, match="not available yet"):
+        _validate_shape(100, 5, 2, 4)
+
+
+def test_cost_model_can_still_price_a_hypothetical_multi_variant_run():
+    """The model stays pure — PRICING_GUIDE quotes an 8-variant shape.
+
+    The refusal belongs at the boundaries that charge money, not in the
+    estimator that the quoting CLI uses for planning.
+    """
+    eight = estimate_simulation_cost(100, 5, platforms=1, variants=8)
+    assert eight.credits > estimate_simulation_cost(100, 5, platforms=1).credits
+
+
+def test_quoted_depth_reaches_the_report_writer():
+    """Depth is the one setting that changes cost without changing the run.
+
+    `run_generate_report` defaults to evidence_depth="deep", so a run quoted at
+    "standard" was written at deep depth — more Opus-written sections than the
+    customer was priced for.
+    """
+    import inspect
+
+    from app.workers import simulation_tasks
+
+    source = inspect.getsource(simulation_tasks.run_simulation)
+    assert "evidence_depth=evidence_depth" in source
+    assert 'sim.get("depth")' in source
+
+
+def test_pricing_depth_round_trips_through_react_depth():
+    """brief/standard/deep must survive the trip and come back the same."""
+    from app.services.intelligence.report_agent import ReACTConfig
+
+    depth_map = {"brief": "shallow", "standard": "standard", "deep": "deep"}
+    for pricing_depth, react_depth in depth_map.items():
+        back = ReACTConfig(evidence_depth=react_depth).evidence_depth_preset()
+        assert back == pricing_depth, f"{pricing_depth} -> {react_depth} -> {back}"

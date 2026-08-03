@@ -220,6 +220,30 @@ Return a JSON object:
         )
     agents_to_create = [r for r in results if isinstance(r, dict)]
 
+    # Usernames must be unique within a simulation. Platform adapters address
+    # agents by username and nothing else: they key agent memory on it, and the
+    # runner maps `event.agent_username` back to an agent row through it.
+    #
+    # The model does not cooperate. Asked for 100 handles it produced 45
+    # distinct ones — nine agents called `mchen_itdir` — which silently merged
+    # those nine into one: they shared memory, and all their events were
+    # attributed to whichever row happened to be last in the lookup. Confidence
+    # intervals are computed across agents, so nine independent observations
+    # counted as one and every band in the artifact was drawn from a swarm less
+    # than half its real size.
+    seen_usernames: set[str] = set()
+    for agent in agents_to_create:
+        base = agent["username"]
+        name, suffix = base, 2
+        while name in seen_usernames:
+            name = f"{base}{suffix}"
+            suffix += 1
+        if name != base:
+            logger.info("agent_username_deduped", original=base, assigned=name)
+        seen_usernames.add(name)
+        agent["username"] = name
+        agent["profile"]["username"] = name
+
     # Guard: if zero agents were created, fail explicitly
     if not agents_to_create:
         admin.table("simulations").update({"status": "failed"}).eq("id", simulation_id).execute()
@@ -299,6 +323,20 @@ async def run_simulation(simulation_id: str):
     # only to feed the drift formula that has been removed — sentiment is now
     # measured from event content by services/intelligence/event_measurement.py.
     agent_lookup: dict[str, str] = {a["username"]: a["id"] for a in agents}
+
+    # Defensive: uniqueness is enforced at generation, but a simulation prepared
+    # before that fix — or by any other path — would silently under-count its
+    # swarm here, and every confidence interval in the artifact would be drawn
+    # from fewer agents than actually ran. Loud, because the resulting numbers
+    # look entirely plausible.
+    if len(agent_lookup) != len(agents):
+        logger.error(
+            "duplicate_agent_usernames",
+            simulation_id=simulation_id,
+            agents=len(agents),
+            distinct_usernames=len(agent_lookup),
+            detail="events will be mis-attributed and agent counts under-reported",
+        )
 
     # Initialize platform adapters
     from app.services.platforms.registry import get_adapter, load_all_adapters
@@ -448,16 +486,50 @@ async def run_simulation(simulation_id: str):
     except Exception:
         pass
 
-    # Auto-trigger report generation after the artifact exists.
+    # Report generation runs after the artifact exists, and is awaited rather
+    # than detached. The run is already marked complete, so the UI shows the
+    # measured findings immediately while the narrative is written — but this
+    # task must outlive the report, because the cost reconciliation below is
+    # only meaningful once the report's spend is in the ledger, and the report
+    # is the largest main-model stage in the run.
+    from app.workers.analysis_tasks import reconcile_run_cost
     from app.workers.report_tasks import run_generate_report
-    asyncio.create_task(run_generate_report(simulation_id))
-    logger.info("report_generation_triggered", simulation_id=simulation_id)
+
+    # The depth the run was quoted at, not the report writer's default. Report
+    # depth is the one setting that changes a run's cost without changing the
+    # simulation, and `run_generate_report` defaults to "deep" — so a run
+    # configured and priced as "standard" was silently written at deep depth,
+    # producing more Opus-written sections than the customer was quoted for.
+    depth_map = {"brief": "shallow", "standard": "standard", "deep": "deep"}
+    evidence_depth = depth_map.get(sim.get("depth") or "standard", "standard")
+
+    logger.info(
+        "report_generation_started",
+        simulation_id=simulation_id,
+        depth=sim.get("depth"),
+        evidence_depth=evidence_depth,
+    )
+    try:
+        await run_generate_report(simulation_id, evidence_depth=evidence_depth)
+    except Exception:
+        # A failed report does not invalidate the run: the events and the
+        # artifact are already stored, and the run still consumed compute that
+        # has to be reconciled.
+        logger.exception("report_generation_failed", simulation_id=simulation_id)
+
+    reconciliation = reconcile_run_cost(simulation_id, org_id)
+    try:
+        admin.table("simulations").update({
+            "retail_cost_usd": reconciliation.get("measured_cost_usd", 0.0),
+        }).eq("id", simulation_id).execute()
+    except Exception:
+        logger.warning("retail_cost_write_failed", simulation_id=simulation_id)
 
     return {
         "simulation_id": simulation_id,
         "status": "complete",
         "total_events": total_events,
-        "analysis": analysis_summary,
+        "analysis": {**analysis_summary, **reconciliation},
     }
 
 

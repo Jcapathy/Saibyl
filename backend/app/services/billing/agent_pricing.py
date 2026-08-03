@@ -101,6 +101,8 @@ class RunCaps(BaseModel):
     max_variants: int
 
 
+# Intended caps once N-way matched swarms exist. Not what a customer can
+# configure today — see MAX_RUNNABLE_VARIANTS.
 TIER_CAPS = {
     "free": RunCaps(max_agents=25, max_rounds=3, max_platforms=2, max_variants=1),
     "trial": RunCaps(max_agents=25, max_rounds=3, max_platforms=2, max_variants=1),
@@ -112,11 +114,30 @@ TIER_CAPS = {
     "enterprise": RunCaps(max_agents=1_000, max_rounds=20, max_platforms=12, max_variants=8),
 }
 
+# How many variant arenas the engine can actually run. **One.**
+#
+# The cost model prices variants correctly — action cost scales with them,
+# generation cost does not — but nothing executes more than one arena:
+# `run_prepare_agents` assigns every agent variant "a", the runner never
+# branches on variant, and `run_simulation_ab` calls `run_simulation` once.
+#
+# Quoting a 4-variant run therefore charges four times the agent-action cost
+# for one arena's worth of work. That is billing for compute that is never
+# performed, so the cap is enforced here rather than left to the caller.
+#
+# **Phase 3 raises this to 8** when N-way matched swarms ship. That is the only
+# change needed — TIER_CAPS above already holds the intended per-tier values.
+MAX_RUNNABLE_VARIANTS = 1
+
 _DEFAULT_PLAN = "starter"
 
 
 def tier_caps(plan: str | None) -> RunCaps:
-    return TIER_CAPS.get((plan or _DEFAULT_PLAN).lower(), TIER_CAPS[_DEFAULT_PLAN])
+    """The run shape a tier may configure, clamped to what the engine can run."""
+    caps = TIER_CAPS.get((plan or _DEFAULT_PLAN).lower(), TIER_CAPS[_DEFAULT_PLAN])
+    if caps.max_variants <= MAX_RUNNABLE_VARIANTS:
+        return caps
+    return caps.model_copy(update={"max_variants": MAX_RUNNABLE_VARIANTS})
 
 
 def tier_grant(plan: str | None) -> int:
@@ -147,26 +168,48 @@ class _StageProfile(BaseModel):
     output_tokens: int
 
 
+# ---------------------------------------------------------------------------
+# MEASURED from the `llm_usage` ledger, 2026-08-02, across two live runs:
+# 25 agents / 3 rounds / 2 platforms, and the reference standard run
+# (100 / 5 / 2 / 1). Figures are per unit of work, calibrated at the standard
+# shape. Re-derive with the query in HANDOFF.md §5 whenever prompts change —
+# every prompt edit in this codebase moves these.
+# ---------------------------------------------------------------------------
+
 # One agent action: persona + feed slice + memory in, a single action line out.
-AGENT_ACTION = _StageProfile(input_tokens=1000, output_tokens=120)
+#
+# This is the one profile that visibly scales with run size — 404 input tokens
+# per action at 25 agents, 748 at 100 — because the feed and the agent's own
+# memory both grow. It should plateau rather than keep climbing: adapters slice
+# the feed to the top 8 posts and memory to the last 10 actions, so there is a
+# ceiling. Calibrated at the standard shape, which means small runs are
+# over-quoted (safe) and very large ones may be under-quoted — which is what
+# `reconcile_run_cost`'s margin-floor check exists to catch.
+AGENT_ACTION = _StageProfile(input_tokens=750, output_tokens=170)
 
-# One agent generated during the prepare phase.
-AGENT_GENERATION = _StageProfile(input_tokens=1200, output_tokens=350)
+# One agent generated during the prepare phase. Measured at 1,901/548 and
+# 1,900/537 on the two runs — genuinely constant, as expected: the prompt is
+# one archetype plus a fixed slice of document context.
+AGENT_GENERATION = _StageProfile(input_tokens=1900, output_tokens=550)
 
-# Per-event measurement, batched ~25 events per call — hence the small
-# per-event share.
-EVENT_MEASUREMENT = _StageProfile(input_tokens=140, output_tokens=40)
+# Per-event measurement, batched ~25 events per call. Output was badly
+# under-estimated: the classifier returns six fields per event including an
+# objections array, which costs more than the 40 tokens originally assumed.
+EVENT_MEASUREMENT = _StageProfile(input_tokens=78, output_tokens=87)
 
 # Objection canonicalization: one main-model call over the run's distinct
-# objection phrasings. Measured at 2,199 in / 2,587 out on a 25-agent run.
-# It is charged once per run, not per event — the input is the *distinct*
-# phrasings, which saturates well before the event count does. Omitting this
-# stage was under-quoting every run by roughly a quarter of its true cost on
-# small runs, because it is nearly constant while everything else scales.
-OBJECTION_CANONICALIZATION = _StageProfile(input_tokens=3000, output_tokens=3000)
+# objection phrasings, charged once per run. Its input is the number of
+# *distinct* phrasings, which grows with run size but far slower than events do
+# — 124 distinct from 72 events, 601 from 497. Sized here for a standard run's
+# ~600 phrasings against the MAX_DISTINCT_STRINGS ceiling.
+OBJECTION_CANONICALIZATION = _StageProfile(input_tokens=11000, output_tokens=6000)
 
-# Report generation, per section (ReACT tool calls plus the write-up).
-REPORT_SECTION = _StageProfile(input_tokens=18000, output_tokens=2500)
+# Report generation, per section (ReACT tool calls plus the write-up). The
+# original 18,000-token input estimate was over 3x reality: the loop's evidence
+# is capped — the seeded artifact at 6,000 characters and each tool observation
+# at 5,000 — so a section's context cannot run away. Output was under-estimated
+# by a similar factor, because sections are long.
+REPORT_SECTION = _StageProfile(input_tokens=5650, output_tokens=4250)
 
 
 def _stage_cost(profile: _StageProfile, units: int, model: str) -> Decimal:
@@ -261,32 +304,15 @@ def estimate_simulation_cost(
     if depth not in DEPTH_PRESETS:
         raise ValueError(f"depth must be one of {DEPTH_PRESETS}")
 
-    fast_model = action_model or settings.llm_fast_model
-    main_model = settings.llm_model
-
-    # Every agent acts once per platform per round, in each variant arena.
-    action_units = agent_count * rounds * platforms * variants
-    # Agents are generated once and reused across variants — that reuse is what
-    # makes matched-swarm comparison valid in the first place.
-    generation_units = agent_count
-    # Not every action produces an event; roughly 80% do (some yield NOTHING).
-    measurement_units = int(action_units * 0.8)
-    section_units = report_section_count(measurement_units, depth)
-
-    action_cost = _stage_cost(AGENT_ACTION, action_units, fast_model)
-    generation_cost = _stage_cost(AGENT_GENERATION, generation_units, fast_model)
-    measurement_cost = _stage_cost(EVENT_MEASUREMENT, measurement_units, fast_model)
-    # Once per run, on the main model, regardless of run size.
-    canonicalization_cost = _stage_cost(OBJECTION_CANONICALIZATION, 1, main_model)
-    report_cost = _stage_cost(REPORT_SECTION, section_units, main_model)
-
-    actual = (
-        action_cost
-        + generation_cost
-        + measurement_cost
-        + canonicalization_cost
-        + report_cost
+    breakdown, action_units, generation_units, section_units = _stage_costs(
+        agent_count, rounds, variants, depth, action_model
     )
+    action_cost = breakdown["agent_actions"]
+    generation_cost = breakdown["agent_generation"]
+    measurement_cost = breakdown["event_measurement"]
+    canonicalization_cost = breakdown["objection_canonicalization"]
+    report_cost = breakdown["report"]
+    actual = sum(breakdown.values(), Decimal("0"))
 
     # Price to the target margin, then enforce the floor.
     retail = actual / (Decimal("1") - TARGET_MARGIN_PCT / Decimal("100"))
@@ -326,26 +352,65 @@ def estimate_simulation_cost(
     )
 
 
+def _stage_costs(
+    agent_count: int,
+    rounds: int,
+    variants: int,
+    depth: str,
+    action_model: str | None = None,
+) -> tuple[dict[str, Decimal], int, int, int]:
+    """Cost of each pipeline stage for a run shape.
+
+    The single place the unit counts are derived. They used to be written out
+    twice — here and in the reference-run helper — and the two promptly drifted
+    apart during recalibration, so a run's price and its "worth N standard runs"
+    line were computed from different formulas.
+
+    Note that `platforms` is absent: it does not appear in any unit count. The
+    swarm is split across platforms rather than duplicated onto each, so adding
+    a platform costs nothing and buys thinner coverage.
+    """
+    fast_model = action_model or settings.llm_fast_model
+    main_model = settings.llm_model
+
+    # Every agent acts once per round, in each variant arena. Measured: a
+    # 100-agent, 5-round, 2-platform run made exactly 500 action calls, against
+    # the 1,000 the old `× platforms` formula predicted. That multiplication
+    # inflated the largest stage of every quote by the platform count, which is
+    # most of why runs were being over-quoted roughly 2x.
+    action_units = agent_count * rounds * variants
+    # Agents are generated once and reused across variants — that reuse is what
+    # makes matched-swarm comparison valid in the first place.
+    generation_units = agent_count
+    # Nearly every action produces an event: measured 497 from 500. The old 80%
+    # assumption came from agents answering NOTHING, which they now rarely do —
+    # the action prompt states the subject and tells an agent facing an empty
+    # feed to post.
+    measurement_units = action_units
+    section_units = report_section_count(measurement_units, depth)
+
+    breakdown = {
+        "agent_actions": _stage_cost(AGENT_ACTION, action_units, fast_model),
+        "agent_generation": _stage_cost(AGENT_GENERATION, generation_units, fast_model),
+        "event_measurement": _stage_cost(EVENT_MEASUREMENT, measurement_units, fast_model),
+        # Once per run, on the main model, regardless of run size.
+        "objection_canonicalization": _stage_cost(OBJECTION_CANONICALIZATION, 1, main_model),
+        "report": _stage_cost(REPORT_SECTION, section_units, main_model),
+    }
+    return breakdown, action_units, generation_units, section_units
+
+
 @lru_cache(maxsize=1)
 def _standard_run_credits() -> int:
-    """Credit cost of the reference run, computed once from the same model.
+    """Credit cost of the reference run, from the same formula as every quote.
 
-    Derived rather than hardcoded: if the token profiles are recalibrated from
+    Derived rather than hardcoded: when the token profiles are recalibrated from
     measured usage, the "worth N standard runs" line moves with them instead of
     quietly describing a run shape that no longer costs that.
     """
-    agents, rounds, platforms, variants = STANDARD_RUN
-    action_units = agents * rounds * platforms * variants
-    measurement_units = int(action_units * 0.8)
-    sections = report_section_count(measurement_units, "standard")
-    total = (
-        _stage_cost(AGENT_ACTION, action_units, settings.llm_fast_model)
-        + _stage_cost(AGENT_GENERATION, agents, settings.llm_fast_model)
-        + _stage_cost(EVENT_MEASUREMENT, measurement_units, settings.llm_fast_model)
-        + _stage_cost(OBJECTION_CANONICALIZATION, 1, settings.llm_model)
-        + _stage_cost(REPORT_SECTION, sections, settings.llm_model)
-    )
-    return credits_for(total)
+    agents, rounds, _platforms, variants = STANDARD_RUN
+    breakdown, *_ = _stage_costs(agents, rounds, variants, "standard")
+    return credits_for(sum(breakdown.values(), Decimal("0")))
 
 
 def get_credit_balance(org_id: UUID) -> tuple[int, int, str]:

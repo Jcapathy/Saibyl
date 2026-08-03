@@ -37,6 +37,7 @@ from app.core.config import settings
 from app.core.database import get_supabase_admin
 from app.services.billing.agent_pricing import (
     MAX_AGENTS,
+    MAX_RUNNABLE_VARIANTS,
     estimate_simulation_cost,
     get_credit_balance,
     tier_caps,
@@ -121,6 +122,15 @@ def _validate_shape(agent_count: int, rounds: int, platforms: int, variants: int
         raise QuoteError("Agents, rounds, platforms and variants must all be positive")
     if agent_count > MAX_AGENTS:
         raise QuoteError(f"Agent count cannot exceed {MAX_AGENTS:,}")
+    if variants > MAX_RUNNABLE_VARIANTS:
+        # Refused rather than clamped: the engine runs one arena, so a
+        # multi-variant quote would charge for arenas that are never executed.
+        # Silently reducing it would price one thing and run another.
+        raise QuoteError(
+            f"Multi-variant runs are not available yet — the engine runs "
+            f"{MAX_RUNNABLE_VARIANTS} arena. Matched-swarm variant testing "
+            f"arrives with the Marketing lens."
+        )
 
 
 def issue_quote(

@@ -561,14 +561,154 @@ a baseline to compare against.
 
 ---
 
+## [PHASE 1 | 2026-08-02] Variants were billable before they were runnable
+
+**The gap.** The cost model scales agent-action cost with variant count, and
+correctly so. But nothing executes more than one arena: `run_prepare_agents`
+assigns every agent `variant: "a"`, the runner never branches on variant, and
+`run_simulation_ab` calls `run_simulation` once. Phase 1 then shipped a variants
+slider, stored `simulations.variants`, and charged credits from the quote — which
+made a 4-variant run cost four times the agent-action price for one arena's
+work. That is billing for compute that is never performed.
+
+The cost model was not wrong and the A/B stub was not new. What was new was
+exposing the dimension to customers and wiring it to a charge.
+
+**Decision — cap at what the engine runs, refuse rather than clamp.**
+`MAX_RUNNABLE_VARIANTS = 1` clamps `tier_caps()`, so the slider cannot reach an
+unrunnable shape; `issue_quote` and `POST /simulations` both refuse `variants > 1`
+outright rather than silently reducing it, because quoting one shape and running
+another is the failure this whole quote mechanism exists to prevent. Phase 3
+raises the constant to 8 — `TIER_CAPS` already holds the intended per-tier
+values, so that is the only edit.
+
+The estimator itself is deliberately left able to price multi-variant shapes:
+`PRICING_GUIDE.md` quotes an 8-variant marketing run, and `scripts/quote.py`
+needs to model shapes the engine cannot yet run. The refusal belongs at the
+boundaries that take money, not in the planning model.
+
+**Generalisable lesson:** the cost model is a forward-looking artifact and the
+engine is not. Any dimension the model prices needs a check that the engine
+delivers it before a slider is attached to it.
+
+---
+
+## [PHASE 1 | 2026-08-02] The standard run, and four more defects
+
+A second live run at the reference shape (100 agents / 5 rounds / 2 platforms,
+`03de92ef`) produced 497 events at 100% coverage with confidence `high` — the
+bands narrowed from the 25-agent run exactly as the agent-count model predicts.
+It also found four things.
+
+**Objection canonicalization silently collapsed at scale.** The clustering call
+returned `output_tokens = 4000`, precisely its `max_tokens`: the JSON truncated,
+`json.loads` raised, and the fallback produced one "canonical objection" per raw
+phrasing. **300 objections, 265 of them with a single event**, with "integration
+debt not addressed", "doesn't address integration complexity" and "doesn't
+surface integration debt" sitting in three separate rows. The Founder lens ranks
+on exactly this object, so the failure was quiet and total — and invisible at 25
+agents, where 124 phrasings still fit in the budget.
+
+The cause was that the prompt asked the model to echo every member string, so
+output scaled with input. Members are now **indices** into a numbered shortlist,
+which makes output scale with the number of *groups* instead. Same run,
+rebuilt: **300 → 17 canonical objections, zero single-event**, the top one
+spanning 18 agents and 8 cohorts. `MAX_DISTINCT_STRINGS` also rose to 800, since
+a standard run produces ~600 distinct phrasings and the truncation is now logged
+rather than silent.
+
+**Agent usernames collided, and the swarm was under-counted.** Asked for 100
+handles the model produced 45 distinct ones — nine agents named `mchen_itdir`.
+Adapters address agents by username and nothing else: they key agent memory on
+it, and the runner maps `event.agent_username` back to a row through it. So nine
+agents shared one memory, all their events were attributed to one row, and — because
+confidence intervals are computed across agents — nine independent observations
+counted as one. Every band in both runs' artifacts was drawn from a swarm less
+than half its real size. The arithmetic gives it away: 45 agents acting once per
+round for 5 rounds cannot produce 497 events.
+
+Usernames are now deduped at generation with a suffix, and the runner logs an
+error if it ever sees a collision again. **The two existing runs cannot be
+repaired** — there is no record of which of nine identically-named agents
+produced a given event — so their `n` values remain understated. Intervals were
+therefore *wider* than truth, which is the safe direction, but wrong.
+
+**The report ignored the configured depth.** `run_generate_report` defaults to
+`evidence_depth="deep"` and `run_simulation` never passed anything, so
+`simulations.depth` — set by the configurator, priced in the quote — did nothing.
+A run quoted at 4 sections was written at 6.
+
+**Report spend was not metered at all.** `run_generate_report` was fired via
+`asyncio.create_task` *after* the run's usage contexts had exited, so
+`record_llm_call` found no active context and dropped every call. The report is
+the largest main-model stage, so `simulation_llm_cost` under-reported every run
+by roughly a fifth and `reconcile_run_cost` compared quotes against a figure
+with its biggest line missing — a margin breach could have passed the gate.
+Report generation is now wrapped in a `usage_context`, and reconciliation moved
+to *after* the report rather than before it, so it sees the complete ledger.
+
+---
+
+## [PHASE 1 | 2026-08-02] Cost model recalibrated from measurement
+
+The stage profiles are no longer estimates. Measured across both runs:
+
+| Stage | Old profile | Measured | Scales with run size? |
+|---|---|---|---|
+| `agent_action` | 1,000 / 120 | **750 / 170** | yes — 404 in at 25 agents, 748 at 100 |
+| `agent_generation` | 1,200 / 350 | **1,900 / 550** | no — 1,900/548 and 1,900/537 |
+| `event_measurement` | 140 / 40 | **78 / 87** | no |
+| `objection_canonicalization` | 3,000 / 3,000 | **11,000 / 6,000** | with distinct phrasings, not events |
+| `report` (per section) | 18,000 / 2,500 | **5,650 / 4,250** | no — evidence is capped |
+
+`agent_action` input grows with the feed and the agent's memory, but both are
+capped by the adapters (top 8 posts, last 10 actions), so it plateaus rather
+than climbing indefinitely. Calibrating at the reference shape means small runs
+are over-quoted, which is safe.
+
+**Two model errors, found only because measurement disagreed with the estimate:**
+
+**Platforms were multiplying agent-action cost.** `action_units` was
+`agents × rounds × platforms × variants`, but `agent_count` is the whole swarm
+and `run_prepare_agents` *splits* it — 100 agents over 2 platforms is 50 on
+each, not 100 on each. Measured: exactly 500 action calls against the 1,000 the
+formula predicted. This inflated the largest stage of every quote by the
+platform count and is most of why runs were over-quoted ~2×.
+
+The honest consequence is worth stating plainly: **adding a platform is close to
+cost-neutral**, because it spreads the same swarm thinner rather than buying
+more simulation. Platforms cannot be sold as volume.
+
+**Only ~80% of actions were assumed to produce events.** Measured 497 from 500.
+The assumption came from agents answering NOTHING, which they rarely do now that
+the action prompt states the subject.
+
+**Result:** standard run $3.23 → **$2.26**, estimate against measurement
+**1.02×**. The blended agency mix falls $11.77 → $6.88, so a 400-run/month
+enterprise quote drops from ~$21,000 to ~$12,515 *at the same margin* — the old
+number was over-priced by a broken model, not protected by a policy. Tier run
+counts rise (Founder 6 → 8, Growth 20 → 26, Agency 69 → 88) for the same reason:
+the grants and the 80% margin are untouched.
+
+**Decision — one formula, not two.** `_stage_costs()` now derives the unit
+counts in a single place. They had been written out twice, in
+`estimate_simulation_cost` and in the reference-run helper, and the two drifted
+apart during this very recalibration — so a run's price and its "worth N
+standard runs" line were briefly computed from different formulas.
+
+---
+
 ## Known issues carried into Phase 2
 
 Recorded here so they are not rediscovered. Items 1, 2 and 7 from the Phase 1
 list are resolved above.
 
 1. **A/B never runs variant B.** `run_simulation_ab` in `workers/simulation_tasks.py`
-   calls `run_simulation` once. The `simulations.variants` column now exists and
-   is priced, but nothing executes more than one arena. Real N-way is Phase 3.
+   calls `run_simulation` once. `simulations.variants` exists and is priced, but
+   nothing executes more than one arena, so `MAX_RUNNABLE_VARIANTS = 1` now
+   blocks multi-variant runs from being configured or quoted. **Phase 3 raising
+   that constant to 8 is the switch that turns N-way on** — along with actually
+   implementing per-variant arenas.
 2. **The live WebSocket feed is empty.** The active runner publishes nothing to
    Redis, and `SimulationRunPage` filters on `event_type === 'agent_action'` while
    the backend schema emits `post`/`comment`/`react`. The UI silently falls back

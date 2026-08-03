@@ -48,7 +48,13 @@ logger = structlog.get_logger()
 # Distinct raw strings sent to the clusterer, most frequent first. Beyond this
 # the tail is single-mention phrasings that add tokens without changing the
 # clusters they would join.
-MAX_DISTINCT_STRINGS = 300
+MAX_DISTINCT_STRINGS = 800
+
+# Output budget for the clustering call. Sized for the worst realistic case:
+# ~300 phrasings collapsing into ~60 groups, each with a label, a summary, and
+# a list of integer indices. Members are indices rather than echoed strings
+# precisely so this budget scales with group count, not input count.
+CLUSTER_MAX_TOKENS = 8000
 
 # Verbatim quotes kept per objection. Enough to show the range of framings
 # without turning the drill-down into a transcript.
@@ -56,13 +62,15 @@ MAX_QUOTES = 5
 
 _PROMPT = """These are objections raised about: {goal}
 
-Each line is one distinct phrasing, with how many times it was raised:
+Each line is one distinct phrasing, numbered, with how many times it was raised:
 
 {strings}
 
 Group them into canonical objections. Two phrasings belong to the same group
 only if answering one would answer the other. "Too expensive" and "no annual
-discount" are different objections even though both concern price.
+discount" are different objections even though both concern price. Conversely
+"integration debt not addressed" and "doesn't address integration complexity"
+are the same objection said twice — group them.
 
 For each group return:
 - "label": 3-8 words naming the objection as the audience would state it, not as
@@ -70,12 +78,13 @@ For each group return:
   "Pricing perception".
 - "summary": one sentence on what would have to be true for this objection to go
   away.
-- "members": every input phrasing in this group, copied exactly as given.
+- "members": the NUMBERS of the phrasings in this group, e.g. [0, 4, 17].
 
-Every input phrasing must appear in exactly one group. Do not invent objections
-that no phrasing supports. Do not merge groups to reach a target count.
+Every number from 0 to {last_index} must appear in exactly one group. Do not
+invent objections that no phrasing supports. Do not merge groups to reach a
+target count.
 
-Return JSON: {{"groups": [{{"label": "...", "summary": "...", "members": ["..."]}}]}}
+Return JSON: {{"groups": [{{"label": "...", "summary": "...", "members": [0, 1]}}]}}
 No commentary."""
 
 
@@ -93,11 +102,38 @@ def _collect_raw(events: list[MeasuredEvent]) -> dict[str, list[MeasuredEvent]]:
     return index
 
 
-async def _cluster(goal: str, raw_index: dict[str, list[MeasuredEvent]]) -> list[dict[str, Any]]:
-    """Ask the model to group distinct phrasings. Returns [] on failure."""
+async def _cluster(
+    goal: str, raw_index: dict[str, list[MeasuredEvent]]
+) -> list[dict[str, Any]]:
+    """Group distinct phrasings. Returns [] on failure.
+
+    Members come back as **indices into the shortlist**, not as echoed strings.
+    Echoing was how this silently broke at scale: output size tracked input
+    size, so a 100-agent run's ~500 phrasings blew past `max_tokens`, the JSON
+    truncated mid-array, `json.loads` raised, and the caller fell back to one
+    "canonical objection" per phrasing. A standard run produced 300 objections
+    of which 265 had a single event — "integration debt not addressed" and
+    "doesn't address integration complexity" sitting in separate rows. The
+    Founder lens ranks on these, so the failure was quiet and total.
+
+    Indices cut output by roughly an order of magnitude and make it scale with
+    the number of *groups* rather than the number of inputs.
+    """
     ranked = sorted(raw_index.items(), key=lambda kv: len(kv[1]), reverse=True)
     shortlist = ranked[:MAX_DISTINCT_STRINGS]
-    lines = "\n".join(f'- "{raw}" ({len(evts)}x)' for raw, evts in shortlist)
+    if len(ranked) > MAX_DISTINCT_STRINGS:
+        # No silent caps: say what was dropped rather than letting the tail
+        # vanish into a figure that reads as complete.
+        logger.warning(
+            "objection_shortlist_truncated",
+            distinct=len(ranked),
+            kept=MAX_DISTINCT_STRINGS,
+            dropped=len(ranked) - MAX_DISTINCT_STRINGS,
+        )
+
+    lines = "\n".join(
+        f'[{i}] "{raw}" ({len(evts)}x)' for i, (raw, evts) in enumerate(shortlist)
+    )
 
     try:
         response = await llm_complete(
@@ -105,20 +141,61 @@ async def _cluster(goal: str, raw_index: dict[str, list[MeasuredEvent]]) -> list
                 {
                     "role": "user",
                     "content": _PROMPT.format(
-                        goal=goal or "(not specified)", strings=lines
+                        goal=goal or "(not specified)",
+                        strings=lines,
+                        last_index=len(shortlist) - 1,
                     ),
                 }
             ],
             temperature=0.0,
-            max_tokens=4000,
+            max_tokens=CLUSTER_MAX_TOKENS,
         )
         parsed = json.loads(_extract_json(response))
     except Exception as exc:
-        logger.warning("objection_clustering_failed", error=str(exc))
+        logger.warning(
+            "objection_clustering_failed",
+            error=str(exc),
+            distinct=len(shortlist),
+            note="falling back to one objection per phrasing",
+        )
         return []
 
     groups = parsed.get("groups")
-    return groups if isinstance(groups, list) else []
+    if not isinstance(groups, list):
+        return []
+
+    # Translate indices back to phrasings. Tolerates a model that returns the
+    # string anyway, since that is the cheaper mistake to absorb.
+    resolved: list[dict[str, Any]] = []
+    for group in groups:
+        if not isinstance(group, dict):
+            continue
+        members: list[str] = []
+        for ref in group.get("members") or []:
+            if isinstance(ref, bool):
+                continue
+            if isinstance(ref, int) and 0 <= ref < len(shortlist):
+                members.append(shortlist[ref][0])
+            elif isinstance(ref, str):
+                if ref in raw_index:
+                    members.append(ref)
+                elif ref.strip().isdigit():
+                    idx = int(ref.strip())
+                    if 0 <= idx < len(shortlist):
+                        members.append(shortlist[idx][0])
+        if members:
+            resolved.append({**group, "members": members})
+
+    # A model that grouped almost nothing has not clustered; it has relabelled.
+    # Better to know than to publish 300 "canonical" objections.
+    if resolved and len(resolved) > len(shortlist) * 0.8:
+        logger.warning(
+            "objection_clustering_ineffective",
+            groups=len(resolved),
+            distinct=len(shortlist),
+            note="model produced roughly one group per phrasing",
+        )
+    return resolved
 
 
 def _fallback_groups(raw_index: dict[str, list[MeasuredEvent]]) -> list[dict[str, Any]]:
