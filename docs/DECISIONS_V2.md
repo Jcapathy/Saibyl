@@ -375,6 +375,49 @@ land-grab lever.
 
 ---
 
+## 15b. Tier ladder is 99 / 299 / 999, and credits ration instead of caps
+
+**Chose:** Growth $299 and Agency $999 (down from $499/$1,499), with margin held
+at 80% by right-sizing the grants. Grants denominated in credits (COGS dollars),
+not runs. Shape caps exist only to prevent runaway spend; the credit balance is
+what actually rations.
+
+**Why the prices moved.** The problem was the ladder shape, not the numbers.
+99 → 499 is a 5× step and that is where prospects stall; 99 → 299 → 999 is 3.0×
+then 3.3×. The old grants (~30 runs at $499, ~100 at $1,499) came from a V1
+strategy doc written before any cost model existed and had never been validated
+against anything — so cutting the price did **not** require cutting margin, only
+sizing the grant honestly. $299 at 80% still buys 18 standard runs or 7
+eight-variant runs a month.
+
+**Why credits, not runs.** A "run" varies by 56× across the tier caps — standard
+is $3.23, a 250-agent 8-variant run is $181.52. A grant denominated in runs is
+therefore unbounded compute: "30 runs" ranges from $65 to $5,445 of COGS. Runs
+survive as sales language against a defined reference run only.
+
+**Why not tighter shape caps.** Rationing by caps punishes the user for the
+system's inability to price. The Run Configurator shows exact credit cost before
+commit, so a user spending 34% of their balance on one large run is making an
+informed choice. Caps then only need to stop accidents, not enforce fairness.
+**This only holds if the disclosure actually happens** — the required copy and
+warning states in `PRICING_GUIDE.md` Part 1 are load-bearing, not decoration.
+
+**Why overage is priced at the same 80% margin, not cheaper.** Volume-discounted
+overage would let a heavy user buy the cheapest tier and load up on credits,
+cannibalizing upgrades. Upgrade pressure should come from caps, seats, the client
+layer, and white-label — real feature differences — not unit price.
+
+**Enterprise margin bands (80% → 68% by volume) are a choice, not a cost saving.**
+COGS is linear in volume; Anthropic gives no bulk discount absent a negotiated
+one. Every band step trades margin for contract size deliberately.
+
+**What would change this:** the stage token profiles behind every figure here are
+still estimates. Recalibrating them from measured `llm_usage` medians after
+Phase 1 is the most likely reason these numbers move. Re-run `scripts/quote.py`
+and update `PRICING_GUIDE.md` when they do.
+
+---
+
 ## 16. Sequencing: truth → founder → marketing → crisis
 
 **Chose:** Phase 1 measurement, Phase 2 Founder, Phase 3 Marketing, Phase 4
@@ -396,10 +439,12 @@ proves slow — the engine work in Phase 1 serves both.
 
 Do not treat these as settled:
 
-- **Founder tier is $99 anchor; Growth ($499) and Agency ($1,499) are inherited
-  from V1 strategy docs and have not been re-derived** against the V2 cost model.
 - **Which countries fall in which regional tier** is unspecified. Use a published
   PPP band list rather than inventing one.
+- **The blended agency run mix** (55% standard / 30% marketing / 13% growth / 2%
+  heavy) behind the enterprise quoting table is an assumption, not observed data.
+  It matters more than it looks: the 2% "heavy" slice contributes 31% of blended
+  COGS. Replace it with real `llm_usage` distributions as soon as there are any.
 - **Whether the adversarial cohort share should default to a fixed percentage or
   scale with detected market maturity** — a founder in a brand-new category has
   no incumbent to model.

@@ -144,15 +144,34 @@ Measured output at 80% margin:
 
 **Billing.** Subscription with a monthly credit grant; every run quoted before it starts and deducted on completion; overage buys more credits.
 
-| Tier | Price (US anchor) | Grant | Caps |
-|---|---|---|---|
-| Free trial | $0, one run | ~$0.35 raw | 25 agents / 3 rounds / 1 variant / 2 platforms, no adversarial cohort, no re-simulation |
-| Founder | **$99/mo** | ~6 standard runs | 100 agents / 8 rounds / 3 variants |
-| Growth | $499/mo | ~30 standard runs | 250 agents / 12 rounds / 8 variants |
-| Agency / War Room | $1,499/mo | ~100 standard runs | Uncapped within credit balance, client layer, white-label |
+**Credits are the metered unit; runs are the sales language.** All advertised run
+counts are quoted against a defined reference:
 
-*Growth and Agency prices are inherited from V1 strategy docs and have not been
-re-derived against the V2 cost model. Do that before launch.*
+> **Standard run** = 100 agents × 5 rounds × 2 platforms × 1 variant → $3.23 COGS
+
+| Tier | Price (US anchor) | COGS grant | ≈ std runs | ≈ 8-var runs | Margin |
+|---|---:|---:|---:|---:|---:|
+| Free trial | $0, one run | ~$0.35 | 1 (capped) | — | — |
+| Founder | **$99/mo** | $19.80 | 6 | 2 | 80% |
+| Growth | **$299/mo** | $59.80 | 18 | 7 | 80% |
+| Agency | **$999/mo** | $199.80 | 62 | 23 | 80% |
+| Enterprise | Custom annual | see `PRICING_GUIDE.md` | | | 68–78% |
+
+Growth and Agency were re-derived from the cost model on 2026-08-02, replacing
+the $499/$1,499 figures inherited from V1 strategy docs. The ladder is now
+99 → 299 → 999 (3.0× then 3.3×) rather than 99 → 499 → 1,499 (5.0× then 3.0×);
+the 5× first step was the stall point. Margin held at 80% by right-sizing the
+grants rather than by discounting compute.
+
+**Credits ration usage; shape caps only prevent runaway spend.** A customer can
+push the sliders past the advertised standard run and consume more credits per
+run — which must be disclosed in the Run Configurator *before* they commit, not
+discovered afterward. Required UI copy and warning states are in
+`docs/PRICING_GUIDE.md` Part 1. Overage credits sell at the same 80% margin as
+the grant, so a heavy user cannot buy the cheapest tier and load up.
+
+Enterprise/annual quoting, the volume band table, and the `scripts/quote.py`
+tool are in `docs/PRICING_GUIDE.md` Part 2.
 
 ### Regional pricing
 

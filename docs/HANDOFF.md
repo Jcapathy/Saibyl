@@ -142,10 +142,17 @@ price. Replaces the fake estimator at `NewSimulationPage.tsx:52`
 (`agents*rounds*platforms/200`, shows no cost at all). Wire
 `deduct_agent_credits` on completion — it exists and has never been called.
 
-Billing decisions already made: **Founder tier is $99/mo (US anchor)**;
-statement descriptor is `SAIDO LABS LLC`; regional tiers discount the price
-*and* scale the grant proportionally, gated on the card's billing country, never
-IP. Bands and margin math are in `docs/PRD_V2.md` §8 and `DECISIONS_V2.md` §15.
+**Pricing is settled — do not re-derive it.** Tiers are $99 / $299 / $999 (US
+anchor) at 80% margin; statement descriptor `SAIDO LABS LLC`; regional bands
+discount price *and* grant together, gated on card billing country, never IP.
+Credits are the metered unit; "runs" is sales language against a defined
+standard run (100ag/5rd/2pf/1v = $3.23 COGS).
+
+**`docs/PRICING_GUIDE.md` is required reading before building the Configurator.**
+Part 1 specifies the exact disclosure copy and four warning states the UI must
+implement — a user can push the sliders past the advertised run size, and that
+must be shown before they commit, not after. Part 2 is enterprise quoting.
+`backend/scripts/quote.py` generates both.
 
 ### 3.7 Sovereign palette
 
