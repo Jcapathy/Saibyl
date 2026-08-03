@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from app.core.auth import get_current_org
 from app.core.database import get_supabase_admin
+from app.services.engine.founder_stages import FOUNDER_STAGES, FounderStage
 from app.services.engine.personas.interview_engine import (
     interview_agent,
     interview_batch,
@@ -59,6 +60,20 @@ class CreateSimulationBody(BaseModel):
     description: str | None = None
     variants: int = Field(default=1, ge=1, le=8)
     depth: Literal["brief", "standard", "deep"] = "standard"
+
+    # Which lens this run is configured through. None means an unlensed run —
+    # the 63 simulations that predate lenses read that way too, rather than
+    # being retroactively assigned one they were never configured with.
+    lens: Literal["founder", "marketing", "crisis"] | None = None
+    founder_stage: FounderStage | None = None
+    # A synthesized ICP to run against. Its compiled pack is appended to
+    # persona_pack_ids, so an ICP and built-in packs can be blended.
+    icp_profile_id: str | None = None
+    # Share of the swarm that is incumbent-aligned. The 0.5 ceiling is enforced
+    # here, in the database, and in the ICP API: past half the swarm the
+    # headline valence is a function of the share the user picked, and it will
+    # still be read as a measurement of the market.
+    adversarial_share: float = Field(default=0.0, ge=0.0, le=0.5)
 
 
 class StartSimulationBody(BaseModel):
@@ -123,6 +138,50 @@ async def create_simulation(body: CreateSimulationBody, auth: dict = Depends(get
             ),
         )
 
+    # A stage belongs to the Founder lens. Silently accepting one on a Crisis
+    # run would let a report be planned from questions the run was never
+    # configured to answer.
+    if body.founder_stage and body.lens != "founder":
+        raise HTTPException(
+            status_code=400,
+            detail="founder_stage is only valid on a Founder-lens run (lens='founder').",
+        )
+
+    persona_pack_ids = list(body.persona_pack_ids)
+    if body.icp_profile_id:
+        icp = (
+            admin.table("icp_profiles")
+            .select("pack_id")
+            .eq("id", body.icp_profile_id)
+            .eq("organization_id", auth["org_id"])
+            .execute()
+        )
+        if not icp.data:
+            raise HTTPException(status_code=404, detail="ICP profile not found")
+        # Appended rather than replacing: a founder may legitimately blend a
+        # synthesized ICP with a built-in pack — press, or a demographic
+        # segment the material never mentions. The 16 packs are priors and
+        # blend targets, not the answer (DECISIONS §3), and that is only true
+        # if blending is actually possible.
+        pack_id = icp.data[0]["pack_id"]
+        if pack_id not in persona_pack_ids:
+            persona_pack_ids.append(pack_id)
+
+    # An adversarial share with no adversarial archetypes in any selected pack
+    # silently does nothing — the share is expressed as archetype weight, and
+    # built-in packs carry none. Caught here, because the run would otherwise
+    # complete and report a cohort split the user configured and never got.
+    if body.adversarial_share > 0 and not body.icp_profile_id:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "adversarial_share requires an ICP profile. The incumbent-aligned "
+                "cohort is synthesized from your uploaded material; the built-in "
+                "persona packs contain no adversarial archetypes for the share to "
+                "apply to."
+            ),
+        )
+
     result = (
         admin.table("simulations")
         .insert({
@@ -133,11 +192,15 @@ async def create_simulation(body: CreateSimulationBody, auth: dict = Depends(get
             "platforms": body.platforms,
             "max_rounds": body.max_rounds,
             "is_ab_test": body.is_ab_test,
-            "persona_pack_ids": body.persona_pack_ids,
+            "persona_pack_ids": persona_pack_ids,
             "agent_count": body.agent_count,
             "description": body.description,
             "variants": body.variants,
             "depth": body.depth,
+            "lens": body.lens,
+            "founder_stage": body.founder_stage,
+            "icp_profile_id": body.icp_profile_id,
+            "adversarial_share": body.adversarial_share,
             "status": "draft",
             "created_by": auth["user"]["id"],
             "created_at": datetime.now(UTC).isoformat(),
@@ -145,6 +208,22 @@ async def create_simulation(body: CreateSimulationBody, auth: dict = Depends(get
         .execute()
     )
     return result.data[0]
+
+
+@router.get("/founder-stages")
+async def list_founder_stages(auth: dict = Depends(get_current_org)):
+    """The five Founder-lens stages, for the stage picker.
+
+    Served from the backend registry rather than duplicated in the frontend so
+    that a stage's defaults, its report questions, and the limits it states in
+    the report cannot disagree with what the picker showed.
+
+    Registered above `GET /{id}`, which would otherwise match "founder-stages"
+    as a simulation id and 404. That collision is the same class of bug as the
+    unreachable export route Phase 0 fixed, and route order is the only thing
+    preventing it.
+    """
+    return [spec.model_dump() for spec in FOUNDER_STAGES.values()]
 
 
 @router.get("")

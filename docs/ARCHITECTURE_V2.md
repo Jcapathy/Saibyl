@@ -756,6 +756,126 @@ here was arithmetic that could not be true: 45 agents acting once per round for
 
 ---
 
+## [PHASE 2 | 2026-08-03] The audience is derived, not picked
+
+DECISIONS §3 settled that the ICP comes from the founder's own material rather
+than from a library of 16 packs. This is that, plus the adversarial cohort it
+has to carry, plus the stage registry the rest of Phase 2 reads.
+
+**Decision — the ICP profile and the persona pack are one row, two shapes.**
+A founder reads role, budget authority, incumbent tooling, switching cost and
+skepticism triggers, and corrects them. The engine reads a `PersonaPack`:
+demographics, Big Five, posting cadence. `icp_synthesizer.compile_pack` is the
+only bridge, and `icp_profiles` stores both — the editable profile and the
+compiled pack — so an edit and the pack the next run uses cannot drift apart.
+Nothing downstream of `run_prepare_agents` learns that ICPs exist; `get_pack`
+resolves the `icp_` prefix out of the new table and everything else is unchanged.
+
+**Decision — the pack is recompiled on write, never on read.** A pack rebuilt at
+read time would make a re-simulation's audience depend on when it was read, and
+the inoculation loop's whole claim is that the audience did not change between
+the two runs. The ICP pack is also the one pack that is deliberately *not*
+cached in `_pack_cache`: built-in packs are files and cannot change under a
+running process, but a founder can edit an ICP between runs, and a
+process-lifetime cache would serve the pre-edit audience to whichever API worker
+loaded it first.
+
+**Decision — the built-in packs become priors, in code and not just in prose.**
+A synthesized archetype states what a buyer cares about and what they would have
+to rip out. The nearest built-in archetype supplies the Big Five vector and
+posting cadence, recorded in `icp_profiles.prior_pack_ids`. Asking a language
+model to invent psychometrics per project produces numbers with no referent that
+then propagate into every agent in the run.
+
+**Decision — `ArchetypeContext` reaches the agent-generation prompt.** The value
+of a synthesized ICP is entirely in fields the pack format has nowhere to put:
+what this archetype uses today, what switching would cost, what makes them stop
+reading. Without carrying those into the prompt, a synthesized ICP is a
+relabelled generic pack — the exact outcome DECISIONS §3 rejected the pack
+library to avoid. `Archetype` gained three optional fields, absent on all 16
+built-in packs, so the JSON on disk validates unchanged.
+
+**Decision — the adversarial guardrail is enforced in data, at two layers.**
+PRD §4 permits an incumbent-aligned agent to name a competitor only from
+material the user uploaded and marked as competitor material. That is
+unenforceable unless the database records which document is which, so
+`documents.material_kind` does — and `NULL`, meaning uploaded before the column
+existed, reads as `own`, because an unlabelled document must never be the thing
+that authorises naming a competitor.
+
+The rule then holds at two layers. `AdversarialArchetype` refuses to validate
+with a `competitor_name` and an empty `grounded_in`; `_ground_adversarial`
+strips the name from any archetype whose citation is not in the project's
+competitor-material set, before validation. **The name is stripped, not the
+archetype** — an unnamed category skeptic is still the cohort PRD §4 asks for
+when there is no competitor material, and dropping the archetype would quietly
+remove the adversarial cohort from precisely the runs that have none, which are
+most early runs and the ones where "we already have a process for this" is the
+objection that matters. By the time a confabulated incumbent reaches a report it
+has already been through agent generation and into verbatim quotes, and there is
+no honest way to redact it there.
+
+**Decision — the cohort share is expressed as archetype weight, and re-applied
+at prepare time.** `run_prepare_agents` allocates by weight and knows nothing
+about cohorts, so a share has to be weight or nothing. It is re-applied from
+`simulations.adversarial_share` at prepare rather than baked in at synthesis,
+because an ICP is reused across runs and a founder who wants the reception at
+40% incumbents should not have to re-synthesize their audience to find out. The
+0.5 ceiling is enforced in the migration, the create endpoint, and the ICP API:
+past half the swarm the headline valence is a function of the share the user
+picked, and it will still be read as a measurement of the market.
+
+A share configured without an ICP is rejected at create rather than silently
+doing nothing — built-in packs carry no adversarial archetypes, so the run would
+otherwise complete and report a cohort split the user configured and never got.
+
+**Decision — synthesis is metered as its own stage, charged per synthesis.**
+`ICP_SYNTHESIS` is priced in `agent_pricing` and runs inside
+`usage_context("icp_synthesis")`. It is not folded into the run quote: an ICP is
+a project-level object reused across every run in the project, so folding it in
+would charge the second run for work the first one did. Leaving it out of
+pricing altogether is Phase 1's bug #6, where objection canonicalization was 24%
+of measured spend and 0% of the quote.
+
+**Its profile is estimated, not measured** — the only one in the model that is.
+It is sized from the material budget in `icp_synthesizer` and deliberately
+biased high, because an over-quoted stage costs a customer credits they can see
+while an under-quoted one is served at a loss nobody notices. Re-derive it from
+`llm_usage` after the first live Founder-lens runs.
+
+**Decision — one narrower retry, rather than a higher token ceiling.** Synthesis
+writes a whole profile in one object, which is how Phase 1's canonicalizer failed
+(bug #7: a single main-model call whose output hit `max_tokens` exactly and
+returned unparseable JSON, on the run that mattered). On a parse failure the
+retry halves the archetype budget instead of raising the ceiling. Three sharp
+archetypes are a better ICP than six vague ones, so the degraded path is barely
+degraded.
+
+**Decision — `lens` and `founder_stage` are nullable with no backfill.** The 63
+existing simulations were run before lenses existed. Stamping them `crisis` or
+`founder` would invent an attribute nobody recorded, which is the failure mode
+Phase 1 spent itself removing. `NULL` reads as "legacy, no lens".
+
+**The stage registry is data.** `services/engine/founder_stages.py` declares all
+five stages: expected inputs, audience defaults, the questions the report must
+answer, and — the load-bearing field — `cannot_conclude`. A concept-validation
+run has no product to adopt, so it cannot measure adoption intent; a fundraise
+run models how a story reads, not whether the round closes. Those limits live in
+the same object that drives the report, because a caveat that lives in a doc
+reaches nobody. Adding a sixth stage is a dict entry rather than a search for
+every `if stage ==` in the codebase.
+
+Concept validation defaults to a **0%** adversarial share and growth to **40%**,
+which is the whole argument for stages in one number: at concept there is no
+product to switch away from and an incumbent cohort would be arguing with a
+problem statement, while at growth the buyer already has something that works.
+
+**Migration 020 is safe to apply while `master` is deployed** — one new table,
+new nullable columns, and defaults that reproduce today's behaviour exactly.
+This is deliberately unlike 019, which still waits for the merge.
+
+---
+
 ## Known issues carried into Phase 2
 
 Recorded here so they are not rediscovered. Items 1, 2 and 7 from the Phase 1

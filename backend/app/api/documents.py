@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
+from typing import Literal
 
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -29,10 +30,18 @@ router = APIRouter(tags=["documents"])
 @router.post("/upload")
 async def upload_document(
     project_id: str = Query(...),
+    material_kind: Literal["own", "competitor", "market"] = Query("own"),
     file: UploadFile = File(...),
     auth: dict = Depends(get_current_org),
 ):
-    """Upload a document, store in Supabase Storage, and trigger processing."""
+    """Upload a document, store in Supabase Storage, and trigger processing.
+
+    `material_kind` is the adversarial cohort's grounding, not a tag. A
+    competitor may be named in a simulation only from a document uploaded here
+    as `competitor` — PRD §4 permits incumbent-aligned agents grounded in
+    material the user uploaded and forbids them grounded in model memory, and
+    that distinction is unenforceable unless it is recorded at upload.
+    """
     allowed_extensions = {"pdf", "txt", "doc", "docx", "csv", "json", "md", "html", "pptx", "xlsx"}
     ext = (file.filename or "").rsplit(".", 1)[-1].lower() if file.filename else ""
     if ext not in allowed_extensions:
@@ -75,6 +84,7 @@ async def upload_document(
             "file_type": ext,
             "storage_path": storage_path,
             "file_size_bytes": len(file_bytes),
+            "material_kind": material_kind,
             "processing_status": "pending",
             "created_at": datetime.now(UTC).isoformat(),
         })

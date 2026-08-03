@@ -7,6 +7,8 @@
 # credits_for(cost_usd) -> int
 # tier_caps(plan) -> RunCaps
 # check_credit_budget(org_id, agent_count, rounds, ...) -> BudgetCheck
+# estimate_icp_synthesis_cost() -> SynthesisCostEstimate
+# check_synthesis_budget(org_id) -> BudgetCheck
 # deduct_credits(org_id, credits) -> None
 # CREDITS_PER_USD, TIER_CREDIT_GRANTS, STANDARD_RUN
 # ─────────────────────────────────────────────────────────
@@ -204,6 +206,23 @@ EVENT_MEASUREMENT = _StageProfile(input_tokens=78, output_tokens=87)
 # ~600 phrasings against the MAX_DISTINCT_STRINGS ceiling.
 OBJECTION_CANONICALIZATION = _StageProfile(input_tokens=11000, output_tokens=6000)
 
+# ICP synthesis: one main-model pass over the founder's uploaded material,
+# charged once per synthesis rather than per run.
+#
+# **ESTIMATED, not measured** — unlike every profile above it, which came out of
+# `llm_usage`. Input is the material budget in icp_synthesizer (24k characters
+# of the team's own material, 12k of competitor material, 6k of market context,
+# plus the pack catalogue and the schema) at roughly 3.6 characters per token.
+# Output is a whole profile: up to six buyer archetypes and four adversarial
+# ones, each with seven or eight list fields.
+#
+# Re-derive from the ledger after the first live Founder-lens runs, with the
+# query in HANDOFF.md §7. Until then this is the one stage in the model whose
+# quote has not been checked against reality, and it is priced deliberately
+# toward the high side — an over-quoted stage costs a customer credits they can
+# see, while an under-quoted one is served at a loss nobody notices.
+ICP_SYNTHESIS = _StageProfile(input_tokens=14_000, output_tokens=4_500)
+
 # Report generation, per section (ReACT tool calls plus the write-up). The
 # original 18,000-token input estimate was over 3x reality: the loop's evidence
 # is capped — the seeded artifact at 6,000 characters and each tool observation
@@ -398,6 +417,81 @@ def _stage_costs(
         "report": _stage_cost(REPORT_SECTION, section_units, main_model),
     }
     return breakdown, action_units, generation_units, section_units
+
+
+class SynthesisCostEstimate(BaseModel):
+    """What one ICP synthesis costs to serve, and what it charges.
+
+    Its own object rather than a `SimulationCostEstimate` with zeroed fields:
+    synthesis has no agents, rounds, platforms or variants, and a shape-shaped
+    estimate with 0 in every shape field invites a caller to price a run with it.
+    """
+
+    stage: str = "icp_synthesis"
+    actual_cost_usd: float
+    retail_cost_usd: float
+    credits: int
+    margin_pct: float
+    standard_run_equivalents: float
+
+
+def estimate_icp_synthesis_cost() -> SynthesisCostEstimate:
+    """Price one ICP synthesis pass.
+
+    Charged per synthesis, not per run. An ICP is a project-level object reused
+    across every run in the project, so folding it into the run quote would
+    charge the second run for work the first one did — and leaving it out of
+    pricing altogether is Phase 1's bug #6, where objection canonicalization was
+    24% of measured spend and 0% of the quote.
+    """
+    actual = _stage_cost(ICP_SYNTHESIS, 1, settings.llm_model)
+
+    retail = actual / (Decimal("1") - TARGET_MARGIN_PCT / Decimal("100"))
+    floor = actual / (Decimal("1") - MIN_MARGIN_PCT / Decimal("100"))
+    retail = max(retail, floor)
+    margin = (retail - actual) / retail * Decimal("100") if retail > 0 else Decimal("0")
+
+    credits = credits_for(actual)
+    standard_credits = _standard_run_credits()
+
+    return SynthesisCostEstimate(
+        actual_cost_usd=float(actual),
+        retail_cost_usd=float(retail),
+        credits=credits,
+        margin_pct=float(round(margin, 2)),
+        standard_run_equivalents=round(credits / standard_credits, 2)
+        if standard_credits
+        else 0.0,
+    )
+
+
+def check_synthesis_budget(org_id: UUID) -> BudgetCheck:
+    """Whether an org can afford an ICP synthesis, in credits."""
+    balance, _granted, _plan = get_credit_balance(org_id)
+    estimate = estimate_icp_synthesis_cost()
+
+    required = estimate.credits
+    allowed = balance >= required
+    share = round(required * 100 / balance, 2) if balance > 0 else 100.0
+
+    if allowed:
+        msg = f"Synthesizing this ICP uses {required:,} of your {balance:,} credits."
+    else:
+        msg = (
+            f"Not enough credits. ICP synthesis needs {required:,}; "
+            f"you have {balance:,}."
+        )
+
+    return BudgetCheck(
+        allowed=allowed,
+        credits_required=required,
+        credits_remaining=balance,
+        credits_after=max(0, balance - required),
+        balance_share_pct=share,
+        estimated_cost_usd=estimate.actual_cost_usd,
+        retail_price_usd=estimate.retail_cost_usd,
+        message=msg,
+    )
 
 
 @lru_cache(maxsize=1)

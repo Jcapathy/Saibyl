@@ -3,6 +3,8 @@
 # load_all_packs() -> list[PersonaPack]
 # get_pack(pack_id: str) -> PersonaPack
 # list_available_packs() -> list[PackSummary]
+# Archetype, ArchetypeContext, PersonaPack, Demographics, Personality,
+# BehaviorTraits, ICP_PACK_PREFIX
 # ─────────────────────────────────────────────────────────
 from __future__ import annotations
 
@@ -10,11 +12,16 @@ import json
 from pathlib import Path
 
 import structlog
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 logger = structlog.get_logger()
 
 PACKS_DIR = Path(__file__).resolve().parents[4] / "data" / "persona_packs"
+
+# Pack ids with this prefix are compiled ICP profiles, stored in `icp_profiles`
+# rather than `custom_persona_packs`. The profile and the pack it compiles to
+# live in one row so that an edit and the pack the next run uses cannot drift.
+ICP_PACK_PREFIX = "icp_"
 
 # In-memory cache
 _pack_cache: dict[str, PersonaPack] = {}
@@ -39,6 +46,38 @@ class BehaviorTraits(BaseModel):
     influence_multiplier: float
 
 
+class ArchetypeContext(BaseModel):
+    """Founder-lens grounding carried alongside an archetype.
+
+    The 16 built-in packs describe *people* — age, Big Five, posting cadence.
+    A synthesized ICP describes a *buying situation*: what this archetype uses
+    today, what it would cost them to switch, what makes them stop reading. That
+    is the part worth paying an Opus pass for, and none of it fits in a pack's
+    demographic fields.
+
+    Optional and absent on every built-in pack, so the packs on disk keep
+    validating unchanged. Present, it reaches the agent-generation prompt — an
+    ICP whose incumbent tooling never gets into an agent's head is a relabelled
+    generic pack, which is the failure mode DECISIONS §3 rejected packs to avoid.
+    """
+
+    role: str = ""
+    seniority: str = ""
+    budget_authority: str = ""
+    incumbent_tooling: list[str] = Field(default_factory=list)
+    switching_cost: str = ""
+    evaluation_criteria: list[str] = Field(default_factory=list)
+    skepticism_triggers: list[str] = Field(default_factory=list)
+    goals: list[str] = Field(default_factory=list)
+    pains: list[str] = Field(default_factory=list)
+
+    # Adversarial archetypes only. `competitor_name` is set only when uploaded
+    # competitor material licensed the name — see icp_schema.
+    competitor_name: str | None = None
+    core_argument: str = ""
+    talking_points: list[str] = Field(default_factory=list)
+
+
 class Archetype(BaseModel):
     id: str
     label: str
@@ -50,6 +89,14 @@ class Archetype(BaseModel):
     interests: list[str]
     political_lean: str
     values: list[str]
+
+    # Set only by compiled ICP packs. An adversarial agent is labelled synthetic
+    # in every report and export (PRD §4), so the flag has to survive from the
+    # pack all the way onto the agent row — inferring it later from a label is
+    # exactly the kind of string-matching this codebase has been removing.
+    is_adversarial: bool = False
+    adversarial_role: str | None = None
+    context: ArchetypeContext | None = None
 
 
 class PersonaPack(BaseModel):
@@ -95,16 +142,46 @@ def load_all_packs() -> list[PersonaPack]:
 
 
 def get_pack(pack_id: str) -> PersonaPack:
-    """Get a specific persona pack by ID (built-in or custom)."""
+    """Get a specific persona pack by ID (built-in, custom, or compiled ICP)."""
     if not _pack_cache:
         load_all_packs()
     if pack_id in _pack_cache:
         return _pack_cache[pack_id]
+    if pack_id.startswith(ICP_PACK_PREFIX):
+        pack = _load_icp_pack(pack_id)
+        if pack:
+            return pack
+        raise KeyError(f"ICP profile '{pack_id}' not found")
     # Check custom packs in DB
     pack = _load_custom_pack(pack_id)
     if pack:
         return pack
     raise KeyError(f"Persona pack '{pack_id}' not found")
+
+
+def _load_icp_pack(pack_id: str) -> PersonaPack | None:
+    """Load a compiled ICP pack from `icp_profiles`.
+
+    Deliberately not cached in `_pack_cache`: a founder can edit their ICP
+    between runs, and a process-lifetime cache would serve the pre-edit audience
+    to whichever API worker happened to have loaded it first. Built-in packs are
+    files and cannot change under a running process; this one can.
+    """
+    try:
+        from app.core.database import get_supabase_admin
+        admin = get_supabase_admin()
+        result = (
+            admin.table("icp_profiles")
+            .select("pack_data")
+            .eq("pack_id", pack_id)
+            .limit(1)
+            .execute()
+        )
+        if result.data:
+            return PersonaPack.model_validate(result.data[0]["pack_data"])
+    except Exception as e:
+        logger.warning("icp_pack_load_failed", pack_id=pack_id, error=str(e))
+    return None
 
 
 def _load_custom_pack(pack_id: str) -> PersonaPack | None:

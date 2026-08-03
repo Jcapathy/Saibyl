@@ -34,6 +34,62 @@ async def run_build_knowledge_graph(project_id: str, ontology_id: str):
     return {"knowledge_graph_id": result["id"]}
 
 
+def _context_block(archetype) -> str:
+    """The founder-lens grounding for one archetype, as prompt text.
+
+    Empty for the 16 built-in packs, which carry no `context`. For a synthesized
+    ICP this is the part that was worth an Opus pass: what this buyer uses
+    today, what it would cost them to switch, what makes them stop reading. An
+    ICP whose incumbent tooling never reaches an agent's head is a relabelled
+    generic pack, which is the outcome DECISIONS §3 rejected packs to avoid.
+    """
+    ctx = getattr(archetype, "context", None)
+    if ctx is None:
+        return ""
+
+    lines: list[str] = []
+    if ctx.role:
+        lines.append(f"Role: {ctx.role}")
+    if ctx.seniority:
+        lines.append(f"Seniority: {ctx.seniority}, budget authority: {ctx.budget_authority}")
+    if ctx.incumbent_tooling:
+        lines.append(
+            f"Uses today: {', '.join(ctx.incumbent_tooling)} "
+            f"(switching cost: {ctx.switching_cost or 'unknown'})"
+        )
+    if ctx.evaluation_criteria:
+        lines.append(f"Judges on: {', '.join(ctx.evaluation_criteria)}")
+    if ctx.skepticism_triggers:
+        lines.append(f"Stops reading when: {', '.join(ctx.skepticism_triggers)}")
+    if ctx.goals:
+        lines.append(f"Trying to: {', '.join(ctx.goals)}")
+    if ctx.pains:
+        lines.append(f"Frustrated by: {', '.join(ctx.pains)}")
+
+    if archetype.is_adversarial:
+        # The guardrail, restated at the call site that could break it. A named
+        # competitor reaches this prompt only when uploaded competitor material
+        # licensed the name — but the model still must not invent facts about
+        # that company, because the material grounds the name, not the claims.
+        aligned = (
+            f"aligned with {ctx.competitor_name}"
+            if ctx.competitor_name
+            else "aligned with the status quo, with no specific company in mind"
+        )
+        lines.append(f"This persona is {aligned}, and argues against adopting the subject.")
+        if ctx.core_argument:
+            lines.append(f"Their core argument: {ctx.core_argument}")
+        if ctx.talking_points:
+            lines.append(f"Their talking points: {', '.join(ctx.talking_points)}")
+        lines.append(
+            "Do not state facts about any real company's product, pricing, "
+            "roadmap, or customers. Argue about the category and the cost of "
+            "switching, which is what this persona actually knows."
+        )
+
+    return "\n" + "\n".join(lines) + "\n" if lines else ""
+
+
 async def run_prepare_agents(simulation_id: str):
     """Generate agents from persona packs (or fallback to ontology entities)."""
     admin = get_supabase_admin()
@@ -91,13 +147,19 @@ async def run_prepare_agents(simulation_id: str):
         )
 
     # -- Generate agents from persona packs (enriched with ontology + doc context) --
+    from app.services.engine.personas.icp_synthesizer import rebalance_adversarial
     from app.services.engine.personas.pack_loader import get_pack
+
+    # The run's configured share, not the one the ICP was compiled with. An ICP
+    # is reused across runs, and a founder who wants to see the reception at 40%
+    # incumbents should not have to re-synthesize their audience to find out.
+    adversarial_share = float(sim.get("adversarial_share") or 0.0)
 
     all_archetypes = []
     for pack_id in persona_pack_ids:
         try:
             pack = get_pack(pack_id)
-            for archetype in pack.archetypes:
+            for archetype in rebalance_adversarial(pack.archetypes, adversarial_share):
                 all_archetypes.append((pack, archetype))
         except KeyError:
             logger.warning("pack_not_found", pack_id=pack_id)
@@ -135,7 +197,7 @@ Values: {', '.join(archetype.values)}
 Political lean: {archetype.political_lean}
 Typical content: {', '.join(archetype.behavior_traits.typical_content)}
 Sentiment baseline: {archetype.behavior_traits.sentiment_baseline}
-
+{_context_block(archetype)}
 Topic context: {prediction_goal}
 Domain context: {ontology_context}
 Document context: {doc_context[:2000]}
@@ -173,6 +235,13 @@ Return a JSON object:
                     "persona_pack_id": pack.id,
                     "variant": "a",
                     "platform": platform,
+                    # Carried on the row, not inferred later from the archetype
+                    # label. Every report and export labels these agents
+                    # synthetic (PRD §4), and a label-matching rule is exactly
+                    # the kind of string coupling this codebase has been
+                    # removing.
+                    "is_adversarial": archetype.is_adversarial,
+                    "adversarial_role": archetype.adversarial_role,
                     "profile": {
                         **profile_data,
                         "archetype": archetype.label,
@@ -181,6 +250,8 @@ Return a JSON object:
                         "entity_type": archetype.label,
                         "platform": platform,
                         "influence_multiplier": archetype.behavior_traits.influence_multiplier,
+                        "is_adversarial": archetype.is_adversarial,
+                        "adversarial_role": archetype.adversarial_role,
                     },
                     "username": profile_data.get("username", f"{archetype.id}_{i}"),
                 }
@@ -194,6 +265,8 @@ Return a JSON object:
                     "persona_pack_id": pack.id,
                     "variant": "a",
                     "platform": platform,
+                    "is_adversarial": archetype.is_adversarial,
+                    "adversarial_role": archetype.adversarial_role,
                     "profile": {
                         "display_name": f"{archetype.label} #{i+1}",
                         "persona_type": archetype.label,
@@ -201,6 +274,8 @@ Return a JSON object:
                         "bio": f"A {archetype.label.lower()} active on {platform}",
                         "sentiment_baseline": archetype.behavior_traits.sentiment_baseline,
                         "influence_multiplier": archetype.behavior_traits.influence_multiplier,
+                        "is_adversarial": archetype.is_adversarial,
+                        "adversarial_role": archetype.adversarial_role,
                     },
                     "username": f"{archetype.id}_{platform}_{i}",
                 }
