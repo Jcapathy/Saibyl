@@ -15,8 +15,29 @@ from litellm import acompletion
 from pydantic import BaseModel
 
 from app.core.config import settings
+from app.services.billing.usage_ledger import record_llm_call
 
 logger = structlog.get_logger()
+
+
+def _record(resolved: str, usage: Any) -> None:
+    """Send a call's token counts to the usage ledger.
+
+    Tolerates providers that omit the cache fields. Never raises — a metering
+    failure must not fail the caller's request.
+    """
+    if usage is None:
+        return
+    try:
+        record_llm_call(
+            model=resolved,
+            input_tokens=getattr(usage, "prompt_tokens", 0) or 0,
+            output_tokens=getattr(usage, "completion_tokens", 0) or 0,
+            cache_read_tokens=getattr(usage, "cache_read_input_tokens", 0) or 0,
+            cache_write_tokens=getattr(usage, "cache_creation_input_tokens", 0) or 0,
+        )
+    except Exception:
+        logger.exception("llm_usage_hook_failed", model=resolved)
 
 
 def _resolve_model(model: str | None, fast: bool = False) -> str:
@@ -54,6 +75,7 @@ async def llm_complete(
         prompt_tokens=usage.prompt_tokens,
         completion_tokens=usage.completion_tokens,
     )
+    _record(resolved, usage)
     return response.choices[0].message.content
 
 
@@ -76,6 +98,7 @@ async def llm_structured(
         schema=schema.__name__,
         tokens=response.usage.completion_tokens,
     )
+    _record(resolved, response.usage)
     raw = response.choices[0].message.content
     # Extract clean JSON from LLM response which may include markdown
     # fences, trailing commentary, or other non-JSON text
