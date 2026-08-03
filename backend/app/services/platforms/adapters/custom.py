@@ -43,6 +43,7 @@ _ACTION_PROMPT = (
     "You are {username} on {platform_name}. Persona: {persona}\n"
     "{tone}"
     "Feed:\n{feed}\n\n"
+    "{topic}"
     "{memory}"
     "Round {round}. Pick ONE action (exact format):\n"
     "POST: <content>\n"
@@ -73,6 +74,7 @@ class CustomAdapter(BasePlatformAdapter):
 
     async def initialize(self, config: dict, agents: list) -> None:
         self._init_history()
+        self.set_topic(config)
         self._platform_config = CustomPlatformConfig(**config.get("platform_config", {}))
         self._agents = agents
         self._posts: list[Post] = []
@@ -178,6 +180,7 @@ class CustomAdapter(BasePlatformAdapter):
             persona=agent.get("persona", "user"),
             tone=tone,
             feed=feed_text,
+            topic=self.topic_block(feed_is_empty=not feed),
             memory=self.get_agent_memory(agent["username"]),
             round=round_number,
         )

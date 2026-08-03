@@ -31,9 +31,8 @@ That is the whole doc set — five files in `docs/`, nothing else to hunt for.
 | Branch | `v2`, pushed to `origin/v2`, in sync |
 | `master` | Untouched, still deployed to Render. **Do not merge without approval.** |
 | Phase 0 | Complete |
-| Phase 1 | Complete — for the commit list: `git log --oneline master..v2` |
-| Verification | ruff clean · pytest 75 passed · `tsc --noEmit` clean · `eslint --quiet` clean · `vite build` OK · 101 routes, no duplicate registrations |
-| **Not yet done** | **No live end-to-end run.** See §2 below — this is the first thing to do. |
+| Phase 1 | Complete and verified end to end — for the commit list: `git log --oneline master..v2` |
+| Verification | ruff clean · pytest 75 passed · `tsc --noEmit` clean · `eslint --quiet` clean · `vite build` OK · 101 routes, no duplicate registrations · **live run `05f1d879` passed** |
 
 ### Migrations applied to production (`txmvwuekkiedgxwovorp`)
 
@@ -56,31 +55,58 @@ drift. When adding a column that may already exist by hand, check
 
 ---
 
-## 2. Do this first — Phase 1 is not verified end to end
+## 2. The live run — what it proved, and what it broke
 
-Everything below has passed static verification. **No simulation has been run
-against the new pipeline.** The measurement pass, the analysis build, the
-objection clusterer, the quote redemption and the reconciliation have never
-executed against real data, and a live run costs real money, so it was left for
-an explicit decision rather than spent unilaterally.
+Simulation `05f1d879-a121-4bca-a00c-1aac9949ea43` (Beta Test Org, 24 agents,
+3 rounds, twitter_x + reddit) is the run that validated the phase. Full detail in
+`ARCHITECTURE_V2.md`.
 
-The check to run, in order:
+**It found four bugs, all now fixed.** The first attempt produced **zero events**:
 
-1. Start a small run (25 agents / 3 rounds / 2 platforms ≈ $0.66 of COGS) through
-   the Run Configurator so it goes out with a signed quote.
-2. Confirm `simulation_events.measured_at` is populated and `valence` varies
-   between agents of the *same archetype* — that is the specific thing the drift
-   formula could not do, so it is the sharpest test that Phase 1 worked.
-3. Confirm a `simulation_analysis` row exists with `build_status = 'complete'`
-   and sensible `coverage_pct`.
-4. Open the report viewer. Every figure should carry an interval and an n.
-5. Check the logs for `margin_floor_breached` and `quote_underestimated_run`.
-6. Then do the §5 recalibration below, which needs exactly this data.
+1. **No adapter told its agents what the simulation was about.** All twelve
+   stored `prediction_goal` and none read it; the subject reached agents only via
+   the persona bio. Fixed with `BasePlatformAdapter.topic_block()`.
+2. **Cold-start deadlock.** Empty round-1 feed → every agent rationally picks
+   NOTHING → the feed never fills → zero events across every round, with no error
+   raised anywhere.
+3. **Agent generation truncated** at `max_tokens=400` on Haiku; 20 of 25 profiles
+   failed to parse and fell back to topic-less stubs. Raised to 900.
+4. **An unguarded Redis publish killed the whole report.** Progress publishing
+   now logs and continues.
+5. **The report wrote its own numbers.** With Redis fixed the report generated,
+   and cited zero confidence intervals, zero agent counts and none of the
+   canonical objections across 48,000 characters — while inventing *"~58% of all
+   SMB objections on Reddit"*. `_run_react_loop` began with `evidence = "None
+   yet."` and could answer on turn one, so every measurement rule in the prompt
+   was conditional on a tool call the model never had to make. The artifact is
+   now seeded into evidence before the loop starts.
+6. **Objection canonicalization was not priced.** A stage this phase added that
+   `estimate_simulation_cost` never learned about — 24% of the live run's spend
+   was invisible to the quote.
 
-Existing runs (63 simulations, 10,236 events) are *not* backfilled. They have no
-`measured_at`, so the viewer will show "this run has not been analysed" for all
-of them — which is correct, not a bug. Their `metadata.sentiment` values are the
-old formula's output and are read by nothing.
+Bugs 1 and 2 predate Phase 1 — moving generation to Haiku removed the accident
+that was hiding them. Bug 5 is the same class as the original defect one level
+up: V1 generated numbers in the frontend because the backend had none; the
+report generated numbers in prose because the loop had none in context.
+
+**What it proved.** 72 events, 100% measurement coverage, 0 failures. The sharp
+test — does valence vary between agents of the *same* archetype, which the drift
+formula could not do by construction — passed on every archetype, with spreads of
+0.6 to 1.2. Headline −0.280 (95% CI −0.375 to −0.184, n=19), 56% oppose. 124
+distinct raw objection phrasings, every one unique, clustered into 19 canonical
+objections. The single flashpoint was correctly reported as *within the bands*
+rather than narrated as a finding.
+
+**Watch this:** the top objection by load-bearing weight was "positioned as
+nice-to-have not must-have" (8 agents, 7 cohorts), outranking "$99/month too
+high" (7 agents, 4 cohorts). Frequency alone would have ranked them level; cohort
+spread is what separated them. That is the ranking rule working as intended, and
+it is worth sanity-checking again on the next few runs.
+
+**Existing runs are not backfilled.** 63 simulations and 10,236 events have no
+`measured_at`, so the viewer correctly shows "this run has not been analysed" for
+all of them. Their `metadata.sentiment` values are the old formula's output and
+are read by nothing.
 
 ---
 
@@ -150,11 +176,21 @@ Two deliberate divergences from the §3 brief, both argued in
 
 Every price in `PRICING_GUIDE.md` rests on the stage token profiles in
 `agent_pricing.py` (`AGENT_ACTION`, `AGENT_GENERATION`, `EVENT_MEASUREMENT`,
-`REPORT_SECTION`). **Those are conservative estimates, not measurements.** The
-`llm_usage` ledger exists to replace them, and now that every stage is wrapped in
-a `usage_context` the data will arrive with the first real run.
+`OBJECTION_CANONICALIZATION`, `REPORT_SECTION`). **Those are conservative
+estimates, not measurements.**
 
-Once §2's live run has happened, do this before Phase 2:
+The live run gave the first data point: it was quoted $0.6595 and actually cost
+**$0.3144**. The floor held (90.5% actual margin) and the direction is the safe
+one, but a 2× over-quote means a customer's grant buys half the runs it should.
+
+The profiles were deliberately **not** recalibrated from that single run:
+per-call input scales with feed size, which scales with agent count and round
+depth, so a 25-agent/3-round run is a bad basis for pricing a 100-agent/5-round
+one. Extrapolating from it would swap a conservative estimate for a confidently
+wrong one. Measured baselines are tabulated in `ARCHITECTURE_V2.md`.
+
+What is needed is several runs across shapes — at minimum one standard
+(100/5/2/1) and one multi-variant. Then:
 
 1. Query measured medians per stage:
    `SELECT stage, model, percentile_cont(0.5) WITHIN GROUP (ORDER BY input_tokens),

@@ -19,6 +19,7 @@ from app.services.platforms.registry import register_adapter
 _ACTION_PROMPT = (
     "You are @{username} on TikTok. Persona: {persona}\n"
     "Feed (recent posts):\n{feed}\n\n"
+    "{topic}"
     "{memory}"
     "Round {round}. Pick ONE action (exact format). Content is video-first.\n"
     "POST: <video caption> | <description>\n"
@@ -48,6 +49,7 @@ class TikTokAdapter(BasePlatformAdapter):
     async def initialize(self, config: dict, agents: list) -> None:
         self._init_history()
         self._config = config
+        self.set_topic(config)
         self._agents = agents
         self._posts: list[Post] = []
         self._comments: list[Comment] = []
@@ -124,6 +126,7 @@ class TikTokAdapter(BasePlatformAdapter):
             username=agent["username"],
             persona=agent.get("persona", "average user"),
             feed=feed_text,
+            topic=self.topic_block(feed_is_empty=not feed),
             memory=self.get_agent_memory(agent["username"]),
             round=round_number,
         )

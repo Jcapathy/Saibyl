@@ -467,6 +467,23 @@ def _get_redis() -> redis.Redis:
     return redis.from_url(settings.redis_url, decode_responses=True)
 
 
+def _publish_progress(r: redis.Redis, report_id: str, payload: dict) -> None:
+    """Emit a live progress event, and never fail the report if it can't.
+
+    Progress publishing is a side channel for the UI. It was previously an
+    unguarded `r.publish(...)` inside the section generator, so an unreachable
+    Redis raised ConnectionError out of `asyncio.gather` and killed report
+    generation outright — every section left `pending`, the report marked
+    `failed`, and an Opus-priced run's whole narrative lost to a notification
+    that nobody was listening to. The report is the product; the progress bar
+    is not.
+    """
+    try:
+        r.publish(f"report:{report_id}:progress", json.dumps(payload))
+    except Exception:
+        logger.warning("report_progress_publish_failed", report_id=report_id)
+
+
 async def _run_react_loop(
     section: SectionPlan,
     simulation_id: str,
@@ -476,9 +493,29 @@ async def _run_react_loop(
     variant: str = "a",
     platforms: str = "",
 ) -> str:
-    """Run the ReACT loop for a single report section."""
-    evidence: list[str] = []
+    """Run the ReACT loop for a single report section.
+
+    The measured findings are seeded into evidence before the loop starts, so
+    every section begins from the analysis artifact whether or not the model
+    chooses to ask for it.
+
+    Without this the loop can emit `ANSWER:` on its first turn against
+    `evidence = "None yet."` and write the whole section from the prediction
+    goal — an LLM opinion wearing a report's formatting, which is the exact
+    thing this phase exists to remove. "Use MULTIPLE different tools" in the
+    prompt is advice; a model under a token budget will decline it.
+
+    Seeding is also strictly cheaper than letting the model ask: it costs one
+    read of a row we already built, instead of an Opus turn spent deciding to
+    request it.
+    """
     resolved = config.resolved()
+
+    seed = await simulation_analytics(UUID(simulation_id), "measured_findings", variant=variant)
+    evidence: list[str] = [
+        f"[Measured analysis — the only source of numbers for this report]\n"
+        f"{seed.summary}\n{json.dumps(seed.data, default=str)[:6000]}"
+    ]
 
     for tool_call_num in range(resolved.max_tool_calls_per_section):
         prompt = REACT_PROMPT.format(
@@ -677,9 +714,9 @@ async def generate_report(
         platforms = ", ".join(sim.get("platforms") or ["twitter_x"])
 
         async def generate_section(idx: int, section: SectionPlan):
-            r.publish(f"report:{report_id}:progress", json.dumps({
+            _publish_progress(r, report_id, {
                 "section_index": idx, "status": "generating", "title": section.title,
-            }))
+            })
 
             content = await _run_react_loop(
                 section, sim_id, sim["prediction_goal"], graph_id, config,
@@ -692,9 +729,9 @@ async def generate_report(
                 "status": "complete",
             }).eq("report_id", report_id).eq("section_index", idx).execute()
 
-            r.publish(f"report:{report_id}:progress", json.dumps({
+            _publish_progress(r, report_id, {
                 "section_index": idx, "status": "complete", "title": section.title,
-            }))
+            })
             return content
 
         tasks = [generate_section(i, s) for i, s in enumerate(outline.sections)]
@@ -720,10 +757,10 @@ async def generate_report(
         conclusion_idx = len(outline.sections)
         conclusion_title = "Strategic Implications & Recommended Actions"
 
-        r.publish(f"report:{report_id}:progress", json.dumps({
+        _publish_progress(r, report_id, {
             "section_index": conclusion_idx, "status": "generating",
             "title": conclusion_title,
-        }))
+        })
 
         admin.table("report_sections").insert({
             "report_id": report_id,
@@ -754,10 +791,10 @@ async def generate_report(
             "status": "complete",
         }).eq("report_id", report_id).eq("section_index", conclusion_idx).execute()
 
-        r.publish(f"report:{report_id}:progress", json.dumps({
+        _publish_progress(r, report_id, {
             "section_index": conclusion_idx, "status": "complete",
             "title": conclusion_title,
-        }))
+        })
 
         # Append conclusion to sections text so exec summary can reference it
         sections_text += f"\n\n---\n\n## {conclusion_title}\n\n{conclusion_content}"

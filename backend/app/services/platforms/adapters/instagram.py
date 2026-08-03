@@ -21,6 +21,7 @@ _STORY_TTL_HOURS = 24
 _ACTION_PROMPT = (
     "You are @{username} on Instagram. Persona: {persona}\n"
     "Feed (recent posts):\n{feed}\n\n"
+    "{topic}"
     "{memory}"
     "Round {round}. Pick ONE action (exact format). Posts are visual-first.\n"
     "POST: <caption> | <image_description>\n"
@@ -49,6 +50,7 @@ class InstagramAdapter(BasePlatformAdapter):
     async def initialize(self, config: dict, agents: list) -> None:
         self._init_history()
         self._config = config
+        self.set_topic(config)
         self._agents = agents
         self._posts: list[Post] = []
         self._stories: list[Post] = []
@@ -148,6 +150,7 @@ class InstagramAdapter(BasePlatformAdapter):
             username=agent["username"],
             persona=agent.get("persona", "average user"),
             feed=feed_text,
+            topic=self.topic_block(feed_is_empty=not feed),
             memory=self.get_agent_memory(agent["username"]),
             round=round_number,
         )

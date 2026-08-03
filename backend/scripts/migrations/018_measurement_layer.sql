@@ -181,13 +181,13 @@ SET credits_balance = CASE COALESCE(plan, 'starter')
         WHEN 'enterprise' THEN 199800
         WHEN 'pro'        THEN 59800
         WHEN 'starter'    THEN 19800
-        ELSE 700
+        ELSE 800
     END,
     credits_granted = CASE COALESCE(plan, 'starter')
         WHEN 'enterprise' THEN 199800
         WHEN 'pro'        THEN 59800
         WHEN 'starter'    THEN 19800
-        ELSE 700
+        ELSE 800
     END,
     credit_cycle_start = COALESCE(credit_cycle_start, DATE_TRUNC('month', NOW()))
 WHERE credits_granted = 0;

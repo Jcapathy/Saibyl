@@ -22,6 +22,7 @@ _MAX_COMMENT_DEPTH = 5
 _ACTION_PROMPT = (
     "You are u/{username} on Reddit. Persona: {persona}\n"
     "Subreddit: r/{subreddit}. Hot posts:\n{feed}\n\n"
+    "{topic}"
     "{memory}"
     "Round {round}. Pick ONE action (exact format):\n"
     "POST: <title> | <body>\n"
@@ -53,6 +54,7 @@ class RedditAdapter(BasePlatformAdapter):
     async def initialize(self, config: dict, agents: list) -> None:
         self._init_history()
         self._config = config
+        self.set_topic(config)
         self._agents = agents
         self._subreddit = config.get("subreddit", "general")
         self._posts: list[Post] = []
@@ -141,6 +143,7 @@ class RedditAdapter(BasePlatformAdapter):
             persona=agent.get("persona", "average redditor"),
             subreddit=self._subreddit,
             feed=feed_text,
+            topic=self.topic_block(feed_is_empty=not feed),
             memory=self.get_agent_memory(agent["username"]),
             round=round_number,
         )

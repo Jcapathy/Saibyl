@@ -12,12 +12,17 @@ All figures come from the same cost model the product bills against
 cd backend && python scripts/quote.py
 ```
 
-> **Figures moved at the end of Phase 1.** Report depth now scales down as well
-> as up, which removed 2 Opus-written sections from a standard run and 4 from a
-> free one. Standard run COGS fell $3.23 → **$2.78**; the free run fell
-> $1.27 → **$0.66**. Margins are unchanged — the grants buy more, they were not
-> re-sized down. **These are still estimated token profiles**, not measured
-> medians; the `llm_usage` recalibration is the next thing to move them.
+> **Figures moved at the end of Phase 1**, for two reasons. Report depth now
+> scales down as well as up, removing 2 Opus-written sections from a standard
+> run and 4 from a free one. And objection canonicalization — a stage Phase 1
+> added — was not priced at all; it was 24% of the first live run's measured
+> spend. Net: standard run COGS $3.23 → **$2.87**, free run $1.27 → **$0.75**.
+> Margins are unchanged.
+>
+> **These are still estimated token profiles, not measured medians.** The first
+> live run cost $0.3144 against a $0.6595 quote — the safe direction, but a 2x
+> over-quote means a grant buys half the runs it should. Recalibration needs
+> several runs across shapes; see `HANDOFF.md` §5.
 
 ---
 
@@ -31,20 +36,20 @@ credits per run. **This must be disclosed before they hit it, not after.**
 
 The reference unit for all advertised run counts:
 
-> **Standard run** = 100 agents × 5 rounds × 2 platforms × 1 variant → **$2.78 COGS**
+> **Standard run** = 100 agents × 5 rounds × 2 platforms × 1 variant → **$2.87 COGS**
 
-**One credit = $0.001 of COGS.** A standard run is 2,777 credits; the Founder
+**One credit = $0.001 of COGS.** A standard run is 2,867 credits; the Founder
 grant of $19.80 is 19,800. Credits are integers so a balance cannot drift, and
 conversion always rounds up — a run costing a fraction of a credit more than it
 charges is a run served at a loss.
 
 ## 1.2 Tier cards — required copy
 
-Advertised run counts are *always* qualified. Never print a bare "7 runs".
+Advertised run counts are *always* qualified. Never print a bare "6 runs".
 
 ```
 FOUNDER — $99/mo
-  ~7 standard runs per month
+  ~6 standard runs per month
   ⓘ "Standard run" = 100 agents, 5 rounds, 2 platforms, 1 variant.
     Larger runs use more of your monthly credits — you'll see the exact
     cost before you start any run.
@@ -109,17 +114,16 @@ whereas dropping a variant deletes a question the user asked.
 
 | Tier | Price | COGS grant | Credits | ≈ standard runs | ≈ 8-variant runs | Margin |
 |---|---:|---:|---:|---:|---:|---:|
-| Free trial | $0 (one run) | $0.70 | 700 | 1 capped | — | — |
-| Founder | $99 | $19.80 | 19,800 | 7 | 2 | 80% |
-| Growth | $299 | $59.80 | 59,800 | 21 | 6 | 80% |
-| Agency | $999 | $199.80 | 199,800 | 71 | 23 | 80% |
+| Free trial | $0 (one run) | $0.80 | 800 | 1 capped | — | — |
+| Founder | $99 | $19.80 | 19,800 | 6 | 2 | 80% |
+| Growth | $299 | $59.80 | 59,800 | 20 | 6 | 80% |
+| Agency | $999 | $199.80 | 199,800 | 69 | 22 | 80% |
 | Enterprise | Custom annual | see Part 2 | | | | 68–78% |
 
-The free grant is $0.70, not the $0.35 originally projected. That projection
-assumed a 2-section report would bring a 25-agent run to $0.35; with depth
-scaling actually implemented the run measures **$0.66**, because the report is
-now 46% of a very small run's cost rather than 84% of it. The grant follows the
-measured cost — one that did not cover a single free run would make the tier
+The free grant is $0.80, not the $0.35 originally projected. The report and the
+objection canonicalizer are both main-model stages that barely shrink with run
+size, so on a 25-agent run they dominate: the run models at **$0.75**. The grant
+follows the cost — one that did not cover a single free run would make the tier
 unusable.
 
 Regional bands (Tier 2 −40%, Tier 3 −60%) scale the grant with the price and
@@ -148,15 +152,15 @@ than refusing.
 
 ## 2.1 Ask this before quoting anything
 
-**The same "400 runs/month" is worth between $5,049 and $51,758 per month
+**The same "400 runs/month" is worth between $5,208 and $51,921 per month
 depending on run shape.** Volume alone is not a quote.
 
 | If their runs are… | COGS/run | COGS/mo @400 | Quote/mo | Annual prepay |
 |---|---:|---:|---:|---:|
-| All standard | $2.78 | $1,111 | $5,049 | $54,533 |
-| Blended agency mix | $11.47 | $4,587 | $20,850 | $225,185 |
-| All 8-variant marketing | $8.70 | $3,479 | $15,814 | $170,795 |
-| All growth-size | $28.47 | $11,387 | $51,758 | $558,984 |
+| All standard | $2.87 | $1,147 | $5,208 | $56,246 |
+| Blended agency mix | $11.56 | $4,623 | $21,014 | $226,953 |
+| All 8-variant marketing | $8.79 | $3,515 | $15,977 | $172,555 |
+| All growth-size | $28.56 | $11,423 | $51,921 | $560,747 |
 
 Three questions that pin the number down:
 
@@ -172,31 +176,31 @@ are "heavy" contribute **31% of total COGS**. A customer who runs one 250-agent
 
 | Shape | Config | COGS | vs standard |
 |---|---|---:|---:|
-| Light | 50ag / 5rd / 2pf / 1v | $1.69 | 0.6× |
-| **Standard** | **100ag / 5rd / 2pf / 1v** | **$2.78** | **1.0×** |
-| Marketing | 100ag / 5rd / 1pf / 8v | $8.70 | 3.1× |
-| Founder-max | 100ag / 8rd / 3pf / 3v | $14.84 | 5.3× |
-| Growth | 150ag / 8rd / 3pf / 4v | $28.47 | 10.3× |
-| Heavy | 250ag / 12rd / 4pf / 8v | $181.52 | 65.4× |
-| *Blended agency mix* | *55/30/13/2 weighting* | *$11.47* | *4.1×* |
+| Light | 50ag / 5rd / 2pf / 1v | $1.78 | 0.6× |
+| **Standard** | **100ag / 5rd / 2pf / 1v** | **$2.87** | **1.0×** |
+| Marketing | 100ag / 5rd / 1pf / 8v | $8.79 | 3.1× |
+| Founder-max | 100ag / 8rd / 3pf / 3v | $14.93 | 5.2× |
+| Growth | 150ag / 8rd / 3pf / 4v | $28.56 | 10.0× |
+| Heavy | 250ag / 12rd / 4pf / 8v | $181.61 | 63.3× |
+| *Blended agency mix* | *55/30/13/2 weighting* | *$11.56* | *4.0×* |
 
 ## 2.3 Volume band table — blended agency mix
 
-Priced at **$11.47/run COGS**. This is the default quoting table.
+Priced at **$11.56/run COGS**. This is the default quoting table.
 
 | Runs/mo | Margin | COGS/mo | **PRICE/mo** | $/run | Annual prepay | Gross profit/yr |
 |---:|---:|---:|---:|---:|---:|---:|
-| 100 | 80% | $1,147 | **$5,734** | $57.34 | $61,926 | $48,165 |
-| 200 | 78% | $2,294 | **$10,425** | $52.13 | $112,593 | $85,070 |
-| 300 | 78% | $3,440 | **$15,638** | $52.13 | $168,889 | $127,605 |
-| 400 | 78% | $4,587 | **$20,850** | $52.13 | $225,185 | $170,140 |
-| 500 | 78% | $5,734 | **$26,063** | $52.13 | $281,482 | $212,675 |
-| 750 | 75% | $8,601 | **$34,403** | $45.87 | $371,556 | $268,346 |
-| 1,000 | 75% | $11,468 | **$45,871** | $45.87 | $495,408 | $357,795 |
-| 1,500 | 72% | $17,202 | **$61,435** | $40.96 | $663,493 | $457,073 |
-| 2,000 | 72% | $22,936 | **$81,913** | $40.96 | $884,657 | $609,430 |
-| 3,000 | 70% | $34,403 | **$114,678** | $38.23 | $1,238,520 | $825,680 |
-| 5,000 | 70% | $57,339 | **$191,130** | $38.23 | $2,064,199 | $1,376,133 |
+| 100 | 80% | $1,156 | **$5,779** | $57.79 | $62,412 | $48,543 |
+| 200 | 78% | $2,312 | **$10,507** | $52.54 | $113,476 | $85,738 |
+| 300 | 78% | $3,467 | **$15,761** | $52.54 | $170,214 | $128,607 |
+| 400 | 78% | $4,623 | **$21,014** | $52.54 | $226,953 | $171,475 |
+| 500 | 78% | $5,779 | **$26,268** | $52.54 | $283,691 | $214,344 |
+| 750 | 75% | $8,668 | **$34,673** | $46.23 | $374,472 | $270,452 |
+| 1,000 | 75% | $11,558 | **$46,231** | $46.23 | $499,296 | $360,603 |
+| 1,500 | 72% | $17,337 | **$61,917** | $41.28 | $668,700 | $460,660 |
+| 2,000 | 72% | $23,116 | **$82,556** | $41.28 | $891,600 | $614,213 |
+| 3,000 | 70% | $34,673 | **$115,578** | $38.53 | $1,248,240 | $832,160 |
+| 5,000 | 70% | $57,789 | **$192,630** | $38.53 | $2,080,399 | $1,386,933 |
 
 **Annual prepay** = 12 × monthly, less 10% for paying up front. That discount is
 a cash-flow trade, not a margin concession — it does not move COGS.

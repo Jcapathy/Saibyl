@@ -22,6 +22,7 @@ _ACTION_PROMPT = (
     "You are commenter '{username}' on a news site. Persona: {persona}\n"
     "Article: {article_title}\n"
     "Comments:\n{feed}\n\n"
+    "{topic}"
     "{memory}"
     "Round {round}. Pick ONE action (exact format). Be concise, opinionated.\n"
     "COMMENT: <your comment on the article>\n"
@@ -43,6 +44,7 @@ class NewsCommentsAdapter(BasePlatformAdapter):
     async def initialize(self, config: dict, agents: list) -> None:
         self._init_history()
         self._config = config
+        self.set_topic(config)
         self._agents = agents
         self._posts: list[Post] = []
         self._comments: list[Comment] = []
@@ -163,6 +165,7 @@ class NewsCommentsAdapter(BasePlatformAdapter):
             persona=agent.get("persona", "news reader"),
             article_title=article_title,
             feed=comments_text,
+            topic=self.topic_block(feed_is_empty=not self._comments),
             memory=self.get_agent_memory(agent["username"]),
             round=round_number,
         )

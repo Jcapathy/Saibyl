@@ -68,15 +68,16 @@ STANDARD_RUN = (100, 5, 2, 1)  # agents, rounds, platforms, variants
 # plan names still in the database and the V2 tier names are mapped, because
 # the Stripe tier migration is separate work — see ARCHITECTURE_V2.md.
 #
-# The free grant is 700 credits ($0.70), not the $0.35 the PRD projected. That
+# The free grant is 800 credits ($0.80), not the $0.35 the PRD projected. That
 # projection assumed a 2-section report would bring a 25-agent run to $0.35;
-# with depth scaling actually implemented the run measures $0.66, because the
-# report is now 46% of a very small run's cost rather than 84% of it. A grant
+# with depth scaling implemented and objection canonicalization priced, the run
+# models at $0.75. The report and the canonicalizer are both main-model stages
+# that barely shrink with run size, so they dominate a very small run. A grant
 # that does not cover one free run would make the free tier unusable, so the
-# grant follows the measured cost rather than the estimate.
+# grant follows the cost rather than the original estimate.
 TIER_CREDIT_GRANTS = {
-    "free": 700,
-    "trial": 700,
+    "free": 800,
+    "trial": 800,
     "founder": 19_800,
     "starter": 19_800,
     "growth": 59_800,
@@ -155,6 +156,14 @@ AGENT_GENERATION = _StageProfile(input_tokens=1200, output_tokens=350)
 # Per-event measurement, batched ~25 events per call — hence the small
 # per-event share.
 EVENT_MEASUREMENT = _StageProfile(input_tokens=140, output_tokens=40)
+
+# Objection canonicalization: one main-model call over the run's distinct
+# objection phrasings. Measured at 2,199 in / 2,587 out on a 25-agent run.
+# It is charged once per run, not per event — the input is the *distinct*
+# phrasings, which saturates well before the event count does. Omitting this
+# stage was under-quoting every run by roughly a quarter of its true cost on
+# small runs, because it is nearly constant while everything else scales.
+OBJECTION_CANONICALIZATION = _StageProfile(input_tokens=3000, output_tokens=3000)
 
 # Report generation, per section (ReACT tool calls plus the write-up).
 REPORT_SECTION = _StageProfile(input_tokens=18000, output_tokens=2500)
@@ -267,9 +276,17 @@ def estimate_simulation_cost(
     action_cost = _stage_cost(AGENT_ACTION, action_units, fast_model)
     generation_cost = _stage_cost(AGENT_GENERATION, generation_units, fast_model)
     measurement_cost = _stage_cost(EVENT_MEASUREMENT, measurement_units, fast_model)
+    # Once per run, on the main model, regardless of run size.
+    canonicalization_cost = _stage_cost(OBJECTION_CANONICALIZATION, 1, main_model)
     report_cost = _stage_cost(REPORT_SECTION, section_units, main_model)
 
-    actual = action_cost + generation_cost + measurement_cost + report_cost
+    actual = (
+        action_cost
+        + generation_cost
+        + measurement_cost
+        + canonicalization_cost
+        + report_cost
+    )
 
     # Price to the target margin, then enforce the floor.
     retail = actual / (Decimal("1") - TARGET_MARGIN_PCT / Decimal("100"))
@@ -300,6 +317,7 @@ def estimate_simulation_cost(
             "agent_actions": float(action_cost),
             "agent_generation": float(generation_cost),
             "event_measurement": float(measurement_cost),
+            "objection_canonicalization": float(canonicalization_cost),
             "report": float(report_cost),
         },
         standard_run_equivalents=round(credits / standard_credits, 2)
@@ -324,6 +342,7 @@ def _standard_run_credits() -> int:
         _stage_cost(AGENT_ACTION, action_units, settings.llm_fast_model)
         + _stage_cost(AGENT_GENERATION, agents, settings.llm_fast_model)
         + _stage_cost(EVENT_MEASUREMENT, measurement_units, settings.llm_fast_model)
+        + _stage_cost(OBJECTION_CANONICALIZATION, 1, settings.llm_model)
         + _stage_cost(REPORT_SECTION, sections, settings.llm_model)
     )
     return credits_for(total)

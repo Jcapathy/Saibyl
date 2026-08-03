@@ -414,6 +414,153 @@ an undefined colour.
 
 ---
 
+## [PHASE 1 | 2026-08-02] The live run, and the three bugs it found
+
+Static verification passes nothing that matters here. A 25-agent / 3-round /
+2-platform run against production (`05f1d879`) is what actually validated the
+phase, and the first attempt produced **zero events**.
+
+**Bug 1 — no adapter ever told its agents what the simulation was about.** All
+twelve stored `prediction_goal` in `self._config` during `initialize()` and not
+one read it. The subject reached agents only through the persona bio, which is
+generated *from* the subject — so the simulation silently depended on the bio
+generator succeeding. Fixed with `BasePlatformAdapter.topic_block()`, threaded
+into all twelve action prompts.
+
+**Bug 2 — the cold-start deadlock.** On round one the feed is empty, and
+"observe before engaging" is what a thoughtful person actually does. So every
+agent chose NOTHING, the feed stayed empty, and rounds two and three did the
+same. A run can end at zero events with no error anywhere. `topic_block()` takes
+`feed_is_empty` and tells the agent to post rather than wait.
+
+**Bug 3 — agent generation truncated.** Moving generation to Haiku kept
+`max_tokens=400`, which is not enough for seven fields including a bio and a
+backstory. 20 of 25 profiles failed `json.loads` mid-string and fell through to
+the stub profile — which has no topic knowledge, which is what made bug 1 fatal
+rather than merely degrading. Raised to 900; the re-run had zero generation
+failures.
+
+Bugs 1 and 2 predate Phase 1. Moving generation to Haiku is what exposed them,
+by removing the accident that had been hiding them.
+
+**Measured results (24 agents, 72 events, 100% coverage):**
+
+The test that matters is whether valence varies between agents of the *same*
+archetype, because the drift formula could not do that by construction — every
+agent of an archetype got an identical score in a given round.
+
+| Archetype | n | min | max | spread |
+|---|---:|---:|---:|---:|
+| Operations Manager | 12 | −0.60 | +0.60 | 1.20 |
+| VP Engineering | 6 | −0.60 | +0.60 | 1.20 |
+| Founder/CEO | 12 | −0.60 | +0.40 | 1.00 |
+| IT Director | 12 | −0.50 | +0.30 | 0.80 |
+| CTO / Finance Lead / Procurement | 6–12 | −0.70 | +0.30 | 0.70 |
+| Security Manager | 6 | −0.80 | −0.20 | 0.60 |
+
+Headline −0.280 (95% CI −0.375 to −0.184, n=19 agents), 56% oppose / 10%
+support, confidence `moderate`, one flashpoint correctly reported as *within the
+bands* rather than narrated as a finding. 124 distinct raw objection phrasings —
+every single one unique, which is precisely why canonicalization exists —
+clustered into 19 canonical objections. The top one by load-bearing weight was
+*"positioned as nice-to-have not must-have"* (8 agents, 7 cohorts), which
+outranked *"$99/month too high"* (7 agents, 4 cohorts) despite similar frequency.
+That ordering is the whole argument for weighting by cohort spread.
+
+**Bug 4 — an unguarded Redis publish killed the report.** `generate_report`
+published section progress to Redis with no error handling, inside
+`asyncio.gather`. With Redis unreachable the ConnectionError propagated out and
+destroyed the entire report: every section left `pending`, status `failed`, an
+Opus-priced narrative lost to a notification nobody was listening to. Progress
+publishing is now `_publish_progress`, which logs and continues.
+
+---
+
+## [PHASE 1 | 2026-08-02] The report was still writing its own numbers
+
+With Redis guarded, report generation completed — and the fidelity check on the
+output was bad. Across four sections and 48,000 characters it made **zero**
+references to a confidence interval, never cited the agent count the figures
+rest on, and named none of the canonical objections. It did produce a confident
+*"accounting for ~58% of all SMB objections on Reddit"* — a number that appears
+nowhere in the artifact.
+
+**The cause is structural, not a prompt weakness.** `_run_react_loop` starts with
+`evidence = "None yet."` and the model is free to answer on its first turn. The
+prompt says *"Use MULTIPLE different tools — do not answer after just 1-2 tool
+calls"*, but that is advice, and a model with a section to write and a token
+budget will decline it. Every measurement rule added to the prompt in this phase
+was conditional on a tool call the model never had to make.
+
+**Decision — seed the artifact into evidence before the loop runs.** Every
+section now starts with `simulation_analytics("measured_findings")` already in
+its evidence, whether or not the model would have asked. The loop can still
+gather more.
+
+Seeding is also strictly cheaper than asking: it costs one read of a row already
+built, rather than an Opus turn spent deciding to request it. And it makes the
+"every number comes from the artifact" rule structural — the artifact is in
+context unconditionally, so a fabricated figure is now a model choosing to ignore
+data in front of it rather than filling a vacuum.
+
+This is the same class of mistake as the original defect, one level up: V1
+generated numbers in the frontend because the backend had none; the report
+generated numbers in prose because the loop had none in context. Both are fixed
+by making the measured object impossible to route around.
+
+**Measured effect**, same simulation, same prompts, only the seeding changed:
+
+| | Before | After |
+|---|---:|---:|
+| "95% CI" / "confidence interval" mentions | 0 | 7 |
+| Cites the agent count behind the figures | no | 8 times |
+| Cites the measured oppose share | no | yes |
+| Cites canonical objections by name | no | yes |
+| Wall clock | 368s | 261s |
+
+The report now opens findings as *"Opposition outpaced support by nearly 6:1
+(55.6% oppose vs. 9.7% support)"* and carries *"−0.28 (95% CI −0.375 to
+−0.184)"* through the analysis, including a passage on how the small swarm
+widens those intervals. It got faster and cheaper as well as more accurate,
+because a seeded turn replaces an Opus turn spent deciding to ask.
+
+---
+
+## [PHASE 1 | 2026-08-02] Cost model: one missing stage, and what the ledger says
+
+**Objection canonicalization was not priced at all.** It is a stage this phase
+added, and `estimate_simulation_cost` never learned about it — 24% of the live
+run's measured spend was invisible to the quote. Added as
+`OBJECTION_CANONICALIZATION`, charged once per run on the main model: its input
+is the run's *distinct* objection phrasings, which saturates long before the
+event count does. It is nearly constant while every other stage scales, so
+omitting it under-quoted small runs badly and large runs barely at all.
+
+Adding it moves the standard run $2.78 → **$2.87** and the free run
+$0.66 → **$0.75**, so the free grant goes to 800 credits.
+
+**Measured vs. estimated, from the live run.** The quote was $0.6595; the run
+actually cost **$0.3144**. The margin floor held comfortably (90.5% actual
+against a 70% floor), and the direction is the safe one — but a 2× over-quote is
+not harmless: it means a customer's grant buys half the runs it should.
+
+| Stage | Calls | Measured per unit | Profile says |
+|---|---:|---|---|
+| `agent_action` | 72 | 404 in / 169 out | 1,000 in / 120 out |
+| `agent_generation` | 24 | 1,900 in / 537 out | 1,200 in / 350 out |
+| `event_measurement` | 3 (72 events) | 81 in / 92 out per event | 140 in / 40 out |
+| `objection_canonicalization` | 1 | 2,199 in / 2,587 out | 3,000 in / 3,000 out |
+
+**The four profiles were deliberately NOT recalibrated from this run.** Per-call
+input scales with feed size, which scales with agent count and round depth — a
+25-agent, 3-round run has a far smaller feed than the 100-agent, 5-round run the
+profiles are meant to price. Extrapolating from one small run would replace a
+conservative estimate with a confidently wrong one. The recalibration needs
+several runs across shapes; it stays the first item in `HANDOFF.md` §5, now with
+a baseline to compare against.
+
+---
+
 ## Known issues carried into Phase 2
 
 Recorded here so they are not rediscovered. Items 1, 2 and 7 from the Phase 1

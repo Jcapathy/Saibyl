@@ -65,8 +65,40 @@ class BasePlatformAdapter(ABC):
     # Agent memory: tracks each agent's actions across rounds
     _agent_history: dict[str, list[str]]
 
+    # What the simulation is about. Empty until set_topic() is called.
+    _topic: str = ""
+
     def _init_history(self) -> None:
         self._agent_history = {}
+
+    def set_topic(self, config: dict) -> None:
+        """Capture the simulation's subject from the run config."""
+        self._topic = (config or {}).get("prediction_goal", "") or ""
+
+    def topic_block(self, feed_is_empty: bool = False) -> str:
+        """The subject line every action prompt must carry.
+
+        Until this existed, no adapter told its agents what the simulation was
+        about: `prediction_goal` was stored in `self._config` by all twelve and
+        read by none. The topic reached agents only through the persona bio,
+        which is generated from it — so the simulation depended on the bio
+        generator succeeding, and produced silent agents when it did not.
+
+        The empty-feed nudge is the other half. On round one nobody has posted,
+        and "observe before engaging" is what a careful person actually does —
+        so every agent picks NOTHING, the feed stays empty, and the run
+        deadlocks at zero events for however many rounds it was given.
+        """
+        if not self._topic:
+            return ""
+        block = f"The conversation is about: {self._topic.strip()}\n\n"
+        if feed_is_empty:
+            block += (
+                "The feed is empty — you are among the first to react. Do not "
+                "wait for someone else to start; POST your own reaction to the "
+                "subject above.\n\n"
+            )
+        return block
 
     def record_action(self, username: str, round_num: int, summary: str) -> None:
         """Record an agent's action for memory across rounds."""

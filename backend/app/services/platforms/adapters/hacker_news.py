@@ -19,6 +19,7 @@ from app.services.platforms.registry import register_adapter
 _ACTION_PROMPT = (
     "You are {username} on Hacker News. Persona: {persona}\n"
     "Front page:\n{feed}\n\n"
+    "{topic}"
     "{memory}"
     "Round {round}. Pick ONE action (exact format). Be technical and skeptical.\n"
     "POST: <title> | <url_or_text>\n"
@@ -49,6 +50,7 @@ class HackerNewsAdapter(BasePlatformAdapter):
     async def initialize(self, config: dict, agents: list) -> None:
         self._init_history()
         self._config = config
+        self.set_topic(config)
         self._agents = agents
         self._posts: list[Post] = []
         self._comments: list[Comment] = []
@@ -134,6 +136,7 @@ class HackerNewsAdapter(BasePlatformAdapter):
             username=agent["username"],
             persona=agent.get("persona", "tech enthusiast"),
             feed=feed_text,
+            topic=self.topic_block(feed_is_empty=not feed),
             memory=self.get_agent_memory(agent["username"]),
             round=round_number,
         )

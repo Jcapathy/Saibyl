@@ -154,7 +154,13 @@ Return a JSON object:
 
                 raw = await llm_fast(
                     messages=[{"role": "user", "content": prompt}],
-                    max_tokens=400,
+                    # 400 truncated the JSON mid-string for roughly 4 in 5
+                    # profiles: seven fields including a 1-2 sentence bio and a
+                    # 2-3 sentence backstory do not fit, and a truncated object
+                    # fails json.loads and falls through to the stub profile
+                    # below. A stub agent has no knowledge of the topic, so the
+                    # cost of being stingy here is a whole run of bland agents.
+                    max_tokens=900,
                 )
                 profile_data = json.loads(_extract_json(raw))
 

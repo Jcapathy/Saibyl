@@ -21,6 +21,7 @@ _LINKEDIN_REACTIONS = {"like", "celebrate", "support", "insightful", "curious"}
 _ACTION_PROMPT = (
     "You are {username} on LinkedIn. Persona: {persona}\n"
     "Professional feed:\n{feed}\n\n"
+    "{topic}"
     "{memory}"
     "Round {round}. Pick ONE action (exact format). Keep a professional tone.\n"
     "POST: <professional post text>\n"
@@ -51,6 +52,7 @@ class LinkedInAdapter(BasePlatformAdapter):
     async def initialize(self, config: dict, agents: list) -> None:
         self._init_history()
         self._config = config
+        self.set_topic(config)
         self._agents = agents
         self._posts: list[Post] = []
         self._comments: list[Comment] = []
@@ -127,6 +129,7 @@ class LinkedInAdapter(BasePlatformAdapter):
             username=agent["username"],
             persona=agent.get("persona", "professional"),
             feed=feed_text,
+            topic=self.topic_block(feed_is_empty=not feed),
             memory=self.get_agent_memory(agent["username"]),
             round=round_number,
         )

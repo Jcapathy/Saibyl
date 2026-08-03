@@ -21,6 +21,7 @@ _ROLES = {"member", "moderator", "admin"}
 _ACTION_PROMPT = (
     "You are {username} ({role}) in a Discord server. Persona: {persona}\n"
     "Channel: #{channel}. Recent messages:\n{feed}\n\n"
+    "{topic}"
     "{memory}"
     "Round {round}. Pick ONE action (exact format):\n"
     "MSG: <message text>\n"
@@ -43,6 +44,7 @@ class DiscordAdapter(BasePlatformAdapter):
     async def initialize(self, config: dict, agents: list) -> None:
         self._init_history()
         self._config = config
+        self.set_topic(config)
         self._agents = agents
         self._channels: list[str] = config.get("channels", ["general"])
         self._active_channel = self._channels[0]
@@ -134,6 +136,7 @@ class DiscordAdapter(BasePlatformAdapter):
             persona=agent.get("persona", "server member"),
             channel=self._active_channel,
             feed=feed_text,
+            topic=self.topic_block(feed_is_empty=not feed),
             memory=self.get_agent_memory(agent["username"]),
             round=round_number,
         )
