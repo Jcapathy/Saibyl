@@ -413,6 +413,22 @@ async def run_simulation(simulation_id: str):
             detail="events will be mis-attributed and agent counts under-reported",
         )
 
+    # Material the team pre-positioned, in an inoculation re-simulation. Empty
+    # on every ordinary run, and read once here rather than per adapter.
+    from app.services.intelligence.inoculation import (
+        asset_prompt_block,
+        load_run_assets,
+    )
+    run_assets = load_run_assets(simulation_id)
+    pre_positioned = asset_prompt_block(run_assets)
+    if run_assets:
+        logger.info(
+            "resimulation_assets_pre_positioned",
+            simulation_id=simulation_id,
+            parent_simulation_id=sim.get("parent_simulation_id"),
+            assets=len(run_assets),
+        )
+
     # Initialize platform adapters
     from app.services.platforms.registry import get_adapter, load_all_adapters
     load_all_adapters()
@@ -436,7 +452,11 @@ async def run_simulation(simulation_id: str):
             ]
             if platform_agents:
                 await adapter.initialize(
-                    config={"prediction_goal": prediction_goal, "simulation_id": simulation_id},
+                    config={
+                        "prediction_goal": prediction_goal,
+                        "simulation_id": simulation_id,
+                        "pre_positioned": pre_positioned,
+                    },
                     agents=platform_agents,
                 )
                 adapters[platform_id] = adapter
@@ -548,6 +568,31 @@ async def run_simulation(simulation_id: str):
     from app.workers.analysis_tasks import run_analysis
     analysis_summary = await run_analysis(simulation_id, org_id)
 
+    # The before/after comparison, if this run had a parent. Built here rather
+    # than on demand because it needs both artifacts and this is the moment the
+    # second one comes into existence — and because the report written below
+    # reads it.
+    inoculation_summary: dict = {}
+    parent_id = sim.get("parent_simulation_id")
+    if parent_id:
+        from app.services.intelligence.inoculation import measure_inoculation
+        try:
+            result = await measure_inoculation(parent_id, simulation_id, org_id)
+            inoculation_summary = {
+                "assets_tested": result.assets_tested,
+                "assets_effective": result.assets_effective,
+                "objections_compared": len(result.deltas),
+            }
+        except Exception:
+            # The run itself is valid and measured; only the comparison failed.
+            # Failing the run here would throw away a paid simulation over a
+            # derived object that can be rebuilt from two stored artifacts.
+            logger.exception(
+                "inoculation_measurement_failed",
+                simulation_id=simulation_id,
+                parent_simulation_id=parent_id,
+            )
+
     admin.table("simulations").update({
         "status": "complete",
         "completed_at": datetime.now(UTC).isoformat(),
@@ -613,6 +658,7 @@ async def run_simulation(simulation_id: str):
         "status": "complete",
         "total_events": total_events,
         "analysis": {**analysis_summary, **reconciliation},
+        "inoculation": inoculation_summary,
     }
 
 

@@ -942,6 +942,89 @@ output" is the kind of property that quietly stops being true.
 
 ---
 
+## [PHASE 2 | 2026-08-03] The inoculation loop, and the verdict it is allowed to give
+
+DECISIONS §4: detect → draft → **re-simulate with the asset pre-seeded** → prove
+the delta. Step 3 is the entire product. Without it, "here's what to
+pre-position" is an LLM opinion every competitor can generate. With it, Saibyl
+can say *this disclosure moved this objection from 34% of the swarm to 9%*.
+
+**Decision — a re-simulation is an ordinary simulation with a parent.** It
+measures, analyses, reports, prices and reconciles through the same code as any
+other run, so the before number and the after number come out of one builder. A
+bespoke "inoculation run" object would produce two numbers computed by two code
+paths, and those are not comparable however carefully they are labelled.
+
+**Decision — the audience is copied, never regenerated.** `run_prepare_agents`
+would put the same archetypes through the model again and produce different
+people. The child's agents are row-for-row copies — same usernames, same
+profiles, same cohort flags — so the only thing that differs between the two
+runs is the material the agents were shown. That is the claim the whole feature
+rests on, and it is also why `create_resimulation` returns a run already in
+status `ready`.
+
+This is the one place in the codebase where username is used to pair records
+across simulations, in `_converted_agents`. It is sound *because* of the copy:
+the pairing is by construction rather than by hoping handles are unique — which
+they are not, as §1a records at length.
+
+**Decision — assets are pre-positioned, not posted.** They reach agents through
+`topic_block()` as material published alongside the subject, visible to everyone
+from round one. A feed post would model *someone dropped the FAQ into the
+thread* — a different, weaker intervention that reaches only the agents whose
+feed slice happened to include it. One hook on `BasePlatformAdapter` covers all
+twelve adapters; adding it to twelve `initialize` implementations would be
+twelve chances to miss one, and a missed adapter produces a re-simulation whose
+agents never saw the asset and a result that reads "the asset did not work".
+
+**Decision — reach is a share of agents, with an interval on the proportion.**
+An objection voiced ten times by one agent is one agent's objection — the same
+clustering rule as `mean_interval`, applied to a proportion. It is also what
+makes the two runs comparable when one produced more events than the other.
+
+**Decision — zero observed is not certainty.** `_proportion_interval` reports an
+upper bound of 3/n when nothing was observed, so "no agent raised it in 40" is a
+band up to 7.5%, and in a 12-agent run it is 25%. Declaring an objection dead on
+zero observations is the most tempting overstatement in the loop, and this is
+the line that refuses it.
+
+**Decision — `unresolved` is a verdict, and it does not count as effective.** A
+move from 34% to 31% is reported as unresolved, never as progress. `effective`
+requires separated intervals *and* a downward move, because `assets_effective`
+is the number this product is sold on and it has to be one a sceptic would
+accept. An asset that does not work is the most valuable thing the loop can
+report — it is the one finding an LLM opinion structurally cannot produce, since
+a model asked whether its own suggestion would work says yes.
+
+`emerged` exists for the same reason: an asset that answers one objection and
+raises two is a result the founder needs *before* they publish it.
+
+**Decision — the hypothesis is recorded before the test runs.** An unstated
+hypothesis is always retroactively correct. `inoculation_assets.hypothesis` is
+written at draft time and judged against the measurement.
+
+**Decision — a re-simulation is not charged for agent generation.** It copies
+its parent's agents and provably makes zero generation calls, so
+`estimate_simulation_cost(..., reuse_agents=True)` drops the stage. The honest
+quote is also the one that makes the second run of the loop cheaper than the
+first, which is the right incentive for the step the product is sold on.
+
+**Decision — asset drafting is charged per pass, like ICP synthesis.** A founder
+can draft, discard, and draft again without ever running a re-simulation, and
+each of those is a main-model call that was made. Its profile is estimated and
+must be re-derived from `llm_usage` after the first live loop; the stage is
+already attributed as `inoculation_draft`, so the data will be there.
+
+**Decision — a failed comparison does not fail the run.** `measure_inoculation`
+is wrapped: the run itself is valid, measured and paid for, and the comparison
+is derived from two stored artifacts. `POST /result/rebuild` recomputes it for
+free, because a task that dies after a run completes must not cost a second run
+to recover from.
+
+**Migration 021 is additive and safe to apply while `master` is deployed.**
+
+---
+
 ## Known issues carried into Phase 2
 
 Recorded here so they are not rediscovered. Items 1, 2 and 7 from the Phase 1

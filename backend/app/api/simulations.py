@@ -335,7 +335,10 @@ async def start_simulation(
     admin = get_supabase_admin()
     sim = (
         admin.table("simulations")
-        .select("id, is_ab_test, status, agent_count, max_rounds, platforms, variants")
+        .select(
+            "id, is_ab_test, status, agent_count, max_rounds, platforms, "
+            "variants, parent_simulation_id"
+        )
         .eq("id", id)
         .eq("organization_id", auth["org_id"])
         .single()
@@ -370,6 +373,10 @@ async def start_simulation(
     max_rounds = sim.data.get("max_rounds") or 10
     platforms = len(sim.data.get("platforms") or ["twitter_x"])
     variants = sim.data.get("variants") or 1
+    # An inoculation re-simulation copies its parent's agents rather than
+    # generating them, so it makes zero generation calls and must not be
+    # charged for them.
+    reuse_agents = bool(sim.data.get("parent_simulation_id"))
 
     # Credits are charged at start, not at completion. Deducting on completion
     # would let a user with one run's worth of credits start ten runs at once
@@ -389,7 +396,8 @@ async def start_simulation(
         # same way, just without the signed guarantee that the price shown is
         # the price charged.
         budget = check_credit_budget(
-            auth["org_id"], agent_count, max_rounds, platforms, variants
+            auth["org_id"], agent_count, max_rounds, platforms, variants,
+            reuse_agents=reuse_agents,
         )
         if not budget.allowed:
             raise HTTPException(status_code=402, detail=budget.message)

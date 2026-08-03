@@ -81,12 +81,25 @@ class BasePlatformAdapter(ABC):
     # What the simulation is about. Empty until set_topic() is called.
     _topic: str = ""
 
+    # Material the team published alongside the subject, in the inoculation
+    # loop's re-simulation. Empty on every ordinary run.
+    _pre_positioned: str = ""
+
     def _init_history(self) -> None:
         self._agent_history = {}
 
     def set_topic(self, config: dict) -> None:
-        """Capture the simulation's subject from the run config."""
-        self._topic = (config or {}).get("prediction_goal", "") or ""
+        """Capture the simulation's subject and any pre-positioned material.
+
+        Both arrive through the run config, and both are read by
+        `topic_block()`, which every adapter already calls. That is deliberate:
+        the inoculation loop needed the assets in front of all twelve adapters,
+        and adding a hook to twelve `initialize` implementations is twelve
+        chances to miss one.
+        """
+        config = config or {}
+        self._topic = config.get("prediction_goal", "") or ""
+        self._pre_positioned = config.get("pre_positioned", "") or ""
 
     def topic_block(self, feed_is_empty: bool = False) -> str:
         """The subject line every action prompt must carry.
@@ -105,6 +118,14 @@ class BasePlatformAdapter(ABC):
         if not self._topic:
             return ""
         block = f"The conversation is about: {self._topic.strip()}\n\n"
+        # Pre-positioned, not posted. The material is published alongside the
+        # subject and available to every agent from round one, which is what
+        # "pre-position this before launch" actually means. Injecting it as a
+        # feed post would model somebody dropping the FAQ into the thread — a
+        # different intervention, reaching only the agents whose feed slice
+        # happened to include it.
+        if self._pre_positioned:
+            block += self._pre_positioned
         if feed_is_empty:
             block += (
                 "The feed is empty — you are among the first to react. Do not "

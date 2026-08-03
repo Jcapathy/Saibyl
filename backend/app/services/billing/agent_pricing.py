@@ -223,6 +223,16 @@ OBJECTION_CANONICALIZATION = _StageProfile(input_tokens=11000, output_tokens=600
 # see, while an under-quoted one is served at a loss nobody notices.
 ICP_SYNTHESIS = _StageProfile(input_tokens=14_000, output_tokens=4_500)
 
+# Inoculation asset drafting: one main-model pass over a run's top objections
+# with their verbatim quotes, producing two publishable assets per objection.
+#
+# **ESTIMATED, not measured**, like ICP synthesis. Input is up to six objections
+# with four quotes each plus the schema; output is up to twelve assets of
+# 80–250 words with a hypothesis apiece. Re-derive from `llm_usage` after the
+# first live loop — the stage is already attributed as `inoculation_draft`, so
+# the data will be there.
+INOCULATION_DRAFT = _StageProfile(input_tokens=4_500, output_tokens=5_000)
+
 # Report generation, per section (ReACT tool calls plus the write-up). The
 # original 18,000-token input estimate was over 3x reality: the loop's evidence
 # is capped — the seeded artifact at 6,000 characters and each tool observation
@@ -308,11 +318,17 @@ def estimate_simulation_cost(
     variants: int = 1,
     depth: str = "standard",
     action_model: str | None = None,
+    reuse_agents: bool = False,
 ) -> SimulationCostEstimate:
     """Estimate what a run will cost to serve, and what to charge for it.
 
     Agent actions run on the fast model by default: they are the highest-volume
     stage by an order of magnitude, and the per-call judgment required is low.
+
+    `reuse_agents` drops the generation stage entirely. Set for an inoculation
+    re-simulation, whose agents are copied from its parent rather than generated
+    — the run makes zero generation calls, so quoting for them would be billing
+    for compute that is never performed.
     """
     if agent_count > MAX_AGENTS:
         raise ValueError(f"Agent count cannot exceed {MAX_AGENTS:,}")
@@ -324,7 +340,7 @@ def estimate_simulation_cost(
         raise ValueError(f"depth must be one of {DEPTH_PRESETS}")
 
     breakdown, action_units, generation_units, section_units = _stage_costs(
-        agent_count, rounds, variants, depth, action_model
+        agent_count, rounds, variants, depth, action_model, reuse_agents
     )
     action_cost = breakdown["agent_actions"]
     generation_cost = breakdown["agent_generation"]
@@ -377,6 +393,7 @@ def _stage_costs(
     variants: int,
     depth: str,
     action_model: str | None = None,
+    reuse_agents: bool = False,
 ) -> tuple[dict[str, Decimal], int, int, int]:
     """Cost of each pipeline stage for a run shape.
 
@@ -400,7 +417,13 @@ def _stage_costs(
     action_units = agent_count * rounds * variants
     # Agents are generated once and reused across variants — that reuse is what
     # makes matched-swarm comparison valid in the first place.
-    generation_units = agent_count
+    #
+    # An inoculation re-simulation reuses the *parent's* agents, copied row for
+    # row, so it generates none at all. Charging for generation there would bill
+    # for LLM calls the run provably never makes, and the honest quote is also
+    # the one that makes the second run of the loop cheaper than the first —
+    # which is exactly the right incentive for the step the product is sold on.
+    generation_units = 0 if reuse_agents else agent_count
     # Nearly every action produces an event: measured 497 from 500. The old 80%
     # assumption came from agents answering NOTHING, which they now rarely do —
     # the action prompt states the subject and tells an agent facing an empty
@@ -420,14 +443,15 @@ def _stage_costs(
 
 
 class SynthesisCostEstimate(BaseModel):
-    """What one ICP synthesis costs to serve, and what it charges.
+    """What one off-run main-model pass costs to serve, and what it charges.
 
     Its own object rather than a `SimulationCostEstimate` with zeroed fields:
-    synthesis has no agents, rounds, platforms or variants, and a shape-shaped
-    estimate with 0 in every shape field invites a caller to price a run with it.
+    these passes have no agents, rounds, platforms or variants, and a
+    shape-shaped estimate with 0 in every shape field invites a caller to price
+    a run with it.
     """
 
-    stage: str = "icp_synthesis"
+    stage: str
     actual_cost_usd: float
     retail_cost_usd: float
     credits: int
@@ -444,7 +468,22 @@ def estimate_icp_synthesis_cost() -> SynthesisCostEstimate:
     pricing altogether is Phase 1's bug #6, where objection canonicalization was
     24% of measured spend and 0% of the quote.
     """
-    actual = _stage_cost(ICP_SYNTHESIS, 1, settings.llm_model)
+    return _one_off_estimate(ICP_SYNTHESIS, "icp_synthesis")
+
+
+def estimate_inoculation_draft_cost() -> SynthesisCostEstimate:
+    """Price one asset-drafting pass.
+
+    Also charged per pass rather than per run: a founder can draft assets,
+    discard them, and draft again without ever paying for a re-simulation, and
+    each of those passes is a main-model call that was actually made.
+    """
+    return _one_off_estimate(INOCULATION_DRAFT, "inoculation_draft")
+
+
+def _one_off_estimate(profile: _StageProfile, stage: str) -> SynthesisCostEstimate:
+    """Price a single main-model pass that is charged on its own."""
+    actual = _stage_cost(profile, 1, settings.llm_model)
 
     retail = actual / (Decimal("1") - TARGET_MARGIN_PCT / Decimal("100"))
     floor = actual / (Decimal("1") - MIN_MARGIN_PCT / Decimal("100"))
@@ -455,6 +494,7 @@ def estimate_icp_synthesis_cost() -> SynthesisCostEstimate:
     standard_credits = _standard_run_credits()
 
     return SynthesisCostEstimate(
+        stage=stage,
         actual_cost_usd=float(actual),
         retail_cost_usd=float(retail),
         credits=credits,
@@ -465,20 +505,26 @@ def estimate_icp_synthesis_cost() -> SynthesisCostEstimate:
     )
 
 
-def check_synthesis_budget(org_id: UUID) -> BudgetCheck:
-    """Whether an org can afford an ICP synthesis, in credits."""
+_ONE_OFF_LABELS = {
+    "icp_synthesis": "Synthesizing this ICP",
+    "inoculation_draft": "Drafting these assets",
+}
+
+
+def check_one_off_budget(org_id: UUID, estimate: SynthesisCostEstimate) -> BudgetCheck:
+    """Whether an org can afford a single off-run main-model pass."""
     balance, _granted, _plan = get_credit_balance(org_id)
-    estimate = estimate_icp_synthesis_cost()
 
     required = estimate.credits
     allowed = balance >= required
     share = round(required * 100 / balance, 2) if balance > 0 else 100.0
+    label = _ONE_OFF_LABELS.get(estimate.stage, "This step")
 
     if allowed:
-        msg = f"Synthesizing this ICP uses {required:,} of your {balance:,} credits."
+        msg = f"{label} uses {required:,} of your {balance:,} credits."
     else:
         msg = (
-            f"Not enough credits. ICP synthesis needs {required:,}; "
+            f"Not enough credits. {label} needs {required:,}; "
             f"you have {balance:,}."
         )
 
@@ -492,6 +538,16 @@ def check_synthesis_budget(org_id: UUID) -> BudgetCheck:
         retail_price_usd=estimate.retail_cost_usd,
         message=msg,
     )
+
+
+def check_synthesis_budget(org_id: UUID) -> BudgetCheck:
+    """Whether an org can afford an ICP synthesis, in credits."""
+    return check_one_off_budget(org_id, estimate_icp_synthesis_cost())
+
+
+def check_inoculation_draft_budget(org_id: UUID) -> BudgetCheck:
+    """Whether an org can afford one asset-drafting pass, in credits."""
+    return check_one_off_budget(org_id, estimate_inoculation_draft_cost())
 
 
 @lru_cache(maxsize=1)
@@ -530,6 +586,7 @@ def check_credit_budget(
     platforms: int = 1,
     variants: int = 1,
     depth: str = "standard",
+    reuse_agents: bool = False,
 ) -> BudgetCheck:
     """Check whether an org can afford a run, in credits.
 
@@ -543,7 +600,7 @@ def check_credit_budget(
     """
     balance, _granted, _plan = get_credit_balance(org_id)
     estimate = estimate_simulation_cost(
-        agent_count, rounds, platforms, variants, depth
+        agent_count, rounds, platforms, variants, depth, reuse_agents=reuse_agents
     )
 
     required = estimate.credits
