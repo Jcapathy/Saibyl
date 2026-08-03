@@ -418,6 +418,50 @@ and update `PRICING_GUIDE.md` when they do.
 
 ---
 
+## 15c. Pass the corrected cost base through to price, don't bank it
+
+**Chose:** when the cost model was recalibrated from measured `llm_usage` at the
+end of Phase 1 and COGS fell, prices fell with it. Enterprise quotes drop ~40%
+(a 400-run/month blended deal goes from ~$21,000 to $12,515), and self-serve
+tiers keep their grants so run counts rise instead — Founder 6 → 8, Growth
+20 → 26, Agency 69 → 88.
+
+**Why.** The old numbers were not a pricing position; they were an artifact of a
+bug. Agent-action cost was being multiplied by the platform count, when the
+swarm is split across platforms rather than duplicated onto each. Holding the
+old prices would have meant charging a margin nobody had decided on, defended by
+a cost figure known to be wrong — and every quote after that would be built on a
+number the team could no longer explain.
+
+There is also a competitive argument, but it is secondary: at $31/run blended,
+Saibyl undercuts the research line item it displaces by more than it needs to.
+The primary reason is that a price should be traceable to a real cost.
+
+**Margin policy is untouched.** 80% target, 70% floor, the same volume bands.
+The margin was never the thing that changed — only the cost base it sits on. A
+recalibration that moved COGS *up* would raise prices by the same logic.
+
+**Rejected — hold the old price points and bank the margin.** Real money, and
+defensible if the market had validated those prices. Rejected because nothing
+had: no enterprise deal has been quoted, so there is no anchor to protect and no
+customer to disappoint. Banking margin on a corrected bug also means the *next*
+recalibration has to be argued against a price that has no derivation.
+
+**Rejected — hold prices until a deal is lost on price.** Slower and lower risk,
+but it means the quoting table and the cost model disagree, and the guide exists
+precisely so a person on a call can quote from one source.
+
+**Carry this caveat:** the blended agency mix assumes 45% multi-variant runs and
+the engine runs one arena until Phase 3. Quoting the blended table for a contract
+starting today over-charges against what a customer can execute — see
+`PRICING_GUIDE.md` §2.3.
+
+**What would change this:** an enterprise deal actually closing near the old
+numbers, which would be evidence the market bears them. Failing that, the next
+recalibration moves prices again, in whichever direction the measurement goes.
+
+---
+
 ## 16. Sequencing: truth → founder → marketing → crisis
 
 **Chose:** Phase 1 measurement, Phase 2 Founder, Phase 3 Marketing, Phase 4

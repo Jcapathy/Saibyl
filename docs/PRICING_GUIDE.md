@@ -169,7 +169,7 @@ than refusing.
 
 ## 2.1 Ask this before quoting anything
 
-**The same "400 runs/month" is worth between $3,393 and $17,980 per month
+**The same "400 runs/month" is worth between $4,118 and $21,795 per month
 depending on run shape.** Volume alone is not a quote.
 
 | If their runs are… | COGS/run | COGS/mo @400 | Quote/mo | Annual prepay |
@@ -186,8 +186,11 @@ Three questions that pin the number down:
 3. **What does your *biggest* run look like?** ← the one people forget
 
 Question 3 matters more than it looks: in the blended mix, the 2% of runs that
-are "heavy" contribute **15% of total COGS**. A customer who runs one 250-agent
-8-variant test a week can double your cost base without changing their run count.
+are "heavy" contribute **15% of total COGS**. Doubling that slice to 4% raises
+blended COGS by about 15% without changing the run count at all — so a customer
+who quietly runs one very large test a week is not on the same deal as one who
+does not. (This was 31% before the cost model was corrected; the sensitivity is
+real but no longer extreme.)
 
 ## 2.2 Cost per run by shape
 
@@ -209,6 +212,18 @@ N-way matched swarms.
 ## 2.3 Volume band table — blended agency mix
 
 Priced at **$6.88/run COGS**. This is the default quoting table.
+
+> ⚠️ **Do not quote this table for a contract starting before Phase 3.** The
+> blended mix assumes 45% of runs are multi-variant (30% marketing, 13% growth,
+> 2% heavy), and the engine runs one arena — so every run a customer can
+> actually execute today is single-variant and costs nearer the **$2.26**
+> standard. Quoting $31/run against runs that cost $2.26 is a ~78% margin on
+> paper and far higher in reality, which is pleasant right up until the customer
+> works it out at renewal.
+>
+> For a contract starting now, quote from the standard-run column in §2.1 and
+> write the variant entitlement into the contract as a Phase 3 addition. Use
+> this table for deals that begin once N-way matched swarms ship.
 
 | Runs/mo | Margin | COGS/mo | **PRICE/mo** | $/run | Annual prepay | Gross profit/yr |
 |---:|---:|---:|---:|---:|---:|---:|
