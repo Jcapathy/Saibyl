@@ -31,7 +31,7 @@ That is the whole doc set — five files in `docs/`, nothing else to hunt for.
 |---|---|
 | Branch | `v2`, pushed to `origin/v2`, in sync |
 | `master` | Untouched, still deployed to Render. **Do not merge without approval.** |
-| Phase 0 | Complete — 8 commits, `6c67509`…`63bbd80` |
+| Phase 0 | Complete — from `6c67509`. For the current list: `git log --oneline master..v2` |
 | Verification | ruff clean · pytest 43 passed · `tsc --noEmit` clean · `eslint --quiet` clean · `vite build` OK · 79 routes, no duplicate registrations |
 | Working tree | Clean (`.~lock.*` and `test_flow.py` are pre-existing untracked, ignore them) |
 
