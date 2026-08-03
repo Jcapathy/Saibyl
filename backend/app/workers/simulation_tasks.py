@@ -349,6 +349,9 @@ async def run_simulation(simulation_id: str):
             # Get agents for this platform
             platform_agents = [
                 {
+                    # Identity. Adapters key memory on this and stamp it on
+                    # every event they emit; `username` is a display handle.
+                    "agent_id": a["id"],
                     "username": a["username"],
                     "persona": a.get("profile", {}).get("bio", ""),
                     "variant": a.get("variant", "a"),
@@ -387,7 +390,12 @@ async def run_simulation(simulation_id: str):
                             "simulation_id": simulation_id,
                             "organization_id": org_id,
                             "event_type": event.event_type,
-                            "agent_id": agent_lookup.get(event.agent_username),
+                            # The adapter stamps the agent's id on the event.
+                            # The username lookup is a fallback for adapters
+                            # that predate the id, and is the path that
+                            # collapsed nine agents onto one row.
+                            "agent_id": event.agent_id
+                            or agent_lookup.get(event.agent_username),
                             "platform": event.platform,
                             "variant": event.variant,
                             "round_number": event.round_number,

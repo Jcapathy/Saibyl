@@ -165,3 +165,94 @@ def test_runner_detects_duplicate_usernames():
 
     source = inspect.getsource(simulation_tasks.run_simulation)
     assert "duplicate_agent_usernames" in source
+
+
+# ── Agent identity: username is a display handle, not an identity ──
+
+def test_agent_key_prefers_the_id():
+    adapter = _bare_adapter()
+    assert adapter.agent_key({"agent_id": "uuid-1", "username": "mchen"}) == "uuid-1"
+
+
+def test_agent_key_falls_back_to_username_when_no_id():
+    """Adapter unit tests construct agents without ids; the live pipeline does not."""
+    adapter = _bare_adapter()
+    assert adapter.agent_key({"username": "mchen"}) == "mchen"
+
+
+def test_colliding_usernames_do_not_share_memory():
+    """The regression test for the whole class of bug.
+
+    Two agents with identical handles and different ids must remain two agents.
+    Before identity moved to `agent_id`, nine agents named `mchen_itdir` shared
+    one memory and behaved as a single confused actor.
+    """
+    adapter = _bare_adapter()
+    adapter._init_history()
+
+    a = {"agent_id": "uuid-a", "username": "mchen_itdir"}
+    b = {"agent_id": "uuid-b", "username": "mchen_itdir"}
+
+    adapter.record_action(adapter.agent_key(a), 1, "Posted: we already use Datadog")
+    adapter.record_action(adapter.agent_key(b), 1, "Posted: this looks useful")
+
+    mem_a = adapter.get_agent_memory(adapter.agent_key(a))
+    mem_b = adapter.get_agent_memory(adapter.agent_key(b))
+
+    assert "Datadog" in mem_a and "Datadog" not in mem_b
+    assert "useful" in mem_b and "useful" not in mem_a
+
+
+def test_every_adapter_stamps_the_agent_id_on_its_events(adapters):
+    """Attribution rides on the id, not on the display handle."""
+    for adapter in adapters:
+        source = inspect.getsource(type(adapter)._decide_action)
+        assert 'agent_id=agent.get("agent_id")' in source, (
+            f"{adapter.platform_id} emits events without an agent id"
+        )
+
+
+def test_every_adapter_keys_memory_on_identity(adapters):
+    for adapter in adapters:
+        source = inspect.getsource(type(adapter)._decide_action)
+        assert 'get_agent_memory(agent["username"])' not in source, (
+            f"{adapter.platform_id} keys agent memory on a display handle"
+        )
+        assert 'record_action(agent["username"]' not in source, (
+            f"{adapter.platform_id} keys agent memory on a display handle"
+        )
+
+
+def test_simulation_event_carries_an_agent_id():
+    from datetime import UTC, datetime
+
+    from app.services.platforms.base_adapter import SimulationEvent
+
+    event = SimulationEvent(
+        event_type="post", agent_id="uuid-a", agent_username="mchen",
+        platform="twitter_x", round_number=1, variant="a",
+        timestamp=datetime.now(UTC),
+    )
+    assert event.agent_id == "uuid-a"
+
+
+def test_runner_attributes_events_by_id_not_username():
+    from app.workers import simulation_tasks
+
+    source = inspect.getsource(simulation_tasks.run_simulation)
+    assert '"agent_id": a["id"]' in source, "adapters are not given the agent id"
+    assert "event.agent_id" in source, "runner does not attribute by agent id"
+
+
+def test_migration_019_enforces_uniqueness_in_the_database():
+    """Layer 3. Conventions in code are enforced by whoever writes the next
+    caller; a database constraint is not."""
+    import pathlib
+
+    sql = pathlib.Path("scripts/migrations/019_agent_username_uniqueness.sql").read_text(
+        encoding="utf-8"
+    )
+    assert "CREATE UNIQUE INDEX" in sql
+    assert "simulation_agents (simulation_id, username)" in sql
+    # Must stay gated until the merge — master has no dedup and would break.
+    assert "DO NOT APPLY TO PRODUCTION UNTIL v2 IS MERGED" in sql

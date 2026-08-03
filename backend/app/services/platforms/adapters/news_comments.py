@@ -166,7 +166,7 @@ class NewsCommentsAdapter(BasePlatformAdapter):
             article_title=article_title,
             feed=comments_text,
             topic=self.topic_block(feed_is_empty=not self._comments),
-            memory=self.get_agent_memory(agent["username"]),
+            memory=self.get_agent_memory(self.agent_key(agent)),
             round=round_number,
         )
         raw = await llm_fast([{"role": "user", "content": prompt}], max_tokens=200)
@@ -179,9 +179,9 @@ class NewsCommentsAdapter(BasePlatformAdapter):
         if line.upper().startswith("COMMENT:"):
             text = line[8:].strip()
             c = await self.comment(agent["username"], article.id, text)
-            self.record_action(agent["username"], round_number, f"Commented: {text[:80]}")
+            self.record_action(self.agent_key(agent), round_number, f"Commented: {text[:80]}")
             return SimulationEvent(
-                event_type="comment", agent_username=agent["username"],
+                event_type="comment", agent_id=agent.get("agent_id"), agent_username=agent["username"],
                 platform=self.platform_id, round_number=round_number,
                 variant=variant, content=c.content, target_id=article.id,
                 timestamp=now,
@@ -192,9 +192,9 @@ class NewsCommentsAdapter(BasePlatformAdapter):
             if match:
                 cid, text = match.group(1), match.group(2)
                 c = await self.comment(agent["username"], cid, text)
-                self.record_action(agent["username"], round_number, f"Replied to {cid}: {text[:80]}")
+                self.record_action(self.agent_key(agent), round_number, f"Replied to {cid}: {text[:80]}")
                 return SimulationEvent(
-                    event_type="comment", agent_username=agent["username"],
+                    event_type="comment", agent_id=agent.get("agent_id"), agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,
                     variant=variant, content=c.content, target_id=cid,
                     timestamp=now,
@@ -204,9 +204,9 @@ class NewsCommentsAdapter(BasePlatformAdapter):
             cid = line.split(maxsplit=1)[1].strip() if len(line.split()) > 1 else ""
             if cid:
                 await self.react(agent["username"], cid, ReactionType.UPVOTE)
-                self.record_action(agent["username"], round_number, f"Upvoted comment {cid}")
+                self.record_action(self.agent_key(agent), round_number, f"Upvoted comment {cid}")
                 return SimulationEvent(
-                    event_type="react", agent_username=agent["username"],
+                    event_type="react", agent_id=agent.get("agent_id"), agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,
                     variant=variant, target_id=cid,
                     metadata={"reaction": "upvote"}, timestamp=now,

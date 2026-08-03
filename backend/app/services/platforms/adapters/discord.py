@@ -137,7 +137,7 @@ class DiscordAdapter(BasePlatformAdapter):
             channel=self._active_channel,
             feed=feed_text,
             topic=self.topic_block(feed_is_empty=not feed),
-            memory=self.get_agent_memory(agent["username"]),
+            memory=self.get_agent_memory(self.agent_key(agent)),
             round=round_number,
         )
         raw = await llm_fast([{"role": "user", "content": prompt}], max_tokens=200)
@@ -150,9 +150,9 @@ class DiscordAdapter(BasePlatformAdapter):
         if line.upper().startswith("MSG:"):
             text = line[4:].strip()
             p = await self.post(agent["username"], text)
-            self.record_action(agent["username"], round_number, f"Posted: {text[:80]}")
+            self.record_action(self.agent_key(agent), round_number, f"Posted: {text[:80]}")
             return SimulationEvent(
-                event_type="post", agent_username=agent["username"],
+                event_type="post", agent_id=agent.get("agent_id"), agent_username=agent["username"],
                 platform=self.platform_id, round_number=round_number,
                 variant=variant, content=p.content, target_id=p.id,
                 metadata={"channel": self._active_channel}, timestamp=now,
@@ -163,9 +163,9 @@ class DiscordAdapter(BasePlatformAdapter):
             if match:
                 pid, text = match.group(1), match.group(2)
                 c = await self.comment(agent["username"], pid, text)
-                self.record_action(agent["username"], round_number, f"Replied to {pid}: {text[:80]}")
+                self.record_action(self.agent_key(agent), round_number, f"Replied to {pid}: {text[:80]}")
                 return SimulationEvent(
-                    event_type="comment", agent_username=agent["username"],
+                    event_type="comment", agent_id=agent.get("agent_id"), agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,
                     variant=variant, content=c.content, target_id=pid, timestamp=now,
                 )
@@ -175,9 +175,9 @@ class DiscordAdapter(BasePlatformAdapter):
             if match:
                 pid = match.group(1)
                 await self.react(agent["username"], pid, ReactionType.LIKE)
-                self.record_action(agent["username"], round_number, f"Reacted {match.group(2)} on {pid}")
+                self.record_action(self.agent_key(agent), round_number, f"Reacted {match.group(2)} on {pid}")
                 return SimulationEvent(
-                    event_type="react", agent_username=agent["username"],
+                    event_type="react", agent_id=agent.get("agent_id"), agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,
                     variant=variant, target_id=pid,
                     metadata={"reaction": match.group(2)}, timestamp=now,
@@ -188,9 +188,9 @@ class DiscordAdapter(BasePlatformAdapter):
             if match:
                 target, text = match.group(1), match.group(2)
                 dm = self._send_dm(agent["username"], target, text)
-                self.record_action(agent["username"], round_number, f"DM to {target}: {text[:80]}")
+                self.record_action(self.agent_key(agent), round_number, f"DM to {target}: {text[:80]}")
                 return SimulationEvent(
-                    event_type="dm", agent_username=agent["username"],
+                    event_type="dm", agent_id=agent.get("agent_id"), agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,
                     variant=variant, content=text, target_id=dm["id"],
                     metadata={"to": target}, timestamp=now,

@@ -134,7 +134,7 @@ class ThreadsAdapter(BasePlatformAdapter):
             persona=agent.get("persona", "average user"),
             feed=feed_text,
             topic=self.topic_block(feed_is_empty=not feed),
-            memory=self.get_agent_memory(agent["username"]),
+            memory=self.get_agent_memory(self.agent_key(agent)),
             round=round_number,
         )
         raw = await llm_fast([{"role": "user", "content": prompt}], max_tokens=160)
@@ -147,9 +147,9 @@ class ThreadsAdapter(BasePlatformAdapter):
         if line.upper().startswith("POST:"):
             text = line[5:].strip()
             p = await self.post(agent["username"], text)
-            self.record_action(agent["username"], round_number, f"Posted: {text[:80]}")
+            self.record_action(self.agent_key(agent), round_number, f"Posted: {text[:80]}")
             return SimulationEvent(
-                event_type="post", agent_username=agent["username"],
+                event_type="post", agent_id=agent.get("agent_id"), agent_username=agent["username"],
                 platform=self.platform_id, round_number=round_number,
                 variant=variant, content=p.content, target_id=p.id,
                 metadata={"hashtags": _extract_hashtags(text)}, timestamp=now,
@@ -160,9 +160,9 @@ class ThreadsAdapter(BasePlatformAdapter):
             if match:
                 pid, text = match.group(1), match.group(2)
                 c = await self.comment(agent["username"], pid, text)
-                self.record_action(agent["username"], round_number, f"Replied to {pid}: {text[:80]}")
+                self.record_action(self.agent_key(agent), round_number, f"Replied to {pid}: {text[:80]}")
                 return SimulationEvent(
-                    event_type="comment", agent_username=agent["username"],
+                    event_type="comment", agent_id=agent.get("agent_id"), agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,
                     variant=variant, content=c.content, target_id=pid,
                     timestamp=now,
@@ -172,9 +172,9 @@ class ThreadsAdapter(BasePlatformAdapter):
             pid = line.split(maxsplit=1)[1].strip() if len(line.split()) > 1 else ""
             if pid:
                 await self.react(agent["username"], pid, ReactionType.LIKE)
-                self.record_action(agent["username"], round_number, f"Liked post {pid}")
+                self.record_action(self.agent_key(agent), round_number, f"Liked post {pid}")
                 return SimulationEvent(
-                    event_type="react", agent_username=agent["username"],
+                    event_type="react", agent_id=agent.get("agent_id"), agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,
                     variant=variant, target_id=pid, metadata={"reaction": "like"},
                     timestamp=now,
@@ -184,9 +184,9 @@ class ThreadsAdapter(BasePlatformAdapter):
             pid = line.split(maxsplit=1)[1].strip() if len(line.split()) > 1 else ""
             if pid:
                 await self.react(agent["username"], pid, ReactionType.REPOST)
-                self.record_action(agent["username"], round_number, f"Reposted {pid}")
+                self.record_action(self.agent_key(agent), round_number, f"Reposted {pid}")
                 return SimulationEvent(
-                    event_type="react", agent_username=agent["username"],
+                    event_type="react", agent_id=agent.get("agent_id"), agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,
                     variant=variant, target_id=pid, metadata={"reaction": "repost"},
                     timestamp=now,

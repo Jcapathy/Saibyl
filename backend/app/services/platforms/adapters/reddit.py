@@ -144,7 +144,7 @@ class RedditAdapter(BasePlatformAdapter):
             subreddit=self._subreddit,
             feed=feed_text,
             topic=self.topic_block(feed_is_empty=not feed),
-            memory=self.get_agent_memory(agent["username"]),
+            memory=self.get_agent_memory(self.agent_key(agent)),
             round=round_number,
         )
         raw = await llm_fast([{"role": "user", "content": prompt}], max_tokens=256)
@@ -157,9 +157,9 @@ class RedditAdapter(BasePlatformAdapter):
         if line.upper().startswith("POST:"):
             text = line[5:].strip()
             p = await self.post(agent["username"], text)
-            self.record_action(agent["username"], round_number, f"Posted: {text[:80]}")
+            self.record_action(self.agent_key(agent), round_number, f"Posted: {text[:80]}")
             return SimulationEvent(
-                event_type="post", agent_username=agent["username"],
+                event_type="post", agent_id=agent.get("agent_id"), agent_username=agent["username"],
                 platform=self.platform_id, round_number=round_number,
                 variant=variant, content=p.content, target_id=p.id,
                 metadata={"title": p.metadata.get("title", "")}, timestamp=now,
@@ -170,9 +170,9 @@ class RedditAdapter(BasePlatformAdapter):
             if match:
                 pid, text = match.group(1), match.group(2)
                 c = await self.comment(agent["username"], pid, text)
-                self.record_action(agent["username"], round_number, f"Commented on {pid}: {text[:80]}")
+                self.record_action(self.agent_key(agent), round_number, f"Commented on {pid}: {text[:80]}")
                 return SimulationEvent(
-                    event_type="comment", agent_username=agent["username"],
+                    event_type="comment", agent_id=agent.get("agent_id"), agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,
                     variant=variant, content=c.content, target_id=pid, timestamp=now,
                 )
@@ -181,9 +181,9 @@ class RedditAdapter(BasePlatformAdapter):
             pid = line.split(maxsplit=1)[1].strip() if len(line.split()) > 1 else ""
             if pid:
                 await self.react(agent["username"], pid, ReactionType.UPVOTE)
-                self.record_action(agent["username"], round_number, f"Upvoted post {pid}")
+                self.record_action(self.agent_key(agent), round_number, f"Upvoted post {pid}")
                 return SimulationEvent(
-                    event_type="react", agent_username=agent["username"],
+                    event_type="react", agent_id=agent.get("agent_id"), agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,
                     variant=variant, target_id=pid, metadata={"reaction": "upvote"},
                     timestamp=now,
@@ -193,9 +193,9 @@ class RedditAdapter(BasePlatformAdapter):
             pid = line.split(maxsplit=1)[1].strip() if len(line.split()) > 1 else ""
             if pid:
                 await self.react(agent["username"], pid, ReactionType.DOWNVOTE)
-                self.record_action(agent["username"], round_number, f"Downvoted post {pid}")
+                self.record_action(self.agent_key(agent), round_number, f"Downvoted post {pid}")
                 return SimulationEvent(
-                    event_type="react", agent_username=agent["username"],
+                    event_type="react", agent_id=agent.get("agent_id"), agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,
                     variant=variant, target_id=pid, metadata={"reaction": "downvote"},
                     timestamp=now,
