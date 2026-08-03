@@ -14,7 +14,7 @@ from app.services.engine.personas.interview_engine import (
     interview_batch,
     interview_by_persona_type,
 )
-from app.services.platforms.simulation_runner import get_simulation_status, stop_simulation
+from app.services.platforms.simulation_control import get_simulation_status, stop_simulation
 from app.workers.simulation_tasks import (
     run_prepare_agents,
     run_simulation,
@@ -159,6 +159,40 @@ async def get_simulation(id: str, auth: dict = Depends(get_current_org)):
     if not result.data:
         raise HTTPException(status_code=404, detail="Simulation not found")
     return result.data
+
+
+@router.delete("/{id}")
+async def delete_simulation(id: str, auth: dict = Depends(get_current_org)):
+    """Delete a simulation and everything derived from it."""
+    log.info("delete_simulation", simulation_id=id, org_id=auth["org_id"])
+    admin = get_supabase_admin()
+
+    sim = (
+        admin.table("simulations")
+        .select("id, status")
+        .eq("id", id)
+        .eq("organization_id", auth["org_id"])
+        .execute()
+    )
+    if not sim.data:
+        raise HTTPException(status_code=404, detail="Simulation not found")
+
+    if sim.data[0]["status"] == "running":
+        raise HTTPException(status_code=409, detail="Stop the simulation before deleting it")
+
+    # Report sections are keyed by report_id, so they must go before the reports.
+    reports = (
+        admin.table("reports").select("id").eq("simulation_id", id).execute()
+    ).data or []
+    for report in reports:
+        admin.table("report_sections").delete().eq("report_id", report["id"]).execute()
+    admin.table("reports").delete().eq("simulation_id", id).execute()
+
+    admin.table("simulation_events").delete().eq("simulation_id", id).execute()
+    admin.table("simulation_agents").delete().eq("simulation_id", id).execute()
+    admin.table("simulations").delete().eq("id", id).execute()
+
+    return {"status": "deleted", "id": id}
 
 
 @router.post("/{id}/prepare")
