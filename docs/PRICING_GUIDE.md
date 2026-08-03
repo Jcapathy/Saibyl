@@ -209,21 +209,43 @@ real but no longer extreme.)
 quote a variant count a customer can actually configure until Phase 3 ships
 N-way matched swarms.
 
-## 2.3 Volume band table — blended agency mix
+## 2.3 Volume band table — standard runs · **QUOTE THIS ONE**
 
-Priced at **$6.88/run COGS**. This is the default quoting table.
+**Use this for every contract starting before Phase 3 ships N-way matched
+swarms.** Priced at **$2.26/run COGS** — the only run shape the engine can
+actually execute today, since `MAX_RUNNABLE_VARIANTS = 1`.
 
-> ⚠️ **Do not quote this table for a contract starting before Phase 3.** The
-> blended mix assumes 45% of runs are multi-variant (30% marketing, 13% growth,
-> 2% heavy), and the engine runs one arena — so every run a customer can
-> actually execute today is single-variant and costs nearer the **$2.26**
-> standard. Quoting $31/run against runs that cost $2.26 is a ~78% margin on
-> paper and far higher in reality, which is pleasant right up until the customer
-> works it out at renewal.
->
-> For a contract starting now, quote from the standard-run column in §2.1 and
-> write the variant entitlement into the contract as a Phase 3 addition. Use
-> this table for deals that begin once N-way matched swarms ship.
+| Runs/mo | Margin | COGS/mo | **PRICE/mo** | $/run | Annual prepay | Gross profit/yr |
+|---:|---:|---:|---:|---:|---:|---:|
+| 100 | 80% | $226 | **$1,132** | $11.32 | $12,228 | $9,511 |
+| 200 | 78% | $453 | **$2,059** | $10.29 | $22,233 | $16,798 |
+| 300 | 78% | $679 | **$3,088** | $10.29 | $33,350 | $25,198 |
+| 400 | 78% | $906 | **$4,117** | $10.29 | $44,467 | $33,597 |
+| 500 | 78% | $1,132 | **$5,147** | $10.29 | $55,583 | $41,996 |
+| 750 | 75% | $1,698 | **$6,794** | $9.06 | $73,370 | $52,989 |
+| 1,000 | 75% | $2,264 | **$9,058** | $9.06 | $97,826 | $70,652 |
+| 1,500 | 72% | $3,397 | **$12,131** | $8.09 | $131,017 | $90,256 |
+| 2,000 | 72% | $4,529 | **$16,175** | $8.09 | $174,690 | $120,342 |
+| 3,000 | 70% | $6,794 | **$22,645** | $7.55 | $244,566 | $163,044 |
+| 5,000 | 70% | $11,322 | **$37,742** | $7.55 | $407,610 | $271,740 |
+
+Generate for an exact volume: `python scripts/quote.py --runs 400 --shape 100,5,2,1 --annual`
+
+**Why this and not the blended table.** The blended agency mix assumes 45% of
+runs are multi-variant. The engine runs one arena, so every run a customer can
+execute today is single-variant. Quoting $31/run against runs that cost $2.26
+reads as a 78% margin and is in fact far higher — pleasant right up until the
+customer works it out at renewal, which is the worst possible moment for a
+number you cannot defend.
+
+Quote what they can run. The variant entitlement goes in the contract as a
+Phase 3 addition — see §2.6.
+
+## 2.3b Volume band table — blended agency mix · **PHASE 3 ONWARD**
+
+Priced at **$6.88/run COGS**, assuming the 55/30/13/2 mix. **Do not quote this
+for a contract that begins before N-way matched swarms ship.** It becomes the
+default the moment they do.
 
 | Runs/mo | Margin | COGS/mo | **PRICE/mo** | $/run | Annual prepay | Gross profit/yr |
 |---:|---:|---:|---:|---:|---:|---:|
@@ -264,33 +286,102 @@ the estimated token profiles, these bands move.
 ## 2.5 Quoting on a call
 
 ```
-python scripts/quote.py --runs 400 --annual                # blended default
-python scripts/quote.py --runs 400 --mix marketing --annual
-python scripts/quote.py --runs 250 --shape 150,8,3,4       # their exact shape
+# Quote this today — standard runs, the only shape the engine executes
+python scripts/quote.py --runs 400 --shape 100,5,2,1 --annual
+
+python scripts/quote.py --runs 250 --shape 150,8,1,1       # their exact shape
 python scripts/quote.py --runs 1500 --margin 72            # override band
+
+# Phase 3 onward only — assumes 45% multi-variant runs
+python scripts/quote.py --runs 400 --annual                # blended mix
 ```
 
 Output gives COGS, monthly price, per-run price, annual list, annual prepay, and
 gross profit — enough to answer live.
 
+**The bare `--runs N` form defaults to the blended mix**, which is not what you
+want for a contract starting before Phase 3. Pass `--shape 100,5,2,1` explicitly,
+or read §2.3. Note that the platform figure in a shape barely moves the price —
+the swarm is split across platforms rather than duplicated onto each, so
+platforms are close to cost-neutral and cannot be sold as volume.
+
 ## 2.6 Contract terms to insist on
 
 1. **Define the included run shape in the contract**, not just the run count.
-   "500 runs/month up to 150 agents / 8 rounds / 4 variants; larger runs draw
-   proportionally more credits." Without this you have sold unbounded compute.
+   "500 runs/month up to 100 agents / 5 rounds / 2 platforms / 1 variant; larger
+   runs draw proportionally more credits." Without this you have sold unbounded
+   compute.
 2. **Credits, not runs, are the metered unit.** Runs are the sales language.
 3. **Annual prepay is credits granted monthly**, not a single annual pool —
    otherwise a customer can burn twelve months of capacity in January.
 4. **Re-quote annually against the current cost model.** These numbers assume
    Haiku for agent actions; a model policy change invalidates them.
+5. **Write the variant entitlement in as a Phase 3 addition** — §2.6a. Do not
+   sell multi-variant capability as though it exists.
+
+### 2.6a The variant entitlement clause
+
+Multi-variant runs are priced, capped at one arena, and unbuilt. A customer
+signing today buys single-variant runs. Two ways to handle that, and only the
+first is honest:
+
+**Do:** sell what runs today, and commit to the variant capability as a dated
+addition at a defined price. That gives the customer a reason to sign now and
+gives you a clean, pre-agreed uplift when Phase 3 lands — rather than a
+renegotiation.
+
+**Do not:** quote the blended table, deliver single-variant runs, and let the
+customer discover the difference. They will, and the number they will focus on
+is the margin.
+
+Sample language, to be reviewed by counsel before use:
+
+> **Included Runs.** During the Initial Term, Customer is entitled to
+> [N] Standard Runs per calendar month. A **Standard Run** means one simulation
+> of up to 100 synthetic agents across up to 5 rounds and 2 platforms, testing a
+> single message variant. Runs exceeding this shape consume credits in
+> proportion to their measured compute cost, disclosed in the product before
+> each run is started.
+>
+> **Matched-Variant Testing (Planned Capability).** Provider is developing
+> matched-variant testing, in which 2–8 message variants are evaluated by an
+> identical synthetic audience under a shared random seed. This capability is
+> **not available as of the Effective Date**. Upon general availability,
+> Customer may elect to add it at [$X] per month for entitlement to runs of up
+> to [V] variants, on the same billing terms. Customer is under no obligation to
+> elect it, and no fees for this capability accrue before Customer elects it in
+> writing. Nothing in this Agreement conditions Customer's existing entitlements
+> on the delivery of this capability.
+
+Three points that clause is doing deliberately:
+
+- **"not available as of the Effective Date"** in the contract itself, not just
+  in a sales conversation. This is the sentence that stops a future dispute.
+- **No fees accrue until elected.** A customer must never pay for a capability
+  during the period it does not exist.
+- **Existing entitlements are not conditioned on it.** If Phase 3 slips, the
+  customer's contract is unaffected — which is the only version of this you can
+  sign without carrying delivery risk into a revenue commitment.
+
+Set `[$X]` from the delta between the two volume band tables at their run count
+(§2.3 versus §2.3b) once the mix is known, not from a guess. If they cannot
+articulate a variant mix, the honest answer is that the uplift is priced when
+the capability ships.
 
 ## 2.7 When these numbers change
 
 Recalculate and update this file when any of these move:
 
 - Model pricing (`app/services/billing/model_pricing.py`)
-- The stage token profiles in `agent_pricing.py` — **these are still estimates**
-  and should be recalibrated from measured `llm_usage` medians once Phase 1 has
-  produced real data. That recalibration is the most likely source of change.
+- **Any prompt in the pipeline.** The stage token profiles in `agent_pricing.py`
+  are now measured from `llm_usage`, not estimated — which means every prompt
+  edit invalidates them. Re-derive with the query in `HANDOFF.md` §7, minding
+  that the units differ per stage (per call, per event, per section, per run).
 - The tiered model policy (Haiku for actions, Opus for judgment)
-- Report depth scaling (a Phase 1 fix that will *lower* small-run COGS)
+- `MAX_RUNNABLE_VARIANTS` — when Phase 3 raises it, §2.3b becomes the default
+  quoting table and the variant entitlement clause in §2.6a becomes a live price
+- The blended agency run mix (55/30/13/2), which is still an assumption rather
+  than observed data
+
+**Do not let this file drift from the model.** Every figure here is reproducible
+from `scripts/quote.py`; if a number cannot be regenerated, it is wrong.

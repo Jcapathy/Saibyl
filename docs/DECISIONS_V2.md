@@ -452,13 +452,51 @@ but it means the quoting table and the cost model disagree, and the guide exists
 precisely so a person on a call can quote from one source.
 
 **Carry this caveat:** the blended agency mix assumes 45% multi-variant runs and
-the engine runs one arena until Phase 3. Quoting the blended table for a contract
-starting today over-charges against what a customer can execute — see
-`PRICING_GUIDE.md` §2.3.
+the engine runs one arena until Phase 3 — see §15d.
 
 **What would change this:** an enterprise deal actually closing near the old
 numbers, which would be evidence the market bears them. Failing that, the next
 recalibration moves prices again, in whichever direction the measurement goes.
+
+---
+
+## 15d. Quote what runs today; sell variants as a dated addition
+
+**Chose:** every contract beginning before Phase 3 is quoted from the
+**standard-run** band table (`PRICING_GUIDE.md` §2.3, $2.26/run COGS), not the
+blended agency mix. The matched-variant capability is written into the contract
+as a planned addition at a defined price, explicitly unavailable at the
+effective date, with no fees accruing until the customer elects it.
+
+**Why.** The blended mix assumes 45% multi-variant runs and the engine runs one
+arena (`MAX_RUNNABLE_VARIANTS = 1`). Quoting $31/run for runs that cost $2.26
+reads as a 78% margin and is in fact far higher. The customer discovers the gap
+at renewal — the worst moment to be holding a number you cannot defend — and the
+thing they will remember is the margin, not the product.
+
+Selling the capability as a dated addition is strictly better than either
+alternative. It gives the customer a reason to sign now, and it gives you a
+pre-agreed uplift when Phase 3 lands instead of a renegotiation.
+
+**Rejected — quote the blended table and treat the excess as a buffer against
+Phase 3 cost growth.** Defensible arithmetic: multi-variant runs will raise COGS
+later, so charging for them early smooths it. Rejected because it charges today
+for a capability that does not exist, and the buffer argument is invisible to
+the customer — they see only that they paid a variant price for single-variant
+runs.
+
+**Rejected — wait for Phase 3 before quoting enterprise at all.** Cleanest, and
+wrong: it forfeits every deal in the interim for a problem a contract clause
+solves.
+
+**Load-bearing in the clause** (§2.6a): the capability is named unavailable *in
+the contract text*, no fees accrue before election, and existing entitlements are
+not conditioned on its delivery. That last point is what keeps a Phase 3 slip
+from becoming a contractual failure. **Have counsel review before use** — the
+sample language is a starting point, not an opinion.
+
+**What would change this:** Phase 3 shipping, at which point §2.3b becomes the
+default table and the clause becomes a live price rather than a placeholder.
 
 ---
 

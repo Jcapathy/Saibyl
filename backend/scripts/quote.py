@@ -158,8 +158,14 @@ def print_single_quote(q: dict, label: str, annual: bool) -> None:
         print(f"  Annual gross profit      ${q['annual_gross_profit']:>12,.2f}")
         print(f"  Effective margin         {q['effective_annual_margin']:>12.1f}%")
     print("=" * 64)
+    # Derived, not hardcoded: this ratio moved from 2.7x to 4.4x when the cost
+    # model was recalibrated, and a stale warning is worse than none.
+    _std = estimate_simulation_cost(*SHAPES["standard"]).actual_cost_usd
+    _mkt = estimate_simulation_cost(*SHAPES["marketing"]).actual_cost_usd
     print("  Before sending: confirm their run shape. Quoting a standard mix to")
-    print("  a customer who runs 8-variant tests understates COGS by ~2.7x.")
+    print(f"  a customer who runs 8-variant tests understates COGS by ~{_mkt / _std:.1f}x.")
+    print("  Multi-variant runs are NOT runnable before Phase 3 - quote the")
+    print("  standard shape and write the entitlement in (PRICING_GUIDE 2.6a).")
 
 
 def main() -> None:
