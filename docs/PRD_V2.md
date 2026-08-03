@@ -221,7 +221,13 @@ Billing appears on customer statements as **SAIDO LABS LLC**.
 
 ## 9. Data model additions
 
-New tables (migrations `017`+): `llm_usage` *(shipped)*, `simulation_analysis` *(shipped, 018)*, `canonical_objections` *(shipped, 018)*, `run_quotes` *(shipped, 018)*, `clients` (agency layer between org and project), `simulation_variants`, `inoculation_assets`, `prediction_outcomes`, `icp_profiles`.
+New tables (migrations `017`+): `llm_usage` *(shipped)*, `simulation_analysis` *(shipped, 018)*, `canonical_objections` *(shipped, 018)*, `run_quotes` *(shipped, 018)*, `icp_profiles` *(written, 020)*, `inoculation_assets` and `inoculation_results` *(written, 021)*, `clients` (agency layer between org and project), `simulation_variants`, `prediction_outcomes`.
+
+Migration `020` also adds `documents.material_kind` — the adversarial cohort's
+grounding, without which the PRD §4 guardrail is unenforceable — plus
+`simulations.lens` / `founder_stage` / `icp_profile_id` / `adversarial_share`
+and `simulation_agents.is_adversarial` / `adversarial_role`. Migration `021`
+adds `simulations.parent_simulation_id` and `inoculation_asset_ids`.
 
 Migration 018 also adds the per-event measurement columns on `simulation_events`
 (`valence`, `stance`, `intensity`, `intent`, `is_novel_claim`, `objections`,
@@ -251,7 +257,7 @@ Sovereign palette: Obsidian `#0A0F1C`, Graphite `#111827`, Sovereign Gold `#C9A2
 |---|---|---|
 | **0** | Dead-code purge, route-collision fix, schema drift, cost model + usage ledger, docs | ✅ Complete |
 | **1** | Measurement layer, `simulation_analysis`, report viewer rebuild, Run Configurator, Sovereign palette | ✅ Complete |
-| **2** | Founder lens — ICP synthesis, adversarial cohort, five stages, inoculation loop | |
+| **2** | Founder lens — ICP synthesis, adversarial cohort, five stages, inoculation loop | Built; static gate passed. **Awaiting migrations 020/021 and a live run.** |
 | **3** | Marketing lens — N-way matched swarms, objective metrics, virality score | |
 | **4** | Crisis lens migration, client layer, calibration, V2 README | |
 

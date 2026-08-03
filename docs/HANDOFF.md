@@ -1,10 +1,13 @@
 # Saibyl V2 — Session Handoff
 
-**Saido Labs LLC** · Updated 2026-08-02 (end of Phase 1)
+**Saido Labs LLC** · Updated 2026-08-03 (Phase 2 built, not yet run live)
 
 Read this first in a new session. It is written to be read cold, with no memory
-of previous sessions. It is the current state, the standing rules, everything
-Phase 1 built and why, and what Phase 2 starts from.
+of previous sessions. It is the current state, the standing rules, what Phase 1
+and Phase 2 built and why, and what has to happen next.
+
+**The single most important thing on this page:** Phase 2 is written and passes
+every static check, and **has never executed once**. §1b says what that means.
 
 **Read in this order:**
 
@@ -34,14 +37,16 @@ them rather than repeating them.
 | `master` | Untouched, still deployed to Render. **Do not merge without approval.** |
 | Phase 0 | Complete — dead-code purge, route-collision fix, schema drift, cost model, usage ledger |
 | Phase 1 | **Complete and verified end to end** |
-| Verification | ruff clean · pytest 101 passed · `tsc --noEmit` clean · `eslint --quiet` clean · `vite build` OK · app boots, 101 routes, no duplicate registrations |
-| Live runs | Two, both passed: `05f1d879` (25 agents) and `03de92ef` (standard, 100/5/2/1) |
-| Cost model | **Measured, not estimated.** Estimate vs measurement at the reference shape: **1.02×** |
+| Phase 2 | **Built and statically verified. NOT run live.** See §1b. |
+| Verification | ruff clean · pytest 180 passed · `tsc --noEmit` clean · `eslint --quiet` clean · `vite build` OK · app boots, 116 routes, no duplicate registrations |
+| Live runs | Two, both Phase 1: `05f1d879` (25 agents) and `03de92ef` (standard, 100/5/2/1). **No Founder-lens run has ever executed.** |
+| Cost model | Measured for Phase 1's five stages. **`icp_synthesis` and `inoculation_draft` are estimated** and must be re-derived from `llm_usage`. |
 | Working tree | `.~lock.*` and `test_flow.py` are pre-existing untracked. Ignore them. |
 
 Commit list: `git log --oneline master..v2` — deliberately not enumerated here,
 because a hardcoded list goes stale on the next commit and a stale list is worse
-than none. Phase 0 ends at `6c67509`; everything after it is Phase 1.
+than none. Phase 0 ends at `6c67509`; Phase 1 ends at `81d7aa9`; everything after
+it is Phase 2.
 
 ### Migrations applied to production (`txmvwuekkiedgxwovorp`)
 
@@ -55,8 +60,22 @@ RLS; the credit ledger on `organizations` plus `deduct_credits` /
 `simulation_measurement_coverage`. Verified after applying: 63 simulations and
 10,236 events unchanged, 8 organizations seeded with credit balances.
 
-**019 — WRITTEN BUT NOT APPLIED.** Agent-username uniqueness. It would break the
-live `master` deployment if applied now; it goes in at the merge. See §1a.
+### Migrations written and not applied
+
+**019 — DO NOT APPLY BEFORE THE MERGE.** Agent-username uniqueness. It would
+break the live `master` deployment. It goes in at the merge. See §1a.
+
+**020 and 021 — safe to apply, waiting on approval.** Both are additive: new
+tables, new nullable columns, and defaults that reproduce current behaviour, so
+`master` neither reads nor writes any of it. **Nothing in Phase 2 can run until
+they are applied** — a Founder-lens run writes `simulations.lens` and
+`simulation_agents.is_adversarial`, and neither column exists in production yet.
+
+- **020** `icp_profiles`; `documents.material_kind`; `simulations.lens`,
+  `founder_stage`, `icp_profile_id`, `adversarial_share`;
+  `simulation_agents.is_adversarial`, `adversarial_role`.
+- **021** `inoculation_assets`, `inoculation_results`;
+  `simulations.parent_simulation_id`, `inoculation_asset_ids`.
 
 **Standing lesson (from 017):** `IF NOT EXISTS` guards hide type drift. Before
 adding a column that may already exist by hand, check
@@ -115,6 +134,47 @@ of which of nine identically-named agents produced a given event. Every run
 created before this fix has an understated agent count and confidence intervals
 wider than truth. **Do not use any pre-fix run as a calibration baseline for
 agent counts**, including the two Phase 1 live runs.
+
+---
+
+## 1b. ⚠️ Phase 2 is built but has never run
+
+Everything below in §9 describes code that passes every static check and has
+**not executed once against a real model or a real database**. Phase 1's own
+lesson is the reason that distinction is in a banner: **ten defects, four of them
+only at the reference scale, none visible to static verification.** A 25-agent
+run is not a proxy for a real one, and a green test suite is not a proxy for
+either.
+
+**What has to happen before Phase 2 can be called complete:**
+
+1. Apply migrations **020** and **021** to production. Both are additive and
+   safe under `master`; nothing in Phase 2 runs without them.
+2. Synthesize an ICP against a project with real uploaded material, and read
+   the result. §3 of DECISIONS says the fallback is form-first if synthesis is
+   unreliable — this is the test that decides it.
+3. Run a Founder-lens simulation at the standard shape with an adversarial share
+   above zero. Check the artifact's `by_cohort` and `adversarial` blocks, and
+   check the report actually carries the stage's questions and its limits.
+4. Draft assets, re-simulate, and read the delta. **Specifically check that the
+   loop is capable of returning `unresolved` and `ineffective`** — a first run
+   where every asset "works" is more likely a broken verdict than a good draft.
+5. Re-derive `ICP_SYNTHESIS` and `INOCULATION_DRAFT` from `llm_usage` with the
+   query in §7. They are the only estimated profiles in the cost model.
+
+**Two specific things to distrust in the first live run**, because they are
+where this build is most likely to be wrong:
+
+- **The adversarial cohort's realised share.** Allocation is by archetype weight
+  and rounds to whole agents, so a 30% request on a small swarm may land well
+  off. The artifact reports configured and realised separately — check they are
+  close at the standard shape, and check `run_prepare_agents` is not silently
+  allocating zero adversarial agents.
+- **`_converted_agents` matching.** It pairs agents across the two runs on
+  username, which is sound only because `create_resimulation` copies rows
+  verbatim. If the copy ever changes, that list silently becomes wrong rather
+  than empty. It is illustrative only — every number in a delta comes from
+  `canonical_objections` — but it will be read as evidence.
 
 ---
 
@@ -371,11 +431,28 @@ DECISIONS §15d. **The sample contract language needs counsel review before use.
 
 ---
 
-## 8. Open items — Phase 2's real backlog
+Phase 2 added two stages that are **estimated, not measured**, and they are the
+only two in the model that are: `icp_synthesis` and `inoculation_draft`. Both are
+deliberately biased high — an over-quoted stage costs a customer credits they can
+see, an under-quoted one is served at a loss nobody notices. Re-derive both from
+the ledger after the first live Founder-lens runs; the stages are already
+attributed, so the data will be there.
+
+A re-simulation is quoted with `reuse_agents=True` and pays no
+`agent_generation`: it copies its parent's agents and provably makes zero
+generation calls.
+
+---
+
+## 8. Open items — the backlog
 
 Full detail in `ARCHITECTURE_V2.md` → *Known issues carried into Phase 2*.
 
 **Blocking or high-consequence:**
+
+0. **Phase 2 has never run live, and migrations 020/021 are not applied.**
+   This is item zero because everything else in Phase 2 is downstream of it.
+   See §1b for what the first live run has to check.
 
 1. **A/B never runs variant B.** `run_simulation_ab` calls `run_simulation` once.
    `MAX_RUNNABLE_VARIANTS = 1` in `agent_pricing.py` currently blocks
@@ -435,15 +512,82 @@ maturity; report depth scaling needs a validated curve, not just a lower floor.
 
 ---
 
-## 9. Phase 2 and beyond
+## 9. What Phase 2 built, and what is next
+
+**Phase 2 is code, not evidence.** Read §1b before treating any of it as done.
+
+### 9.1 The audience is derived, not picked
+
+| Concern | File |
+|---|---|
+| The editable ICP object | `services/engine/personas/icp_schema.py` |
+| Synthesis + compilation to a pack | `services/engine/personas/icp_synthesizer.py` |
+| The five stages, as data | `services/engine/founder_stages.py` |
+| API | `api/icp.py`, `GET /api/simulations/founder-stages` |
+
+One main-model pass over the project's uploaded material proposes an ICP; the
+founder corrects it. The profile and the `PersonaPack` it compiles to live in
+**one row** so an edit and the pack the next run uses cannot drift apart, and
+`get_pack` resolves the `icp_` prefix out of `icp_profiles` — nothing downstream
+of `run_prepare_agents` learns that ICPs exist. The 16 built-in packs supply
+psychometrics as priors; `ArchetypeContext` carries what they have nowhere to
+put (incumbent tooling, switching cost, skepticism triggers) into the
+agent-generation prompt, without which a synthesized ICP is a relabelled generic
+pack.
+
+**The adversarial guardrail is enforced in data at two layers**, and DECISIONS §7
+forbids relaxing it to improve output. `documents.material_kind` records which
+upload is competitor material (`NULL` reads as `own`, so an unlabelled document
+can never license a name); the schema refuses a `competitor_name` with empty
+`grounded_in`; and the builder strips the name from any archetype citing a
+document outside that set. **The name is stripped, not the archetype** — an
+unnamed category skeptic is what PRD §4 asks for when there is no competitor
+material.
+
+### 9.2 The headline says what it measured
+
+`SCHEMA_VERSION` is **2**. The artifact gains `by_cohort` (buyers vs
+incumbent-aligned) and `adversarial` (the disclosure sentence, composed once and
+rendered verbatim by the viewer, print page, PDF, PPTX and JSON export). Per
+objection it records `originated_adversarial` and `buyer_agent_count`, so
+"competitor advocates start the narrative decline" is checkable rather than
+asserted.
+
+`SUPPORTED_SCHEMA_VERSION` in `frontend/src/lib/analysis.ts` must move in the
+same commit as any future bump. The frontend refuses to render an unknown
+version, so a bump without the mirror blanks every report in the product.
+
+### 9.3 The inoculation loop
+
+| Concern | File |
+|---|---|
+| Before/after shape and verdicts | `services/intelligence/inoculation_schema.py` |
+| Draft, re-simulate, prove | `services/intelligence/inoculation.py` |
+| API | `api/inoculation.py` |
+| UI | `frontend/src/components/founder/InoculationWorkbench.tsx` |
+
+A re-simulation is an ordinary simulation with a `parent_simulation_id`, so both
+numbers come out of one builder. **Its agents are copied, never regenerated** —
+regenerating produces different people, and the claim is that only the material
+changed. Assets are **pre-positioned, not posted**: they ride in `topic_block()`
+as material published alongside the subject, which one hook on
+`BasePlatformAdapter` delivers to all twelve adapters.
+
+**The verdict logic exists to be able to say no.** Reach is a share of agents
+with an interval on the proportion; zero observed carries a 3/n upper bound, so
+"nobody raised it in 40 agents" is a band up to 7.5% and an objection is called
+dead only when the bands separate. `unresolved` is a verdict and does **not**
+count toward `assets_effective`. Do not "improve" that — it is the whole product.
+
+### 9.4 Next
 
 | Phase | Scope |
 |---|---|
-| **2** | Founder lens — ICP synthesis, adversarial cohort, five stage workflows, inoculation loop (detect → draft → **re-simulate** → prove delta). First sellable milestone. Built on the artifact and `canonical_objections`, which is why their schemas were settled in Phase 1 rather than deferred. |
 | **3** | Marketing lens — N-way matched swarms (seed-locked shared audience), per-objective intent metrics, Virality Potential Score. Raises `MAX_RUNNABLE_VARIANTS`. |
 | **4** | Crisis lens migration, `clients` layer + org switcher, calibration loop, V2 README on the repo, merge to `master` on approval. |
 
-**Before starting Phase 2:** re-read DECISIONS §1 (why measurement came first),
-§4 (the inoculation loop must re-simulate — step 3 is the entire product) and §7
-(the adversarial cohort's guardrails are load-bearing, not decoration — do not
-relax them to improve output quality).
+**Before starting Phase 3:** re-read DECISIONS §5 (matched swarms — agent
+generation must not scale with variant count, or the comparison stops being
+valid *and* costs 8×) and §6 (virality stays a separate axis from the objective
+metric). Note that `estimate_simulation_cost` already models variants correctly;
+Phase 3's work is the arenas, not the pricing.
