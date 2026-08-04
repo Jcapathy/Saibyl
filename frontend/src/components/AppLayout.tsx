@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   FolderOpen,
+  Building2,
   Clock,
   Search,
   Users,
@@ -30,6 +31,11 @@ const coreNav: NavItem[] = [
   { path: '/app/dashboard', label: 'Dashboard', Icon: LayoutDashboard },
   { path: '/app/projects', label: 'Projects', Icon: FolderOpen },
   { path: '/app/audiences', label: 'Audiences', Icon: Users },
+  // Sits directly after Audiences because that is the order of the work:
+  // describe who buys, then go and find real companies who look like them.
+  // Named for the thing the founder gets, not for the discipline — "GTM" and
+  // "ICP" are terms most of these readers have never had to learn.
+  { path: '/app/prospects', label: 'Companies', Icon: Building2 },
   { path: '/app/simulations', label: 'Simulations', Icon: Clock },
 ];
 

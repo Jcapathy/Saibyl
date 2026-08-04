@@ -14,6 +14,10 @@ import NewSimulationPage from '@/pages/NewSimulationPage';
 import PackLibraryPage from '@/pages/PackLibraryPage';
 import ProjectDetailPage from '@/pages/ProjectDetailPage';
 import ProjectsPage from '@/pages/ProjectsPage';
+import ProspectDetailPage from '@/pages/ProspectDetailPage';
+import ProspectDiscoverPage from '@/pages/ProspectDiscoverPage';
+import ProspectSettingsPage from '@/pages/ProspectSettingsPage';
+import ProspectsPage from '@/pages/ProspectsPage';
 import ReportPrintPage from '@/pages/ReportPrintPage';
 import ReportViewerPage from '@/pages/ReportViewerPage';
 import SettingsPage from '@/pages/SettingsPage';
@@ -48,6 +52,13 @@ function AnimatedRoutes() {
           <Route path="projects" element={<PageTransition><ProjectsPage /></PageTransition>} />
           <Route path="projects/:id" element={<PageTransition><ProjectDetailPage /></PageTransition>} />
           <Route path="audiences" element={<PageTransition><PackLibraryPage /></PageTransition>} />
+          {/* Prospects. `discover` and `settings` are declared before `:id` —
+              a static segment shadowed by a parameterised one would send the
+              literal string "discover" to GET /gtm/candidates/{id}. */}
+          <Route path="prospects" element={<PageTransition><ProspectsPage /></PageTransition>} />
+          <Route path="prospects/discover" element={<PageTransition><ProspectDiscoverPage /></PageTransition>} />
+          <Route path="prospects/settings" element={<PageTransition><ProspectSettingsPage /></PageTransition>} />
+          <Route path="prospects/:id" element={<PageTransition><ProspectDetailPage /></PageTransition>} />
           <Route path="simulations" element={<PageTransition><SimulationsPage /></PageTransition>} />
           <Route path="simulations/new" element={<PageTransition><NewSimulationPage /></PageTransition>} />
           <Route path="simulations/:id" element={<PageTransition><SimulationDetailPage /></PageTransition>} />
