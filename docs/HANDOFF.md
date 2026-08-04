@@ -39,28 +39,43 @@ them rather than repeating them.
 
 ## 0. Start here — the work queue, in order
 
-Phase 2 is done and verified. Items 3 and 4 below are **done** as of 2026-08-04
-and are kept in the table with their outcomes, because what they found changed
-items 5 and 7. Nothing is half-finished. **Items 1, 2, 6 and 7 need a human
-answer before any code is written.**
+> ### 🛑 The cost model is closed. Build Phase 3.
+>
+> **Decided 2026-08-04, by the user, and it is a standing instruction rather than
+> a note on one session:** the calibration thread is finished. Items 3 and 4 were
+> the last of it, and what they returned — a $0.03 move on the standard run —
+> is not worth a session. **Stop tuning token profiles. Build the product.**
+>
+> Deferred by that decision: the per-adapter `AGENT_ACTION` profile and the free
+> grant's headroom, both now in §8 rather than in this queue. Neither is wrong;
+> both are pennies, and pennies is why they are not here.
+>
+> **What would reopen it**, and nothing less: `reconcile_run_cost` logging
+> `margin_floor_breached` on a real run, a stage changing its *unit of work*
+> rather than its size (that is what the re-simulation defect was — §1c), or a
+> prompt edit large enough to move a stage by more than half. A future session
+> that finds itself re-deriving a profile for accuracy's sake has misread this.
+
+Phase 2 is done and verified. Items 3 and 4 are **done** as of 2026-08-04, kept
+here with their outcomes because what they found changed item 5. Nothing is
+half-finished.
 
 | # | Item | Type | Blocking |
 |---|---|---|---|
-| 1 | **Re-check any contract quoted before 2026-08-03.** The tables are regenerated (below), but a deal already signed against $2.26/run carries ~20% less margin than its band table claimed. Nothing to build — a review. | Review | Renewals |
-| 2 | **Clean re-run of the inoculation loop** (~$5.97 COGS at the corrected model, not $2.70 — see item 6). The measured delta's *magnitude* is contaminated: 3 of 6 assets carried a fabricated statistic that is now blocked. Mechanism is proven; effect size is not citable. | Decision | Citing any delta figure |
-| 3 | ~~Re-derive `ICP_SYNTHESIS` and `INOCULATION_DRAFT`~~ **Done 2026-08-04.** Both outputs checked against one live pass; `INOCULATION_DRAFT` output raised 5,000 → 5,700. Inputs held at their ceilings — both are document-dependent, same as `AGENT_GENERATION`. Still one pass each; re-derive when a project with substantial uploads runs. | Done | — |
-| 4 | ~~Re-derive `OBJECTION_CANONICALIZATION`~~ **Done 2026-08-04.** It is a ceiling, not a floor: input bought 728 phrasings against an 800 cap, and the output was reconstructed from the response structure at ~9,400 against the 10,000 priced. Unchanged for ordinary runs; a **re-simulation** now has its own profile at 4.4× the output. §1c. | Done | — |
-| 5 | **Per-adapter `AGENT_ACTION` profile.** Now measured, not inferred: **748** input tokens per action on Reddit + Twitter/X against **312** on Hacker News + LinkedIn, same shape. Blocked twice over — `llm_usage` has no platform column, so calls are not attributable; and per-adapter pricing makes platform choice change price, which cuts against "platforms are cost-neutral". **Needs a product decision before the schema work.** | Decision + Work | Quote precision |
-| 6 | **The free grant has 20 credits of headroom** — a free run costs 1,180 of 1,200. Not new (the previous revision left 24) and not caused by the recalibration, but any repricing consumes it and the failure lands at signup. 1,400 costs $0.22 a trial. | Decision | A broken signup |
-| 7 | **Phase 3 — Marketing lens.** N-way matched swarms, per-objective intent metrics, Virality Potential Score. Entry notes in §9.4. | Phase | — |
+| 1 | **Phase 3 — Marketing lens.** ← **the work.** N-way matched swarms, per-objective intent metrics, Virality Potential Score. Entry notes in §9.4; read DECISIONS §5 and §6 first. Raises `MAX_RUNNABLE_VARIANTS`. | Phase | — |
+| 2 | **Re-check any contract quoted before 2026-08-03.** A deal signed against $2.26/run carries ~20% less margin than its band table claimed. Nothing to build — a review, at renewal. | Review | Renewals |
+| 3 | **Clean re-run of the inoculation loop** (~$5.97 COGS). The measured delta's *magnitude* is contaminated: 3 of 6 assets carried a fabricated statistic that is now blocked. Mechanism is proven; effect size is not citable. Do this when there is a reason to cite a delta figure, not before. | Decision | Citing any delta figure |
+| — | ~~Re-derive `ICP_SYNTHESIS` and `INOCULATION_DRAFT`~~ **Done 2026-08-04.** Outputs checked against one live pass each; `INOCULATION_DRAFT` raised 5,000 → 5,700. Inputs held at their ceilings — document-dependent, same as `AGENT_GENERATION`. | Done | — |
+| — | ~~Re-derive `OBJECTION_CANONICALIZATION`~~ **Done 2026-08-04.** A ceiling, not a floor: input bought 728 phrasings against an 800 cap; output reconstructed at ~9,400 against the 10,000 priced. Unchanged for ordinary runs; a **re-simulation** now has its own profile. §1c. | Done | — |
 
-Everything in §8 is the older backlog, plus three new entries from the 2026-08-04
-pass.
+Everything in §8 is the older backlog, plus four entries from the 2026-08-04
+pass — including the two deferred above.
 
 **If you do nothing else, read §1b and §1c.** Phase 2's worst defect reported a
 perfect score. The 2026-08-04 defect was defended by a comment explaining why the
 number was low. Both survived a green test suite; the second was *asserted* by
-one.
+one. Neither was found by tuning a profile — which is the other half of the
+argument for closing the cost model and building.
 
 ---
 
@@ -628,8 +643,9 @@ sample contract language needs counsel review before use.**
 > promises — at signup. That relationship is pinned by
 > `test_the_free_grant_covers_one_free_run`, and the advertised paid run counts by
 > `test_paid_tier_run_counts_are_whole_runs`, because this is the second time the
-> grant has silently gone stale. **20 credits of headroom is not enough to stop a
-> third — §0 item 6.**
+> grant has silently gone stale. 20 credits of headroom is not enough to stop a
+> third, and the test is the guard that catches it before a customer does — §8
+> item 18, deferred by decision.
 >
 > ⚠️ **Contracts signed before this date** were quoted off $2.26/run and carry
 > ~20% less margin than their band table showed. Review at renewal.
@@ -743,11 +759,16 @@ where noted.
 
 **New from the 2026-08-04 ledger pass:**
 
-15. **`llm_usage` has no platform dimension.** Agent-action spend cannot be
-    attributed to an adapter, which is the schema half of §0 item 5. The 748 vs
-    312 split is measurable only because those two runs happened to use one
-    adapter family each; a mixed run tells you nothing. The fix is a column plus
-    a `usage_context` argument — small. The product question above it is not.
+15. **Per-adapter `AGENT_ACTION`, deferred 2026-08-04.** Measured at **748**
+    input tokens per action on Reddit + Twitter/X against **312** on Hacker News
+    + LinkedIn. Two things block it and neither is urgent: `llm_usage` has no
+    platform dimension, so action spend is not attributable to an adapter (the
+    748/312 split is legible only because those two runs each used one adapter
+    family — a mixed run tells you nothing); and per-adapter pricing makes
+    **platform choice change the price**, which cuts against "adding a platform
+    is cost-neutral". The profile is held at the higher figure, so compact
+    adapters are over-quoted, which is the safe direction. **Left as-is by
+    decision, not by omission.**
 16. **`AGENT_ACTION` output is one observation for the asset surcharge.** Input
     is corroborated by construction (`ASSET_BODY_IN_PROMPT` = 700 characters
     bounds it at ~205 tokens against 224 measured); output, +7 tokens per asset,
@@ -763,9 +784,13 @@ where noted.
     client issues a quote for a child today — but it is a **silent
     under-charge** if one ever does, which is the failure class this model
     exists to prevent.
-18. **The free grant has 20 credits of headroom.** §0 item 6. Repeated here
-    because it is the item most likely to be discovered by a customer rather
-    than by a test.
+18. **The free grant has 20 credits of headroom, deferred 2026-08-04.** A free
+    run costs 1,180 of the 1,200 granted. Pre-existing — the previous revision
+    left 24 — but any stage repricing consumes it and the symptom is a signup
+    that cannot complete its one promised run. 1,400 costs $0.22 a trial.
+    `test_the_free_grant_covers_one_free_run` fails before a customer does, and
+    reports the headroom in its message. **That test is the guard; act when it
+    goes red, not before.**
 
 **Open product questions** (DECISIONS §17): which countries fall in which
 regional tier; the blended agency run mix (55/30/13/2) is still an assumption;

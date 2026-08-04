@@ -1387,7 +1387,8 @@ higher one, so compact adapters are over-quoted on purpose. A per-adapter profil
 needs a `platform` dimension on `llm_usage`, which does not exist — action calls
 are not attributable to an adapter today — and it makes platform choice change
 price, which contradicts "adding a platform is close to cost-neutral" in the
-direction customers will notice. HANDOFF §0 item 5.
+direction customers will notice. **Deferred by decision on 2026-08-04** — the
+cost model is closed and the remaining precision is pennies. HANDOFF §8 item 15.
 
 ---
 
@@ -1439,7 +1440,8 @@ list are resolved above.
    Reddit + Twitter/X against 312 on Hacker News + LinkedIn) only because those
    two runs happened to be single-family. A mixed run tells you nothing. Fixing
    it is a column plus a `usage_context` argument — the harder half is the
-   product question in HANDOFF §0 item 5.
+   product question above it. **Deferred by decision 2026-08-04**; HANDOFF §8
+   item 15.
 10. **`issue_quote` cannot price a re-simulation.** It takes a bare shape and
     knows neither `reuse_agents` nor `inoculation_assets`, and `consume_quote`
     validates only agents/rounds/platforms/variants — so a parent-shaped quote
