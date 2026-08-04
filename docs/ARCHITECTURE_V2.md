@@ -1597,6 +1597,114 @@ not separate them", and the true reading of both live runs.
 
 ---
 
+## [2026-08-04, late] The V1 audit worked down, and three features the user asked for
+
+Four commits, six parallel audits then five build agents. `V1_AUDIT.md` carries
+the per-item verdicts; this entry records only the reasoning a future session
+would otherwise have to re-derive.
+
+### The defects worth remembering, because their shape recurs
+
+**Two silent extraction failures, on the two files a founder is most likely to
+upload.** `.pptx` was dispatched to the DOCX extractor, which looks for
+`word/document.xml` — a member no PPTX contains — so a deck stored
+`"[Unable to extract text from this DOCX file]"` as its whole contribution to
+the ICP with `processing_status: complete`. Separately, `_download_doc` fetched
+the *raw* upload and decoded it as UTF-8 with `errors="replace"`, splicing a
+PDF's bytes into the agent-generation prompt. Neither raised, ever. **The
+pattern: an extractor that returns a string on failure is indistinguishable from
+one that succeeded**, and every consumer downstream treated the apology text as
+content.
+
+**The swarm was short, and it was a billing defect first.** Apportionment used
+`max(1, round(w/W * n))` against a truncating remainder: 45 agents built where
+48 were requested, 85 of 180 configurations missing their total in both
+directions. Credits are charged at start from the *selected* count, so this was
+paid-for-and-not-delivered — and a second, independent source of the
+interval-widening §1a already documents, because bands are computed across
+agents. Largest-remainder (Hamilton) apportionment; 0 of 180 now miss.
+
+**The multi-pack design was chosen by measurement, and the obvious option was
+wrong.** Copying the adversarial cohort into every pack *doubles* allocation
+error, because each archetype rounds independently and copying multiplies the
+archetype count. Across 480 configurations: 0.100 worst deviation for one
+blended pack, **0.200 for copy-into-every** (worse in 178 cases), 0.100 for
+dealing `ceil(K/N)` round-robin. Dealt. A test fails if anyone switches back.
+
+**28 log assertions could pass while capturing nothing.** `create_app()` installs
+a *new* structlog processor list; `capture_logs` swaps processors on the current
+list *in place*. A module logger bound before the last `create_app()` logs to the
+orphaned list, so `capture_logs` returns `[]` and the assertion passes for the
+wrong reason — **order-dependent**, which is why four test files had grown
+private fixtures against it and six had not. Every one of those assertions
+guards a defect whose signature was failing silently, so a vacuous guard is worse
+than none. One `conftest` fixture now, plus `test_log_capture_canary.py`, which
+was **verified to fail without the fixture before being kept** — a canary that
+cannot fail is the defect it exists to detect.
+
+### The tenant boundary moved to the lookup
+
+`get_pack(pack_id)` took no org while `custom_persona_packs` constrains
+`UNIQUE(organization_id, pack_id)` — the schema stating that `pack_id` selects a
+*set*, so which row you got depended on the query plan. The compiled-ICP path was
+worse: a globally unique id and no authorisation check at all.
+
+Org is now threaded to the query, and **`org_id=None` is fail-closed to
+built-ins** — a caller that never proved which org it acts for cannot be served
+tenant data by omitting an argument. Composite keys (`"{org}:{pack_id}"`) were
+rejected: 70 `simulations.persona_pack_ids` rows store bare slugs, and splitting
+a user-supplied key is §2a's first failure class. This is what §1a did for
+`agent_id`, applied to packs.
+
+Verified latent rather than realised before changing it — 5 custom packs across 2
+orgs, no id shared. The org library is what would have realised it.
+
+### Classification proposes; a human decides
+
+Ingestion classifies each upload as `own`/`competitor`/`market` into
+`material_kind_suggested` + `material_kind_confidence`. **`material_kind` is
+absent from the write payload, and a test asserts that at the write site.**
+DECISIONS §7 is the reason: the column records a *human decision*, and it is what
+licenses the model to name a competitor in copy a founder may publish. A model's
+guess and a founder's confirmation are different events; only the second grants
+anything.
+
+### A cost that no token count can express
+
+The web search tool bills per search *on top of* tokens. `record_llm_call` gained
+`surcharge_usd`, and the adapter reports the searches billed on a response onto
+the same `llm_usage` row as that response's tokens — both read off one `usage`
+object, so the fee cannot drift from the call that incurred it.
+
+This is load-bearing, not tidy: `reconcile_run_cost` sums `llm_usage.cost_usd`,
+so **a cost that never reaches the ledger is one the margin gate structurally
+cannot see** — the stage reconciles as cheaper than it is and
+`margin_floor_breached` cannot fire for the missing part. ~19% of serving cost on
+a 12-query discovery. It was first built as a *logged* gap, which was honest but
+not sufficient; the docstrings describing that gap were then corrected rather
+than left to become the next false claim a comment defends (§1c).
+
+⚠ `gtm_discovery` rows therefore carry a `cost_usd` higher than their tokens
+imply. §7's re-derivation query reads token medians and is unaffected; a
+cost-based derivation would over-state this stage.
+
+### Migration ordering is not a constant
+
+`026` and `027` must be applied **before** the deploy, because they add columns
+the code writes. `019` went the other way — merge → deploy → constrain — because
+it added a constraint the code had to satisfy first. The rule is not "migrations
+last": **a writer and the schema it needs must never be apart in the direction
+that breaks.**
+
+An integration break between two agents was caught before commit and is worth
+recording as a near-miss: the ingestion code wrote `material_kind_suggested`
+while the migration created `suggested_material_kind`, and the migration was
+missing five columns the pipeline writes. Both agents' reports were individually
+accurate — the defect existed only *between* them, which is the same
+`sim_uuid`/`sim_id` shape that has now bitten this codebase three times.
+
+---
+
 ## Known issues carried into Phase 2
 
 Recorded here so they are not rediscovered. Items 1, 2 and 7 from the Phase 1

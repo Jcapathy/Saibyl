@@ -1,7 +1,9 @@
 # Saibyl V2 — Session Handoff
 
-**Saido Labs LLC** · Updated 2026-08-04 — **Phases 0–3 complete, merged to
-`master`, deployed. Migrations 017–024 all applied.**
+**Saido Labs LLC** · Updated 2026-08-04 (late) — **Phases 0–3 complete and
+deployed. Migrations 017–024 applied; 025, 026 and 027 written and NOT applied.
+Four commits on `master` are local and unpushed, and no live run has been done
+since the V1-audit sweep — see the banner in §0 before deploying anything.**
 
 Read this first in a new session. It is written to be read cold, with no memory
 of previous sessions.
@@ -15,9 +17,9 @@ below is reference you read *when a task points you at it*, not upfront.
 | | |
 |---|---|
 | Where the code is | `master` and `v2` are the **same commit** and both deployed. Work on either; keep them aligned. |
-| What works | Phases 0–3: measurement layer, Founder lens + inoculation loop, Marketing lens + N-way matched swarms. All verified by live runs, not just tests. |
-| What to do next | **`docs/V1_AUDIT.md`**, top-down. ~70 findings from a systematic sweep, ranked, each marked fixed / accepted / open. |
-| How to verify | `cd backend && python -m pytest -q && ruff check app tests scripts` · `cd frontend && npx tsc --noEmit && npx eslint . --quiet && npx vite build`. 270 tests should pass. |
+| What works | Phases 0–3: measurement layer, Founder lens + inoculation loop, Marketing lens + N-way matched swarms — all verified by live runs. Added 2026-08-04 and **static-green only**: one upload surface feeding ICP synthesis, multi-pack + org library, `services/gtm/` candidate discovery. |
+| What to do next | **A live end-to-end run**, then the tier migration (§0 item 2 — payment is impossible from the UI until it lands) and the Marketing-lens calibration (§0 item 4). `docs/V1_AUDIT.md` is now mostly closed: 1–18 and 20–38 fixed, 19/25/39 open. |
+| How to verify | `cd backend && python -m pytest -q && ruff check app tests scripts` · `cd frontend && npx tsc --noEmit && npx eslint . --quiet && npx vite build`. **848 tests** should pass (270 before the 2026-08-04 sweep). |
 | What a live run costs | ~$1.70 for a 3-variant gate run. `python scripts/live_run_marketing.py --dry-run` prices it without spending. |
 
 **Three things that will save you a day each:**
@@ -87,12 +89,66 @@ Six files in `docs/`, nothing else to hunt for.
 > prompt edit large enough to move a stage by more than half. A future session
 > that finds itself re-deriving a profile for accuracy's sake has misread this.
 
+> ### ⚠️ Read this before you touch anything — state as of 2026-08-04, late
+>
+> **The queue below is largely done, and there are four unapplied migrations
+> whose order can break production.** Four commits sit on `master`, **local and
+> unpushed**, and **no live end-to-end run has happened** — so under §2's own
+> gate this is not push-ready.
+>
+> ```
+> 31910e8  Turn the ICP into a candidate list, and put its search fee on the ledger
+> d9e8a05  Allocate the swarm the customer paid for; stop the suite asserting nothing
+> bff67c3  Derive the audience from every upload, and emit packs the org can reuse
+> 4726fc3  Work down the V1 audit; remove the prediction-market subsystem
+> ```
+>
+> **Deployment order, and it is not the same for every migration:**
+>
+> | | | Order |
+> |---|---|---|
+> | `025` | asset-count RPCs | Any time. It is a no-op on production and reproduces prod on a fresh DB |
+> | `026` | pack library + upload columns | ⚠️ **APPLY BEFORE DEPLOY** — adds columns the code writes |
+> | `027` | GTM discovery | ⚠️ **APPLY BEFORE DEPLOY** — same reason |
+>
+> This is the **reverse of 019**, and the difference is the whole rule: 019 added
+> a *constraint the code had to satisfy*, so it went merge → deploy → constrain.
+> 026 and 027 add *columns the code writes*, so a deploy that lands first fails
+> every upload and every discovery. **The rule is not "migrations last" — it is
+> that a writer and the schema it needs must never be apart in the direction that
+> breaks.**
+>
+> **Also true now, and it changes what you should read:**
+>
+> - **Prediction markets (Kalshi/Polymarket) are gone**, by decision. The tables
+>   remain in production; dropping them is a separate, unwritten migration.
+> - **Uploads are one surface.** `/api/documents` and `/api/uploads` both write
+>   `documents` through `services/ingestion/pipeline`. `project_assets` has no
+>   reader. Two silent extraction defects were fixed here — see `V1_AUDIT.md`.
+> - **The ICP compiles to *several* packs**, promotable to an org-level library.
+>   `get_pack` now takes an org and is **fail-closed** without one.
+> - **`services/gtm/` is new and has never run live.** Its cost profiles are
+>   estimated, not measured, and `measured=False` is pinned by a test.
+> - The suite is **848 tests**, up from 270. Some of that growth is guards against
+>   defects that a green suite had already been hiding.
+
 Phases 0–3 are complete and verified live. Nothing is half-finished. **Start at
 item 1 and work down.**
 
+> **Queue status, 2026-08-04:** item 1 is **done** except audit items 19, 25 and
+> 39. Item 2 (tiers) is **still blocked on Stripe Price IDs** and is now the
+> highest-value thing a session can unblock, because payment remains impossible
+> from the UI. Items 4, 5 and 6 are **untouched and still correct** — item 4, the
+> Marketing lens calibration, is the one that gates selling that lens at all.
+>
+> **Three things were added that are not on this list**, because the user
+> directed them mid-session: the ingestion unification, the multi-pack + org
+> library, and `services/gtm/` candidate discovery. All three are committed and
+> static-green; **none has run live.**
+
 | # | Item | Type | Blocking |
 |---|---|---|---|
-| 1 | **Work down `docs/V1_AUDIT.md`** ← **the work.** A systematic sweep found ~70 findings; 4 fixed, the rest ranked and open. Start at the top. Highest-value still open: **one dead key with six customer-visible readers** (`metadata.sentiment`, item 8) — the headline Saibyl Score returns 422 on every Phase 1+ run. Then **`frontend/src/types/index.ts` is imported by nothing** (item 26), which is the hole every frontend/backend mismatch drifted through. **Verify each item before fixing** — several are reasoned rather than observed. | Work | Everything |
+| 1 | **Work down `docs/V1_AUDIT.md`** ← ~~**the work.**~~ **Largely done 2026-08-04** — 1–18, 20–38 fixed, one rejected on evidence. Remaining: **19** (fire-and-forget tasks, wants Phase 4's durable jobs), **25** (tiers, blocked on Stripe), **39** (no-caller subsystems, needs a per-subsystem decision). A systematic sweep found ~70 findings; 4 fixed, the rest ranked and open. Start at the top. Highest-value still open: **one dead key with six customer-visible readers** (`metadata.sentiment`, item 8) — the headline Saibyl Score returns 422 on every Phase 1+ run. Then **`frontend/src/types/index.ts` is imported by nothing** (item 26), which is the hole every frontend/backend mismatch drifted through. **Verify each item before fixing** — several are reasoned rather than observed. | Work | Everything |
 | 2 | **Tier migration to `founder`/`growth`/`agency` at $99/$299/$999.** Decided; see the banner above. Needs new Stripe Products and Price IDs. **Until it lands, payment is impossible from the UI** — audit item 25 has the full scope. | Work | Revenue |
 | 3 | **Phase 4** — Crisis lens, `clients` layer + org switcher, durable background jobs, calibration. One codebase now. Audit items 19–22 overlap durable jobs; do them together. | Phase | — |
 | 4 | ⚠️ **The Marketing lens is measured but uncalibrated.** Two live runs put the *same* three messages in opposite orders — 42/42/35% then 23/15/8%, Proof-led last then first. The scoreboard correctly refused to name a winner both times, but that variance **is** the finding: at 26 agents this test cannot separate anything. Before the lens is sold, establish how many agents resolve a difference worth acting on. | Work | Selling the lens |
@@ -121,7 +177,7 @@ argument for closing the cost model and building.
 | Phase 1 | **Complete and verified end to end** |
 | Phase 2 | Built and **verified end to end live**. Four defects found and fixed — see §1b. |
 | Phase 3 | **Complete and verified live.** Two multi-variant runs: `398bf601` (found the graph defect) and `37530696` (confirmed the fix — 208/208 replies linked, 6/6 virality components). |
-| Verification | ruff clean · **pytest 270 passed** · `tsc --noEmit` clean · `eslint --quiet` clean · `vite build` OK · app boots, 119 routes, no duplicate registrations |
+| Verification | ruff clean · **pytest 848 passed** · `tsc --noEmit` clean · `eslint --quiet` clean · `vite build` OK · app boots, **119 routes**, no duplicate registrations. ⚠️ **No live end-to-end run since the 2026-08-04 sweep** — static-green only |
 | Live runs | **Six.** Phase 1: `05f1d879`, `03de92ef`. Phase 2: `f980fe0d` (Founder lens, 30% adversarial) + `fa28d899` (its re-simulation). Phase 3: `398bf601` (3 variants — found the graph defect) + `37530696` (confirmed the fix, 208/208 replies linked). |
 | Migrations | 017–**024, all applied.** 019 went in at the merge in the only order that works: deploy first, index second — 377 rows renamed, 0 duplicate groups left, 2,730 agents intact. 024 dropped the V1 A/B columns. |
 | Cost model | Re-derived 2026-08-04 from `llm_usage`. **Standard run COGS $2.71 → $2.74**; tier runs 7/22/73 → **7/21/73**; a re-simulation **$2.38 → $3.13** and the full loop $5.97. Free grant unchanged at 1,200. All tables regenerated from `scripts/quote.py`. §1c. |
@@ -959,7 +1015,10 @@ count toward `assets_effective`. Do not "improve" that — it is the whole produ
 > not, and that distinction is the entire defect.
 >
 > `keys_carried_over` in the `objections_canonicalized` log is the health metric.
-> Zero fires an ERROR. A low ratio means the delta measured less than it appears.
+> **A ratio below `MIN_CARRYOVER_RATIO` (0.30) fires an ERROR** — it was
+> zero-only until 2026-08-04, which made the realistic "12 of 46 carried" case
+> invisible. The event is `objection_keys_carried_over_too_few`. A low ratio
+> means the delta measured less than it appears.
 
 **Assets are dropped, not flagged, when they fabricate evidence.** The drafter
 invented a validation statistic on the first live run and put it in three assets.

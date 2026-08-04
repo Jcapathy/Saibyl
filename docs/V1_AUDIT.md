@@ -57,7 +57,60 @@ fix, the `isSupportedSchema` range fix, and the V1 A/B subsystem removal.
 
 ---
 
+## FIXED — 2026-08-04, second pass (six parallel audits)
+
+**Items 1–18 and 20–38 are fixed**, each verified against the code and, where it
+mattered, against production before anything was changed. Detail is in the four
+commits; what follows is only what a future session needs to *not* re-derive.
+
+**One finding was rejected on evidence.** Item 29's headline — "every upload
+500s" — is **wrong**. `increment_asset_count(p_project_id uuid)` exists in
+production and PostgREST binds overloads by argument name, so uploads worked.
+The real defect underneath it is worse and different: **neither single-argument
+function is in any migration.** A database rebuilt from `scripts/migrations/`
+breaks upload *and* delete on day one. Migration `025` reproduces both from
+`pg_get_functiondef` on production. `scripts/migrations/apply.py` also depends
+on an `exec_sql` RPC that **exists in no schema** — the migration runner has
+never applied anything.
+
+**Corrections to the audit's own text, so they are not inherited as facts:**
+
+- Item 13 said "~13 sites". It is **15**, plus 17 further raw-id parse sites.
+- Item 28's diagnosis was partly wrong. `sentiment_score` is not always a
+  misspelling of `valence`: on the `simulations` list reads there is **no
+  backend source under any name**, so those displays were removed rather than
+  renamed. On the WS stream the backend declares the field but never constructs
+  it — events are written unmeasured and scored afterwards, so live sentiment is
+  architecturally impossible. Three sites in `SimulationDetailPage` were
+  **correct** and left alone (interview responses genuinely carry it).
+- Item 39's "no caller" list was right about `/api/uploads` and the five
+  ingestion processors, and that is now **resolved by wiring, not deletion** —
+  see the ingestion unification below.
+
+**What the sweep found that the audit did not have:**
+
+| Finding | Why it matters |
+|---|---|
+| **`.pptx` was extracted as DOCX.** The extractor looks for `word/document.xml`, which no PPTX contains, so a deck stored `"[Unable to extract text from this DOCX file]"` as its whole contribution to the ICP, status `complete` | A deck is the most likely thing a founder uploads. Every ICP synthesized from one was built on nothing |
+| **PDF `doc_context` was mojibake.** `_download_doc` decoded the raw upload as UTF-8 with `errors="replace"`, which never raises | The other most likely upload. Both silent |
+| **The swarm was short.** Apportionment allocated 45 agents where 48 were requested; 85 of 180 configurations missed their total | Credits are charged at start from the selected count. Paid for, not delivered — and a second source of the interval-widening in §1a |
+| **`rate_limit` built a Redis pool per request** | It manufactured the very error `fail_open=True` was swallowing. Cause and cover-up in one function |
+| **The strip set in `post_ref` had already drifted by one character** between its two copies | The 193-of-193 link failure returning, exactly as the audit predicted a duplicated literal would |
+| **28 log assertions could pass while capturing nothing** | `create_app()` installs a new structlog processor list; `capture_logs` swaps the current one in place. Order-dependent, so 4 files had private fixtures and 6 did not. Now one `conftest` fixture and a canary that was verified to fail without it |
+
+---
+
 ## OPEN — ranked. Verify before fixing.
+
+> **Status 2026-08-04:** items 1–18 and 20–38 are **fixed** (above). What remains
+> open below is **item 19** (fire-and-forget tasks, which wants the durable-jobs
+> work in Phase 4), **item 25** (the tier migration — decided, but it needs
+> Stripe Products and Price IDs, so it is blocked on an external action), and
+> **item 39** (the no-caller subsystems, which needs a wire-up-or-delete decision
+> per subsystem; `/api/uploads` and the ingestion processors are now wired).
+>
+> The ranked list is kept below **unedited**, because several entries record the
+> reasoning that made the fix findable and a summary would lose it.
 
 ### Money and correctness
 
