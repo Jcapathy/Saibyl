@@ -352,6 +352,21 @@ one is narrower and worth having next to it:
 
 From the user directly. These persist across sessions.
 
+- **Grep before you claim, query before you assert.** Stated after a session in
+  which two confident claims about V1 were both wrong within twenty minutes:
+  "nothing deployed reads these columns" (nine call sites) and "no row has ever
+  used them" (two rows). Each was one `grep` and one `SELECT` away. **A statement
+  about the codebase that has not been checked is a guess, and writing it into a
+  doc or a migration comment turns a guess into a fact the next session
+  inherits.** This is not a style preference — every V1 defect this build has hit
+  was found by measurement and hidden by assumption.
+- **Audit a subsystem before building on it, not after it bites.** V1 remnants
+  interrupted the Phase 3 gate run twice. Every one of them — bracketed post
+  references, a NOT NULL `created_by`, an RPC parameter named `sim_uuid` and
+  called as `sim_id` — would have come out of one systematic sweep at the start
+  of the phase for a fraction of what they cost discovered one at a time. **Run
+  the sweep at the phase boundary.** The failure classes worth sweeping for are
+  in §2a, because they are the ones this codebase actually produces.
 - **Authorship is Saido Labs LLC.** Commit with
   `--author="Saido Labs LLC <info@saidolabs.com>"`. **No Claude or Claude Code
   attribution** — no `Co-Authored-By`, no "Generated with", no 🤖. The committer
@@ -381,6 +396,22 @@ From the user directly. These persist across sessions.
 - `gh` is authenticated as `Jcapathy` with `repo` scope.
 
 ---
+
+## 2a. The sweep — failure classes this codebase actually produces
+
+Run at each phase boundary, before building on a subsystem. Not a generic
+checklist: every class below is here because it has already shipped a defect in
+this repo, and the example is the real one.
+
+| Class | The defect it produced | How to find it |
+|---|---|---|
+| **A model-supplied string used as a key or compared to stored data, unnormalised** | Adapters showed the feed as `[<id>]` and the model echoed the brackets, inconsistently. `if p.id == post_id` failed in all twelve adapters: reactions never landed, feed ranking silently degraded to recency-only, 193 of 193 reply links lost. **Months, no error.** | Grep every `re.match` / `.split()` / `startswith` on model output, and every model value used as a dict key, `==` operand, or DB identifier. `BasePlatformAdapter.post_ref` is the fix shape. |
+| **A silently swallowed exception** | The class that hid every defect on this list. A failure that logs nothing is a failure nobody investigates. | `except Exception: pass`, `except: continue`, `or {}` masking an error, `.get()` chains over data that must exist. |
+| **A number invented rather than measured** | `viral_but_off_message` compared takeaway accuracy to an absolute `0.25`; the live distribution was 0.07–0.14, so it fired on two of three variants. A flag that fires on everything is noise dressed as a finding. | Any threshold, cap or weight not traceable to a measurement. If a constant has no measured value in its comment, it is a guess. |
+| **A comment or doc asserting something nobody checked** | `_stage_costs` explained that a re-simulation is cheaper than its parent. It is more expensive. The claim was repeated in DECISIONS and pinned by a passing test — three layers agreeing, none matching the ledger. | Read comments as claims. Where one states a fact about behaviour or cost, verify it against the ledger or the data. |
+| **A parameter, column or field accepted but never used** | `run_generate_report(variant="a")` reached only a log line, which then announced `variant=a` on a three-arena run. `is_ab_test` branched between two identical functions. | Unused args; columns written but never read; a naive dead-code scan **plus** manual exclusion of framework-called route handlers. |
+| **Two sources of truth for one value** | `isSupportedSchema` used `===` and a user-facing message hardcoded "version 1" while the constant had moved to 3. | Anything declared in both `backend/app/` and `frontend/src/`, or in both code and a migration. |
+| **A constraint safe only after the code that satisfies it is serving** | Migration 019 would have failed agent insertion on every run had it landed before the deploy carrying the dedup. | Any migration adding a constraint. Order is merge → deploy → constrain, and the deploy must be *verified* live, not assumed. |
 
 ## 3. Where the product reasoning lives
 
