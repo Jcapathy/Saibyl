@@ -20,7 +20,6 @@ from app.services.platforms.simulation_control import get_simulation_status, sto
 from app.workers.simulation_tasks import (
     run_prepare_agents,
     run_simulation,
-    run_simulation_ab,
 )
 
 log = structlog.get_logger()
@@ -54,7 +53,6 @@ class CreateSimulationBody(BaseModel):
     project_id: str
     platforms: list[str]
     max_rounds: int = 10
-    is_ab_test: bool = False
     persona_pack_ids: list[str] = []
     agent_count: int | None = None
     description: str | None = None
@@ -191,7 +189,6 @@ async def create_simulation(body: CreateSimulationBody, auth: dict = Depends(get
             "organization_id": auth["org_id"],
             "platforms": body.platforms,
             "max_rounds": body.max_rounds,
-            "is_ab_test": body.is_ab_test,
             "persona_pack_ids": persona_pack_ids,
             "agent_count": body.agent_count,
             "description": body.description,
@@ -336,7 +333,7 @@ async def start_simulation(
     sim = (
         admin.table("simulations")
         .select(
-            "id, is_ab_test, status, agent_count, max_rounds, platforms, "
+            "id, status, agent_count, max_rounds, platforms, "
             "variants, parent_simulation_id, inoculation_asset_ids"
         )
         .eq("id", id)
@@ -424,10 +421,12 @@ async def start_simulation(
             raise HTTPException(status_code=402, detail=budget.message)
         deduct_credits(auth["org_id"], budget.credits_required)
 
-    if sim.data.get("is_ab_test"):
-        asyncio.create_task(_safe_task(run_simulation_ab(id), "run_simulation_ab", simulation_id=id))
-    else:
-        asyncio.create_task(_safe_task(run_simulation(id), "run_simulation", simulation_id=id))
+    # One entry point. The `is_ab_test` branch that used to sit here chose
+    # between `run_simulation_ab` and `run_simulation`, and the two were the same
+    # function — V1's A/B ran variant B never. Arenas replaced it: a run's
+    # variants live in `simulation_variants`, and `run_simulation` executes all
+    # of them.
+    asyncio.create_task(_safe_task(run_simulation(id), "run_simulation", simulation_id=id))
     return {"status": "started"}
 
 

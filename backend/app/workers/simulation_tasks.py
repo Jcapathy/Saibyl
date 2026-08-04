@@ -887,18 +887,8 @@ async def run_simulation(simulation_id: str):
     }
 
 
-async def run_simulation_ab(simulation_id: str):
-    """Deprecated alias for `run_simulation`. Kept for the V1 `is_ab_test` path.
-
-    In V1 this was the A/B entry point and it called `run_simulation` once, so
-    variant B was never run — the scoreboard compared a variant against nothing
-    and V1 shipped that for months. It is now genuinely an alias, because
-    `run_simulation` runs every configured arena.
-
-    A run reaches this instead of `run_simulation` only through the legacy
-    `simulations.is_ab_test` flag, which `master` still writes. Both paths now
-    do the same correct thing. The flag and its `variant_a_config` /
-    `variant_b_config` columns go at the Phase 4 merge, when `master` stops
-    reading them — see migration 022's header.
-    """
-    return await run_simulation(simulation_id)
+# `run_simulation_ab` was here. In V1 it was the A/B entry point and it called
+# `run_simulation` once, so variant B was never run — a scoreboard comparing a
+# variant against nothing, shipped for months. Phase 3 made it a true alias by
+# giving `run_simulation` every arena; Phase 4 removed it, along with the
+# `is_ab_test` flag that was the only way to reach it.

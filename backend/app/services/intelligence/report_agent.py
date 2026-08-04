@@ -1,7 +1,6 @@
 # PUBLIC INTERFACE
 # ─────────────────────────────────────────────────────────
 # generate_report(simulation_id, config) -> dict
-# generate_ab_comparison_report(simulation_id, config) -> dict
 # build_lens_context(sim, analysis) -> str
 # get_report_progress(report_id) -> ReportProgress
 # clean_report_output(text) -> str
@@ -129,7 +128,6 @@ class ReACTConfig(BaseModel):
     evidence_depth: Literal["shallow", "standard", "deep", "exhaustive"] = "standard"
     section_count: int | None = None
     include_agent_interviews: bool = True
-    ab_comparison: bool = False
 
     def resolved(self) -> ReACTConfig:
         """Apply depth preset overrides."""
@@ -518,27 +516,11 @@ Notable Event)
 This section is SUPPORTING EVIDENCE for the Key Findings above, not the opening content.
 Keep it concise — 1-2 pages maximum. The reader has already gotten the headline from Parts A-C."""
 
-AB_COMPARISON_PROMPT = """Compare the two simulation variants and determine a winner.
-
-Prediction goal: {prediction_goal}
-
-Variant A metrics: {variant_a_data}
-Variant B metrics: {variant_b_data}
-
-Provide:
-1. Key differences between variants
-2. Which variant better achieved the prediction goal
-3. Confidence in the determination
-4. Specific evidence supporting the conclusion
-
-Return JSON: {{"winner": "a" or "b", "confidence": float 0-1, "reasoning": str, "key_differences": [str]}}"""
-
-
-class _WinnerResult(BaseModel):
-    winner: str
-    confidence: float
-    reasoning: str
-    key_differences: list[str]
+# `AB_COMPARISON_PROMPT` and `_WinnerResult` were here. The prompt asked a
+# model to name a winner from two blobs of aggregate metrics and return a
+# confidence float it had no basis to compute - the schema had no way to say
+# "these are indistinguishable". That is the failure the variant scoreboard
+# was built to make impossible.
 
 
 CONCLUSION_PROMPT = """You are a senior political/crisis strategist writing the concluding section \
@@ -1020,58 +1002,11 @@ async def generate_report(
         raise
 
 
-async def generate_ab_comparison_report(
-    simulation_id: UUID,
-    config: ReACTConfig | None = None,
-) -> dict:
-    """Generate a comparison report for an A/B simulation."""
-    if config is None:
-        config = ReACTConfig(ab_comparison=True)
-    config.ab_comparison = True
-
-    # Generate base report for variant A
-    report = await generate_report(simulation_id, config)
-    report_id = report["id"]
-    admin = get_supabase_admin()
-    sim = admin.table("simulations").select("*").eq("id", str(simulation_id)).single().execute().data
-
-    # Get A/B comparison data
-    ab_data = await simulation_analytics(simulation_id, "ab_comparison")
-
-    # Determine winner
-    winner_result = await llm_structured(
-        messages=[{"role": "user", "content": AB_COMPARISON_PROMPT.format(
-            prediction_goal=sim["prediction_goal"],
-            variant_a_data=json.dumps(ab_data.data.get("variant_a", {})),
-            variant_b_data=json.dumps(ab_data.data.get("variant_b", {})),
-        )}],
-        schema=_WinnerResult,
-    )
-
-    # Update simulation with winner
-    admin.table("simulations").update({
-        "winner_variant": winner_result.winner,
-    }).eq("id", str(simulation_id)).execute()
-
-    # Append comparison section to report
-    comparison_md = (
-        f"\n\n## A/B Comparison Summary\n\n"
-        f"**Winner: Variant {winner_result.winner.upper()}** "
-        f"(confidence: {winner_result.confidence:.0%})\n\n"
-        f"{winner_result.reasoning}\n\n"
-        f"### Key Differences\n\n"
-        + "\n".join(f"- {d}" for d in winner_result.key_differences)
-    )
-
-    current = admin.table("reports").select("markdown_content").eq(
-        "id", report_id).single().execute().data
-    admin.table("reports").update({
-        "markdown_content": (current["markdown_content"] or "") + comparison_md,
-        "variant": "comparison",
-    }).eq("id", report_id).execute()
-
-    logger.info("ab_report_generated", report_id=report_id, winner=winner_result.winner)
-    return admin.table("reports").select("*").eq("id", report_id).single().execute().data
+# `generate_ab_comparison_report` was here. It asked a model to pick a winner
+# between two variants from raw aggregates, with no confidence interval and no
+# way to answer "neither" - on an engine that only ever ran variant A. The
+# N-way scoreboard replaces it, and what it adds is the refusal: a winner is
+# named only when the intervals separate.
 
 
 def get_report_progress(report_id: UUID) -> ReportProgress:

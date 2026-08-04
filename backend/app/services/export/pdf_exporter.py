@@ -171,7 +171,7 @@ async def export_report_pdf(report_id: UUID) -> bytes:
         <p><strong>Platforms:</strong> {', '.join(sim.get('platforms') or ['N/A'])}</p>
         <p><strong>Max rounds:</strong> {sim.get('max_rounds', 'N/A')}</p>
         <p><strong>Prediction goal:</strong> {sim.get('prediction_goal', 'N/A')}</p>
-        <p><strong>A/B Test:</strong> {'Yes' if sim.get('is_ab_test') else 'No'}</p>
+        <p><strong>Variants tested:</strong> {sim.get('variants') or 1}</p>
     </div>
 </body>
 </html>"""

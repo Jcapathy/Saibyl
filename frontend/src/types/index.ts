@@ -20,7 +20,7 @@ export interface Simulation {
   name: string;
   prediction_goal: string;
   status: string;
-  is_ab_test: boolean;
+  variants?: number;
   platforms: string[];
   max_rounds: number;
   created_at: string;

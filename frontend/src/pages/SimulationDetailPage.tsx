@@ -15,7 +15,7 @@ interface Simulation {
   prediction_goal: string;
   platforms: string[];
   max_rounds: number;
-  is_ab_test: boolean;
+  variants?: number;
   agent_count: number;
   persona_pack_ids: string[];
   created_at: string;
@@ -535,7 +535,7 @@ export default function SimulationDetailPage() {
             ['Persona Packs', (sim.persona_pack_ids || []).length > 0 ? sim.persona_pack_ids.join(', ') : 'None'],
             ['Agents', String(sim.agent_count ?? 0)],
             ['Max Rounds', String(sim.max_rounds)],
-            ['A/B Testing', sim.is_ab_test ? 'Enabled' : 'Disabled'],
+            ['Variants tested', String(sim.variants ?? 1)],
           ].map(([label, value]) => (
             <div key={label} className="flex items-center gap-4 py-1.5 border-b border-white/[0.03] last:border-0">
               <dt className="w-28 text-saibyl-muted text-[12px]">{label}</dt>

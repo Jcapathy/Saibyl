@@ -148,7 +148,7 @@ async def export_report_pptx(report_id: UUID) -> bytes:
         f"Total Events: {events.count or 0}",
         f"Platforms: {', '.join(sim.get('platforms') or [])}",
         f"Max Rounds: {sim.get('max_rounds', 'N/A')}",
-        f"A/B Test: {'Yes' if sim.get('is_ab_test') else 'No'}",
+        f"Variants tested: {sim.get('variants') or 1}",
         f"Sentiment Trajectory: {trajectory}",
     ])
 

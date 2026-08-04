@@ -76,7 +76,7 @@ async def export_report_json(report_id: UUID) -> bytes:
             "prediction_goal": sim.get("prediction_goal"),
             "platforms": sim.get("platforms"),
             "max_rounds": sim.get("max_rounds"),
-            "is_ab_test": sim.get("is_ab_test"),
+            "variants": sim.get("variants") or 1,
             "status": sim.get("status"),
         },
         "sections": [
@@ -139,7 +139,7 @@ async def export_simulation_json(simulation_id: UUID) -> bytes:
         "config": {
             "platforms": sim.get("platforms"),
             "max_rounds": sim.get("max_rounds"),
-            "is_ab_test": sim.get("is_ab_test"),
+            "variants": sim.get("variants") or 1,
             "timezone": sim.get("timezone"),
         },
         "agents": [

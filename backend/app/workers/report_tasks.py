@@ -71,23 +71,7 @@ async def run_generate_report(
     return {"report_id": result["id"], "status": result["status"]}
 
 
-async def run_generate_ab_report(simulation_id: str):
-    """Generate A/B comparison report."""
-    from app.services.billing.usage_ledger import usage_context
-    from app.services.intelligence.report_agent import (
-        ReACTConfig,
-        generate_ab_comparison_report,
-    )
-
-    logger.info("task_generate_ab_report_started", simulation_id=simulation_id)
-    config = ReACTConfig(evidence_depth="deep", ab_comparison=True)
-
-    with usage_context(
-        "report",
-        simulation_id=simulation_id,
-        organization_id=_org_for(simulation_id),
-    ):
-        result = await generate_ab_comparison_report(simulation_id, config)
-
-    logger.info("task_generate_ab_report_complete", report_id=result["id"])
-    return {"report_id": result["id"], "status": result["status"]}
+# `run_generate_ab_report` was here, with no caller. It wrote a two-variant
+# comparison report for a two-variant test the engine never ran. The N-way
+# scoreboard in `simulation_analysis` replaces it, and `build_lens_context`
+# hands it to the ordinary report writer.
