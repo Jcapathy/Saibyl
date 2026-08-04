@@ -64,6 +64,20 @@ _CONTENTLESS_EVENT_TYPES = {"react", "reaction", "like", "repost", "vote"}
 
 _VALID_STANCES = {"support", "oppose", "undecided", "off_topic"}
 
+# The closed taxonomy the prompt asks for. **`intent` was validated with
+# `isinstance(intent, str)` — a type check, not a membership test — while
+# `stance` eight lines below was checked properly.**
+#
+# That gap lands on the Marketing lens's headline. `variant_scoreboard` counts
+# converting agents with `e.intent in intents`, so `"Purchase"`, `"trial "` or
+# `"none."` puts the event in no bucket, the objective rate reads 0.0 with a
+# rule-of-three interval, and `_resolve_winner` then explains a parsing bug to
+# the customer as a sampling problem — "no winner, more agents needed" when in
+# fact nothing was counted.
+_VALID_INTENTS = {
+    "purchase", "trial", "click", "visit", "inquire", "share", "abandon", "none",
+}
+
 # The prompt asks for at most 12 words. This is the backstop, because a model
 # that ignores a word limit and returns the whole post would turn a summary
 # column into a second copy of `content`.

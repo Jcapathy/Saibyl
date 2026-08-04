@@ -5,7 +5,14 @@ import json
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.responses import StreamingResponse
 
 from app.core.auth import get_current_org
@@ -67,6 +74,37 @@ async def simulation_websocket(
         manager.disconnect(websocket, str(simulation_id))
 
 
+def _assert_owns_simulation(simulation_id: UUID, org_id: str) -> None:
+    """Refuse a simulation belonging to another organisation.
+
+    **Both SSE endpoints took `auth` and never used it.** Depending on
+    `get_current_org` proves the caller is signed in; it proves nothing about
+    *whose* simulation they asked for. Any authenticated user could stream any
+    organisation's live events by knowing a UUID — a cross-tenant leak that no
+    test covered because the dependency being present looks like an access
+    check.
+
+    The WebSocket endpoint above does not have this hole: it hands `org_id` to
+    `manager.connect`, which scopes the subscription. The SSE fallbacks were
+    added later and did not carry the check across.
+    """
+    row = (
+        get_supabase_admin()
+        .table("simulations")
+        .select("id")
+        .eq("id", str(simulation_id))
+        .eq("organization_id", org_id)
+        .execute()
+    ).data
+    if not row:
+        logger.warning(
+            "sse_cross_org_denied",
+            simulation_id=str(simulation_id),
+            org_id=org_id,
+        )
+        raise HTTPException(status_code=404, detail="Simulation not found")
+
+
 @router.get("/api/simulations/{simulation_id}/stream")
 async def simulation_stream_sse(
     simulation_id: UUID,
@@ -76,6 +114,8 @@ async def simulation_stream_sse(
     import redis.asyncio as aioredis
 
     from app.core.config import settings
+
+    _assert_owns_simulation(simulation_id, auth["org_id"])
 
     async def event_generator():
         yield f"data: {json.dumps({'type': 'connected', 'simulation_id': str(simulation_id)})}\n\n"
@@ -104,6 +144,22 @@ async def report_progress_sse(
     auth: dict = Depends(get_current_org),
 ):
     """SSE stream for report generation progress."""
+    # Same hole as the simulation stream: authenticated is not authorised.
+    report = (
+        get_supabase_admin()
+        .table("reports")
+        .select("id")
+        .eq("id", str(report_id))
+        .eq("organization_id", auth["org_id"])
+        .execute()
+    ).data
+    if not report:
+        logger.warning(
+            "sse_cross_org_denied",
+            report_id=str(report_id),
+            org_id=auth["org_id"],
+        )
+        raise HTTPException(status_code=404, detail="Report not found")
 
     async def generator():
         for _ in range(600):  # max 10 minutes

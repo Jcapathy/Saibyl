@@ -1,11 +1,21 @@
 from __future__ import annotations
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from app.core.auth import get_current_org, get_current_user
 from app.core.database import get_supabase, get_supabase_admin
 from app.core.rate_limit import check_rate_limit
+from app.services.billing.agent_pricing import tier_grant
+
+# This module imported no logger at all, so all five handlers were silent by
+# construction — a Supabase outage read as every user typing a bad password.
+log = structlog.get_logger()
+
+# What a new account starts on. Explicit rather than relying on the column
+# default, because the credit grant is derived from it and the two must agree.
+DEFAULT_SIGNUP_PLAN = "free"
 
 router = APIRouter(tags=["auth"])
 
@@ -45,10 +55,47 @@ async def signup(body: SignupRequest, request: Request):
     # Create organization
     import secrets
     slug = body.org_name.lower().replace(" ", "-")[:50] + "-" + secrets.token_hex(3)
+    # `plan` and the credit grant are set explicitly, not left to defaults.
+    #
+    # **Without this every new account was dead on arrival.** The org was created
+    # with name and slug only, `organizations.credits_balance` defaults to 0, and
+    # `check_credit_budget` compares the balance against the run's cost — so the
+    # first thing a new user ever did returned
+    # "Not enough credits. This run needs 1,180; you have 0."
+    #
+    # The `grant_credits` RPC exists for exactly this and had **zero callers**
+    # anywhere in the codebase. The free grant is sized so it covers one free run
+    # (`test_the_free_grant_covers_one_free_run`), which is worth nothing if
+    # nobody is ever given it.
     org = admin.table("organizations").insert({
         "name": body.org_name,
         "slug": slug,
+        "plan": DEFAULT_SIGNUP_PLAN,
     }).execute().data[0]
+
+    granted = tier_grant(DEFAULT_SIGNUP_PLAN)
+    try:
+        admin.rpc("grant_credits", {
+            "org_uuid": org["id"],
+            "amount": granted,
+        }).execute()
+    except Exception:
+        # Loud, and not fatal: the account exists and is recoverable by granting
+        # credits manually. Silently leaving it at zero is what produced a
+        # signup that could never run anything.
+        log.exception(
+            "signup_credit_grant_failed",
+            org_id=org["id"],
+            plan=DEFAULT_SIGNUP_PLAN,
+            amount=granted,
+        )
+    else:
+        log.info(
+            "signup_credits_granted",
+            org_id=org["id"],
+            plan=DEFAULT_SIGNUP_PLAN,
+            amount=granted,
+        )
 
     # Link user as owner
     admin.table("organization_members").insert({

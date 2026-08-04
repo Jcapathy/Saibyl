@@ -148,9 +148,21 @@ async def handle_webhook(payload: bytes, signature: str) -> None:
     logger.info("stripe_webhook", event_type=event_type)
 
     if event_type == "checkout.session.completed":
-        org_id = data.get("metadata", {}).get("org_id")
-        plan = data.get("metadata", {}).get("plan", "starter")
-        if org_id:
+        metadata = data.get("metadata") or {}
+        org_id = metadata.get("org_id")
+        plan = metadata.get("plan")
+
+        if not org_id:
+            # Ack'd 200 by the caller, so Stripe never retries. A payment that
+            # reaches nobody has to be loud or it is simply lost.
+            logger.error(
+                "stripe_webhook_missing_org",
+                event_type=event_type,
+                session=data.get("id"),
+                detail="checkout completed with no org_id in metadata; "
+                       "the purchase was not applied to any organisation",
+            )
+        elif plan:
             limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["starter"])
             admin.table("organizations").update({
                 "plan": plan,
@@ -159,6 +171,28 @@ async def handle_webhook(payload: bytes, signature: str) -> None:
                 **limits,
             }).eq("id", org_id).execute()
             logger.info("subscription_activated", org_id=org_id, plan=plan)
+        elif metadata.get("report_type"):
+            # A one-off Flash Report. **This used to fall through the
+            # subscription branch**, because `plan` defaulted to "starter" when
+            # absent — and `create_flash_report_checkout` never sets it. So an
+            # Agency customer buying a single report was downgraded to starter
+            # limits, and `data["subscription"]` is None on a `mode="payment"`
+            # session, so their subscription id was nulled at the same time.
+            # The purchase is fulfilled elsewhere; there is nothing to do to the
+            # organisation here except not corrupt it.
+            logger.info(
+                "flash_report_purchased",
+                org_id=org_id,
+                report_type=metadata.get("report_type"),
+            )
+        else:
+            logger.error(
+                "stripe_webhook_unclassified_checkout",
+                org_id=org_id,
+                session=data.get("id"),
+                detail="checkout completed with neither a plan nor a "
+                       "report_type; nothing was applied",
+            )
 
     elif event_type == "invoice.payment_succeeded":
         customer_id = data.get("customer")
