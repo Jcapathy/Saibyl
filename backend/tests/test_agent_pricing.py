@@ -141,3 +141,52 @@ def test_cache_reads_are_cheaper_than_fresh_input():
     fresh = cost_usd("claude-opus-4-7", input_tokens=10_000)
     cached = cost_usd("claude-opus-4-7", cache_read_tokens=10_000)
     assert cached < fresh
+
+
+def test_the_free_grant_covers_one_free_run():
+    """A grant that does not cover one free run makes the tier unusable.
+
+    The user hits "not enough credits" on the only run they were promised, at
+    signup, which is the worst possible moment. This has gone stale twice — once
+    when depth scaling and canonicalization pricing landed, and again when the
+    2026-08-03 recalibration found the report writes six sections and was quoted
+    for four. Both times the *free* tier moved first, because the report and the
+    canonicalizer barely shrink with run size and so dominate a 25-agent run.
+
+    Asserted against the tier caps rather than a hardcoded shape, so tightening
+    a cap cannot quietly invalidate it.
+    """
+    from app.services.billing.agent_pricing import (
+        TIER_CREDIT_GRANTS,
+        estimate_simulation_cost,
+        tier_caps,
+    )
+
+    caps = tier_caps("free")
+    free_run = estimate_simulation_cost(
+        caps.max_agents, caps.max_rounds, caps.max_platforms, caps.max_variants
+    )
+
+    assert TIER_CREDIT_GRANTS["free"] >= free_run.credits, (
+        f"free grant is {TIER_CREDIT_GRANTS['free']} credits but a free run at "
+        f"the tier cap costs {free_run.credits} — the free tier cannot complete "
+        f"its one run"
+    )
+    assert TIER_CREDIT_GRANTS["trial"] == TIER_CREDIT_GRANTS["free"]
+
+
+def test_paid_tier_run_counts_are_whole_runs():
+    """A tier advertising N runs must actually afford N."""
+    from app.services.billing.agent_pricing import (
+        STANDARD_RUN,
+        TIER_CREDIT_GRANTS,
+        estimate_simulation_cost,
+    )
+
+    standard = estimate_simulation_cost(*STANDARD_RUN).credits
+    for tier, advertised in (("founder", 7), ("growth", 22), ("agency", 73)):
+        affordable = TIER_CREDIT_GRANTS[tier] // standard
+        assert affordable == advertised, (
+            f"{tier} affords {affordable} standard runs; PRICING_GUIDE §1.6 and "
+            f"PRD §8 advertise {advertised}. Regenerate the tables."
+        )

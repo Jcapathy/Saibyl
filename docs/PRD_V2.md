@@ -137,10 +137,10 @@ Measured output at 80% margin:
 
 | Preset | Agent-rounds | LLM calls | Cost | Price |
 |---|---:|---:|---:|---:|
-| Free trial (25 agents / 3 rounds / 2 platforms) | 75 | 102 | $0.75 | $3.75 |
-| Standard (100 / 5 / 2) | 500 | 604 | $2.26 | $11.32 |
-| Marketing 8-variant (100 / 5 / 1 platform)* | 4,000 | 4,107 | $10.06 | $50.32 |
-| Deep (250 / 10 / 4) | 2,500 | 3,006 | $7.46 | $37.29 |
+| Free trial (25 agents / 3 rounds / 2 platforms) | 75 | 102 | $1.18 | $5.88 |
+| Standard (100 / 5 / 2) | 500 | 604 | $2.71 | $13.56 |
+| Marketing 8-variant (100 / 5 / 1 platform)* | 500 | 4,107 | $10.54 | $52.72 |
+| Deep (250 / 10 / 4) | 2,500 | 2,756 | $7.93 | $39.63 |
 
 \* Multi-variant runs are priced but **not runnable** until Phase 3.
 
@@ -159,18 +159,18 @@ stage of every quote. Estimate against measurement on the reference run is now
 **Credits are the metered unit; runs are the sales language.** All advertised run
 counts are quoted against a defined reference:
 
-> **Standard run** = 100 agents × 5 rounds × 2 platforms × 1 variant → $2.26 COGS
+> **Standard run** = 100 agents × 5 rounds × 2 platforms × 1 variant → $2.71 COGS
 
-One credit is **$0.001 of COGS**, so a standard run is 2,265 credits. Grants are
+One credit is **$0.001 of COGS**, so a standard run is 2,713 credits. Grants are
 denominated in credits because a run varies 65× in cost across the tier caps —
 an allowance denominated in runs or agent-rounds rations nothing.
 
 | Tier | Price (US anchor) | COGS grant | Credits | ≈ std runs | ≈ 8-var runs | Margin |
 |---|---:|---:|---:|---:|---:|---:|
-| Free trial | $0, one run | $0.80 | 800 | 1 (capped) | — | — |
-| Founder | **$99/mo** | $19.80 | 19,800 | 8 | 2 | 80% |
-| Growth | **$299/mo** | $59.80 | 59,800 | 26 | 6 | 80% |
-| Agency | **$999/mo** | $199.80 | 199,800 | 88 | 20 | 80% |
+| Free trial | $0, one run | $1.20 | 1,200 | 1 (capped) | — | — |
+| Founder | **$99/mo** | $19.80 | 19,800 | 7 | 1 | 80% |
+| Growth | **$299/mo** | $59.80 | 59,800 | 22 | 5 | 80% |
+| Agency | **$999/mo** | $199.80 | 199,800 | 73 | 18 | 80% |
 | Enterprise | Custom annual | see `PRICING_GUIDE.md` | | | | 68–78% |
 
 Growth and Agency were re-derived from the cost model on 2026-08-02, replacing
@@ -199,9 +199,16 @@ above the 70% floor.
 
 | Region band | Price | Runs | COGS | Margin |
 |---|---:|---:|---:|---:|
-| Tier 1 — US / EU / UK / AU / CA / JP | $99 | 8 | $19.41 | 80.4% |
+| Tier 1 — US / EU / UK / AU / CA / JP | $99 | 7 | $19.41 | 80.4% |
 | Tier 2 — −40% | $59 | 4 | $12.94 | 78.1% |
 | Tier 3 — −60% (incl. India) | $39 | 3 | $9.70 | 75.1% |
+
+The COGS column is the region-scaled grant, not runs × cost, so the margins are
+unaffected by the 2026-08-03 recalibration — only Tier 1's run count moved
+(8 → 7 at $2.71/run). Note the grant does **not** scale linearly with price:
+−40% on price is −33% on grant and −60% is −50%, tuned so every band clears the
+70% floor. That shape is a design choice and should be re-derived alongside the
+Stripe Price IDs when the bands are actually built.
 
 Holding the US grant at the Tier 3 price would yield 50.2% margin — below the
 floor — which is why the grant scales.

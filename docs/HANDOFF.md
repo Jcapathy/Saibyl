@@ -40,8 +40,8 @@ any code is written.**
 
 | # | Item | Type | Blocking |
 |---|---|---|---|
-| 1 | **Pricing decision.** Standard-run COGS moved $2.26 → $2.71 and tier runs 8/26/88 → 7/22/73. `PRICING_GUIDE` §2.3 and every enterprise quote off $2.26 understate cost ~20%. Options in §7. | Decision | **Any new enterprise quote** |
-| 2 | **Clean re-run of the inoculation loop** (~$2.50 COGS). The measured delta's *magnitude* is contaminated — 3 of 6 assets carried a fabricated statistic that is now blocked. Mechanism is proven; effect size is not citable. | Decision | Citing any delta figure |
+| 1 | **Re-check any contract quoted before 2026-08-03.** The tables are regenerated (below), but a deal already signed against $2.26/run carries ~20% less margin than its band table claimed. Nothing to build — a review. | Review | Renewals |
+| 2 | **Clean re-run of the inoculation loop** (~$2.70 COGS). The measured delta's *magnitude* is contaminated — 3 of 6 assets carried a fabricated statistic that is now blocked. Mechanism is proven; effect size is not citable. | Decision | Citing any delta figure |
 | 3 | **Re-derive `ICP_SYNTHESIS` and `INOCULATION_DRAFT`** from `llm_usage` (§7 query). One live pass each is not a calibration; they are the only estimated profiles left. | Work | Quote accuracy |
 | 4 | **Re-derive `OBJECTION_CANONICALIZATION`.** Its measured output was capped at the old ceiling, so the current figure is a floor, not a measurement. | Work | Quote accuracy |
 | 5 | **Per-adapter `AGENT_ACTION` profile.** One number cannot serve a compact feed (Hacker News, 312 input tokens) and a body-carrying one (750). Today's value is a cross-platform ceiling on purpose. | Work | Quote precision |
@@ -67,7 +67,7 @@ suspicious rather than as success.
 | Verification | ruff clean · pytest 187 passed · `tsc --noEmit` clean · `eslint --quiet` clean · `vite build` OK · app boots, 116 routes, no duplicate registrations |
 | Live runs | Four. Phase 1: `05f1d879`, `03de92ef`. Phase 2: `f980fe0d` (Founder lens, 30% adversarial) and `fa28d899` (its inoculation re-simulation). |
 | Migrations | 017, 018, **020, 021** applied. **019 still not applied — it waits for the merge.** |
-| Cost model | Recalibrated 2026-08-03. **Standard run COGS $2.26 → $2.71**; tier runs 8/26/88 → 7/22/73. `PRICING_GUIDE` tables are stale — §7. |
+| Cost model | Recalibrated 2026-08-03. **Standard run COGS $2.26 → $2.71**; tier runs 8/26/88 → 7/22/73; free grant 800 → 1,200 credits. All tables regenerated from `scripts/quote.py`. |
 | Working tree | `.~lock.*` and `test_flow.py` are pre-existing untracked. Ignore them. |
 
 Commit list: `git log --oneline master..v2` — deliberately not enumerated here,
@@ -525,20 +525,26 @@ runs and the engine runs one arena — quoting it today over-charges against wha
 customer can execute. Reasoning and rejected alternatives: DECISIONS §15d. **The
 sample contract language needs counsel review before use.**
 
-> ⚠️ **The §2.3 table's cost base is stale.** It is built on $2.26/run COGS. The
-> 2026-08-03 recalibration moved that to **$2.71** after finding the report was
-> quoted for 4 sections and writes 6. Tier run counts fall from 8/26/88 to
-> **7/22/73**. Any quote issued off the current table understates cost by ~20%.
+> ✅ **Regenerated 2026-08-03 at $2.71/run COGS.** Every table in the guide, the
+> PRD's tier and reference tables, and DECISIONS §15d now come from
+> `scripts/quote.py` against the current model. Verified by re-running the tool
+> and diffing.
 >
-> The table is deliberately **not** regenerated. DECISIONS §15c set the
-> precedent of passing a corrected cost base straight through to price — but
-> that was when costs *fell* and run counts *rose*. The same question arriving in
-> the opposite direction reduces advertised runs on tiers already sold, and that
-> is a commercial decision, not a code one. Options are (a) hold price and
-> publish the lower run counts, (b) hold run counts and absorb the margin, or
-> (c) hold both and re-examine whether `AGENT_ACTION`'s cross-platform ceiling
-> is costing more than it protects. **Decide before the next enterprise quote
-> goes out.**
+> **The choice made:** hold prices, grants and the 80% margin; publish the lower
+> run counts (8/26/88 → 7/22/73). DECISIONS §15c set the precedent of passing a
+> corrected cost base straight through, and this is that precedent applied in the
+> uncomfortable direction. The grants and the margin floor are the promises the
+> pricing rests on; the run count is the derived figure, and it was always
+> disclosed as approximate and shape-dependent.
+>
+> **The free grant moved 800 → 1,200 credits.** A 25-agent trial now costs 1,176,
+> so 800 would have failed the one run the free tier promises — at signup. That
+> relationship is now pinned by `test_the_free_grant_covers_one_free_run`, and
+> the advertised paid run counts by `test_paid_tier_run_counts_are_whole_runs`,
+> because this is the second time the grant has silently gone stale.
+>
+> ⚠️ **Contracts signed before this date** were quoted off $2.26/run and carry
+> ~20% less margin than their band table showed. Review at renewal.
 
 ---
 

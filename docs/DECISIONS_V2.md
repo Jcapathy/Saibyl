@@ -115,8 +115,10 @@ structurally two runs. The free tier gets one.
 throws away the defensibility *and* the natural second-run trigger in one move.
 
 **What would change this:** if re-simulation cost makes the loop unsellable —
-but at ~$3.23 per standard run, two runs is $6.46 of COGS against a $99/mo tier.
-It is not close to being the constraint.
+but at $2.71 per standard run, the detect-then-verify pair is **$4.94** of COGS
+against a $99/mo tier, and the re-simulation is the cheaper of the two because it
+copies its parent's agents rather than generating them. It is not close to being
+the constraint.
 
 ---
 
@@ -387,13 +389,18 @@ what actually rations.
 then 3.3×. The old grants (~30 runs at $499, ~100 at $1,499) came from a V1
 strategy doc written before any cost model existed and had never been validated
 against anything — so cutting the price did **not** require cutting margin, only
-sizing the grant honestly. $299 at 80% still buys 18 standard runs or 7
+sizing the grant honestly. $299 at 80% still buys 22 standard runs or 5
 eight-variant runs a month.
 
-**Why credits, not runs.** A "run" varies by 56× across the tier caps — standard
-is $3.23, a 250-agent 8-variant run is $181.52. A grant denominated in runs is
-therefore unbounded compute: "30 runs" ranges from $65 to $5,445 of COGS. Runs
-survive as sales language against a defined reference run only.
+**Why credits, not runs.** A "run" varies by roughly 20× across the tier caps —
+standard is $2.71, a 250-agent 8-variant run is $53.50. A grant denominated in
+runs is therefore unbounded compute. Runs survive as sales language against a
+defined reference run only.
+
+That the multiplier itself has moved — it was quoted at 56× when the cost model
+was wrong in a different place — is the argument for credits restated. Any unit
+whose meaning shifts when the cost model is corrected cannot be the metered
+unit; a credit is $0.001 of COGS by definition and does not move.
 
 **Why not tighter shape caps.** Rationing by caps punishes the user for the
 system's inability to price. The Run Configurator shows exact credit cost before
@@ -463,16 +470,23 @@ recalibration moves prices again, in whichever direction the measurement goes.
 ## 15d. Quote what runs today; sell variants as a dated addition
 
 **Chose:** every contract beginning before Phase 3 is quoted from the
-**standard-run** band table (`PRICING_GUIDE.md` §2.3, $2.26/run COGS), not the
-blended agency mix. The matched-variant capability is written into the contract
-as a planned addition at a defined price, explicitly unavailable at the
-effective date, with no fees accruing until the customer elects it.
+**standard-run** band table (`PRICING_GUIDE.md` §2.3, **$2.71/run COGS** as of
+2026-08-03), not the blended agency mix. The matched-variant capability is
+written into the contract as a planned addition at a defined price, explicitly
+unavailable at the effective date, with no fees accruing until the customer
+elects it.
 
 **Why.** The blended mix assumes 45% multi-variant runs and the engine runs one
-arena (`MAX_RUNNABLE_VARIANTS = 1`). Quoting $31/run for runs that cost $2.26
+arena (`MAX_RUNNABLE_VARIANTS = 1`). Quoting $33/run for runs that cost $2.71
 reads as a 78% margin and is in fact far higher. The customer discovers the gap
 at renewal — the worst moment to be holding a number you cannot defend — and the
 thing they will remember is the margin, not the product.
+
+**Note on the cost base.** The per-run figure has now moved twice — $3.23 →
+$2.26 → $2.71 — as the cost model was corrected against measured usage. The
+decision is unaffected: it is about *which table* to quote, not what the numbers
+in it are. Always take the figure from `PRICING_GUIDE.md` §2.3 rather than from
+this page, and regenerate with `python scripts/quote.py` if in any doubt.
 
 Selling the capability as a dated addition is strictly better than either
 alternative. It gives the customer a reason to sign now, and it gives you a

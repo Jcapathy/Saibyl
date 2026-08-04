@@ -70,16 +70,24 @@ STANDARD_RUN = (100, 5, 2, 1)  # agents, rounds, platforms, variants
 # plan names still in the database and the V2 tier names are mapped, because
 # the Stripe tier migration is separate work — see ARCHITECTURE_V2.md.
 #
-# The free grant is 800 credits ($0.80), not the $0.35 the PRD projected. That
-# projection assumed a 2-section report would bring a 25-agent run to $0.35;
-# with depth scaling implemented and objection canonicalization priced, the run
-# models at $0.75. The report and the canonicalizer are both main-model stages
-# that barely shrink with run size, so they dominate a very small run. A grant
-# that does not cover one free run would make the free tier unusable, so the
-# grant follows the cost rather than the original estimate.
+# The free grant follows the cost of one free run, because a grant that does not
+# cover one makes the tier unusable — the user hits "not enough credits" on the
+# only run they were promised.
+#
+# It has moved twice for that reason. The PRD projected $0.35; with depth
+# scaling and objection canonicalization priced it came out at $0.75, so the
+# grant went to 800. The 2026-08-03 recalibration — the report writes six
+# sections and was quoted for four — took a 25-agent run to **$1.18**, which
+# 800 credits does not cover. Now 1,200, which leaves headroom rather than
+# tracking the cost exactly, because this number failing is a broken signup and
+# the saving from cutting it fine is $0.02 a trial.
+#
+# The report and the canonicalizer are both main-model stages that barely shrink
+# with run size, so they dominate a very small run. That is why the free tier is
+# the most sensitive of all of them to a report-stage repricing.
 TIER_CREDIT_GRANTS = {
-    "free": 800,
-    "trial": 800,
+    "free": 1_200,
+    "trial": 1_200,
     "founder": 19_800,
     "starter": 19_800,
     "growth": 59_800,
