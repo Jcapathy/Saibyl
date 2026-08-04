@@ -62,9 +62,10 @@ half-finished.
 
 | # | Item | Type | Blocking |
 |---|---|---|---|
-| 1 | **Phase 3 — Marketing lens.** ← **the work.** N-way matched swarms, per-objective intent metrics, Virality Potential Score. Entry notes in §9.4; read DECISIONS §5 and §6 first. Raises `MAX_RUNNABLE_VARIANTS`. | Phase | — |
+| 1 | **Live multi-variant run — the Phase 3 gate.** ← **the work.** Everything else in Phase 3 is built and static-green. **Three variants at ~25–30 agents, deliberately underpowered** (~$1.50–2.00 COGS) so the *overlap refusal* actually fires and the "no winner" path is exercised rather than assumed. A larger run more likely produces a clean winner and leaves the refusal untested. §9.5. | Gate | Closing Phase 3 |
 | 2 | **Re-check any contract quoted before 2026-08-03.** A deal signed against $2.26/run carries ~20% less margin than its band table claimed. Nothing to build — a review, at renewal. | Review | Renewals |
 | 3 | **Clean re-run of the inoculation loop** (~$5.97 COGS). The measured delta's *magnitude* is contaminated: 3 of 6 assets carried a fabricated statistic that is now blocked. Mechanism is proven; effect size is not citable. Do this when there is a reason to cite a delta figure, not before. | Decision | Citing any delta figure |
+| 4 | **Phase 4** — Crisis lens migration, `clients` layer + org switcher, calibration loop, V2 README, merge to `master` on approval (which is when 019 applies). | Phase | — |
 | — | ~~Re-derive `ICP_SYNTHESIS` and `INOCULATION_DRAFT`~~ **Done 2026-08-04.** Outputs checked against one live pass each; `INOCULATION_DRAFT` raised 5,000 → 5,700. Inputs held at their ceilings — document-dependent, same as `AGENT_GENERATION`. | Done | — |
 | — | ~~Re-derive `OBJECTION_CANONICALIZATION`~~ **Done 2026-08-04.** A ceiling, not a floor: input bought 728 phrasings against an 800 cap; output reconstructed at ~9,400 against the 10,000 priced. Unchanged for ordinary runs; a **re-simulation** now has its own profile. §1c. | Done | — |
 
@@ -88,9 +89,10 @@ argument for closing the cost model and building.
 | Phase 0 | Complete — dead-code purge, route-collision fix, schema drift, cost model, usage ledger |
 | Phase 1 | **Complete and verified end to end** |
 | Phase 2 | Built and **verified end to end live**. Four defects found and fixed — see §1b. |
-| Verification | ruff clean · pytest 193 passed · `tsc --noEmit` clean · `eslint --quiet` clean · `vite build` OK · app boots, 116 routes, no duplicate registrations |
-| Live runs | Four. Phase 1: `05f1d879`, `03de92ef`. Phase 2: `f980fe0d` (Founder lens, 30% adversarial) and `fa28d899` (its inoculation re-simulation). |
-| Migrations | 017, 018, **020, 021** applied. **019 still not applied — it waits for the merge.** |
+| Phase 3 | **Built; static gate passed. Awaiting a live end-to-end run** — see §0 item 1. |
+| Verification | ruff clean · pytest 230 passed · `tsc --noEmit` clean · `eslint --quiet` clean · `vite build` OK · app boots, 119 routes, no duplicate registrations |
+| Live runs | Four, all pre-Phase-3. Phase 1: `05f1d879`, `03de92ef`. Phase 2: `f980fe0d` (Founder lens, 30% adversarial) and `fa28d899` (its inoculation re-simulation). **No multi-variant run has ever executed.** |
+| Migrations | 017, 018, **020, 021, 022, 023** applied. **019 still not applied — it waits for the merge.** |
 | Cost model | Re-derived 2026-08-04 from `llm_usage`. **Standard run COGS $2.71 → $2.74**; tier runs 7/22/73 → **7/21/73**; a re-simulation **$2.38 → $3.13** and the full loop $5.97. Free grant unchanged at 1,200. All tables regenerated from `scripts/quote.py`. §1c. |
 | Working tree | `.~lock.*` and `test_flow.py` are pre-existing untracked. Ignore them. |
 
@@ -888,15 +890,68 @@ invented a validation statistic on the first live run and put it in three assets
 when that number is absent from the uploaded material — this is copy a founder
 may publish as their own claim, so there is no partial version worth keeping.
 
-### 9.4 Next
+---
+
+## 9.5 What Phase 3 built — the Marketing lens
+
+Built and static-green. **Not yet run live** — §0 item 1. Full detail in
+`ARCHITECTURE_V2.md`, 2026-08-04 entry.
+
+| Concern | File |
+|---|---|
+| The arenas | `services/engine/variants.py` |
+| Arena execution + the event graph | `workers/simulation_tasks.py` |
+| Scoreboard + Virality Potential Score | `services/intelligence/variant_scoreboard.py` |
+| Artifact shape | `services/intelligence/analysis_schema.py` (`SCHEMA_VERSION` 3) |
+| API | `api/variants.py` |
+| UI | `frontend/src/components/analysis/VariantScoreboard.tsx`, `components/marketing/VariantSetup.tsx` |
+
+**Arena isolation was already in the codebase.** `get_adapter()` returns a fresh
+instance and an adapter owns its feed, posts and per-agent memory, so one
+instance per `(platform, variant)` isolates the variants with **no change to any
+of the twelve adapters**. The swarm is shared by handing the same agent rows, by
+id, to every arena — which is why generation cost does not scale with variants.
+
+> ⚠️ **If adapters ever become singletons or acquire class-level state, matched
+> swarms break silently.** Every arena would read one feed, every variant would
+> be scored on a conversation they were all in together, and every number would
+> still compute. `test_each_arena_gets_its_own_adapter_instance` is the guard.
+
+**The event graph is written now.** Adapters always emitted `target_id`; the
+runner always dropped it. It is resolved in a second pass at write time, keyed on
+`(platform, variant, adapter_id)` — every arena mints its own `post_1`, so a
+global map would attach one variant's reply to another's post.
+
+> ⚠️ **Cascade is branching, not depth.** `BasePlatformAdapter.comment()` takes a
+> *post id* across all twelve adapters — there is no reply-to-reply, so the graph
+> is structurally two levels. The metric is named `cascade_branching` for that
+> reason. Do not rename it to depth without changing the adapter contract.
+
+**The scoreboard's value is its refusals**, and all three are the kind a future
+session will be tempted to remove:
+
+- `winner_variant_key` is **None whenever the top two intervals overlap**. A
+  marketer acts on the top row, so an ordering drawn from overlapping bands
+  launders sampling noise into a spend decision. Same rule as the inoculation
+  loop's `unresolved`.
+- **Unmeasurable virality components are None, not zero**, and are dropped from
+  the weighting with the rest renormalised. Zero would penalise a variant for a
+  gap in the instrumentation.
+- **A silent arena keeps its row.** A variant nobody engaged with is a finding.
+
+The report writer is handed the same prohibition in words: when the server named
+no winner, the writer must not name one. **That is Phase 1's bug #5 in
+Marketing-lens form** — not inventing a number, inventing a conclusion the
+numbers do not carry.
+
+### 9.6 Next
 
 | Phase | Scope |
 |---|---|
-| **3** | Marketing lens — N-way matched swarms (seed-locked shared audience), per-objective intent metrics, Virality Potential Score. Raises `MAX_RUNNABLE_VARIANTS`. |
-| **4** | Crisis lens migration, `clients` layer + org switcher, calibration loop, V2 README on the repo, merge to `master` on approval. |
+| **4** | Crisis lens migration, `clients` layer + org switcher, calibration loop, V2 README on the repo, merge to `master` on approval — which is when migration 019 applies. |
 
-**Before starting Phase 3:** re-read DECISIONS §5 (matched swarms — agent
-generation must not scale with variant count, or the comparison stops being
-valid *and* costs 8×) and §6 (virality stays a separate axis from the objective
-metric). Note that `estimate_simulation_cost` already models variants correctly;
-Phase 3's work is the arenas, not the pricing.
+**Before starting Phase 4:** the Crisis lens wants propagation velocity, which is
+what the event graph added in Phase 3 now makes measurable — but it will also
+want real cascade *depth*, and that needs `BasePlatformAdapter.comment()` to
+accept a comment id. That is a twelve-adapter change and it is the natural moment
+to make it.

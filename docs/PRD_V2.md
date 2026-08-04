@@ -270,8 +270,8 @@ Sovereign palette: Obsidian `#0A0F1C`, Graphite `#111827`, Sovereign Gold `#C9A2
 |---|---|---|
 | **0** | Dead-code purge, route-collision fix, schema drift, cost model + usage ledger, docs | ✅ Complete |
 | **1** | Measurement layer, `simulation_analysis`, report viewer rebuild, Run Configurator, Sovereign palette | ✅ Complete |
-| **2** | Founder lens — ICP synthesis, adversarial cohort, five stages, inoculation loop | Built; static gate passed. **Awaiting migrations 020/021 and a live run.** |
-| **3** | Marketing lens — N-way matched swarms, objective metrics, virality score | |
+| **2** | Founder lens — ICP synthesis, adversarial cohort, five stages, inoculation loop | ✅ Complete — migrations 020/021 applied, verified live 2026-08-03 |
+| **3** | Marketing lens — N-way matched swarms, objective metrics, virality score | Built; static gate passed. Migrations 022/023 applied. **Awaiting a live multi-variant run.** |
 | **4** | Crisis lens migration, client layer, calibration, V2 README | |
 
 Per-phase verification gate: `pytest`, `tsc --noEmit`, `eslint --quiet`, live end-to-end run, plus (Phase 1+) a numeric-integrity check that no rendered value lacks a `simulation_analysis` field, and a cost-integrity check that quoted price ≥ measured `llm_usage` cost × margin floor.

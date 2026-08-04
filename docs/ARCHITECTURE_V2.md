@@ -1392,6 +1392,157 @@ cost model is closed and the remaining precision is pennies. HANDOFF §8 item 15
 
 ---
 
+## [PHASE 3 | 2026-08-04] The Marketing lens — N-way matched swarms
+
+DECISIONS §5 and §6, built. Three commits: the arenas, the scoreboard, the
+surfaces that configure and read it.
+
+### Arena isolation was already there
+
+The expected work was building isolated arenas. It turned out not to exist:
+`get_adapter()` returns a fresh `cls()` per call, and an adapter instance owns
+its feed, its posts and its `_agent_history`. **One adapter instance per
+`(platform, variant)` gives each variant its own world with no change to any of
+the twelve adapters.**
+
+The swarm is shared by handing the same agent rows, by id, to every arena — that
+sharing is the entire basis of the comparison, and the reason agent generation
+cost does not scale with variant count. An 8-variant run on 2 platforms builds 16
+adapter instances over one generated audience.
+
+Two guards, because both failures are invisible in a run that looks fine:
+
+- **The runner stamps the arena's key on the event**, rather than echoing back
+  `event.variant`. Trusting twelve adapters to return what they were handed
+  means one of them forgetting merges two variants into one column of the
+  scoreboard — which renders as a result.
+- **A test asserts `get_adapter` returns distinct instances.** A shared adapter
+  would put every variant in one conversation while still labelling the events
+  apart. Every number would compute; none would mean anything.
+
+`MAX_RUNNABLE_VARIANTS` 1 → 8, and the test that pinned it at 1 now asserts the
+runner actually branches on arena, so the constant cannot run ahead of the
+engine again — which is exactly what it existed to prevent.
+
+### The propagation graph
+
+The adapters have always emitted `SimulationEvent.target_id` and the runner has
+always dropped it on write. That is why cascade metrics were not computable from
+stored data.
+
+Resolved in a second pass at write time, because the adapter's id (`post_3`)
+means nothing outside the instance that minted it and only the runner knows the
+database ids. A `post` event's `target_id` is the id it just minted — registered
+in the map. A `comment` or `react` carries its parent's — resolved against it.
+
+**The map is keyed on `(platform, variant, adapter_id)`, not on the id alone.**
+Every arena mints its own `post_1`, so a global map would attach variant B's
+comment to variant A's post: silently merging two isolated conversations and
+inflating the exact metric virality weights most heavily. Children are grouped by
+parent so one UPDATE covers a whole reply set rather than one per child.
+
+> ⚠️ **Graph depth is structurally capped at 2.** `BasePlatformAdapter.comment()`
+> takes a *post id* across all twelve adapters — there is no reply-to-reply. The
+> metric is therefore named `cascade_branching` and measures replies per post,
+> not depth. A depth figure would read 2.0 for every variant that got one reply
+> and tell a marketer nothing. Raising it means changing the adapter contract.
+
+### The scoreboard, and its three refusals
+
+The measurement layer did most of the work: `event_measurement` has emitted
+`intent` with exactly the PRD §6 taxonomy since Phase 1, so objective metrics are
+a mapping onto values the classifier already produces rather than a change to the
+agent action schema. Second time this phase that Phase 1's groundwork turned a
+build into a wiring job.
+
+What matters is what the scoreboard declines to say:
+
+1. **`winner_variant_key` is None whenever the top two intervals overlap**, and
+   `verdict` says so in words. A marketer acts on the top row; an ordering drawn
+   from overlapping bands launders sampling noise into a spend decision. This is
+   the inoculation loop's `unresolved` verdict applied to a comparison, and it is
+   the single thing in Phase 3 most likely to be "improved" away by someone who
+   finds a blank winner unsatisfying.
+2. **Unmeasurable virality components are None and are dropped from the
+   weighting**, with the remaining weights renormalised — not counted as zero,
+   which would penalise a variant for a gap in the instrumentation.
+   `components_used` records how many contributed, so a score built from three is
+   not read as one built from six.
+3. **An arena that produced nothing keeps its row.** A variant nobody engaged
+   with is a finding. Deriving the variant list from the events rather than from
+   the configuration would delete it instead of showing it scoring nothing.
+
+Intent rates are proportions over **agents**, and zero observed carries the
+rule-of-three upper bound — "no agent clicked, in 40 agents" reports a band up to
+7.5% rather than a confident zero, the same convention the inoculation loop uses
+so the two read consistently in one report.
+
+Cross-archetype reach carries the heaviest weight (0.35). A share count cannot
+tell virality from an echo chamber.
+
+**Takeaway accuracy is lexical overlap, and is labelled approximate everywhere it
+renders.** A per-variant main-model pass would price the lens out of the tier it
+sells in; asserting accuracy without measuring it would be worse than a stated
+approximation. The classifier gained a `takeaway` field inside the same batched
+call, so it costs no extra request.
+
+### The surfaces
+
+`PUT /api/variants/{id}` replaces the whole set rather than offering per-variant
+CRUD: keys are positional, so deleting the second of four renumbers the rest and
+a per-row endpoint can leave a run half-keyed. It refuses once the run has
+started, and refuses a single variant.
+
+It also writes `simulations.variants`. `estimate_simulation_cost` charges
+`agent_count × rounds × variants`, so a run whose column disagreed with its
+variant rows would be **quoted for a different experiment than the one that
+executes** — the Phase 2 defect class, caught before it shipped this time.
+
+The viewer puts the verdict *above* the table and marks no row as leading when
+the server named no winner. On a multi-variant run the scoreboard displaces the
+headline, which averages every arena into one number describing none of them.
+
+**The report writer was the piece most likely to undo all of it.**
+`build_lens_context` gains a scoreboard block whose central rule is a
+prohibition: when the server declined to name a winner, the writer must not name
+one. A model handed six ranked rows with no instruction calls the top one the
+winner, because that is what a ranked list reads like. This is Phase 1's bug #5
+in its Marketing-lens form — not inventing a number, inventing a conclusion the
+numbers do not carry.
+
+### Migrations
+
+**022** *(applied 2026-08-04)* — `simulation_variants` with org-isolation RLS;
+`simulations.objective` with a CHECK on the six PRD objectives, nullable so
+Founder and Crisis runs never acquire one; `simulation_events.target_event_id`
+with a partial index.
+
+**023** *(applied 2026-08-04)* — `simulation_events.takeaway`.
+
+Both additive. Verified after: 68 simulations / 2,704 agents / 11,765 events / 8
+orgs unchanged, **zero rows backfilled**, column types checked against
+`information_schema` per the 017 lesson, `get_advisors` reports no RLS lint on
+the new table.
+
+### `SCHEMA_VERSION` 2 → 3
+
+With `SUPPORTED_SCHEMA_VERSION` in `frontend/src/lib/analysis.ts` moved **in the
+same commit**. The version moves for more than the added field: on a
+multi-variant run the `headline` stops being the thing to read, so a client
+rendering v3 without the scoreboard would show a marketer one confident sentiment
+figure for a test whose whole purpose was to separate six alternatives.
+
+### Verification
+
+ruff clean · pytest **230 passed** (187 at the start of the day) · `tsc --noEmit`
+clean · `eslint --quiet` clean · `vite build` OK · app boots, 119 routes, no
+duplicate registrations.
+
+**No live run yet.** That is the outstanding half of the Phase 3 gate, and on two
+phases running it is where every real defect has come from.
+
+---
+
 ## Known issues carried into Phase 2
 
 Recorded here so they are not rediscovered. Items 1, 2 and 7 from the Phase 1
