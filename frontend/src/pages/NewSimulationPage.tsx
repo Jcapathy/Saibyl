@@ -2,11 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Lightbulb } from 'lucide-react';
-import api from '@/lib/api';
+import api, { unwrapList } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
+import { listPacks } from '@/lib/packs';
 import RunConfigurator, { type RunShape } from '@/components/RunConfigurator';
 import FounderLensStep, { type FounderConfig } from '@/components/founder/FounderLensStep';
-import type { PersonaPack, Project } from '@/types';
+import type { OrgPersonaPack, PersonaPack, Project } from '@/types';
 
 const PLATFORMS = [
   { id: 'twitter_x', name: 'Twitter / X', desc: 'Engagement-weighted feeds' },
@@ -56,6 +57,12 @@ export default function NewSimulationPage() {
 
   // Step 3
   const [packs, setPacks] = useState<PersonaPack[]>([]);
+  /* Audiences this org has already worked out and kept. They go into the same
+     `persona_pack_ids` list as the ready-made packs — the API has always taken
+     a list and the engine blends whatever is in it, so there is one selection
+     here, not two. */
+  const [orgPacks, setOrgPacks] = useState<OrgPersonaPack[]>([]);
+  const [orgPacksError, setOrgPacksError] = useState('');
   const [selectedPacks, setSelectedPacks] = useState<string[]>([]);
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [customName, setCustomName] = useState('');
@@ -97,9 +104,19 @@ export default function NewSimulationPage() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (step === 2 && packs.length === 0) {
-      api.get('/persona-packs').then((r) => setPacks(Array.isArray(r.data) ? r.data : r.data.items || [])).catch(() => {});
-    }
+    if (step !== 2 || packs.length > 0) return;
+    api
+      .get('/persona-packs')
+      .then((r) => setPacks(unwrapList<PersonaPack>(r.data).items))
+      .catch(() => {});
+    listPacks()
+      .then((rows) => {
+        setOrgPacks(rows);
+        setOrgPacksError('');
+      })
+      // Kept distinct from "you have none saved". A failed lookup that rendered
+      // as an empty library would tell a founder their saved audiences are gone.
+      .catch((err) => setOrgPacksError(getErrorMessage(err, 'Your saved audiences could not be loaded.')));
   }, [step, packs.length]);
 
   const togglePlatform = (id: string) => setSelectedPlatforms((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
@@ -354,6 +371,70 @@ export default function NewSimulationPage() {
                   })}
                 </div>
               )}
+              {/* ── Audiences this org already worked out and kept ── */}
+              <div className="mt-6 pt-6 border-t border-white/[0.04]">
+                <div className="flex items-baseline justify-between mb-1">
+                  <h3 className="text-[14px] font-medium text-saibyl-platinum">
+                    Audiences you&rsquo;ve saved
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/app/audiences')}
+                    className="text-[12px] text-saibyl-gold hover:underline"
+                  >
+                    Manage
+                  </button>
+                </div>
+                <p className="text-[12px] text-saibyl-muted mb-3 leading-relaxed">
+                  Buyers Saibyl worked out for one of your projects and you kept. Pick as many
+                  as you like — the run blends them with anything selected above.
+                </p>
+
+                {orgPacksError ? (
+                  <p className="text-[12px] text-saibyl-muted">
+                    {orgPacksError} Nothing is listed here because we don&rsquo;t know what you
+                    have, not because you have none.
+                  </p>
+                ) : orgPacks.length === 0 ? (
+                  <p className="text-[12px] text-saibyl-muted">
+                    Nothing saved yet. Work out your buyers on the next step and you can keep
+                    them for every other project.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {orgPacks.map((pack) => {
+                      const selected = selectedPacks.includes(pack.id);
+                      return (
+                        <button
+                          key={pack.id}
+                          onClick={() => togglePack(pack.id)}
+                          className={`text-left p-4 rounded-xl border transition-all duration-200 ${
+                            selected
+                              ? 'border-saibyl-gold/50 bg-saibyl-gold/10'
+                              : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12]'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className={`font-medium text-[14px] ${selected ? 'text-saibyl-white' : 'text-saibyl-platinum'}`}>{pack.name}</span>
+                            {selected && <div className="w-5 h-5 rounded-full bg-saibyl-gold flex items-center justify-center shrink-0"><svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg></div>}
+                          </div>
+                          {pack.description && (
+                            <p className="text-[11px] text-saibyl-muted leading-relaxed line-clamp-2">{pack.description}</p>
+                          )}
+                          {/* Shown only when the server sent a count. A zero
+                              here would read as an audience containing nobody. */}
+                          {pack.archetype_count != null && (
+                            <span className="block text-[10px] text-saibyl-muted mt-2">
+                              {pack.archetype_count} group{pack.archetype_count === 1 ? '' : 's'} of people
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
               <p className="text-[12px] text-saibyl-muted mt-4">{selectedPacks.length} pack{selectedPacks.length !== 1 ? 's' : ''} selected</p>
 
               {/* Custom Persona Modal */}

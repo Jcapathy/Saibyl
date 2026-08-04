@@ -20,6 +20,7 @@ from app.api import (
     inoculation,
     ontologies,
     organizations,
+    packs,
     personas,
     platforms,
     projects,
@@ -133,6 +134,9 @@ def create_app() -> FastAPI:
     app.include_router(simulations.router, prefix="/api/simulations")
     app.include_router(reports.router, prefix="/api/reports")
     app.include_router(personas.router, prefix="/api/persona-packs")
+    # The org-level pack library. Separate prefix from /api/persona-packs, which
+    # is the built-in + custom picker; nothing here can shadow one of its paths.
+    app.include_router(packs.router, prefix="/api/packs")
     app.include_router(icp.router, prefix="/api/icp")
     app.include_router(inoculation.router, prefix="/api/inoculation")
     app.include_router(variants.router, prefix="/api/variants")

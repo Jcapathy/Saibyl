@@ -76,6 +76,9 @@ class _Query:
     def eq(self, *_a, **_kw):
         return self
 
+    def limit(self, *_a, **_kw):
+        return self
+
     def execute(self):
         return _Result(self._data)
 
@@ -146,8 +149,8 @@ def test_get_pack_never_serves_a_shadowing_custom_pack(monkeypatch):
     reload_packs()
     _fake_admin([{"pack_data": _clone_of_a_builtin()}], monkeypatch)
 
-    assert get_pack("enterprise-it-buyer").name == "Enterprise IT Buyer"
-    assert pack_loader._load_custom_pack("enterprise-it-buyer") is None
+    assert get_pack("enterprise-it-buyer", "org-a").name == "Enterprise IT Buyer"
+    assert pack_loader._load_custom_pack("enterprise-it-buyer", "org-a") is None
 
 
 def test_a_custom_pack_is_never_written_into_the_process_cache(monkeypatch):
@@ -162,7 +165,7 @@ def test_a_custom_pack_is_never_written_into_the_process_cache(monkeypatch):
     custom["id"] = "org-a-private-pack"
     _fake_admin([{"pack_data": custom}], monkeypatch)
 
-    served = pack_loader._load_custom_pack("org-a-private-pack")
+    served = pack_loader._load_custom_pack("org-a-private-pack", "org-a")
     assert served is not None and served.id == "org-a-private-pack"
     assert set(pack_loader._pack_cache) == builtin_ids
 

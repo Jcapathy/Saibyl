@@ -40,9 +40,19 @@ async def list_packs(auth: dict = Depends(get_current_org)):
 
 @router.get("/{pack_id}")
 async def get_pack_details(pack_id: str, auth: dict = Depends(get_current_org)):
-    """Get details of a specific persona pack."""
+    """Get details of a specific persona pack.
+
+    The org is threaded into `get_pack`: without it the lookup resolved a
+    tenant-owned slug across every organization and returned the first row the
+    query plan produced, so this endpoint could serve another org's audience.
+    A pack that does not exist *for this org* is a 404, not the uncaught
+    `KeyError` — and therefore 500 — it used to be.
+    """
     log.info("get_persona_pack", pack_id=pack_id, org_id=auth["org_id"])
-    pack = get_pack(pack_id)
+    try:
+        pack = get_pack(pack_id, auth["org_id"])
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Persona pack not found") from exc
     return pack.model_dump()
 
 

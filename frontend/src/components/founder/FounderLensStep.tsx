@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, Loader2, Sparkles } from 'lucide-react';
-import api from '@/lib/api';
+import api, { unwrapList } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
+import AudienceReview from './AudienceReview';
 import type { ICPProfile, StageSpec } from '@/lib/founder';
 
 export interface FounderConfig {
@@ -18,9 +19,13 @@ export interface FounderConfig {
  *
  * 1. **What the stage cannot conclude.** Shown before the run, not buried in the
  *    report afterwards. A concept-validation run has no product to adopt.
- * 2. **That the ICP is a proposal.** Synthesis reads the founder's material and
- *    is often wrong about who signs the cheque. The gaps it reports are the
- *    honest part.
+ * 2. **That the audience is a proposal.** Synthesis reads the founder's material
+ *    and is often wrong about who signs the cheque, so `AudienceReview` puts it
+ *    in front of them to agree with or correct. The gaps it reports are the
+ *    honest part. Nothing on this screen requires the reader to know the phrase
+ *    "ideal customer profile" — DECISIONS_V2 §3 is that synthesis proposes and
+ *    the founder disposes, and a founder who cannot read the proposal cannot
+ *    dispose of anything.
  * 3. **What the adversarial share does to the headline.** Past a certain point
  *    the run measures the share, not the market.
  */
@@ -42,6 +47,7 @@ export default function FounderLensStep({
     null,
   );
   const [error, setError] = useState('');
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
 
   useEffect(() => {
     api.get('/simulations/founder-stages').then((r) => setStages(r.data)).catch(() => {});
@@ -52,7 +58,7 @@ export default function FounderLensStep({
     if (!projectId) return;
     api
       .get('/icp', { params: { project_id: projectId } })
-      .then((r) => setProfiles(r.data))
+      .then((r) => setProfiles(unwrapList<ICPProfile>(r.data).items))
       .catch(() => {});
   }, [projectId]);
 
@@ -79,8 +85,12 @@ export default function FounderLensStep({
       });
       setProfiles((prev) => [data, ...prev]);
       onChange({ ...value, icpProfileId: data.id });
+      // Opened straight away rather than behind a second click: this is a
+      // proposal, and a proposal nobody was shown is indistinguishable from a
+      // generated blob.
+      setReviewingId(data.id);
     } catch (err) {
-      setError(getErrorMessage(err, 'ICP synthesis failed'));
+      setError(getErrorMessage(err, 'We could not work out your buyers from this project.'));
     } finally {
       setSynthesizing(false);
     }
@@ -163,14 +173,15 @@ export default function FounderLensStep({
         </>
       )}
 
-      {/* ── ICP ───────────────────────────────────────────────────── */}
+      {/* ── Who will react ────────────────────────────────────────── */}
       <div>
         <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-2">
-          Audience
+          Who will react to this
         </label>
         <p className="text-[12px] text-saibyl-muted mb-3 leading-relaxed">
-          Synthesis reads the documents on this project — PRD, landing page, deck, pricing — and
-          proposes the buyers. It is a proposal: correct it before you run against it.
+          Saibyl reads the documents on this project — your pitch, landing page, deck, pricing
+          — and works out who your buyers are and what they care about. You get to check it
+          before anything runs.
         </p>
 
         {profiles.length > 0 && (
@@ -178,35 +189,74 @@ export default function FounderLensStep({
             {profiles.map((p) => {
               const selected = p.id === value.icpProfileId;
               return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => onChange({ ...value, icpProfileId: selected ? null : p.id })}
-                  className={`w-full text-left p-4 rounded-xl border transition-all ${
-                    selected
-                      ? 'border-saibyl-gold/50 bg-saibyl-gold/10'
-                      : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12]'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="font-medium text-[14px] text-saibyl-platinum truncate">
-                      {p.name}
-                    </span>
-                    <span className="text-[10px] text-saibyl-muted whitespace-nowrap">
-                      {p.profile.archetypes.length} buyers ·{' '}
-                      {p.profile.adversarial.length} incumbent-aligned
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-saibyl-muted mt-1 leading-relaxed line-clamp-2">
-                    {p.product_summary}
-                  </p>
-                  {p.profile.gaps.length > 0 && (
-                    <p className="text-[10px] text-saibyl-gold/80 mt-2">
-                      {p.profile.gaps.length} thing
-                      {p.profile.gaps.length === 1 ? '' : 's'} your material never says
+                <div key={p.id} className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = selected ? null : p.id;
+                      // Reviewing an audience that is no longer selected would
+                      // let a founder correct a profile the run will not use.
+                      setReviewingId(next);
+                      onChange({ ...value, icpProfileId: next });
+                    }}
+                    className={`w-full text-left p-4 rounded-xl border transition-all ${
+                      selected
+                        ? 'border-saibyl-gold/50 bg-saibyl-gold/10'
+                        : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-medium text-[14px] text-saibyl-platinum truncate">
+                        {p.name}
+                      </span>
+                      <span className="text-[10px] text-saibyl-muted whitespace-nowrap">
+                        {p.profile.archetypes.length} buyer
+                        {p.profile.archetypes.length === 1 ? '' : 's'}
+                        {p.profile.adversarial.length > 0
+                          ? ` · ${p.profile.adversarial.length} who'll push back`
+                          : ''}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-saibyl-muted mt-1 leading-relaxed line-clamp-2">
+                      {p.product_summary}
                     </p>
+                    <div className="flex items-center gap-3 mt-2">
+                      {p.profile.gaps.length > 0 && (
+                        <span className="text-[10px] text-saibyl-gold/80">
+                          {p.profile.gaps.length} thing
+                          {p.profile.gaps.length === 1 ? '' : 's'} your documents never say
+                        </span>
+                      )}
+                      {p.edited_by_user && (
+                        <span className="text-[10px] text-saibyl-muted">You edited this</span>
+                      )}
+                    </div>
+                  </button>
+
+                  {selected && reviewingId !== p.id && (
+                    <button
+                      type="button"
+                      onClick={() => setReviewingId(p.id)}
+                      className="text-[12px] text-saibyl-gold hover:underline"
+                    >
+                      Check who we think will buy this →
+                    </button>
                   )}
-                </button>
+
+                  {selected && reviewingId === p.id && (
+                    <AudienceReview
+                      profile={p}
+                      platforms={platforms}
+                      adversarialShare={value.adversarialShare}
+                      onSaved={(updated) =>
+                        setProfiles((prev) =>
+                          prev.map((row) => (row.id === updated.id ? updated : row)),
+                        )
+                      }
+                      onClose={() => setReviewingId(null)}
+                    />
+                  )}
+                </div>
               );
             })}
           </div>
@@ -223,12 +273,12 @@ export default function FounderLensStep({
           ) : (
             <Sparkles className="w-4 h-4" />
           )}
-          {synthesizing ? 'Reading your documents…' : 'Synthesize an ICP from this project'}
+          {synthesizing ? 'Reading your documents…' : 'Work out who my buyers are'}
         </button>
         {synthCost && (
           <p className="text-[11px] text-saibyl-muted mt-2">
-            {synthCost.credits_required.toLocaleString()} credits. Charged once per synthesis, not
-            per run — the ICP is reused across every run in this project.
+            {synthCost.credits_required.toLocaleString()} credits, charged once — not per run.
+            Every simulation in this project reuses the same buyers.
           </p>
         )}
       </div>
@@ -237,7 +287,7 @@ export default function FounderLensStep({
       <div>
         <div className="flex items-baseline justify-between mb-2">
           <label className="text-[12px] font-medium text-saibyl-muted uppercase tracking-wide">
-            Incumbent-aligned share
+            How many will push back
           </label>
           <span className="text-[13px] font-mono text-saibyl-platinum">
             {(value.adversarialShare * 100).toFixed(0)}%
@@ -258,27 +308,27 @@ export default function FounderLensStep({
         <p className="text-[11px] text-saibyl-muted mt-2 leading-relaxed">
           {!value.icpProfileId ? (
             <>
-              Needs a synthesized ICP. The incumbent-aligned cohort is built from your uploaded
-              material; the built-in persona packs have no adversarial archetypes for a share to
-              apply to.
+              Work out your buyers first. The people who argue against you are built from the
+              documents you uploaded — the ready-made persona packs have nobody like that in
+              them, so there is no share to set.
             </>
           ) : (
             <>
-              These agents argue against adopting by construction, so they pull the headline
-              negative on purpose. The report separates them from buyers and labels them synthetic
-              everywhere it appears. The ceiling is 50%: past half the swarm, the headline measures
-              the share you chose rather than the market.
+              These are people happy with whatever they use today, so they talk your score down
+              on purpose. The report always keeps them separate from your buyers and says where
+              they came from. 50% is the ceiling: past half the room, the score is measuring the
+              number you picked here rather than the market.
             </>
           )}
         </p>
         {profile && profile.profile.competitors.some((c) => c.mentioned_in.length > 0) && (
           <p className="text-[11px] text-saibyl-muted mt-2">
-            Grounded competitors:{' '}
+            Rivals we can name:{' '}
             {profile.profile.competitors
               .filter((c) => c.mentioned_in.length > 0)
               .map((c) => c.name)
               .join(', ')}
-            . Names appear only because your uploaded material named them.
+            . They appear by name only because something you uploaded named them.
           </p>
         )}
       </div>

@@ -38,16 +38,80 @@ export interface StageSpec {
 
 /* ── ICP ────────────────────────────────────────────────────────────── */
 
+/**
+ * The profile shape this client knows how to render and edit.
+ *
+ * Mirrors `ICP_SCHEMA_VERSION` in `personas/icp_schema.py`. A profile carrying
+ * anything else is not partially rendered: the editor sends the *whole* body
+ * back on save, so showing the subset of fields this build recognises and
+ * PATCHing the result would silently delete every field it did not know about.
+ */
+export const SUPPORTED_ICP_SCHEMA_VERSION = 1;
+
+export function isSupportedICPSchema(version: number): boolean {
+  return (
+    Number.isFinite(version) && version >= 1 && version <= SUPPORTED_ICP_SCHEMA_VERSION
+  );
+}
+
+/* The three closed vocabularies on an archetype. Literals on the server, so a
+   free-text box here would produce a 422 the founder cannot act on. */
+
+export type Seniority = 'ic' | 'manager' | 'director' | 'vp' | 'c_level' | 'founder';
+
+export type BudgetAuthority =
+  | 'none'
+  | 'influencer'
+  | 'recommender'
+  | 'approver'
+  | 'owner';
+
+export type SwitchingCost = 'low' | 'moderate' | 'high' | 'prohibitive';
+
+/**
+ * Plain-English renderings of the three closed vocabularies.
+ *
+ * The payload keys stay exactly as the API defines them; only the presentation
+ * changes. The reader is a solo founder who may never have heard the phrase
+ * "ideal customer profile", and "budget_authority: recommender" is a schema
+ * name, not a sentence anyone can agree or disagree with — and agreeing or
+ * disagreeing is the entire job this screen asks of them.
+ */
+
+export const SENIORITY_LABELS: Record<Seniority, string> = {
+  ic: 'Does the work day to day',
+  manager: 'Manages a team',
+  director: 'Runs a department',
+  vp: 'VP — runs several teams',
+  c_level: 'On the exec team',
+  founder: 'Founder or owner',
+};
+
+export const BUDGET_AUTHORITY_LABELS: Record<BudgetAuthority, string> = {
+  none: "Doesn't control any budget",
+  influencer: "Has a say, but isn't the one who decides",
+  recommender: 'Recommends it to whoever signs off',
+  approver: 'Can approve the spend',
+  owner: 'Owns the budget outright',
+};
+
+export const SWITCHING_COST_LABELS: Record<SwitchingCost, string> = {
+  low: 'Could switch this quarter without much fuss',
+  moderate: 'Switching would be a project, not a decision',
+  high: 'Switching would need a business case',
+  prohibitive: "Realistically, they won't switch at all",
+};
+
 export interface ICPArchetype {
   id: string;
   label: string;
   weight: number;
   role: string;
-  seniority: string;
-  budget_authority: string;
+  seniority: Seniority;
+  budget_authority: BudgetAuthority;
   /** What they use today. The field that does the most work in the whole ICP. */
   incumbent_tooling: string[];
-  switching_cost: string;
+  switching_cost: SwitchingCost;
   evaluation_criteria: string[];
   skepticism_triggers: string[];
   goals: string[];

@@ -38,10 +38,20 @@ const MAX_CONTENT = 4000;
  */
 export default function VariantSetup({
   simulationId,
-  onChange,
+  onSavedChange,
 }: {
   simulationId: string;
-  onChange?: (variantCount: number) => void;
+  /**
+   * How many variants are *stored* carrying copy — on load, and after each
+   * successful save.
+   *
+   * Deliberately not fired while typing. The start guard downstream mirrors a
+   * server-side check that counts rows in `simulation_variants`, and an
+   * un-saved textarea is not a row: reporting the draft count would clear the
+   * guard on a run the server will still refuse, which is the same class of
+   * defect as the guard existing at all.
+   */
+  onSavedChange?: (variantsWithCopy: number) => void;
 }) {
   const [objectives, setObjectives] = useState<ObjectiveOption[]>([]);
   const [objective, setObjective] = useState<Objective | ''>('');
@@ -65,14 +75,14 @@ export default function VariantSetup({
         setObjective(current.data.objective ?? '');
         setEditable(current.data.editable ?? true);
         setMaxVariants(current.data.max_variants ?? 8);
-        setVariants(
-          (current.data.variants ?? []).map(
-            (v: { label: string; content: string }) => ({
-              label: v.label ?? '',
-              content: v.content ?? '',
-            }),
-          ),
+        const stored: VariantDraft[] = (current.data.variants ?? []).map(
+          (v: { label: string; content: string }) => ({
+            label: v.label ?? '',
+            content: v.content ?? '',
+          }),
         );
+        setVariants(stored);
+        onSavedChange?.(stored.filter((v) => v.content.trim()).length);
       } catch (err) {
         if (!cancelled) setError(getErrorMessage(err, 'Could not load variants'));
       }
@@ -80,25 +90,30 @@ export default function VariantSetup({
     return () => {
       cancelled = true;
     };
+    // `onSavedChange` is intentionally not a dependency: it is a notification
+    // out of this component, and re-running the fetch when the parent happens
+    // to re-render would refetch on every keystroke upstream.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [simulationId]);
 
   const update = (next: VariantDraft[]) => {
     setVariants(next);
     setSaved(false);
-    onChange?.(next.length);
   };
 
   const save = async () => {
     setSaving(true);
     setError('');
+    const payload = variants
+      .filter((v) => v.content.trim())
+      .map((v) => ({ label: v.label.trim(), content: v.content.trim() }));
     try {
       await api.put(`/variants/${simulationId}`, {
         objective: objective || null,
-        variants: variants
-          .filter((v) => v.content.trim())
-          .map((v) => ({ label: v.label.trim(), content: v.content.trim() })),
+        variants: payload,
       });
       setSaved(true);
+      onSavedChange?.(payload.length);
     } catch (err) {
       setError(getErrorMessage(err, 'Could not save variants'));
     } finally {

@@ -53,6 +53,14 @@ export interface Simulation {
   variants: number;
   /** Null until the prepare pass has generated the swarm. */
   agent_count: number | null;
+  /**
+   * How many report sections the write-up gets.
+   *
+   * `NOT NULL DEFAULT 'standard'` since migration 018, with no CHECK
+   * constraint — so it is always present but not guaranteed to be one of the
+   * three the API accepts. Narrow before feeding it back to a priced shape.
+   */
+  depth: string;
   persona_pack_ids: string[];
   /** Set only alongside `status: 'failed'`. */
   error_message: string | null;
@@ -60,6 +68,30 @@ export interface Simulation {
   completed_at: string | null;
   /** Set when this run is an inoculation re-simulation of another. */
   parent_simulation_id: string | null;
+}
+
+/**
+ * What a document was uploaded as.
+ *
+ * NULL reads as `own` — the column was added after documents existed, so the
+ * absence of a value means "nobody said", and the safe reading of that is the
+ * founder's own material. Only `competitor` licenses the model to name a
+ * company by name in published copy, which is why the value is a deliberate
+ * choice at upload rather than a tag applied afterwards.
+ */
+export type MaterialKind = 'own' | 'competitor' | 'market';
+
+/** `GET /documents?project_id=…`, `POST /documents/upload` — the `documents` row. */
+export interface ProjectDocument {
+  id: string;
+  project_id: string;
+  filename: string;
+  file_type: string;
+  processing_status: string;
+  file_size_bytes: number;
+  /** Null on every row uploaded before the column existed. Reads as `own`. */
+  material_kind: MaterialKind | null;
+  created_at: string;
 }
 
 /** One section of a generated report, as embedded in the report response. */
@@ -102,6 +134,29 @@ export interface PersonaPack {
   description: string;
   archetype_count: number;
   archetype_labels: string[];
+}
+
+/**
+ * `GET /packs` — one entry in the org's reusable persona-pack library.
+ *
+ * The library is org-level: a pack promoted out of one project's synthesized
+ * ICP is selectable from every other project, which is the whole reason it is a
+ * separate object from `icp_profiles.pack_data`.
+ *
+ * Only `id` and `name` are required, because only those two are needed to list,
+ * rename, delete and select. Everything else is optional and is rendered only
+ * when the server actually sends it — an absent archetype count shows nothing
+ * rather than a zero, because "we did not receive it" and "this pack has no
+ * archetypes" are different facts and one of them is alarming.
+ */
+export interface OrgPersonaPack {
+  id: string;
+  name: string;
+  description?: string | null;
+  category?: string | null;
+  archetype_count?: number | null;
+  archetype_labels?: string[] | null;
+  created_at?: string | null;
 }
 
 /** `GET /billing/status`. */

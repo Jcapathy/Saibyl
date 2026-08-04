@@ -5,6 +5,7 @@ import {
   FolderOpen,
   Clock,
   Search,
+  Users,
   Settings,
   LogOut,
   ChevronDown,
@@ -28,6 +29,7 @@ interface NavItem {
 const coreNav: NavItem[] = [
   { path: '/app/dashboard', label: 'Dashboard', Icon: LayoutDashboard },
   { path: '/app/projects', label: 'Projects', Icon: FolderOpen },
+  { path: '/app/audiences', label: 'Audiences', Icon: Users },
   { path: '/app/simulations', label: 'Simulations', Icon: Clock },
 ];
 

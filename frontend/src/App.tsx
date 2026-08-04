@@ -11,6 +11,7 @@ import DashboardPage from '@/pages/DashboardPage';
 import GuidePage from '@/pages/GuidePage';
 import LoginPage from '@/pages/LoginPage';
 import NewSimulationPage from '@/pages/NewSimulationPage';
+import PackLibraryPage from '@/pages/PackLibraryPage';
 import ProjectDetailPage from '@/pages/ProjectDetailPage';
 import ProjectsPage from '@/pages/ProjectsPage';
 import ReportPrintPage from '@/pages/ReportPrintPage';
@@ -46,6 +47,7 @@ function AnimatedRoutes() {
           <Route path="guide" element={<PageTransition><GuidePage /></PageTransition>} />
           <Route path="projects" element={<PageTransition><ProjectsPage /></PageTransition>} />
           <Route path="projects/:id" element={<PageTransition><ProjectDetailPage /></PageTransition>} />
+          <Route path="audiences" element={<PageTransition><PackLibraryPage /></PageTransition>} />
           <Route path="simulations" element={<PageTransition><SimulationsPage /></PageTransition>} />
           <Route path="simulations/new" element={<PageTransition><NewSimulationPage /></PageTransition>} />
           <Route path="simulations/:id" element={<PageTransition><SimulationDetailPage /></PageTransition>} />

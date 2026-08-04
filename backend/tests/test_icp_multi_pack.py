@@ -1,0 +1,480 @@
+"""Segmenting an ICP into several packs must not move the adversarial share.
+
+`simulations.persona_pack_ids` is already a list and `run_prepare_agents`
+already loops over it, so emitting several packs is a compile-and-register
+change. The hazard is `rebalance_adversarial`: it is applied **per pack** and
+normalises a pack containing both cohorts to a total weight of 1.0. A pack with
+no adversarial archetype is returned untouched at whatever its raw weights
+summed to, and dilutes the cohort by an amount nobody can see.
+
+The accuracy being protected is a selling point, and it is measured: the live
+Founder-lens run allocated 30 of 96 agents to the incumbent-aligned cohort
+against 30% configured — 31.2%, HANDOFF §1b. These tests assert the same
+property holds when the audience is split N ways.
+"""
+from __future__ import annotations
+
+import pytest
+import structlog
+
+from app.services.engine.personas.icp_schema import (
+    AdversarialArchetype,
+    ICPArchetype,
+    ICPProfile,
+)
+from app.services.engine.personas.icp_synthesizer import (
+    compile_pack,
+    compile_packs,
+    rebalance_adversarial,
+)
+from app.services.engine.personas.pack_loader import ICP_PACK_PREFIX, PersonaPack
+
+BASE_PACK_ID = f"{ICP_PACK_PREFIX}deadbeef"
+PLATFORMS = ["hacker_news"]
+
+# The live Founder-lens run: 30 of 96 agents against 30% configured is 1.25
+# percentage points, and that figure is quoted as a product claim. It is the
+# *single-pack* accuracy, and it is a property of `run_prepare_agents`'
+# apportionment — independent `max(1, round(...))` per archetype with no
+# remainder redistribution — not of anything in this module. Segmentation is
+# held to it: the tests below compare against the single-pack case at the same
+# configuration rather than against a number chosen here.
+_LIVE_SINGLE_PACK_DEVIATION = 0.0125
+
+
+def _profile(*, adversarial_count: int = 2) -> ICPProfile:
+    """Three buyer archetypes falling in three different segments."""
+    return ICPProfile(
+        name="Observability buyers",
+        product_summary="Tracing for teams already paying for something else.",
+        archetypes=[
+            ICPArchetype(
+                id="platform-lead", label="Platform Lead", weight=0.4,
+                role="Platform engineering lead", seniority="director",
+                switching_cost="high", evaluation_criteria=["ingest cost"],
+                platforms=PLATFORMS,
+            ),
+            ICPArchetype(
+                id="sre", label="SRE", weight=0.35, role="Site reliability engineer",
+                seniority="ic", switching_cost="moderate",
+                evaluation_criteria=["alert quality"], platforms=PLATFORMS,
+            ),
+            ICPArchetype(
+                id="eng-manager", label="Engineering Manager", weight=0.25,
+                role="Engineering manager", seniority="manager",
+                switching_cost="prohibitive", evaluation_criteria=["team ramp"],
+                platforms=PLATFORMS,
+            ),
+        ],
+        adversarial=[
+            AdversarialArchetype(
+                id=f"skeptic-{i}", label=f"Skeptic {i}", weight=1.0,
+                role="category_skeptic", core_argument="We already have a process.",
+                talking_points=["migration cost"], platforms=PLATFORMS,
+            )
+            for i in range(adversarial_count)
+        ],
+    )
+
+
+def _single_segment_profile() -> ICPProfile:
+    """Two archetypes that land in the same seniority/switching-cost cell."""
+    return ICPProfile(
+        name="One segment",
+        archetypes=[
+            ICPArchetype(id="a", label="A", weight=0.6, role="dev",
+                         seniority="ic", switching_cost="low"),
+            ICPArchetype(id="b", label="B", weight=0.4, role="dev",
+                         seniority="manager", switching_cost="moderate"),
+        ],
+        adversarial=[
+            AdversarialArchetype(id="s", label="Skeptic", role="category_skeptic"),
+        ],
+    )
+
+
+def _simulate_agents(
+    packs: list[PersonaPack],
+    share: float,
+    target_agents: int,
+    platforms: list[str] | None = None,
+) -> tuple[int, int]:
+    """Mirror `run_prepare_agents`' allocation and count the cohorts.
+
+    Deliberately a copy of the runner's arithmetic rather than a cleaner
+    equivalent: the property under test is what the runner will actually
+    allocate, including its `max(1, round(...))` and its `remaining` cut-off.
+    """
+    platforms = platforms or PLATFORMS
+    all_archetypes = []
+    for pack in packs:
+        for archetype in rebalance_adversarial(pack.archetypes, share):
+            all_archetypes.append(archetype)
+
+    total_weight = sum(a.weight for a in all_archetypes)
+    per_platform = max(1, target_agents // len(platforms))
+
+    adversarial = 0
+    total = 0
+    for _platform in platforms:
+        remaining = per_platform
+        for archetype in all_archetypes:
+            count = max(1, round(archetype.weight / total_weight * per_platform))
+            if remaining <= 0:
+                break
+            count = min(count, remaining)
+            remaining -= count
+            total += count
+            if archetype.is_adversarial:
+                adversarial += count
+    return adversarial, total
+
+
+# ---------------------------------------------------------------------------
+# Segmentation
+# ---------------------------------------------------------------------------
+
+def test_a_profile_that_splits_produces_several_packs():
+    packs = compile_packs(_profile(), BASE_PACK_ID, PLATFORMS, 0.3)
+    assert len(packs) == 3
+    assert len({p.id for p in packs}) == 3
+    for pack in packs:
+        assert pack.id.startswith(BASE_PACK_ID)
+        assert PersonaPack.model_validate(pack.model_dump()) == pack
+
+
+def test_every_buyer_archetype_lands_in_exactly_one_pack():
+    packs = compile_packs(_profile(), BASE_PACK_ID, PLATFORMS, 0.3)
+    buyers = [a.id for pack in packs for a in pack.archetypes if not a.is_adversarial]
+    assert sorted(buyers) == ["eng-manager", "platform-lead", "sre"]
+
+
+def test_a_profile_that_does_not_split_returns_one_pack(monkeypatch):
+    packs = compile_packs(_single_segment_profile(), BASE_PACK_ID, PLATFORMS, 0.3)
+    assert len(packs) == 1
+    assert packs[0].id == BASE_PACK_ID
+
+
+def test_not_segmenting_is_reported():
+    """"One pack" must be a stated outcome, not an empty result."""
+    with structlog.testing.capture_logs() as logs:
+        compile_packs(_single_segment_profile(), BASE_PACK_ID, PLATFORMS, 0.3)
+    assert any(entry["event"] == "icp_packs_not_segmented" for entry in logs)
+
+
+def test_compile_pack_still_produces_the_blended_pack():
+    """The single-pack path is unchanged — nothing downstream regresses."""
+    pack = compile_pack(_profile(), BASE_PACK_ID, PLATFORMS, 0.3)
+    assert pack.id == BASE_PACK_ID
+    assert len([a for a in pack.archetypes if not a.is_adversarial]) == 3
+    assert sum(a.weight for a in pack.archetypes if a.is_adversarial) == pytest.approx(0.3)
+
+
+# ---------------------------------------------------------------------------
+# The adversarial share
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("cohort", [1, 2, 3, 4])
+def test_no_segment_pack_is_left_without_an_adversarial_cohort(cohort):
+    """The invariant the share depends on.
+
+    A pack without adversarial archetypes is skipped by `rebalance_adversarial`,
+    keeps un-normalised weights, and silently dilutes the cohort across the run.
+    Partitioning the cohort so that some segment gets none is the design this
+    forbids.
+    """
+    packs = compile_packs(
+        _profile(adversarial_count=cohort), BASE_PACK_ID, PLATFORMS, 0.3
+    )
+    counts = [len([a for a in pack.archetypes if a.is_adversarial]) for pack in packs]
+    assert all(count > 0 for count in counts), counts
+    # Dealt evenly: every pack carries the same number, so packs stay
+    # interchangeable in weight.
+    assert len(set(counts)) == 1, counts
+
+
+@pytest.mark.parametrize("cohort", [1, 2, 3, 4])
+def test_every_adversarial_archetype_appears_somewhere_in_the_run(cohort):
+    """Dealing must not drop a role.
+
+    The five adversarial roles are distinct cohorts, and a run that silently
+    contains three of the four the founder configured reports a cohort split it
+    did not measure.
+    """
+    profile = _profile(adversarial_count=cohort)
+    packs = compile_packs(profile, BASE_PACK_ID, PLATFORMS, 0.3)
+
+    dealt = {
+        a.id.split("--")[0]
+        for pack in packs
+        for a in pack.archetypes
+        if a.is_adversarial
+    }
+    assert dealt == {a.id for a in profile.adversarial}
+
+
+@pytest.mark.parametrize("share", [0.1, 0.3, 0.4, 0.5])
+def test_adversarial_weight_share_is_exact_across_n_packs(share):
+    """Weight-level: the realised share equals the configured one, exactly."""
+    packs = compile_packs(_profile(), BASE_PACK_ID, PLATFORMS, share)
+    total = sum(a.weight for pack in packs for a in pack.archetypes)
+    attackers = sum(
+        a.weight for pack in packs for a in pack.archetypes if a.is_adversarial
+    )
+    assert attackers / total == pytest.approx(share)
+
+
+def test_the_live_run_shape_reproduces_the_measured_share():
+    """96 agents at 30% — the shape HANDOFF §1b measured at 30 of 96.
+
+    Segmented into three packs, the allocation is still 30 of 96. The number
+    the product quotes survives the split at the shape it was measured on.
+    """
+    packs = compile_packs(_profile(), BASE_PACK_ID, PLATFORMS, 0.3)
+    adversarial, total = _simulate_agents(packs, 0.3, 96)
+
+    assert (adversarial, total) == (30, 96)
+    assert abs(adversarial / total - 0.3) <= _LIVE_SINGLE_PACK_DEVIATION + 1e-9
+
+
+def test_realised_agent_share_survives_multiple_platforms():
+    """The live run was two platforms; allocation runs per platform."""
+    share = 0.3
+    platforms = ["hacker_news", "reddit"]
+    segmented = _simulate_agents(
+        compile_packs(_profile(), BASE_PACK_ID, platforms, share),
+        share, 96, platforms=platforms,
+    )
+    assert (
+        abs(segmented[0] / segmented[1] - share) <= _LIVE_SINGLE_PACK_DEVIATION + 1e-9
+    )
+
+
+# ---------------------------------------------------------------------------
+# The envelope
+#
+# `run_prepare_agents` apportions with `max(1, round(weight / total * n))` per
+# archetype and truncates on a running remainder. That is coarse on its own —
+# the single-pack case is 10 percentage points out on a 30-agent swarm — and it
+# gets coarser as the archetype count rises, because each group rounds
+# independently. Segmentation raises the archetype count, so the property worth
+# asserting is not per-configuration equality (which the runner cannot deliver
+# for either design) but that **splitting does not widen the envelope**.
+#
+# Largest-remainder apportionment in `run_prepare_agents` would make both
+# columns exact and make this test uninteresting. That is the fix; this is the
+# guarantee until it lands.
+# ---------------------------------------------------------------------------
+
+# The four segment cells `_segment_key` can produce.
+_CELLS = (
+    ("ic", "low"),
+    ("manager", "high"),
+    ("director", "moderate"),
+    ("vp", "prohibitive"),
+)
+
+
+def _grid_profile(buyers: int, adversarial: int) -> ICPProfile:
+    """`buyers` archetypes dealt across as many distinct segments as they fill."""
+    return ICPProfile(
+        name="Grid",
+        archetypes=[
+            ICPArchetype(
+                id=f"buyer-{i}", label=f"Buyer {i}", weight=1.0, role="buyer",
+                seniority=_CELLS[i % len(_CELLS)][0],
+                switching_cost=_CELLS[i % len(_CELLS)][1],
+                platforms=PLATFORMS,
+            )
+            for i in range(buyers)
+        ],
+        adversarial=[
+            AdversarialArchetype(
+                id=f"adv-{i}", label=f"Adversary {i}", weight=1.0,
+                role="category_skeptic", platforms=PLATFORMS,
+            )
+            for i in range(adversarial)
+        ],
+    )
+
+
+def _envelope() -> tuple[float, float]:
+    """Worst deviation from the configured share: (one pack, segmented)."""
+    single_worst = 0.0
+    segmented_worst = 0.0
+    for buyers in (3, 4, 6):
+        for cohort in (2, 3, 4):
+            for agents in (30, 48, 96, 150, 200):
+                for share in (0.2, 0.3, 0.4, 0.5):
+                    profile = _grid_profile(buyers, cohort)
+                    one = _simulate_agents(
+                        [compile_pack(profile, BASE_PACK_ID, PLATFORMS, share)],
+                        share, agents,
+                    )
+                    many = _simulate_agents(
+                        compile_packs(profile, BASE_PACK_ID, PLATFORMS, share),
+                        share, agents,
+                    )
+                    single_worst = max(single_worst, abs(one[0] / one[1] - share))
+                    segmented_worst = max(segmented_worst, abs(many[0] / many[1] - share))
+    return single_worst, segmented_worst
+
+
+def test_segmentation_does_not_widen_the_share_envelope():
+    """The claim, across 180 configurations: same tolerance, split or not."""
+    single_worst, segmented_worst = _envelope()
+
+    assert segmented_worst <= single_worst + 1e-9, (
+        f"segmenting widened the worst-case deviation from {single_worst:.4f} "
+        f"to {segmented_worst:.4f}"
+    )
+
+
+def test_copying_the_cohort_into_every_pack_would_widen_the_envelope():
+    """Why `compile_packs` deals the cohort instead of copying it.
+
+    Pins the reasoning in the `compile_packs` docstring to an executable
+    measurement, so a future change to "just give every pack the whole cohort"
+    — which is the more obvious design, and preserves the cohort's internal mix
+    exactly — fails here rather than in a founder's report.
+    """
+    single_worst, dealt_worst = _envelope()
+
+    copied_worst = 0.0
+    for buyers in (3, 4, 6):
+        for cohort in (2, 3, 4):
+            for agents in (30, 48, 96, 150, 200):
+                for share in (0.2, 0.3, 0.4, 0.5):
+                    profile = _grid_profile(buyers, cohort)
+                    packs = compile_packs(profile, BASE_PACK_ID, PLATFORMS, share)
+                    # Rebuild each pack with the whole cohort attached.
+                    copied = []
+                    for pack in packs:
+                        buyers_only = [a for a in pack.archetypes if not a.is_adversarial]
+                        attackers = [
+                            a
+                            for a in compile_pack(
+                                profile, BASE_PACK_ID, PLATFORMS, share
+                            ).archetypes
+                            if a.is_adversarial
+                        ]
+                        copied.append(
+                            PersonaPack(
+                                id=pack.id, name=pack.name, version="1.0",
+                                category="synthesized-icp", description="",
+                                archetypes=buyers_only + attackers,
+                            )
+                        )
+                    a, t = _simulate_agents(copied, share, agents)
+                    copied_worst = max(copied_worst, abs(a / t - share))
+
+    assert dealt_worst <= single_worst + 1e-9
+    assert copied_worst > single_worst, (
+        f"copying no longer widens the envelope ({copied_worst:.4f} against "
+        f"{single_worst:.4f}); re-measure before simplifying compile_packs"
+    )
+
+
+def test_prepare_time_share_overrides_the_compiled_share_on_every_pack():
+    """An ICP is reused across runs; the run's share is the authoritative one."""
+    packs = compile_packs(_profile(), BASE_PACK_ID, PLATFORMS, 0.1)
+    for pack in packs:
+        rebalance_adversarial(pack.archetypes, 0.45)
+
+    total = sum(a.weight for pack in packs for a in pack.archetypes)
+    attackers = sum(
+        a.weight for pack in packs for a in pack.archetypes if a.is_adversarial
+    )
+    assert attackers / total == pytest.approx(0.45)
+
+
+def test_zero_share_leaves_the_cohort_present_and_negligible():
+    packs = compile_packs(_profile(), BASE_PACK_ID, PLATFORMS, 0.0)
+    for pack in packs:
+        attackers = [a for a in pack.archetypes if a.is_adversarial]
+        assert attackers
+        assert all(a.weight < 0.001 for a in attackers)
+
+
+def test_packs_carry_equal_swarm_weight_at_every_share():
+    """Pack-level normalisation is what preserves the cohort share.
+
+    At share 0 the buyers used to keep their raw weights, so a pack with more
+    archetypes took more of the swarm than one with fewer — at that share only.
+    """
+    for share in (0.0, 0.3):
+        packs = compile_packs(_profile(), BASE_PACK_ID, PLATFORMS, share)
+        totals = [sum(a.weight for a in pack.archetypes) for pack in packs]
+        assert all(t == pytest.approx(totals[0], abs=1e-3) for t in totals), share
+
+
+# ---------------------------------------------------------------------------
+# Identity
+# ---------------------------------------------------------------------------
+
+def test_replicated_adversarial_archetypes_get_distinct_ids():
+    """`run_prepare_agents` builds `entity_id` from the archetype id.
+
+    HANDOFF §1a is the record of what two agents sharing one identity did to
+    this codebase: nine agents, one memory, one row of event attribution, and
+    confidence intervals drawn from a ninth of the observations.
+    """
+    packs = compile_packs(_profile(), BASE_PACK_ID, PLATFORMS, 0.3)
+    ids = [a.id for pack in packs for a in pack.archetypes]
+    assert len(ids) == len(set(ids)), "an archetype id repeats across packs"
+
+
+def test_a_dealt_adversarial_keeps_its_cohort_and_role():
+    """Only the id is suffixed. The cohort is carried on the flag, not the id."""
+    packs = compile_packs(_profile(adversarial_count=1), BASE_PACK_ID, PLATFORMS, 0.3)
+    for pack in packs:
+        attacker = next(a for a in pack.archetypes if a.is_adversarial)
+        assert attacker.id.startswith("skeptic-0--")
+        assert attacker.adversarial_role == "category_skeptic"
+        assert attacker.label == "Skeptic 0"
+
+
+def test_a_profile_with_no_adversarial_cohort_still_yields_equal_weight_packs():
+    """No cohort means `rebalance_adversarial` is a no-op on every pack."""
+    profile = _profile()
+    profile.adversarial = []
+
+    packs = compile_packs(profile, BASE_PACK_ID, PLATFORMS, 0.3)
+
+    totals = [sum(a.weight for a in pack.archetypes) for pack in packs]
+    assert all(total == pytest.approx(1.0) for total in totals), totals
+
+
+def test_segment_packs_are_ordered_deterministically():
+    """Order must not depend on the order the model emitted archetypes in."""
+    first = [p.id for p in compile_packs(_profile(), BASE_PACK_ID, PLATFORMS, 0.3)]
+    reordered = _profile()
+    reordered.archetypes.reverse()
+    second = [p.id for p in compile_packs(reordered, BASE_PACK_ID, PLATFORMS, 0.3)]
+    assert first == second
+
+
+def test_an_unrecognised_seniority_is_reported_not_absorbed(monkeypatch):
+    """A silent default merges two segments and reports a clean split."""
+    from app.services.engine.personas import icp_synthesizer
+
+    profile = _profile()
+    # Bypasses the Literal so the runtime path can be exercised, which is what a
+    # profile round-tripped through an older schema would look like.
+    object.__setattr__(profile.archetypes[0], "seniority", "principal")
+
+    with structlog.testing.capture_logs() as logs:
+        icp_synthesizer._segment_key(profile.archetypes[0])
+
+    assert any(
+        entry["event"] == "icp_segment_seniority_unrecognised" for entry in logs
+    )
+
+
+def test_a_restated_seniority_still_resolves():
+    from app.services.engine.personas import icp_synthesizer
+
+    profile = _profile()
+    for form in ("director", "Director", "  director ", "[director]"):
+        object.__setattr__(profile.archetypes[0], "seniority", form)
+        assert icp_synthesizer._segment_key(profile.archetypes[0])[0] == "decision_maker"

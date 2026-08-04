@@ -81,6 +81,29 @@ def _fetch_profile(profile_id: str, org_id: str) -> dict:
     return row.data[0]
 
 
+def _with_promotions(row: dict, org_id: str) -> dict:
+    """Attach the library packs promoted out of this profile.
+
+    A promoted pack is a **snapshot** (`persona_packs`, migration 026). Editing
+    the profile recompiles this row's own `pack_data` — the pack `get_pack`
+    serves for the `icp_` prefix — and deliberately does not touch the library
+    entries: a run configured last month against a library pack must not change
+    audience because a job title was corrected today, which is the same
+    reproducibility guarantee `icp_profiles.pack_data` exists to give.
+
+    That decision is only honest if the drift is visible, so each entry carries
+    `source_stale`. Re-promoting (`POST /api/packs/promote`) refreshes the
+    snapshot in place and keeps its pack id. Without this, the founder would have
+    no way to tell that the pack in their library no longer matches the ICP they
+    just edited — a divergence with no error attached to it.
+    """
+    from app.services.engine.personas import persona_store
+
+    row = dict(row)
+    row["promoted_packs"] = persona_store.promotions_of_profile(org_id, row["id"])
+    return row
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -159,9 +182,9 @@ async def estimate(auth: dict = Depends(get_current_org)):
 
 @router.get("/{id}")
 async def get_profile(id: str, auth: dict = Depends(get_current_org)):
-    """Get one ICP profile."""
+    """Get one ICP profile, with any library packs promoted out of it."""
     log.info("get_icp_profile", profile_id=id)
-    return _fetch_profile(id, auth["org_id"])
+    return _with_promotions(_fetch_profile(id, auth["org_id"]), auth["org_id"])
 
 
 @router.patch("/{id}")
@@ -172,10 +195,19 @@ async def update_profile(
 ):
     """Replace a synthesized profile with the founder's corrected version.
 
+    "Synthesis proposes, the founder disposes" (DECISIONS §3) is this endpoint.
+
     The pack is recompiled here, on write. Recompiling on read would make a
     re-simulation's audience depend on when the pack was read, and the
     inoculation loop's entire claim is that the audience did not change between
     the two runs.
+
+    **What an edit does not do is change a promoted library pack.** Those are
+    snapshots taken at promotion time and are left alone; the response carries
+    `promoted_packs`, each with `source_stale`, so the founder is told which of
+    their library entries no longer match and can re-promote deliberately. The
+    alternative — cascading the recompile into the library — would silently
+    change the audience of every future run configured against those packs.
     """
     from app.services.engine.personas.icp_synthesizer import compile_pack
 
@@ -221,7 +253,7 @@ async def update_profile(
         # deleted between the two statements. `updated.data[0]` would have been
         # an IndexError and a 500 on what is a plain 404.
         raise HTTPException(status_code=404, detail="ICP profile not found")
-    return updated.data[0]
+    return _with_promotions(updated.data[0], auth["org_id"])
 
 
 @router.delete("/{id}")
@@ -232,11 +264,30 @@ async def delete_profile(id: str, auth: dict = Depends(get_current_org)):
     ON DELETE SET NULL, and their agents were materialised at prepare time. What
     is lost is the ability to re-simulate against the same audience, which is
     why the inoculation loop copies agents rather than re-deriving them.
+
+    Library packs promoted out of this profile **survive**, by the same
+    reasoning: they are snapshots, and `persona_packs.source_icp_profile_id` is
+    ON DELETE SET NULL (026). Deleting the profile costs the provenance link,
+    not the pack — an org that promoted an audience and then tidied up its ICP
+    profiles would otherwise lose the reusable library the promotion existed to
+    build. The affected pack ids come back in the response so the loss of
+    provenance is stated rather than discovered.
     """
+    from app.services.engine.personas import persona_store
+
     log.info("delete_icp_profile", profile_id=id, org_id=auth["org_id"])
     _fetch_profile(id, auth["org_id"])
+    orphaned = [
+        p["pack_id"] for p in persona_store.promotions_of_profile(auth["org_id"], id)
+    ]
     admin = get_supabase_admin()
     admin.table("icp_profiles").delete().eq("id", id).eq(
         "organization_id", auth["org_id"]
     ).execute()
-    return {"status": "deleted", "id": id}
+    return {
+        "status": "deleted",
+        "id": id,
+        # Still in the library and still runnable; they no longer know where
+        # they came from.
+        "orphaned_pack_ids": orphaned,
+    }

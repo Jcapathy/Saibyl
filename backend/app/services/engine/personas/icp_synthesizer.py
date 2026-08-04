@@ -3,6 +3,8 @@
 # synthesize_icp(project_id, org_id, *, adversarial=True, platforms=None,
 #                created_by=None, name=None) -> dict   [persists icp_profiles]
 # compile_pack(profile, pack_id, platforms=None, adversarial_share=0.0) -> PersonaPack
+# compile_packs(profile, base_pack_id, platforms=None,
+#               adversarial_share=0.0) -> list[PersonaPack]
 # rebalance_adversarial(archetypes, share) -> list[Archetype]
 # gather_material(project_id) -> ProjectMaterial
 # recompile_profile(profile_row) -> dict
@@ -79,6 +81,18 @@ _OWN_MATERIAL_CHARS = 24_000
 _COMPETITOR_MATERIAL_CHARS = 12_000
 _MARKET_MATERIAL_CHARS = 6_000
 
+# The floor a single source must clear to be worth including.
+#
+# The budget used to be spent first-come: documents were read in upload order
+# until the bucket was full, and everything after that was skipped by a bare
+# `continue` with no log. One 200-row CRM export uploaded before the deck could
+# therefore consume the entire `own` budget, and the deck — the densest ICP
+# material a founder ever sends — contributed nothing, silently. Sources now
+# share the bucket (`_fair_share`), and a source whose share would fall below
+# this floor is excluded **by name, with a reason**, because a 300-character
+# fragment of a spreadsheet is not a source, it is noise that looks like one.
+_MIN_SOURCE_CHARS = 1_000
+
 # The synthesis pass writes a whole profile in one object, and bug #7 in Phase 1
 # was a main-model stage silently hitting exactly this ceiling and returning
 # unparseable JSON. The retry below halves the archetype budget rather than
@@ -133,6 +147,17 @@ class ProjectMaterial:
     competitor_ids: list[str] = field(default_factory=list)
     market_ids: list[str] = field(default_factory=list)
 
+    # Documents the classifier proposed as competitor material that no human has
+    # confirmed. They are **not** in `competitor_ids` and license no name — see
+    # `services/ingestion/classifier.py` and DECISIONS_V2 §7. Carried so the
+    # product can ask, and so "this project has competitor material nobody
+    # labelled" stops being indistinguishable from "this project has none".
+    unconfirmed_competitor_ids: list[str] = field(default_factory=list)
+
+    # Every document the pass did not read, with why. A source contributing zero
+    # characters is the defect this structure exists to make visible.
+    excluded: list[dict[str, Any]] = field(default_factory=list)
+
     @property
     def all_ids(self) -> list[str]:
         return [*self.own_ids, *self.competitor_ids, *self.market_ids]
@@ -150,62 +175,237 @@ class ProjectMaterial:
 # Material
 # ---------------------------------------------------------------------------
 
-def gather_material(project_id: str) -> ProjectMaterial:
-    """Read the project's processed documents, bucketed by material kind.
+_MATERIAL_LIMITS = {
+    "own": _OWN_MATERIAL_CHARS,
+    "competitor": _COMPETITOR_MATERIAL_CHARS,
+    "market": _MARKET_MATERIAL_CHARS,
+}
 
-    Text extraction goes through `document_processor._extract_text`, which knows
-    about PDF and DOCX. `run_prepare_agents` does its own `bytes.decode('utf-8')`
-    on the same files, which produces mojibake for every non-text upload — that
-    is a separate known issue, but it is why this path does not reuse it.
+
+def _fair_share(demands: list[int], budget: int) -> list[int]:
+    """Split `budget` across `demands` so no source is starved by another.
+
+    Water-filling: everyone gets an equal share, anyone who wants less than
+    their share releases the remainder, and the remainder is re-divided among
+    those who still want more. A short landing page therefore comes through
+    whole while a 400-page PDF is the thing that gets truncated, which is the
+    opposite of what first-come-first-served did.
     """
+    allocation = [0] * len(demands)
+    wanting = {i for i, demand in enumerate(demands) if demand > 0}
+    remaining = budget
+
+    while wanting and remaining > 0:
+        share = remaining // len(wanting)
+        if share == 0:
+            break
+        satisfied = [i for i in wanting if demands[i] - allocation[i] <= share]
+        if not satisfied:
+            for i in wanting:
+                allocation[i] += share
+                remaining -= share
+            break
+        for i in satisfied:
+            take = demands[i] - allocation[i]
+            allocation[i] += take
+            remaining -= take
+            wanting.discard(i)
+
+    return allocation
+
+
+def _source_text(admin: Any, doc: dict[str, Any]) -> str:
+    """The extracted text for one document.
+
+    Read from `processed_text_path`, which `services/ingestion/pipeline.py`
+    writes for every media type. Rows that predate it — and only those — are
+    re-extracted here, which works for PDF/DOCX/text and is exactly the set of
+    things the old single-path pipeline could produce. The fallback is logged so
+    a project that is silently paying for re-extraction on every synthesis is
+    visible rather than merely slow.
+    """
+    text_path = doc.get("processed_text_path")
+    if text_path:
+        raw = admin.storage.from_("project-media").download(text_path)
+        return raw.decode("utf-8", errors="replace")
+
     from app.services.engine.document_processor import _extract_text
 
+    logger.info(
+        "icp_material_legacy_extraction",
+        document_id=doc["id"],
+        filename=doc.get("filename"),
+        file_type=doc.get("file_type"),
+        detail="row has no processed_text_path; re-extracting from the stored object",
+    )
+    file_bytes = admin.storage.from_("project-media").download(doc["storage_path"])
+    text, _, _ = _extract_text(file_bytes, doc.get("file_type") or "txt")
+    return text
+
+
+def gather_material(project_id: str) -> ProjectMaterial:
+    """Read every kind of upload the project has, bucketed by material kind.
+
+    Three things this has to get right, all of them the same failure underneath.
+
+    **Every upload kind is in scope.** Images, video, spreadsheets, decks and
+    linked articles used to land in `project_assets`, which this function never
+    read — so a founder could upload a deck as slide images and a customer
+    spreadsheet and have their ICP synthesized from neither. One upload surface
+    now writes to `documents`; see `services/ingestion/pipeline.py`.
+
+    **The budget is shared, not raced.** See `_MIN_SOURCE_CHARS`.
+
+    **What was left out is on the record.** Every exclusion — over budget, too
+    small a share, unprocessed, failed extraction — is counted, named, and
+    returned on `ProjectMaterial.excluded`. The previous version dropped
+    documents with a bare `continue`, so a source contributing zero characters
+    and a project with no such source produced identical logs.
+    """
     admin = get_supabase_admin()
-    docs = (
+    rows = (
         admin.table("documents")
-        .select("id, filename, file_type, storage_path, material_kind")
+        .select(
+            "id, filename, file_type, media_type, storage_path, processed_text_path, "
+            "extracted_char_count, material_kind, material_kind_suggested, processing_status"
+        )
         .eq("project_id", project_id)
-        .eq("processing_status", "complete")
         .order("created_at", desc=False)
         .execute()
     ).data or []
 
+    excluded: list[dict[str, Any]] = []
+    unconfirmed_competitors: list[str] = []
+    ready: dict[str, list[dict[str, Any]]] = {"own": [], "competitor": [], "market": []}
+
+    for doc in rows:
+        # NULL predates the column and is read as 'own'. An unlabelled document
+        # can never be the thing that authorises naming a competitor — and a
+        # *suggested* kind is not a label, so it is recorded for confirmation
+        # and never bucketed (DECISIONS_V2 §7).
+        kind = doc.get("material_kind") or "own"
+        if kind not in ready:
+            kind = "own"
+        if doc.get("material_kind_suggested") == "competitor" and kind != "competitor":
+            unconfirmed_competitors.append(doc["id"])
+
+        status = doc.get("processing_status")
+        if status != "complete":
+            excluded.append({
+                "document_id": doc["id"],
+                "filename": doc.get("filename"),
+                "media_type": doc.get("media_type"),
+                "reason": f"processing_status={status}",
+            })
+            continue
+        ready[kind].append(doc)
+
     buckets: dict[str, list[str]] = {"own": [], "competitor": [], "market": []}
     ids: dict[str, list[str]] = {"own": [], "competitor": [], "market": []}
-    limits = {
-        "own": _OWN_MATERIAL_CHARS,
-        "competitor": _COMPETITOR_MATERIAL_CHARS,
-        "market": _MARKET_MATERIAL_CHARS,
-    }
-    used = {"own": 0, "competitor": 0, "market": 0}
+    chars_by_media_type: dict[str, int] = {}
+    truncated: list[str] = []
 
-    for doc in docs:
-        # NULL predates the column and is read as 'own'. An unlabelled document
-        # can never be the thing that authorises naming a competitor.
-        kind = doc.get("material_kind") or "own"
-        if kind not in buckets:
-            kind = "own"
-        if used[kind] >= limits[kind]:
-            continue
-        try:
-            file_bytes = admin.storage.from_("project-media").download(doc["storage_path"])
-            text, _, _ = _extract_text(file_bytes, doc["file_type"])
-        except Exception as exc:
-            logger.warning(
-                "icp_material_read_failed",
+    for kind, all_docs in ready.items():
+        limit = _MATERIAL_LIMITS[kind]
+
+        # A bucket can hold more sources than it has characters to give them.
+        # Sharing regardless would put every source below the floor and the
+        # bucket would contribute *nothing* — the same zero-characters failure
+        # in a new shape. So the bucket is capped at the number of sources it
+        # can actually fund, in upload order, and the overflow is excluded by
+        # name rather than diluted into uselessness.
+        capacity = max(1, limit // _MIN_SOURCE_CHARS)
+        docs = all_docs[:capacity]
+        for doc in all_docs[capacity:]:
+            excluded.append({
+                "document_id": doc["id"],
+                "filename": doc.get("filename"),
+                "media_type": doc.get("media_type") or "document",
+                "reason": (
+                    f"{kind} bucket holds {len(all_docs)} sources and can fund "
+                    f"{capacity} at the {_MIN_SOURCE_CHARS}-character floor; "
+                    "this one is past that, in upload order"
+                ),
+            })
+
+        # A row written before `extracted_char_count` existed reports no demand.
+        # Claiming the whole bucket is the honest guess — it is the only value
+        # that cannot starve the document — and the allocator then trims it back
+        # to a fair share against everything else in the bucket.
+        demands = [int(d.get("extracted_char_count") or limit) for d in docs]
+        allocation = _fair_share(demands, limit)
+
+        for doc, demand, budget in zip(docs, demands, allocation, strict=True):
+            media_type = doc.get("media_type") or "document"
+            if budget < _MIN_SOURCE_CHARS:
+                excluded.append({
+                    "document_id": doc["id"],
+                    "filename": doc.get("filename"),
+                    "media_type": media_type,
+                    "reason": (
+                        f"{kind} budget of {limit} characters is shared by "
+                        f"{len(docs)} sources; this one's share of {budget} is "
+                        f"below the {_MIN_SOURCE_CHARS}-character floor"
+                    ),
+                })
+                continue
+
+            try:
+                text = _source_text(admin, doc)
+            except Exception as exc:
+                logger.warning(
+                    "icp_material_read_failed",
+                    document_id=doc["id"],
+                    filename=doc.get("filename"),
+                    media_type=media_type,
+                    error=str(exc),
+                    error_type=type(exc).__name__,
+                )
+                excluded.append({
+                    "document_id": doc["id"],
+                    "filename": doc.get("filename"),
+                    "media_type": media_type,
+                    "reason": f"read failed: {exc}",
+                })
+                continue
+
+            snippet = text[:budget]
+            if not snippet.strip():
+                excluded.append({
+                    "document_id": doc["id"],
+                    "filename": doc.get("filename"),
+                    "media_type": media_type,
+                    "reason": "extraction is empty",
+                })
+                continue
+
+            was_truncated = len(text) > len(snippet)
+            if was_truncated:
+                truncated.append(doc["id"])
+
+            # The media type is stated in the header. An image description and a
+            # spreadsheet dump read very differently as evidence, and a synthesis
+            # pass told only "### customers.xlsx" has to infer that from the text.
+            header = f"### {doc.get('filename') or 'document'} ({media_type})"
+            if was_truncated:
+                header += f" — first {len(snippet)} of {len(text)} characters"
+            buckets[kind].append(f"{header}\n{snippet}")
+            ids[kind].append(doc["id"])
+            chars_by_media_type[media_type] = (
+                chars_by_media_type.get(media_type, 0) + len(snippet)
+            )
+
+            logger.info(
+                "icp_material_source_included",
                 document_id=doc["id"],
                 filename=doc.get("filename"),
-                error=str(exc),
+                media_type=media_type,
+                material_kind=kind,
+                included_chars=len(snippet),
+                available_chars=len(text),
+                demand_chars=demand,
+                truncated=was_truncated,
             )
-            continue
-
-        remaining = limits[kind] - used[kind]
-        snippet = text[:remaining]
-        if not snippet.strip():
-            continue
-        used[kind] += len(snippet)
-        buckets[kind].append(f"### {doc.get('filename') or 'document'}\n{snippet}")
-        ids[kind].append(doc["id"])
 
     material = ProjectMaterial(
         own="\n\n".join(buckets["own"]),
@@ -214,16 +414,49 @@ def gather_material(project_id: str) -> ProjectMaterial:
         own_ids=ids["own"],
         competitor_ids=ids["competitor"],
         market_ids=ids["market"],
+        unconfirmed_competitor_ids=unconfirmed_competitors,
+        excluded=excluded,
     )
+
     logger.info(
         "icp_material_gathered",
         project_id=project_id,
+        documents_in_project=len(rows),
         own_docs=len(ids["own"]),
         competitor_docs=len(ids["competitor"]),
         market_docs=len(ids["market"]),
         own_chars=len(material.own),
         competitor_chars=len(material.competitor),
+        market_chars=len(material.market),
+        # Which upload kinds actually reached the model. A kind present in the
+        # project and absent from here is the bug this whole change exists for.
+        chars_by_media_type=chars_by_media_type,
+        truncated_documents=len(truncated),
+        excluded_documents=len(excluded),
     )
+    if excluded:
+        logger.warning(
+            "icp_material_excluded",
+            project_id=project_id,
+            count=len(excluded),
+            excluded=excluded,
+            detail="these uploads contributed nothing to the ICP",
+        )
+    if unconfirmed_competitors:
+        # Not an error: refusing to act on an unconfirmed suggestion is the
+        # guardrail working. It is logged because the alternative — a project
+        # whose competitor material is all sitting unlabelled — is otherwise
+        # indistinguishable from a project that uploaded none, and the second is
+        # the one everybody assumes.
+        logger.info(
+            "icp_competitor_material_unconfirmed",
+            project_id=project_id,
+            document_ids=unconfirmed_competitors,
+            detail=(
+                "classified as competitor material but not labelled by a human; "
+                "not bucketed as competitor and licensing no competitor name"
+            ),
+        )
     return material
 
 
@@ -777,15 +1010,26 @@ def rebalance_adversarial(archetypes: list[Archetype], share: float) -> list[Arc
         logger.warning("icp_pack_all_adversarial", archetypes=len(attackers))
         return archetypes
 
+    buyer_total = sum(a.weight for a in buyers) or 1.0
+
     if share <= 0:
         # The cohort exists in the pack but takes none of the swarm. Dropping it
         # instead would make a compiled pack depend on the share of whichever
         # run happened to compile it first.
+        #
+        # Buyers are normalised here as well as on the share > 0 path. Without
+        # it a pack's total weight was whatever its raw archetype weights
+        # summed to, and `run_prepare_agents` allocates agents across *all*
+        # selected packs by weight — so with multiple packs in one run, a pack
+        # that happened to carry more archetypes took a larger share of the
+        # swarm than one that carried fewer, at share 0 only. One rule at both
+        # ends: a pack is worth 1.0 of the swarm, whatever is inside it.
+        for archetype in buyers:
+            archetype.weight = archetype.weight / buyer_total
         for archetype in attackers:
             archetype.weight = 0.0001
         return archetypes
 
-    buyer_total = sum(a.weight for a in buyers) or 1.0
     attacker_total = sum(a.weight for a in attackers) or 1.0
     for archetype in buyers:
         archetype.weight = archetype.weight / buyer_total * (1.0 - share)
@@ -814,6 +1058,229 @@ def compile_pack(
         description=profile.product_summary or f"Synthesized ICP: {profile.name}",
         archetypes=archetypes,
     )
+
+
+# ---------------------------------------------------------------------------
+# Segmentation: one profile -> several packs
+# ---------------------------------------------------------------------------
+
+# The two axes a B2B audience actually splits on, and the only two the ICP
+# schema records for every archetype.
+#
+# Seniority, because what a practitioner and an approver each need to hear is
+# different in kind, not degree — one is asking "will this work", the other
+# "what does this cost me if it doesn't". Switching cost, because DECISIONS §7's
+# central claim is that a B2B buyer evaluates net of what they would rip out;
+# an archetype with nothing to rip out and one facing a prohibitive migration
+# are not the same buyer wearing different job titles.
+#
+# Deliberately not clustered on free text (goals, pains, incumbent tooling).
+# Those are model-written strings, and clustering on them would make the number
+# of packs a function of the model's phrasing on the day.
+_SENIORITY_SEGMENT = {
+    "ic": "practitioner",
+    "manager": "practitioner",
+    "director": "decision_maker",
+    "vp": "decision_maker",
+    "c_level": "decision_maker",
+    "founder": "decision_maker",
+}
+_SWITCHING_SEGMENT = {
+    "low": "low_switching_cost",
+    "moderate": "low_switching_cost",
+    "high": "high_switching_cost",
+    "prohibitive": "high_switching_cost",
+}
+
+_SEGMENT_LABELS = {
+    "practitioner": "practitioners",
+    "decision_maker": "decision makers",
+    "low_switching_cost": "low switching cost",
+    "high_switching_cost": "entrenched",
+}
+
+
+def _segment_key(archetype: ICPArchetype) -> tuple[str, str]:
+    """Which pack an archetype belongs in.
+
+    `enum_ref` rather than `.get(...)` with a default: seniority and switching
+    cost come back from the model restated, and an unrecognised value silently
+    becoming `practitioner` / `low_switching_cost` would merge two segments into
+    one and report a clean split. The miss is defaulted here, loudly.
+    """
+    seniority = enum_ref(archetype.seniority, set(_SENIORITY_SEGMENT))
+    if seniority is None:
+        logger.warning(
+            "icp_segment_seniority_unrecognised",
+            archetype=archetype.id,
+            returned=str(archetype.seniority)[:40],
+            allowed=sorted(_SENIORITY_SEGMENT),
+        )
+        seniority = "manager"
+
+    switching = enum_ref(archetype.switching_cost, set(_SWITCHING_SEGMENT))
+    if switching is None:
+        logger.warning(
+            "icp_segment_switching_cost_unrecognised",
+            archetype=archetype.id,
+            returned=str(archetype.switching_cost)[:40],
+            allowed=sorted(_SWITCHING_SEGMENT),
+        )
+        switching = "moderate"
+
+    return _SENIORITY_SEGMENT[seniority], _SWITCHING_SEGMENT[switching]
+
+
+def _segment_slug(key: tuple[str, str]) -> str:
+    return f"{key[0]}-{key[1]}".replace("_", "-")
+
+
+def _segment_name(key: tuple[str, str]) -> str:
+    return f"{_SEGMENT_LABELS[key[0]].capitalize()}, {_SEGMENT_LABELS[key[1]]}"
+
+
+def compile_packs(
+    profile: ICPProfile,
+    base_pack_id: str,
+    platforms: list[str] | None = None,
+    adversarial_share: float = 0.0,
+) -> list[PersonaPack]:
+    """Compile an ICP into one pack per coherent buyer segment.
+
+    `simulations.persona_pack_ids` is already a list and `run_prepare_agents`
+    already loops over it, so this is a compile-and-register change and nothing
+    in the runner moves. What it buys is a founder being able to run *the
+    entrenched decision makers* on their own, instead of averaging them into one
+    blended audience where the segment that would have killed the deal is 15% of
+    the swarm and invisible in the headline.
+
+    Returns a single pack — identical to `compile_pack` — when the profile does
+    not split, so the one-pack case stays exactly what it was.
+
+    ## The adversarial share is the hazard, and this is how it is held
+
+    `run_prepare_agents` calls `rebalance_adversarial` **per pack** and then
+    allocates agents across every pack's archetypes by raw weight. Rebalancing
+    normalises a pack containing both cohorts to a total weight of 1.0, of which
+    `share` is adversarial. So:
+
+    * **Every pack must contain adversarial archetypes.** A pack with none is
+      returned untouched by `rebalance_adversarial`, keeps whatever its raw
+      weights summed to, and dilutes the cohort across the run by an amount
+      nobody can see. Partitioning the cohort so some segments have none — the
+      obvious design — is the one that must not be used.
+    * **Every pack gets `ceil(K / N)` of the K adversarial archetypes, dealt
+      round-robin.** Every archetype therefore appears at least once across the
+      run, and no pack faces an empty cohort.
+    * Each dealt archetype gets a per-segment id suffix. `run_prepare_agents`
+      builds `entity_id` as `f"{archetype.id}_{platform}_{i}"`, and HANDOFF §1a
+      is the record of what happens here when two agents share one identity.
+
+    **Why deal rather than copy the whole cohort into every pack.** Copying
+    preserves the cohort's internal mix exactly, and it was measured to be
+    materially worse where it counts. `run_prepare_agents` apportions agents
+    with `max(1, round(weight / total * n))` per archetype and then truncates on
+    a running remainder, so its accuracy degrades as the archetype count grows —
+    and copying multiplies that count by N. Across 480 configurations (3–6
+    buyers, 2–4 adversarial, 2–4 packs, 30–200 agents, 20–50% share):
+
+    | design | worst deviation from the configured share | cases worse than one pack |
+    |---|---|---|
+    | one blended pack | 0.100 | — |
+    | copy the cohort into every pack | **0.200** | 178 / 480 |
+    | deal `ceil(K/N)` per pack | 0.100 | 83 / 480 |
+
+    Dealing holds the same error bound as the single-pack case; copying doubles
+    it. The cost is that an archetype dealt into a pack of two carries half the
+    weight of one dealt into a pack of one, so the cohort's *internal* mix
+    shifts by up to 2×. The share — the number the product claims accuracy on —
+    does not.
+
+    That 0.100 worst case belongs to `run_prepare_agents`, not to this function:
+    independent per-archetype rounding with no remainder redistribution cannot
+    be accurate on a 30-agent swarm. Largest-remainder apportionment there would
+    make both columns exact.
+
+    Each pack is worth an equal share of the swarm when several run together,
+    because pack-level normalisation is what preserves the cohort share. Segment
+    sizes therefore do not carry over; the founder chooses which audiences to
+    run, and that choice is the point of splitting them.
+    """
+    run_platforms = platforms or []
+    segments: dict[tuple[str, str], list[ICPArchetype]] = {}
+    for archetype in profile.archetypes:
+        segments.setdefault(_segment_key(archetype), []).append(archetype)
+
+    if len(segments) <= 1:
+        logger.info(
+            "icp_packs_not_segmented",
+            pack_id=base_pack_id,
+            archetypes=len(profile.archetypes),
+            detail="every buyer archetype falls in one segment; emitting one pack",
+        )
+        return [compile_pack(profile, base_pack_id, platforms, adversarial_share)]
+
+    # Heaviest segment first, then by slug, so the order does not depend on dict
+    # insertion — which is the order the model happened to emit archetypes in.
+    ordered = sorted(
+        segments.items(),
+        key=lambda item: (-sum(a.weight for a in item[1]), _segment_slug(item[0])),
+    )
+
+    cohort = profile.adversarial
+    # Ceiling division: N × per_pack ≥ K, so every adversarial archetype is
+    # dealt at least once and no pack is left without a cohort.
+    per_pack = -(-len(cohort) // len(ordered)) if cohort else 0
+    dealt = 0
+
+    packs: list[PersonaPack] = []
+    for key, members in ordered:
+        slug = _segment_slug(key)
+        buyers = [_compile_buyer(a, run_platforms) for a in members]
+
+        attackers: list[Archetype] = []
+        for _ in range(per_pack):
+            compiled = _compile_adversarial(cohort[dealt % len(cohort)], run_platforms)
+            dealt += 1
+            compiled.id = f"{compiled.id}--{slug}"
+            attackers.append(compiled)
+
+        archetypes = rebalance_adversarial(buyers + attackers, adversarial_share)
+        if not attackers:
+            # No adversarial cohort at all, so `rebalance_adversarial` is a
+            # no-op and the pack keeps its raw buyer weights. Normalised here so
+            # packs still carry equal swarm weight — `run_prepare_agents`
+            # allocates across every selected pack by weight, and without this a
+            # segment that happened to hold more archetypes would quietly take a
+            # larger share of the swarm.
+            buyer_total = sum(a.weight for a in buyers) or 1.0
+            for archetype in buyers:
+                archetype.weight = archetype.weight / buyer_total
+        packs.append(
+            PersonaPack(
+                id=f"{base_pack_id}__{slug}",
+                name=f"{profile.name} — {_segment_name(key)}",
+                version="1.0",
+                category="synthesized-icp",
+                description=(
+                    f"{_segment_name(key)} segment of {profile.name}: "
+                    + ", ".join(a.label for a in members)
+                ),
+                archetypes=archetypes,
+            )
+        )
+
+    logger.info(
+        "icp_packs_compiled",
+        base_pack_id=base_pack_id,
+        packs=len(packs),
+        segments=[_segment_slug(key) for key, _ in ordered],
+        buyers_per_pack=[len(members) for _, members in ordered],
+        adversarial_in_cohort=len(cohort),
+        adversarial_per_pack=per_pack,
+        adversarial_share=adversarial_share,
+    )
+    return packs
 
 
 # ---------------------------------------------------------------------------
@@ -884,16 +1351,83 @@ async def synthesize_icp(
         .execute()
     ).data[0]
 
+    segment_pack_ids = _persist_segment_packs(
+        profile,
+        base_pack_id=pack_id,
+        org_id=org_id,
+        icp_profile_id=row["id"],
+        platforms=platforms,
+        adversarial_share=adversarial_share,
+    )
+
     logger.info(
         "icp_synthesized",
         project_id=project_id,
         pack_id=pack_id,
+        segment_pack_ids=segment_pack_ids,
         archetypes=len(profile.archetypes),
         adversarial=len(profile.adversarial),
         named_competitors=len(profile.named_competitors),
         gaps=len(profile.gaps),
     )
-    return row
+    # `segment_pack_ids` is carried on the response, not on the row. The link
+    # from a segment pack back to the profile lives in the store, keyed by
+    # `source_icp_profile_id`, so a column here would be a second copy of it.
+    return {**row, "segment_pack_ids": segment_pack_ids}
+
+
+def _persist_segment_packs(
+    profile: ICPProfile,
+    *,
+    base_pack_id: str,
+    org_id: str,
+    icp_profile_id: str,
+    platforms: list[str] | None,
+    adversarial_share: float,
+) -> list[str]:
+    """Store one pack per buyer segment and return their ids.
+
+    The blended pack in `icp_profiles.pack_data` is unchanged and remains what
+    `get_pack(icp_…)` resolves; these are additional, selectable audiences.
+
+    Persistence belongs to `personas/persona_store.py`. If that module is not
+    present the packs are compiled and **not** stored, and that is reported at
+    ERROR with the ids that were lost — an empty list returned quietly would
+    make "this ICP does not segment" and "the store is missing" the same
+    observation, which is the failure class this file is full of comments about.
+    """
+    try:
+        from app.services.engine.personas.persona_store import save_org_pack
+    except ImportError:
+        save_org_pack = None
+
+    packs = compile_packs(profile, base_pack_id, platforms, adversarial_share)
+    if len(packs) <= 1:
+        return []
+
+    if save_org_pack is None:
+        logger.error(
+            "persona_store_unavailable",
+            icp_profile_id=icp_profile_id,
+            compiled_packs=[p.id for p in packs],
+            detail=(
+                "personas/persona_store.save_org_pack is not importable; "
+                f"{len(packs)} segment packs were compiled and discarded. The "
+                "blended pack is unaffected."
+            ),
+        )
+        return []
+
+    # `save_org_pack` returns the id the pack is stored under, which is the id
+    # `get_pack` will have to resolve. The ids `compile_packs` mints are
+    # therefore proposals: if the store assigns its own, it must write it onto
+    # the stored `pack_data.id` too, or a run will load a pack whose `id` does
+    # not match the row it came from — and `run_prepare_agents` stamps
+    # `pack.id` onto every agent row as `persona_pack_id`.
+    stored: list[str] = []
+    for pack in packs:
+        stored.append(save_org_pack(org_id, pack, icp_profile_id))
+    return stored
 
 
 def recompile_profile(

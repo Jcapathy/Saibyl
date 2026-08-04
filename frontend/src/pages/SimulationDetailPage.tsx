@@ -1,13 +1,27 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { AlertTriangle } from 'lucide-react';
 import api from '@/lib/api';
 import { PLATFORM_NAMES, TERMINAL_STATUSES, ACTIVE_STATUSES, IDLE_STATUSES } from '@/lib/constants';
 import StatusBadge from '@/components/StatusBadge';
+import RunConfigurator, { type RunShape } from '@/components/RunConfigurator';
 import VariantSetup from '@/components/marketing/VariantSetup';
 import { getErrorMessage } from '../lib/errors';
 import type { SimulationAgent } from '../lib/types';
 import type { Simulation } from '@/types';
+
+/**
+ * Narrow the stored `depth` to the three values the pricing API accepts.
+ *
+ * The column is `TEXT NOT NULL DEFAULT 'standard'` with no CHECK constraint, so
+ * it is always present but not guaranteed to be one of them. Falling back to
+ * the column's own default keeps the quote on this page priced the same way the
+ * run was.
+ */
+function toDepth(value: string): RunShape['depth'] {
+  return value === 'brief' || value === 'deep' ? value : 'standard';
+}
 
 /**
  * Redeem the quote the configurator stashed for this simulation, once.
@@ -34,6 +48,14 @@ export default function SimulationDetailPage() {
   const [eventCount, setEventCount] = useState(0);
   const [events, setEvents] = useState<Record<string, unknown>[]>([]);
 
+  /* How many variants are stored carrying copy, as `VariantSetup` last read or
+     wrote them. Null means "not yet known" and is never treated as zero: an
+     unanswered question and an answer of none are different, and only one of
+     them justifies blocking a run. */
+  const [variantsWithCopy, setVariantsWithCopy] = useState<number | null>(null);
+  const [variantResetting, setVariantResetting] = useState(false);
+  const [variantSetupKey, setVariantSetupKey] = useState(0);
+
   // Accuracy scoring state
   const [actualSentiment, setActualSentiment] = useState('');
   const [actualNotes, setActualNotes] = useState('');
@@ -46,6 +68,22 @@ export default function SimulationDetailPage() {
   const [interviewPrompt, setInterviewPrompt] = useState('');
   const [interviewLoading, setInterviewLoading] = useState(false);
   const [interviewResponses, setInterviewResponses] = useState<{ agent: string; persona: string; response: string; sentiment: number }[]>([]);
+
+  /* The run was priced per arena — `variants` on the row is what the quote
+     signed for — but the engine executes one arena per variant row that has
+     copy. A 4-variant run with no copy was billed four arenas and ran one, so
+     `/start` now refuses it with a 409. Mirrored here so the refusal is visible
+     before the click rather than as an error after it. */
+  const configuredVariants = sim?.variants ?? 1;
+  const variantsUnknown = configuredVariants > 1 && variantsWithCopy === null;
+  const variantShortfall =
+    configuredVariants > 1 &&
+    variantsWithCopy !== null &&
+    variantsWithCopy < configuredVariants;
+  /* What this run would actually execute, and therefore what it should be
+     quoted at. Never `configuredVariants`: quoting the selected count is how
+     the price reads 4x on a run the server will refuse. */
+  const arenasThatWouldRun = Math.max(1, variantsWithCopy ?? configuredVariants);
 
   const loadSim = useCallback(() => {
     api.get(`/simulations/${id}`).then((r) => {
@@ -143,21 +181,30 @@ export default function SimulationDetailPage() {
     if (!sim || !id || sim.status !== 'ready') return;
     // Check if events exist — if so, this sim already ran, don't re-start
     if (eventCount > 0) return;
+    // A multi-variant run does not auto-start until the variant rows have been
+    // read. Firing before then either 409s on a run the user never got to fix,
+    // or — worse, if the guard were skipped — charges for arenas that never
+    // execute. Waiting costs one render; the alternative costs money.
+    if (variantsUnknown || variantShortfall) return;
     // Auto-start
     setRunning(true);
     setRunStatus('Starting simulation...');
     api.post(`/simulations/${id}/start`, { quote_id: takeQuoteId(id) }).then(() => {
       setRunStatus('Simulation running...');
       loadSim();
-    }).catch(() => {
+    }).catch((err) => {
       setRunning(false);
       setRunStatus('');
+      // Previously swallowed. A 409 from the variant guard is the server
+      // explaining, in a sentence written to be read, why nothing happened —
+      // dropping it left the page sitting on "ready" with no explanation.
+      setError(getErrorMessage(err, 'Could not start this simulation'));
     });
-  }, [sim?.status, id, eventCount]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sim?.status, id, eventCount, variantsUnknown, variantShortfall]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // One-click: prepare + wait for ready + start + poll
   async function handleRunNow() {
-    if (!id) return;
+    if (!id || variantShortfall) return;
     setRunning(true);
     setError('');
     setRunStatus('Preparing agents...');
@@ -213,6 +260,30 @@ export default function SimulationDetailPage() {
       await api.post(`/simulations/${id}/stop`);
       loadSim();
     } catch { /* ignore */ }
+  }
+
+  /**
+   * The escape hatch the 409 names: drop back to a single arena.
+   *
+   * An *empty* list, not a list of one — the API rejects exactly one variant
+   * with a 400, because one variant is not a comparison. So "delete all but
+   * one" is a different and unavailable operation, and offering it as the fix
+   * would replace one refusal with another.
+   */
+  async function handleResetToSingleArena() {
+    if (!id) return;
+    setVariantResetting(true);
+    setError('');
+    try {
+      await api.put(`/variants/${id}`, { variants: [] });
+      setVariantsWithCopy(0);
+      setVariantSetupKey((key) => key + 1);
+      loadSim();
+    } catch (err) {
+      setError(getErrorMessage(err, 'Could not switch this run back to a single message'));
+    } finally {
+      setVariantResetting(false);
+    }
   }
 
   if (loading) {
@@ -295,24 +366,92 @@ export default function SimulationDetailPage() {
             rather than to who happened to be in the room. Leave it empty for an
             ordinary single-message run.
           </p>
-          <VariantSetup simulationId={id!} />
+          <VariantSetup
+            key={variantSetupKey}
+            simulationId={id!}
+            onSavedChange={setVariantsWithCopy}
+          />
         </div>
       )}
 
       {/* Primary Action */}
       <div className="glass rounded-2xl p-6 mb-6">
         {isIdle && !running && (
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[15px] font-medium text-saibyl-platinum">Ready to run</p>
-              <p className="text-[12px] text-saibyl-muted mt-0.5">This will prepare agents and start the simulation on {(sim.platforms || []).map((p) => PLATFORM_NAMES[p] || p).join(' + ')}.</p>
+          <div className="space-y-5">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-[15px] font-medium text-saibyl-platinum">Ready to run</p>
+                <p className="text-[12px] text-saibyl-muted mt-0.5">This will prepare agents and start the simulation on {(sim.platforms || []).map((p) => PLATFORM_NAMES[p] || p).join(' + ')}.</p>
+              </div>
+              <button
+                onClick={handleRunNow}
+                disabled={variantShortfall}
+                title={
+                  variantShortfall
+                    ? 'Some of the messages you’re testing have no copy yet'
+                    : undefined
+                }
+                className="px-8 py-3 rounded-xl bg-[#C9A227] text-[#0A0F1C] font-semibold text-sm transition-all hover:bg-[#D4AF37] hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(201,162,39,0.3)] disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:bg-[#C9A227] disabled:hover:shadow-none shrink-0"
+              >
+                Run Simulation →
+              </button>
             </div>
-            <button
-              onClick={handleRunNow}
-              className="px-8 py-3 rounded-xl bg-[#C9A227] text-[#0A0F1C] font-semibold text-sm transition-all hover:bg-[#D4AF37] hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(201,162,39,0.3)]"
-            >
-              Run Simulation →
-            </button>
+
+            {variantShortfall && variantsWithCopy !== null && (
+              <div className="rounded-2xl border border-saibyl-warning/30 bg-saibyl-warning/[0.08] p-4">
+                <p className="flex items-center gap-2 text-[13px] font-semibold text-saibyl-warning">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  This run can&rsquo;t start yet
+                </p>
+                <p className="text-[12px] text-saibyl-silver mt-1.5 leading-relaxed">
+                  You set this run up to test {configuredVariants} different messages, but only{' '}
+                  {variantsWithCopy} of them {variantsWithCopy === 1 ? 'has' : 'have'} any copy
+                  written. Each message is a whole simulation of its own — the same audience
+                  reacts to each one — so starting now would charge you for{' '}
+                  {configuredVariants - variantsWithCopy} run
+                  {configuredVariants - variantsWithCopy === 1 ? '' : 's'} that would never
+                  happen.
+                </p>
+                <p className="text-[12px] text-saibyl-silver mt-2 leading-relaxed">
+                  Write the missing copy above and save, or:
+                </p>
+                <button
+                  onClick={handleResetToSingleArena}
+                  disabled={variantResetting}
+                  className="mt-3 px-4 py-2 rounded-lg text-[12px] font-medium bg-saibyl-gold text-saibyl-void hover:bg-saibyl-gold-hover disabled:opacity-50 transition-colors"
+                >
+                  {variantResetting
+                    ? 'Switching…'
+                    : 'Just test one message instead'}
+                </button>
+              </div>
+            )}
+
+            {/*
+              Priced from the arenas that would actually execute, not from the
+              number of variants the configurator sold. Quoting the selected
+              count leaves the price reading 4x on a run the server refuses,
+              which is the same disagreement between price shown and price
+              charged that the guard exists to prevent.
+
+              Not rendered before the swarm exists: `agent_count` is null until
+              the prepare pass has generated it, and substituting a zero would
+              quote a run of nobody.
+            */}
+            {sim.agent_count != null && (
+              <RunConfigurator
+                shape={{
+                  agent_count: sim.agent_count,
+                  rounds: sim.max_rounds,
+                  platforms: Math.max(sim.platforms?.length ?? 1, 1),
+                  variants: arenasThatWouldRun,
+                  depth: toDepth(sim.depth),
+                }}
+                platformCount={sim.platforms?.length ?? 1}
+                onChange={() => {}}
+                readOnly
+              />
+            )}
           </div>
         )}
 

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { AxiosError } from 'axios';
 import { ArrowLeft, Copy, Download, MessageCircle, RotateCcw, Send, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { formatDistanceToNow } from 'date-fns';
@@ -37,6 +38,38 @@ interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
 }
+
+/**
+ * `POST /reports/{id}/chat` → 409, when there is no report to answer from yet.
+ *
+ * The body is `{ detail: { … } }` — an object, not the `detail: string` every
+ * other error on this API uses, so `getErrorMessage` cannot read it and would
+ * surface "Request failed with status code 409" instead of the sentence the
+ * server wrote. Parsed explicitly for that reason.
+ */
+interface ReportNotReady {
+  code: 'report_not_ready';
+  report_id: string;
+  status: string;
+  message: string;
+}
+
+function asReportNotReady(err: unknown): ReportNotReady | null {
+  if (!(err instanceof AxiosError) || err.response?.status !== 409) return null;
+  const detail = err.response.data?.detail;
+  if (!detail || typeof detail !== 'object' || detail.code !== 'report_not_ready') return null;
+  return detail as ReportNotReady;
+}
+
+/**
+ * How many times a report with an *unrecognised* status may be re-fetched.
+ *
+ * The status-based test below covers every value the backend writes. This bound
+ * only applies to the emptiness fallback, which fires when the status is
+ * something this build has never heard of — and an unrecognised status is not a
+ * licence to poll forever. At the 5s interval this is two minutes.
+ */
+const UNKNOWN_STATUS_POLL_LIMIT = 24;
 
 const TAB_LABELS = [
   'Findings',
@@ -108,7 +141,18 @@ export default function ReportViewerPage() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
+  const [chatNotReady, setChatNotReady] = useState<ReportNotReady | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
+  const [regenerateError, setRegenerateError] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  /* Re-fetching the report is what drives the "still generating" banner, so it
+     is restarted and halted from more than one place: the fetch itself, and a
+     409 from the chat endpoint that reports a status the page had not seen yet.
+     The ref is the halt — a poll that has been told the report failed must not
+     schedule another tick, whichever of the two learned it first. */
+  const [pollNonce, setPollNonce] = useState(0);
+  const pollHalted = useRef(false);
 
   /* Objection key -> label, so a chip can name what it points at. */
   const objectionLabels = useMemo(() => {
@@ -127,8 +171,10 @@ export default function ReportViewerPage() {
 
     let cancelled = false;
     let pollTimer: ReturnType<typeof setTimeout> | null = null;
+    let unknownStatusPolls = 0;
 
     async function load() {
+      if (pollHalted.current) return;
       try {
         const [reportRes, simRes] = await Promise.all([
           api.get(`/reports/by-simulation/${simId}`),
@@ -146,12 +192,24 @@ export default function ReportViewerPage() {
         // markdown and no section content, so "still empty" looked identical to
         // "still writing" and the request repeated every five seconds for as
         // long as the tab stayed open.
+        const terminal = REPORT_TERMINAL_STATUSES.includes(rpt.status ?? '');
+        const explicitlyWriting = rpt.status === 'generating' || rpt.status === 'pending';
+        // The emptiness fallback, reached only when the status is absent or is
+        // a value this build does not know. It is bounded for the same reason
+        // the terminal check exists: "empty" is not evidence of progress, and
+        // an unrecognised status must not be able to poll indefinitely either.
+        const maybeWriting =
+          !terminal &&
+          !explicitlyWriting &&
+          !rpt.full_markdown &&
+          rpt.sections.every((s) => !s.content);
+        if (maybeWriting) unknownStatusPolls += 1;
+
         const stillWriting =
-          !REPORT_TERMINAL_STATUSES.includes(rpt.status ?? '') &&
-          (rpt.status === 'generating' ||
-            rpt.status === 'pending' ||
-            (!rpt.full_markdown && rpt.sections.every((s) => !s.content)));
-        if (stillWriting && !cancelled) {
+          !terminal &&
+          (explicitlyWriting ||
+            (maybeWriting && unknownStatusPolls < UNKNOWN_STATUS_POLL_LIMIT));
+        if (stillWriting && !cancelled && !pollHalted.current) {
           pollTimer = setTimeout(load, 5000);
         }
       } catch {
@@ -197,15 +255,24 @@ export default function ReportViewerPage() {
       cancelled = true;
       if (pollTimer) clearTimeout(pollTimer);
     };
-  }, [simId]);
+  }, [simId, pollNonce]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, chatLoading]);
 
+  /* The report arrived while the chat was locked out. Clearing here rather than
+     leaving the panel up means the lockout ends by itself, without the reader
+     having to work out that reloading would fix it. */
+  useEffect(() => {
+    if (chatNotReady && REPORT_TERMINAL_STATUSES.includes(report?.status ?? '')) {
+      if (report?.status !== 'failed') setChatNotReady(null);
+    }
+  }, [report?.status, chatNotReady]);
+
   const sendChat = async (e: FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim() || !report) return;
+    if (!chatInput.trim() || !report || chatNotReady) return;
     const msg = chatInput.trim();
     setChatMessages((prev) => [...prev, { role: 'user', content: msg }]);
     setChatInput('');
@@ -220,12 +287,55 @@ export default function ReportViewerPage() {
         },
       ]);
     } catch (err) {
+      const notReady = asReportNotReady(err);
+      if (notReady) {
+        // Not an answer, so it is not pushed into the transcript as one. The
+        // panel below renders the server's own `message`, then branches on the
+        // status it reports.
+        setChatNotReady(notReady);
+        if (notReady.status === 'failed') {
+          // Stop polling. A failed report is not going to arrive, and this is
+          // the second of the two places that can learn so — the fetch reads
+          // the same status, but only whichever one learns it first stops the
+          // timer.
+          pollHalted.current = true;
+        } else {
+          // pending / generating: it is still coming. Restart the poll in case
+          // this page loaded after it had already stopped.
+          pollHalted.current = false;
+          setPollNonce((n) => n + 1);
+        }
+        return;
+      }
       setChatMessages((prev) => [
         ...prev,
         { role: 'assistant', content: getErrorMessage(err, 'Error getting response.') },
       ]);
     } finally {
       setChatLoading(false);
+    }
+  };
+
+  /**
+   * Write the report again, from the measurements that already exist.
+   *
+   * The measured findings on this page do not depend on the prose and are
+   * unaffected by its failure, so this re-runs the write-up only — it does not
+   * re-run the simulation, and costs nothing near what that would.
+   */
+  const regenerateReport = async () => {
+    if (!simId) return;
+    setRegenerating(true);
+    setRegenerateError('');
+    try {
+      await api.post('/reports/generate', { simulation_id: simId });
+      setChatNotReady(null);
+      pollHalted.current = false;
+      setPollNonce((n) => n + 1);
+    } catch (err) {
+      setRegenerateError(getErrorMessage(err, 'Could not start the report again.'));
+    } finally {
+      setRegenerating(false);
     }
   };
 
@@ -405,12 +515,25 @@ export default function ReportViewerPage() {
       {/* Content */}
       <div className="flex-1 overflow-auto p-8">
         {report.status === 'failed' && (
-          <div className="mb-6 flex items-center gap-3 px-5 py-4 rounded-2xl bg-saibyl-negative/10 border border-saibyl-negative/20">
-            <span className="inline-flex h-3 w-3 rounded-full bg-saibyl-negative" />
-            <span className="text-[14px] text-saibyl-platinum">
-              The written report failed to generate and will not arrive. The measured findings
-              below are unaffected — they come from the analysis artifact, not the prose.
-            </span>
+          <div className="mb-6 px-5 py-4 rounded-2xl bg-saibyl-negative/10 border border-saibyl-negative/20">
+            <div className="flex items-center gap-3">
+              <span className="inline-flex h-3 w-3 rounded-full bg-saibyl-negative shrink-0" />
+              <span className="text-[14px] text-saibyl-platinum">
+                The written report failed to generate and will not arrive. The measured findings
+                below are unaffected — they come from the analysis artifact, not the prose.
+              </span>
+            </div>
+            <button
+              onClick={regenerateReport}
+              disabled={regenerating}
+              className="mt-3 ml-6 flex items-center gap-1.5 text-[12px] px-3 py-1.5 rounded-lg bg-saibyl-gold text-saibyl-void font-semibold hover:bg-saibyl-gold-hover disabled:opacity-50 transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              {regenerating ? 'Starting…' : 'Write the report again'}
+            </button>
+            {regenerateError && (
+              <p className="mt-2 ml-6 text-[12px] text-saibyl-negative">{regenerateError}</p>
+            )}
           </div>
         )}
 
@@ -665,16 +788,64 @@ export default function ReportViewerPage() {
             <div ref={chatEndRef} />
           </div>
 
+          {/* The server's own sentence, verbatim, then what happens next —
+              which depends entirely on the status it reported. */}
+          {chatNotReady && (
+            <div
+              className={`mx-3 mb-2 px-3 py-3 rounded-xl border ${
+                chatNotReady.status === 'failed'
+                  ? 'bg-saibyl-negative/10 border-saibyl-negative/25'
+                  : 'bg-saibyl-insight-violet/10 border-saibyl-insight-violet/25'
+              }`}
+            >
+              <p className="text-[12px] text-saibyl-platinum leading-relaxed">
+                {chatNotReady.message}
+              </p>
+              {chatNotReady.status === 'failed' ? (
+                <>
+                  <p className="text-[11px] text-saibyl-muted mt-1.5 leading-relaxed">
+                    It is not still coming — we have stopped waiting for it. The measured
+                    findings on this page are unaffected; only the written-up version is
+                    missing. Write it again and the assistant will have something to answer
+                    from.
+                  </p>
+                  <button
+                    onClick={regenerateReport}
+                    disabled={regenerating}
+                    className="mt-2.5 flex items-center gap-1.5 text-[12px] px-3 py-1.5 rounded-lg bg-saibyl-gold text-saibyl-void font-semibold hover:bg-saibyl-gold-hover disabled:opacity-50 transition-colors"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    {regenerating ? 'Starting…' : 'Write the report again'}
+                  </button>
+                  {regenerateError && (
+                    <p className="mt-2 text-[12px] text-saibyl-negative">{regenerateError}</p>
+                  )}
+                </>
+              ) : (
+                <p className="flex items-center gap-2 text-[11px] text-saibyl-muted mt-1.5">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-saibyl-insight-violet opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-saibyl-insight-violet" />
+                  </span>
+                  Still being written — this unlocks on its own when it lands.
+                </p>
+              )}
+            </div>
+          )}
+
           <form onSubmit={sendChat} className="p-3 border-t border-saibyl-border flex gap-2">
             <input
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
-              placeholder="Ask a question..."
-              className="flex-1 bg-saibyl-surface border border-saibyl-border rounded-lg px-3 py-2 text-[13px] text-saibyl-platinum placeholder-saibyl-muted focus:outline-none focus:ring-1 focus:ring-saibyl-gold focus:border-saibyl-gold"
+              disabled={!!chatNotReady}
+              placeholder={
+                chatNotReady ? 'Nothing to ask about yet…' : 'Ask a question...'
+              }
+              className="flex-1 bg-saibyl-surface border border-saibyl-border rounded-lg px-3 py-2 text-[13px] text-saibyl-platinum placeholder-saibyl-muted focus:outline-none focus:ring-1 focus:ring-saibyl-gold focus:border-saibyl-gold disabled:opacity-50"
             />
             <button
               type="submit"
-              disabled={chatLoading || !chatInput.trim()}
+              disabled={chatLoading || !chatInput.trim() || !!chatNotReady}
               className="p-2 rounded-lg bg-saibyl-gold text-saibyl-void hover:bg-saibyl-gold-hover transition-colors disabled:opacity-50"
             >
               <Send className="w-4 h-4" />

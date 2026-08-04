@@ -1,174 +1,124 @@
+"""`/api/uploads` — the media upload path, now backed by `documents`.
+
+This router used to be one half of a second, parallel upload system: it wrote to
+`project_assets`, dispatched `ingestion/asset_processor.py`, and nothing that
+table held was ever read by ICP synthesis. A client who uploaded a deck as
+images, a customer spreadsheet, a CRM export, a demo video or a linked article
+had every one of those files processed and none of them reach the audience their
+simulation ran against. V1_AUDIT item 39; the full account is in
+`services/ingestion/pipeline.py`.
+
+The route is kept — deleting a public path breaks whatever integration is
+calling it — but it now stores into `documents` through exactly the same
+function `/api/documents/upload` uses. `project_assets` has no remaining reader
+in `backend/app`; a migration should backfill it into `documents` and drop it.
+
+`media_type` stays in the signature because callers send it. It is validated
+against the extension rather than trusted: the media type decides which
+processor reads the bytes, and a caller who mislabels a `.csv` as an `image`
+would otherwise send it to the vision model.
+"""
 from __future__ import annotations
 
-import mimetypes
-import uuid
-
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+import structlog
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 
+from app.api.documents import delete_upload, store_upload
 from app.core.auth import get_current_org
 from app.core.database import get_supabase_admin
-from app.services.billing.storage_billing import check_storage_quota, update_org_storage_usage
+from app.services.ingestion.media_types import extension_of, media_type_for_extension
+
+log = structlog.get_logger()
 
 router = APIRouter(tags=["uploads"])
 
-ALLOWED_EXTENSIONS = {
-    "document": {"pdf", "docx", "txt", "md"},
-    "image": {"jpg", "jpeg", "png", "gif", "webp"},
-    "video": {"mp4", "mov", "webm", "avi"},
-    "spreadsheet": {"xlsx", "csv", "xls"},
-    "presentation": {"pptx"},
-}
-
-MAX_FILE_SIZES = {
-    "document": 50 * 1024 * 1024,
-    "image": 25 * 1024 * 1024,
-    "video": 500 * 1024 * 1024,
-    "spreadsheet": 20 * 1024 * 1024,
-    "presentation": 50 * 1024 * 1024,
-    "news_article": 5 * 1024 * 1024,
-}
-
 
 class UploadResponse(BaseModel):
+    # Named `asset_id` for the callers that already parse this shape. It is a
+    # `documents.id`.
     asset_id: str
+    document_id: str
+    media_type: str
     status: str
     message: str
 
 
 @router.post("", response_model=UploadResponse)
 async def upload_asset(
-    project_id: str,
-    media_type: str,
+    project_id: str = Query(...),
+    media_type: str | None = Query(None),
+    material_kind: str = Query("own"),
+    title: str | None = Query(None),
+    source_url: str | None = Query(None),
     file: UploadFile = File(...),
-    title: str | None = None,
-    source_url: str | None = None,
     auth: dict = Depends(get_current_org),
 ):
     """Upload a media asset to a project."""
-    org_id = auth["org_id"]
-    admin = get_supabase_admin()
+    if material_kind not in ("own", "competitor", "market"):
+        raise HTTPException(status_code=400, detail=f"Invalid material_kind: {material_kind}")
 
-    # Validate media type
-    if media_type not in ALLOWED_EXTENSIONS and media_type != "news_article":
-        raise HTTPException(400, f"Invalid media_type: {media_type}")
+    resolved = media_type_for_extension(extension_of(file.filename))
+    if media_type and resolved and media_type != resolved:
+        # Loud, and the extension wins. The declared type used to be the only
+        # input to the dispatch, so a mislabelled file was routed to a processor
+        # that could not read it and the failure was stored as extracted text.
+        log.warning(
+            "upload_media_type_mismatch",
+            filename=file.filename,
+            declared=media_type,
+            resolved=resolved,
+            detail="dispatching on the extension; the declared media_type is ignored",
+        )
 
-    # Validate file extension
-    ext = (file.filename or "").rsplit(".", 1)[-1].lower() if file.filename else ""
-    if media_type != "news_article":
-        valid_exts = ALLOWED_EXTENSIONS.get(media_type, set())
-        if ext not in valid_exts:
-            raise HTTPException(400, "File type not allowed")
-
-    # Read file
-    file_bytes = await file.read()
-    file_size = len(file_bytes)
-
-    # Validate file size
-    max_size = MAX_FILE_SIZES.get(media_type, 50 * 1024 * 1024)
-    if file_size > max_size:
-        raise HTTPException(413, f"File too large. Max {max_size / 1024 / 1024:.0f} MB for {media_type}")
-
-    # Check storage quota
-    quota = check_storage_quota(org_id, file_size)
-    if not quota.allowed:
-        raise HTTPException(402, quota.message)
-
-    # Generate storage path
-    asset_id = str(uuid.uuid4())
-    storage_path = f"uploads/{org_id}/{project_id}/{asset_id}.{ext}"
-
-    # Upload to Supabase Storage
-    admin.storage.from_("project-media").upload(
-        storage_path,
-        file_bytes,
-        {"content-type": mimetypes.types_map.get(f".{ext}", "application/octet-stream")},
+    doc = await store_upload(
+        project_id=project_id,
+        org_id=auth["org_id"],
+        file=file,
+        material_kind=material_kind,
+        source_url=source_url,
+        title=title,
     )
-
-    # Create project_assets record
-    asset_title = title or file.filename or f"Untitled {media_type}"
-    admin.table("project_assets").insert({
-        "id": asset_id,
-        "organization_id": org_id,
-        "project_id": project_id,
-        "title": asset_title,
-        "media_type": media_type,
-        "file_extension": ext,
-        "storage_path": storage_path,
-        "source_url": source_url,
-        "file_size_bytes": file_size,
-        "status": "uploaded",
-    }).execute()
-
-    # Update org storage usage
-    update_org_storage_usage(org_id, file_size)
-
-    # Dispatch processing task
-    import asyncio
-
-    from app.workers.asset_tasks import run_process_asset
-
-    async def _safe_task(coro, name: str):
-        try:
-            await coro
-        except Exception:
-            import structlog
-            structlog.get_logger().exception("background_task_failed", task=name)
-
-    asyncio.create_task(_safe_task(run_process_asset(asset_id), "process_asset"))
-
     return UploadResponse(
-        asset_id=asset_id,
+        asset_id=doc["id"],
+        document_id=doc["id"],
+        media_type=doc["media_type"],
         status="processing",
-        message=f"Asset uploaded and queued for processing ({file_size / 1024:.0f} KB)",
+        message=f"Uploaded and queued for extraction ({doc['file_size_bytes'] / 1024:.0f} KB)",
     )
 
 
 @router.get("")
-async def list_assets(project_id: str, auth: dict = Depends(get_current_org)):
-    """List all assets for a project."""
+async def list_assets(project_id: str = Query(...), auth: dict = Depends(get_current_org)):
+    """List all uploads for a project."""
     admin = get_supabase_admin()
-    result = admin.table("project_assets").select("*").eq(
-        "project_id", project_id
-    ).eq("organization_id", auth["org_id"]).order("created_at", desc=True).execute()
-    return result.data
+    return (
+        admin.table("documents")
+        .select("*")
+        .eq("project_id", project_id)
+        .eq("organization_id", auth["org_id"])
+        .order("created_at", desc=True)
+        .execute()
+    ).data
 
 
 @router.get("/{asset_id}")
 async def get_asset(asset_id: str, auth: dict = Depends(get_current_org)):
-    """Get asset details."""
+    """Get upload details."""
     admin = get_supabase_admin()
-    result = admin.table("project_assets").select("*").eq(
-        "id", asset_id
-    ).eq("organization_id", auth["org_id"]).single().execute()
+    result = (
+        admin.table("documents")
+        .select("*")
+        .eq("id", asset_id)
+        .eq("organization_id", auth["org_id"])
+        .execute()
+    )
     if not result.data:
-        raise HTTPException(404, "Asset not found")
-    return result.data
+        raise HTTPException(status_code=404, detail="Asset not found")
+    return result.data[0]
 
 
 @router.delete("/{asset_id}")
 async def delete_asset(asset_id: str, auth: dict = Depends(get_current_org)):
-    """Delete an asset and reclaim storage."""
-    admin = get_supabase_admin()
-    asset = admin.table("project_assets").select("*").eq(
-        "id", asset_id
-    ).eq("organization_id", auth["org_id"]).single().execute().data
-
-    if not asset:
-        raise HTTPException(404, "Asset not found")
-
-    # Delete from storage
-    try:
-        admin.storage.from_("project-media").remove([asset["storage_path"]])
-        if asset.get("processed_text_path"):
-            admin.storage.from_("project-media").remove([asset["processed_text_path"]])
-    except Exception:
-        pass
-
-    # Delete record
-    admin.table("project_assets").delete().eq("id", asset_id).execute()
-
-    # Update storage usage
-    update_org_storage_usage(auth["org_id"], -asset["file_size_bytes"])
-
-    return {"message": "Asset deleted", "storage_reclaimed_bytes": asset["file_size_bytes"]}
+    """Delete an upload and reclaim storage."""
+    return delete_upload(asset_id, auth["org_id"])

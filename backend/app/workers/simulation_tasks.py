@@ -165,11 +165,21 @@ async def run_prepare_agents(simulation_id: str):
     all_archetypes = []
     for pack_id in persona_pack_ids:
         try:
-            pack = get_pack(pack_id)
+            # `org_id`, not just `pack_id`. Custom and library pack ids are
+            # unique only *within* an organization — both tables constrain
+            # `UNIQUE(organization_id, pack_id)` — so resolving one without the
+            # org asks a question with more than one right answer, and the run
+            # would complete against whichever org's audience the query plan
+            # returned. Same defect class as §1a's `username`.
+            pack = get_pack(pack_id, org_id)
             for archetype in rebalance_adversarial(pack.archetypes, adversarial_share):
                 all_archetypes.append((pack, archetype))
         except KeyError:
-            logger.warning("pack_not_found", pack_id=pack_id)
+            # The pack is genuinely absent for this org — deleted, or never
+            # theirs. A store that could not be *read* raises PackLookupError
+            # and is deliberately not caught here: running with a silently
+            # reduced audience is the failure this whole path exists to avoid.
+            logger.warning("pack_not_found", pack_id=pack_id, org_id=org_id)
 
     if not all_archetypes:
         admin.table("simulations").update({"status": "failed"}).eq("id", simulation_id).execute()
