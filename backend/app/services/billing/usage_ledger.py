@@ -97,10 +97,23 @@ def record_llm_call(
     output_tokens: int = 0,
     cache_read_tokens: int = 0,
     cache_write_tokens: int = 0,
+    surcharge_usd: Decimal | float = 0,
 ) -> None:
     """Record one call. A no-op outside a usage_context.
 
     Never raises: a billing-ledger failure must not take down a simulation.
+
+    `surcharge_usd` is real serving cost this call incurred that **no token
+    count can express** — a per-request fee charged alongside the tokens. The
+    server-side web search tool is the first: it bills per search on top of the
+    tokens its results occupy.
+
+    It exists because `reconcile_run_cost` compares the quoted price against
+    the sum of `llm_usage.cost_usd`, so a cost that never reaches this ledger
+    is invisible to the margin floor. A stage whose spend is partly off-ledger
+    reconciles as cheaper than it is, and `margin_floor_breached` — the single
+    signal that reopens the cost model — cannot fire for the portion that is
+    missing. Recording it here keeps one definition of what a run cost.
     """
     ctx = _current.get()
     if ctx is None:
@@ -114,6 +127,12 @@ def record_llm_call(
             cache_read_tokens=cache_read_tokens,
             cache_write_tokens=cache_write_tokens,
         )
+        # Decimal throughout: the fee is a price, and float addition against a
+        # Decimal cost is how a rounding difference gets into a margin gate.
+        surcharge = Decimal(str(surcharge_usd))
+        if surcharge < 0:
+            raise ValueError(f"surcharge_usd must not be negative, got {surcharge}")
+        cost += surcharge
         ctx.buffer.append({
             "organization_id": ctx.organization_id,
             "simulation_id": ctx.simulation_id,

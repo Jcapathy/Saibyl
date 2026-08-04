@@ -399,6 +399,56 @@ ICP_SYNTHESIS = _StageProfile(input_tokens=14_000, output_tokens=4_500)
 # One pass is not a calibration. Re-derive after the next live loop.
 INOCULATION_DRAFT = _StageProfile(input_tokens=4_500, output_tokens=5_700)
 
+# GTM candidate discovery, per **compiled query**. Two profiles because a query
+# runs two turns on two models (DECISIONS §14): a search turn on the fast model
+# that issues the query and transcribes each retrieved page, and an extraction
+# turn on the main model that matches candidates to archetypes over the compact
+# digests. Retrieved page content is billed as *input* to the search turn, which
+# is why that profile is an order of magnitude larger.
+#
+# ⚠ **ESTIMATED, not measured.** There are no `llm_usage` rows for this stage
+# yet — it has never run live. These are constructed from the ceilings the code
+# actually enforces (`max_uses=2`, `_SEARCH_MAX_TOKENS=3,000`,
+# `_EXTRACTION_MAX_TOKENS=6,000`, 8 digests) and deliberately sit high within
+# those bounds, because an under-quoted stage is the failure this model exists
+# to prevent. `DiscoveryCostEstimate.measured` is False and a test pins it, so
+# re-deriving from the ledger has to be a deliberate act rather than a drift.
+#
+# **Re-derive after the first live discovery.** The query in HANDOFF §7 scoped
+# to `stage = 'gtm_discovery'` gives the medians; note that this stage's
+# `cost_usd` rows include the per-search fee below, so derive from the token
+# columns, not from cost.
+#
+# This stage is new work, not a recalibration of existing work — HANDOFF §7
+# names "a stage changing its unit of work" as one of the three things that
+# legitimately reopens the closed cost model, and adding a stage is squarely
+# within that. No existing profile was touched.
+GTM_SEARCH = _StageProfile(input_tokens=19_000, output_tokens=1_200)
+GTM_EXTRACTION = _StageProfile(input_tokens=2_900, output_tokens=1_800)
+
+# Web searches per compiled query — the `max_uses` the adapter sets on the tool.
+GTM_SEARCHES_PER_QUERY = 2
+
+# The server-side web search tool bills **per search, on top of tokens**: $10
+# per 1,000 requests. No token count can express it, so it is carried onto the
+# ledger row as `record_llm_call(surcharge_usd=…)`. Leaving it off-ledger would
+# understate a 12-query discovery by ~19% of its serving cost, and
+# `reconcile_run_cost` reads that ledger to decide whether the margin floor
+# held — so an off-ledger cost is one the margin gate structurally cannot see.
+WEB_SEARCH_USD_PER_REQUEST = Decimal("0.01")
+
+
+def search_fee_usd(searches: int) -> Decimal:
+    """Per-search charge for `searches` web searches.
+
+    Lives here rather than in `services/gtm/` so that the search adapter — which
+    reports the fee onto the ledger — and the quote path can both reach it
+    without importing each other. `gtm.pricing` imports the adapter for its
+    per-query search ceiling, so a helper in `gtm.pricing` that the adapter also
+    needed would close a cycle.
+    """
+    return WEB_SEARCH_USD_PER_REQUEST * Decimal(max(0, searches))
+
 # Report generation, per **written** section (ReACT tool calls plus the
 # write-up). The loop's evidence is capped — the seeded artifact at 6,000
 # characters and each tool observation at 5,000 — so a section's context cannot

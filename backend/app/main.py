@@ -16,6 +16,7 @@ from app.api import (
     comparison,
     documents,
     exports,
+    gtm,
     icp,
     inoculation,
     ontologies,
@@ -138,6 +139,10 @@ def create_app() -> FastAPI:
     # is the built-in + custom picker; nothing here can shadow one of its paths.
     app.include_router(packs.router, prefix="/api/packs")
     app.include_router(icp.router, prefix="/api/icp")
+    # Go-to-market candidate discovery. Its own prefix rather than nesting
+    # under /api/icp: it reads an ICP but is a separate asset with its own
+    # lifecycle, and nothing here can shadow an ICP path.
+    app.include_router(gtm.router, prefix="/api/gtm")
     app.include_router(inoculation.router, prefix="/api/inoculation")
     app.include_router(variants.router, prefix="/api/variants")
     app.include_router(platforms.router, prefix="/api/platforms")
