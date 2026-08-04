@@ -216,6 +216,11 @@ async def update_profile(
         .eq("organization_id", auth["org_id"])
         .execute()
     )
+    if not updated.data:
+        # `_fetch_profile` above found it, so zero updated rows means it was
+        # deleted between the two statements. `updated.data[0]` would have been
+        # an IndexError and a 500 on what is a plain 404.
+        raise HTTPException(status_code=404, detail="ICP profile not found")
     return updated.data[0]
 
 

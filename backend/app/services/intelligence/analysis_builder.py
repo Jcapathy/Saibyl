@@ -66,6 +66,9 @@ FLASHPOINT_MIN_DELTA = 0.15
 _CI_WIDTH_MODERATE = 0.50
 _CI_WIDTH_HIGH = 0.25
 
+# Objections carried in the artifact. Applied **once**, before any slice
+# builder sees the list — see `build_simulation_analysis`. The full set is
+# persisted to `canonical_objections` either way.
 MAX_OBJECTIONS_IN_ARTIFACT = 20
 
 
@@ -514,10 +517,22 @@ async def build_simulation_analysis(
     # Cohort attribution runs before persistence so the stored objections and
     # the artifact's copies agree on where each objection started.
     _attribute_objection_cohorts(run, objections)
+    # Persisted in full. `canonical_objections` is the table the inoculation
+    # loop's priors and asset drafting read from, and truncating it there would
+    # drop objections the artifact never claimed to carry.
     persist_objections(run, objections)
 
+    # **Truncated once, before anything reads it.** Every slice builder emits
+    # `top_objection_keys` by looking the slice's events up in this list, so
+    # handing them the full list and truncating only the `objections` field
+    # produced slices naming keys the artifact does not contain — a field
+    # pointing at an object that is not there, which is the frontend/backend
+    # mismatch class this build keeps hitting. The list is already sorted by
+    # load-bearing score, so the cut is the tail.
+    artifact_objections = objections[:MAX_OBJECTIONS_IN_ARTIFACT]
+
     timeline = _timeline(run)
-    headline = _headline(run, timeline, objections)
+    headline = _headline(run, timeline, artifact_objections)
 
     analysis = SimulationAnalysis(
         schema_version=SCHEMA_VERSION,
@@ -525,12 +540,12 @@ async def build_simulation_analysis(
         generated_at=datetime.now(UTC),
         headline=headline,
         sentiment_timeline=timeline,
-        by_platform=_by_platform(run, objections),
-        by_archetype=_by_archetype(run, objections),
-        by_cohort=_by_cohort(run, objections),
-        objections=objections[:MAX_OBJECTIONS_IN_ARTIFACT],
-        flashpoints=_flashpoints(run, timeline, objections),
-        propagation=_propagation(objections[:MAX_OBJECTIONS_IN_ARTIFACT], run),
+        by_platform=_by_platform(run, artifact_objections),
+        by_archetype=_by_archetype(run, artifact_objections),
+        by_cohort=_by_cohort(run, artifact_objections),
+        objections=artifact_objections,
+        flashpoints=_flashpoints(run, timeline, artifact_objections),
+        propagation=_propagation(artifact_objections, run),
         adversarial=_adversarial_disclosure(run),
         # None on every single-arena run. Built last because it is the one block
         # that reads the run's arenas rather than only its events.
@@ -544,6 +559,9 @@ async def build_simulation_analysis(
         simulation_id=simulation_id,
         rounds=len(timeline),
         objections=len(objections),
+        # Persisted against carried. No silent caps: a run whose tail was cut
+        # should say so rather than let the artifact read as the whole set.
+        objections_in_artifact=len(artifact_objections),
         flashpoints=len(analysis.flashpoints),
         coverage_pct=analysis.quality.coverage_pct,
         confidence=analysis.quality.confidence,

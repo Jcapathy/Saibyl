@@ -5,6 +5,7 @@
 # get_report_progress(report_id) -> ReportProgress
 # clean_report_output(text) -> str
 # strip_react_artifacts(text) -> str   (alias for clean_report_output)
+# compute_polarization(events) -> dict
 # ─────────────────────────────────────────────────────────
 from __future__ import annotations
 
@@ -25,6 +26,7 @@ from app.core.llm_client import llm_complete, llm_structured
 from app.services.billing.agent_pricing import report_section_count
 from app.services.engine.founder_stages import stage_spec
 from app.services.intelligence.analysis_builder import get_analysis
+from app.services.intelligence.analysis_data import MeasuredEvent, load_run_data
 from app.services.intelligence.react_tools import (
     agent_interview_tool,
     insight_forge,
@@ -448,8 +450,7 @@ Platforms: {platforms}
 Agent count: {agent_count}
 Rounds completed: {rounds}
 Total events: {event_count}
-Polarization ratio (extreme-to-moderate): {polarization_ratio}
-Polarization controversy score (0-1): {controversy_score}
+{polarization_context}
 
 === REPORT SECTIONS (your evidence base) ===
 {sections_text}
@@ -494,14 +495,10 @@ Output exactly this markdown table with values filled from your analysis:
 |--------|-------|-------|
 | Sentiment | <overall sentiment score, signed decimal e.g. -0.42> | <Strongly Positive/Positive/Mixed/Negative/Strongly Negative> |
 | Engagement | <engagement score X.X / 10> | <High virality potential OR Moderate reach> |
-| Polarization Ratio | {polarization_ratio} | <Low/Moderate/High — description> |
-| Platforms | <count of platforms> | <comma-separated platform names> |
+{polarization_row}| Platforms | <count of platforms> | <comma-separated platform names> |
 | Sentiment Trajectory | <directional summary e.g. "Topic A: -0.59 ↓ / Topic B: +0.40 ↑"> | <Net shift description> |
 
-IMPORTANT for Polarization Ratio: Use the provided value "{polarization_ratio}". Label it as:
-- Low (< 1.5:1): minimal polarization
-- Moderate (1.5:1 - 3:1): notable division
-- High (> 3:1): significant polarization
+{polarization_guidance}
 
 IMPORTANT for Sentiment Trajectory: Show the directional arrow and net change for the primary \
 subjects/topics in the simulation. Use ↑ for positive movement, ↓ for negative, → for flat.
@@ -534,8 +531,7 @@ Platforms (ONLY these were simulated): {platforms}
 Agent count: {agent_count}
 Rounds completed: {rounds}
 Total events: {event_count}
-Polarization ratio (extreme-to-moderate): {polarization_ratio}
-Controversy score (0-1): {controversy_score}
+{polarization_context}
 
 === REPORT SECTIONS (your evidence base) ===
 {sections_text}
@@ -599,6 +595,145 @@ or remain split/oscillating (lower confidence)? Cite the evidence.
 unpredictably (lower confidence)? Cite the evidence.
 
 End with ONE sentence on the single biggest uncertainty in the findings."""
+
+
+# ── Polarization ─────────────────────────────────────────
+
+_POLARIZATION_ABSENT: dict[str, float | str | None] = {
+    "controversy_score": None,
+    "polarization_ratio": None,
+    "valence_switching_pct": None,
+}
+
+
+def compute_polarization(events: list[MeasuredEvent]) -> dict:
+    """Polarization metrics from measured event valence.
+
+    Reads `valence` rather than the metadata "sentiment" key this used to
+    average. That key was written by the drift formula removed in Phase 1 —
+    `sentiment_baseline * (1 + round/max_rounds * 1.5)` — so on a measured run
+    it is absent and on an older one it is the archetype preset, meaning the
+    ratio described the persona pack rather than the conversation.
+
+    Reactions carry no text and are stored with a null valence; off-topic events
+    hold no view of the subject. Both are excluded rather than counted as 0.0,
+    because a like is not a moderate opinion and would inflate the moderate
+    denominator on every run.
+
+    Every metric is None when nothing was measured, so a caller cannot render an
+    unmeasured run as an unpolarized one.
+    """
+    scored = [e for e in events if e.scored]
+    if not scored:
+        return dict(_POLARIZATION_ABSENT)
+
+    max_round = max(e.round_number for e in scored)
+
+    # Per-agent mean valence at the final round. Averaged rather than
+    # last-event-wins: an agent that posted twice in the last round holds one
+    # position, and taking whichever row happened to sort last made the ratio
+    # depend on read order.
+    final_round: dict[str, list[float]] = {}
+    for event in scored:
+        if event.round_number == max_round:
+            key = event.agent_id or event.agent_username
+            final_round.setdefault(key, []).append(float(event.valence))
+
+    agent_means = [sum(vals) / len(vals) for vals in final_round.values()]
+    if not agent_means:
+        return dict(_POLARIZATION_ABSENT)
+
+    # Extreme-to-moderate ratio: |valence| > 0.5 vs |valence| <= 0.5
+    extreme = sum(1 for v in agent_means if abs(v) > 0.5)
+    moderate = max(sum(1 for v in agent_means if abs(v) <= 0.5), 1)
+    ratio = round(extreme / moderate, 1)
+
+    # Valence switching: how often an agent's position crosses the zero line
+    # between consecutive rounds. Computed within an agent, because the previous
+    # version compared consecutive rows of an arbitrarily ordered event list —
+    # counting one agent's opinion against a different agent's as a "switch",
+    # and returning a different number depending on how the rows came back.
+    by_agent_round: dict[str, dict[int, list[float]]] = {}
+    for event in scored:
+        key = event.agent_id or event.agent_username
+        by_agent_round.setdefault(key, {}).setdefault(
+            event.round_number, []
+        ).append(float(event.valence))
+
+    pairs = 0
+    switches = 0
+    for rounds in by_agent_round.values():
+        arc = [
+            sum(vals) / len(vals)
+            for _round, vals in sorted(rounds.items())
+        ]
+        for i in range(1, len(arc)):
+            pairs += 1
+            if (arc[i] > 0) != (arc[i - 1] > 0):
+                switches += 1
+
+    # An agent that spoke in only one round has no transition to switch across.
+    # That is an absent measurement, not zero switching.
+    switching_pct = round(switches / pairs * 100) if pairs else None
+
+    return {
+        # Normalized to 0-1; a ratio of 5:1 or above saturates at 1.0.
+        "controversy_score": round(min(1.0, ratio / 5.0), 2),
+        "polarization_ratio": f"{ratio}:1",
+        "valence_switching_pct": switching_pct,
+    }
+
+
+def _polarization_prompt_fields(metrics: dict) -> dict[str, str]:
+    """Render polarization metrics as prompt fragments, omitting the unmeasured.
+
+    An unmeasured metric is left out of the prompt rather than passed through as
+    "N/A". Part D of the executive summary mandates a filled stat card, so a
+    writer handed "N/A" for a row it is required to complete supplies the
+    missing figure itself — a fabricated number in published copy, which is
+    exactly what the measurement layer exists to prevent.
+    """
+    ratio = metrics.get("polarization_ratio")
+    controversy = metrics.get("controversy_score")
+
+    if ratio is None:
+        return {
+            "polarization_row": "",
+            "polarization_guidance": (
+                "IMPORTANT for Polarization Ratio: this run has NO measured "
+                "polarization ratio, which is why the table above has no such "
+                "row. Do not add one, do not estimate a ratio, and do not "
+                "characterise the audience as polarized or unified anywhere in "
+                "Part D."
+            ),
+            "polarization_context": (
+                "Polarization: not measured for this run — state no "
+                "polarization ratio and no controversy score, and do not "
+                "describe the room as divided or united on the strength of a "
+                "figure you were not given."
+            ),
+        }
+
+    return {
+        "polarization_row": (
+            f"| Polarization Ratio | {ratio} | <Low/Moderate/High — description> |\n"
+        ),
+        "polarization_guidance": (
+            f'IMPORTANT for Polarization Ratio: Use the provided value "{ratio}". '
+            "Label it as:\n"
+            "- Low (< 1.5:1): minimal polarization\n"
+            "- Moderate (1.5:1 - 3:1): notable division\n"
+            "- High (> 3:1): significant polarization"
+        ),
+        "polarization_context": (
+            f"Polarization ratio (extreme-to-moderate): {ratio}\n"
+            + (
+                f"Controversy score (0-1): {controversy}"
+                if controversy is not None
+                else "Controversy score: not measured — do not state one."
+            )
+        ),
+    }
 
 
 # ── Core functions ───────────────────────────────────────
@@ -893,14 +1028,14 @@ async def generate_report(
             f"## {s.title}\n\n{c}" for s, c in zip(outline.sections, section_contents)
         )
 
-        # Compute polarization metrics for executive summary prompt
-        from app.api.reports import _compute_polarization
-        all_events = admin.table("simulation_events").select(
-            "metadata, round_number, agent_id"
-        ).eq("simulation_id", sim_id).limit(2000).execute().data or []
-        pol_metrics = _compute_polarization(all_events)
-        polarization_ratio = pol_metrics["polarization_ratio"] or "N/A"
-        controversy_score = str(pol_metrics["controversy_score"]) if pol_metrics["controversy_score"] is not None else "N/A"
+        # Polarization for the conclusion and executive-summary prompts, from
+        # measured valence. `load_run_data` pages past PostgREST's 1,000-row
+        # cap; the previous `.limit(2000)` silently truncated any run larger
+        # than that and reported the ratio of its first thousand events.
+        pol_metrics = compute_polarization(load_run_data(sim_id).events)
+        if pol_metrics["polarization_ratio"] is None:
+            logger.warning("report_polarization_unmeasured", simulation_id=sim_id)
+        polarization_fields = _polarization_prompt_fields(pol_metrics)
 
         rounds = sim.get("max_rounds", 10)
 
@@ -930,9 +1065,8 @@ async def generate_report(
                 agent_count=agent_count,
                 rounds=rounds,
                 event_count=event_count,
-                polarization_ratio=polarization_ratio,
-                controversy_score=controversy_score,
                 sections_text=sections_text[:20000],
+                **polarization_fields,
             )}],
         )
         conclusion_content = clean_report_output(conclusion_raw)
@@ -965,9 +1099,8 @@ async def generate_report(
                 agent_count=agent_count,
                 rounds=rounds,
                 event_count=event_count,
-                polarization_ratio=polarization_ratio,
-                controversy_score=controversy_score,
                 sections_text=sections_text[:20000],
+                **polarization_fields,
             )}],
         )
         exec_summary = clean_report_output(exec_summary_raw)

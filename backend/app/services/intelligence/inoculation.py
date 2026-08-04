@@ -244,7 +244,12 @@ async def draft_assets(
     admin = get_supabase_admin()
     sim = (
         admin.table("simulations")
-        .select("id, prediction_goal, icp_profile_id")
+        # `project_id` is load-bearing and was missing: `_sourced_numbers` reads
+        # the project's uploaded material, and without the column every number
+        # in every draft was unsourced, so the fabrication filter dropped assets
+        # for quoting the founder's own published price — after a 6,000-token
+        # main-model draft had already been paid for.
+        .select("id, project_id, prediction_goal, icp_profile_id")
         .eq("id", simulation_id)
         .single()
         .execute()
@@ -264,7 +269,22 @@ async def draft_assets(
 
     # The numbers the founder's own material actually contains. Anything
     # statistical outside this set is something the model made up.
+    #
+    # An empty set is not a neutral input to `_evidence_claims` — it makes every
+    # figure unsourced, so the filter stops distinguishing a fabricated study
+    # from a quoted price and drops assets for both. The filter is right to stay
+    # strict, so the absence is made loud here instead of absorbed there.
     project_id = sim.get("project_id")
+    if not project_id:
+        logger.error(
+            "inoculation_draft_material_unavailable",
+            simulation_id=simulation_id,
+            detail=(
+                "this run has no project, so no uploaded material can be read. "
+                "Every number in every draft will count as unsourced and any "
+                "asset citing one will be dropped as fabricated."
+            ),
+        )
     sourced = _sourced_numbers(gather_material(project_id)) if project_id else set()
 
     with usage_context(
@@ -596,40 +616,75 @@ def _objection_rows(simulation_id: str) -> dict[str, dict]:
     return {r["objection_key"]: r for r in rows}
 
 
-def _converted_agents(parent_run, child_run, objection_key: str) -> list[str]:
+def _converted_agents(
+    parent_run,
+    child_run,
+    parent_row: dict | None,
+    child_row: dict | None,
+) -> list[str]:
     """Agents who voiced this objection before and not after.
 
-    Matched on username, which is stable across the copy — `create_resimulation`
-    copies the rows verbatim, so the same person exists in both runs under the
-    same handle with a different id. This is the only place in the codebase where
-    username is used as an identity, and it is sound precisely because the copy
-    guarantees it: the pairing is by construction, not by hoping handles are
-    unique.
+    Membership comes from the canonical objection's own `event_ids` — the
+    clustering pass's record of exactly which events it assigned to this key.
+    That is the authoritative answer and it is already loaded.
+
+    It previously re-derived membership by slugging each raw per-event objection
+    string with a **second, incompatible slug algorithm**:
+    `"-".join(s.lower().split())[:64]` against the canonicalizer's
+    `re.sub(r"[^a-z0-9]+", "-", ...)[:60]`. A verbatim identical objection
+    produced two different keys, so the set intersection was empty on every run
+    and the "agents who changed their mind" list was always empty — and the
+    docstring pre-excused it as "approximate by design", which is how a broken
+    feature survives a code review. There is now one definition of key
+    derivation, in `refs.slugify`, and this function does not need it at all.
+
+    Paired on username, which is stable across the copy — `create_resimulation`
+    copies the agent rows verbatim, so the same person exists in both runs under
+    the same handle with a different `agent_id`. `agent_id` would be the correct
+    identity and cannot be used here: the child's rows are new rows with new ids,
+    and the copied stable column (`entity_id`) is not carried onto
+    `MeasuredEvent`. `measure_inoculation` logs when a run's handles are not
+    unique, so a collision is visible rather than silently merging two people.
     """
-    def voices(run) -> set[str]:
-        return {
-            e.agent_username
-            for e in run.events
-            if objection_key in _normalised(e.objections)
-        }
+    def voices(run, row: dict | None) -> set[str]:
+        if not row:
+            return set()
+        wanted = set(row.get("event_ids") or [])
+        if not wanted:
+            return set()
+        return {e.agent_username for e in run.events if e.id in wanted}
 
-    return sorted(voices(parent_run) - voices(child_run))[:25]
+    return sorted(voices(parent_run, parent_row) - voices(child_run, child_row))[:25]
 
 
-def _normalised(objections: list[str]) -> set[str]:
-    """Raw per-event objection strings, slugged to compare with canonical keys.
+def _warn_on_colliding_handles(run, simulation_id: str) -> None:
+    """Say so when a run's usernames are not one-to-one with its agents.
 
-    Approximate by design. Raw strings are the classifier's phrasing and
-    canonical keys come from the clustering pass, so this matches only the
-    objections whose phrasing survived clustering unchanged. It backs the
-    "agents who changed their mind" list, which is illustrative; every number in
-    the delta comes from `canonical_objections`, not from here.
+    `_converted_agents` pairs the two runs on username because the child's rows
+    are copies with fresh ids. That is sound only while a handle identifies one
+    agent. A collision does not error anywhere — it silently merges two people
+    into one entry, so an agent who never dropped the objection can cancel out
+    one who did. Checked rather than assumed, because "96 of 96 distinct
+    usernames" is an observation about one run, not a constraint.
     """
-    out = set()
-    for raw in objections or []:
-        slug = "-".join(str(raw).lower().split())[:64]
-        out.add(slug)
-    return out
+    handles: dict[str, set[str]] = {}
+    for event in run.events:
+        handles.setdefault(event.agent_username, set()).add(
+            event.agent_id or event.agent_username
+        )
+    colliding = sorted(h for h, ids in handles.items() if len(ids) > 1)
+    if colliding:
+        logger.warning(
+            "inoculation_usernames_not_unique",
+            simulation_id=simulation_id,
+            handles=colliding[:10],
+            colliding=len(colliding),
+            detail=(
+                "more than one agent shares a username in this run, so the "
+                "converted-agent pairing merges them. Every measured figure in "
+                "the delta is unaffected; the named list is not."
+            ),
+        )
 
 
 async def measure_inoculation(
@@ -638,6 +693,8 @@ async def measure_inoculation(
     """Compare two runs and say, per objection, whether the asset worked."""
     parent_run = load_run_data(parent_id)
     child_run = load_run_data(child_id)
+    _warn_on_colliding_handles(parent_run, parent_id)
+    _warn_on_colliding_handles(child_run, child_id)
 
     parent_objections = _objection_rows(parent_id)
     child_objections = _objection_rows(child_id)
@@ -691,7 +748,12 @@ async def measure_inoculation(
                 verdict=_verdict(before, after, significant),
                 asset_ids=[a["id"] for a in targeting],
                 asset_titles=[a["title"] for a in targeting],
-                converted_agent_usernames=_converted_agents(parent_run, child_run, key)
+                converted_agent_usernames=_converted_agents(
+                    parent_run,
+                    child_run,
+                    parent_objections.get(key),
+                    child_objections.get(key),
+                )
                 if targeting
                 else [],
             )

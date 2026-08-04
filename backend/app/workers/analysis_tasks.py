@@ -88,12 +88,54 @@ def reconcile_run_cost(simulation_id: str, organization_id: str) -> dict[str, An
 
     A shortfall is charged rather than absorbed, because absorbing it silently
     is how a pricing bug becomes a business one. It is logged loudly either way.
+
+    The two failure paths below both return `cost_reconciled=False` and
+    `margin_floor_held=None`. `None` is the point: it says the gate did not run.
+    A `False` here would claim a breach that was never measured, and a `True`
+    would claim a margin that was never checked — and `margin_floor_breached` is
+    the only signal that reopens the closed cost model, so a gate that cannot
+    fail is worse than no gate.
     """
     measured = get_simulation_cost(simulation_id)
     if not measured.get("available"):
-        return {"cost_reconciled": False}
+        # A completed run that will not be charged. Silence here is how a run
+        # goes out free and nothing anywhere says so.
+        logger.error(
+            "cost_reconciliation_unavailable",
+            simulation_id=simulation_id,
+            organization_id=organization_id,
+            reason=measured.get("reason", "unknown"),
+            note="run completed but was not charged; the usage ledger has no measured cost for it",
+        )
+        return {
+            "cost_reconciled": False,
+            "reason": measured.get("reason", "unknown"),
+            "margin_floor_held": None,
+            "credits_charged": 0,
+            "by_stage": [],
+        }
 
     measured_usd = float(measured.get("total_cost_usd") or 0.0)
+
+    if measured_usd <= 0.0:
+        # Ledger rows exist but sum to nothing. Every downstream figure derived
+        # from this is meaningless: `credits_for(0)` is 0, so the run is free,
+        # and the margin floor is `retail >= 0`, which no price can fail.
+        logger.error(
+            "cost_reconciliation_zero_measured",
+            simulation_id=simulation_id,
+            organization_id=organization_id,
+            stage_rows=len(measured.get("by_stage") or []),
+            note="ledger returned rows totalling $0; the run cannot be charged or margin-checked",
+        )
+        return {
+            "cost_reconciled": False,
+            "reason": "zero_measured_cost",
+            "margin_floor_held": None,
+            "credits_charged": 0,
+            "by_stage": measured.get("by_stage", []),
+        }
+
     admin = get_supabase_admin()
 
     quotes = (
@@ -134,7 +176,9 @@ def reconcile_run_cost(simulation_id: str, organization_id: str) -> dict[str, An
         deduct_credits(UUID(organization_id), shortfall)
 
     # Margin held on what was actually charged, against what it actually cost.
-    floor_price = measured_usd / (1 - float(MIN_MARGIN_PCT) / 100) if measured_usd else 0.0
+    # `measured_usd` is guaranteed positive by the guard above, so this floor is
+    # always a real number and `margin_held` is always a real comparison.
+    floor_price = measured_usd / (1 - float(MIN_MARGIN_PCT) / 100)
     margin_held = retail >= floor_price
 
     result.update({

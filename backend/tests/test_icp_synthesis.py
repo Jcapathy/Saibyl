@@ -192,6 +192,130 @@ def test_unknown_adversarial_role_falls_back_to_category_skeptic():
     assert profile.adversarial[0].role in ADVERSARIAL_ROLES
 
 
+@pytest.mark.parametrize(
+    "returned",
+    [
+        # The five roles are rendered to the model as a list, so they come back
+        # the way a model restates a list member.
+        "incumbent_power_user",
+        "Incumbent Power User",
+        "incumbent-power-user",
+        "[incumbent_power_user]",
+        "`incumbent_power_user`",
+        "  incumbent_power_user  ",
+        "incumbent power user",
+    ],
+)
+def test_a_restated_adversarial_role_resolves_instead_of_collapsing(returned):
+    """Four cohorts collapsing into one is not a cosmetic defect.
+
+    A silent default sends every unrecognised role to `category_skeptic`, and
+    the cohort split is what the Founder lens is for: on the live run the entire
+    negative headline was one cohort. A run whose four roles had merged would
+    have reported that as the market's verdict on the product.
+    """
+    output = _model_output()
+    output["adversarial"][0]["role"] = returned
+
+    profile = _build_profile(output, _material(), adversarial=True)
+
+    assert profile.adversarial[0].role == "incumbent_power_user"
+
+
+def test_a_genuinely_unknown_role_is_not_bent_onto_a_real_one():
+    """The default still exists; it just is not applied to a near-miss."""
+    output = _model_output()
+    output["adversarial"][0]["role"] = "disgruntled_person"
+
+    profile = _build_profile(output, _material(), adversarial=True)
+
+    assert profile.adversarial[0].role == "category_skeptic"
+
+
+# ---------------------------------------------------------------------------
+# Priors
+#
+# The prior supplies the Big Five vector, the demographics and the posting
+# cadence — everything that shapes how an agent *behaves*. Substituting a
+# different prior substitutes a different person into every agent built from
+# the archetype, which is why a lookup miss must not look like an absence.
+# ---------------------------------------------------------------------------
+
+def test_a_restated_prior_archetype_id_still_finds_its_archetype():
+    from app.services.engine.personas.icp_synthesizer import _prior_archetype
+    from app.services.engine.personas.pack_loader import get_pack
+
+    pack = get_pack("enterprise-it-buyer")
+    wanted = pack.archetypes[0]
+
+    for form in (wanted.id, wanted.id.upper(), f"[{wanted.id}]", f"  {wanted.id} "):
+        assert _prior_archetype("enterprise-it-buyer", form) is wanted, form
+
+
+def _captured_log(monkeypatch, module) -> list[tuple[str, str]]:
+    """Records (level, event) off the module's structlog logger.
+
+    Not `capsys`: structlog writes through a logger bound at configuration time,
+    so whether stdout capture sees it depends on what else has run first — which
+    made these tests pass alone and fail in the suite.
+    """
+    captured: list[tuple[str, str]] = []
+
+    class _Logger:
+        def __getattr__(self, level):
+            def record(event, **_kw):
+                captured.append((level, event))
+            return record
+
+    monkeypatch.setattr(module, "logger", _Logger())
+    return captured
+
+
+def test_an_unknown_prior_archetype_id_is_reported_not_absorbed(monkeypatch):
+    """Naming an archetype the pack does not have is a miss, not an absence.
+
+    The fallback is unchanged — the heaviest archetype is still the best
+    stand-in — but it now arrives with a record that the model referred to
+    something that is not there.
+    """
+    from app.services.engine.personas import icp_synthesizer
+    from app.services.engine.personas.pack_loader import get_pack
+
+    pack = get_pack("enterprise-it-buyer")
+    heaviest = max(pack.archetypes, key=lambda a: a.weight)
+    captured = _captured_log(monkeypatch, icp_synthesizer)
+
+    result = icp_synthesizer._prior_archetype("enterprise-it-buyer", "no-such-archetype")
+
+    assert result is heaviest
+    assert ("warning", "icp_prior_archetype_unknown") in captured
+
+
+def test_naming_no_prior_archetype_is_a_legitimate_absence(monkeypatch):
+    """"The typical member of this pack" is a real answer and stays silent."""
+    from app.services.engine.personas import icp_synthesizer
+
+    captured = _captured_log(monkeypatch, icp_synthesizer)
+
+    result = icp_synthesizer._prior_archetype("enterprise-it-buyer", None)
+
+    assert result is not None
+    assert "icp_prior_archetype_unknown" not in [event for _, event in captured]
+
+
+def test_an_unrecognised_adversarial_role_is_reported_not_absorbed(monkeypatch):
+    """The default is still applied — loudly, rather than hidden in a lookup."""
+    from app.services.engine.personas import icp_synthesizer
+
+    captured = _captured_log(monkeypatch, icp_synthesizer)
+    output = _model_output()
+    output["adversarial"][0]["role"] = "disgruntled_person"
+
+    icp_synthesizer._build_profile(output, _material(), adversarial=True)
+
+    assert ("warning", "icp_adversarial_role_unrecognised") in captured
+
+
 # ---------------------------------------------------------------------------
 # Profile construction
 # ---------------------------------------------------------------------------

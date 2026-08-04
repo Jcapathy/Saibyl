@@ -6,6 +6,8 @@ import uuid
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 
+import structlog
+
 from app.core.llm_client import llm_fast
 from app.services.platforms.base_adapter import (
     BasePlatformAdapter,
@@ -15,8 +17,26 @@ from app.services.platforms.base_adapter import (
     SimulationEvent,
 )
 from app.services.platforms.registry import register_adapter
+from app.services.refs import enum_ref
 
-_LINKEDIN_REACTIONS = {"like", "celebrate", "support", "insightful", "curious"}
+logger = structlog.get_logger()
+
+# LinkedIn's five verbs, as `ReactionType` members rather than bare strings.
+# They were bare strings, and `react()` mapped anything that was not literally
+# `"like"` back onto `"like"` — which, since `ReactionType` carried no
+# `celebrate`/`support`/`insightful`/`curious`, was *all five of them*. The
+# breakdown this adapter maintains therefore had one non-zero key on every run.
+_LINKEDIN_REACTION_MAP: dict[str, ReactionType] = {
+    r.value: r
+    for r in (
+        ReactionType.LIKE,
+        ReactionType.CELEBRATE,
+        ReactionType.SUPPORT,
+        ReactionType.INSIGHTFUL,
+        ReactionType.CURIOUS,
+    )
+}
+_LINKEDIN_REACTIONS = frozenset(_LINKEDIN_REACTION_MAP)
 
 _ACTION_PROMPT = (
     "You are {username} on LinkedIn. Persona: {persona}\n"
@@ -111,10 +131,20 @@ class LinkedInAdapter(BasePlatformAdapter):
         for p in self._posts:
             if p.id == post_id:
                 p.metadata["reactions_count"] = p.metadata.get("reactions_count", 0) + 1
-                rname = reaction.value if reaction.value in _LINKEDIN_REACTIONS else "like"
                 breakdown = p.metadata.setdefault("reactions_breakdown", {})
-                breakdown[rname] = breakdown.get(rname, 0) + 1
-                break
+                # Recorded under the verb that actually happened. A reaction
+                # outside LinkedIn's vocabulary gets its own key rather than
+                # being folded into `like`: a value we did not expect must stay
+                # visible, and the caller has already rejected the ones that are
+                # not real verbs at all.
+                breakdown[reaction.value] = breakdown.get(reaction.value, 0) + 1
+                if reaction.value not in _LINKEDIN_REACTIONS:
+                    logger.warning(
+                        "reaction_outside_platform_vocabulary",
+                        platform=self.platform_id,
+                        reaction=reaction.value,
+                    )
+                return
 
     def get_state_snapshot(self) -> dict:
         return {
@@ -159,7 +189,7 @@ class LinkedInAdapter(BasePlatformAdapter):
         if line.upper().startswith("COMMENT"):
             match = re.match(r"COMMENT\s+(\S+):\s*(.+)", line, re.IGNORECASE)
             if match:
-                pid, text = match.group(1), match.group(2)
+                pid, text = self.post_ref(match.group(1)), match.group(2)
                 c = await self.comment(agent["username"], pid, text)
                 self.record_action(self.agent_key(agent), round_number, f"Commented on {pid}: {text[:80]}")
                 return SimulationEvent(
@@ -171,16 +201,36 @@ class LinkedInAdapter(BasePlatformAdapter):
         if line.upper().startswith("REACT"):
             match = re.match(r"REACT\s+(\S+)\s+(\S+)", line, re.IGNORECASE)
             if match:
-                pid, rtype = match.group(1), match.group(2).lower()
-                if rtype not in _LINKEDIN_REACTIONS:
-                    rtype = "like"
-                await self.react(agent["username"], pid, ReactionType.LIKE)
-                self.record_action(self.agent_key(agent), round_number, f"Reacted {rtype} on {pid}")
+                pid, rtype = self.post_ref(match.group(1)), match.group(2)
+                # **An unrecognised verb is dropped, not defaulted.** This was
+                # `if rtype not in _LINKEDIN_REACTIONS: rtype = "like"`, so an
+                # agent reacting with anything outside the five — including a
+                # dissenting verb the model reached for because the persona was
+                # dissenting — was recorded as approval. A signal the product is
+                # sold on must never silently invert.
+                #
+                # `enum_ref` first absorbs decoration, casing and separators,
+                # because the prompt renders the vocabulary pipe-joined and the
+                # model copies it back the way it was shown. What survives that
+                # is dropped and logged rather than guessed at — the same choice
+                # as Facebook, for the same reason.
+                verb = enum_ref(rtype, _LINKEDIN_REACTIONS)
+                if verb is None:
+                    logger.warning(
+                        "reaction_verb_unrecognised",
+                        platform=self.platform_id,
+                        verb=rtype,
+                        detail="dropped rather than defaulted to LIKE; this "
+                               "agent's action is unmeasured this round",
+                    )
+                    return None
+                await self.react(agent["username"], pid, _LINKEDIN_REACTION_MAP[verb])
+                self.record_action(self.agent_key(agent), round_number, f"Reacted {verb} on {pid}")
                 return SimulationEvent(
                     event_type="react", agent_id=agent.get("agent_id"), agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,
                     variant=variant, target_id=pid,
-                    metadata={"reaction": rtype}, timestamp=now,
+                    metadata={"reaction": verb}, timestamp=now,
                 )
 
         return None

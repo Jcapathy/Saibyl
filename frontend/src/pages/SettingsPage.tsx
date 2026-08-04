@@ -9,10 +9,10 @@ import {
   Shield,
   Settings as SettingsIcon,
   Webhook,
-  Plug,
 } from 'lucide-react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
+import type { ApiKey, BillingStatus, CreatedApiKey } from '@/types';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -23,19 +23,9 @@ type SettingsTab =
   | 'team'
   | 'billing'
   | 'api-keys'
-  | 'integrations'
   | 'webhooks'
   | 'notifications'
   | 'security';
-
-interface BillingStatus {
-  plan: string;
-  simulations_used: number;
-  simulations_limit: number;
-  agents_used?: number;
-  agents_limit?: number;
-  agents_per_sim_limit?: number;
-}
 
 interface PaymentMethod {
   brand: string;
@@ -57,13 +47,6 @@ interface Member {
   id: string;
   email: string;
   role: string;
-}
-
-interface ApiKeyItem {
-  id: string;
-  name: string;
-  prefix: string;
-  created_at: string;
 }
 
 interface WebhookItem {
@@ -689,7 +672,7 @@ function TeamTab() {
 // ---------------------------------------------------------------------------
 
 function ApiKeysTab() {
-  const [keys, setKeys] = useState<ApiKeyItem[]>([]);
+  const [keys, setKeys] = useState<ApiKey[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [keyName, setKeyName] = useState('');
   const [newKeyValue, setNewKeyValue] = useState('');
@@ -710,7 +693,7 @@ function ApiKeysTab() {
     e.preventDefault();
     setCreating(true);
     try {
-      const { data } = await api.post('/api-keys', { name: keyName });
+      const { data } = await api.post<CreatedApiKey>('/api-keys', { name: keyName });
       setNewKeyValue(data.key);
       setKeyName('');
       fetchKeys();
@@ -754,7 +737,7 @@ function ApiKeysTab() {
             <li key={k.id} className="px-5 py-3 flex items-center justify-between hover:bg-[#1A2233] transition">
               <div>
                 <span className="text-sm font-medium text-[#E8ECF2]">{k.name}</span>
-                <span className="text-xs text-[#5A6578] ml-2 font-mono">{k.prefix}...</span>
+                <span className="text-xs text-[#5A6578] ml-2 font-mono">{k.key_prefix}...</span>
               </div>
               <button
                 onClick={() => handleRevoke(k.id)}
@@ -827,149 +810,6 @@ function ApiKeysTab() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// INTEGRATIONS TAB (logic preserved, restyled)
-// ---------------------------------------------------------------------------
-
-function IntegrationsTab() {
-  const [keys, setKeys] = useState<{ platform: string; key_preview: string }[]>([]);
-  const [kalshiKeyId, setKalshiKeyId] = useState('');
-  const [kalshiPem, setKalshiPem] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    api
-      .get('/markets/keys')
-      .then((r) => setKeys(Array.isArray(r.data) ? r.data : []))
-      .catch(() => {});
-  }, []);
-
-  const handleSave = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!kalshiKeyId.trim() || !kalshiPem.trim()) return;
-    setSaving(true);
-    setError('');
-    try {
-      const combined = `${kalshiKeyId.trim()}|||${kalshiPem.trim()}`;
-      await api.post('/markets/keys', { platform: 'kalshi', api_key: combined });
-      setKalshiKeyId('');
-      setKalshiPem('');
-      const r = await api.get('/markets/keys');
-      setKeys(Array.isArray(r.data) ? r.data : []);
-    } catch (err: unknown) {
-      const axiosErr = err as { response?: { data?: { detail?: string } } };
-      setError(axiosErr.response?.data?.detail || 'Failed to save key');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDelete = async (p: string) => {
-    try {
-      await api.delete(`/markets/keys/${p}`);
-      setKeys((prev) => prev.filter((k) => k.platform !== p));
-    } catch {
-      /* ignore */
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="font-bold text-[#E8ECF2] mb-1 flex items-center gap-2">
-          <Plug size={16} className="text-[#8B97A8]" />
-          Market Integrations
-        </h3>
-        <p className="text-sm text-[#5A6578]">
-          Connect prediction market platforms to run AI-powered predictions.
-        </p>
-      </div>
-
-      {error && (
-        <div className="text-sm text-[#EF4444] bg-[#EF4444]/10 px-4 py-2 rounded-lg">{error}</div>
-      )}
-
-      <div className={`${cardClass} p-5 space-y-4`}>
-        <div className="flex items-start gap-4">
-          <div className="flex-1">
-            <p className="text-sm font-medium text-[#E8ECF2]">Polymarket</p>
-            <p className="text-xs text-[#5A6578] mt-0.5">
-              No API key required &mdash; uses public APIs. Import markets and run predictions
-              immediately.
-            </p>
-          </div>
-          <span className="text-xs px-2 py-1 rounded bg-[#22C55E]/15 text-[#22C55E]">
-            Connected
-          </span>
-        </div>
-
-        <div className="border-t border-[#1E293B] pt-4">
-          <div className="flex items-start gap-4 mb-3">
-            <div className="flex-1">
-              <p className="text-sm font-medium text-[#E8ECF2]">Kalshi</p>
-              <p className="text-xs text-[#5A6578] mt-0.5">
-                Requires API key for market data access. Get yours at kalshi.com/account/api.
-              </p>
-            </div>
-            {keys.some((k) => k.platform === 'kalshi') ? (
-              <div className="flex items-center gap-2">
-                <span className="text-xs px-2 py-1 rounded bg-[#22C55E]/15 text-[#22C55E]">
-                  Connected (&bull;&bull;&bull;
-                  {keys.find((k) => k.platform === 'kalshi')?.key_preview})
-                </span>
-                <button
-                  onClick={() => handleDelete('kalshi')}
-                  className="text-xs text-[#EF4444]/80 hover:text-[#EF4444] transition"
-                >
-                  Remove
-                </button>
-              </div>
-            ) : (
-              <span className="text-xs px-2 py-1 rounded bg-[#1A2233] text-[#5A6578]">
-                Not connected
-              </span>
-            )}
-          </div>
-
-          {!keys.some((k) => k.platform === 'kalshi') && (
-            <form onSubmit={handleSave} className="space-y-3">
-              <div>
-                <label className="block text-xs text-[#5A6578] mb-1">Key ID</label>
-                <input
-                  type="text"
-                  value={kalshiKeyId}
-                  onChange={(e) => setKalshiKeyId(e.target.value)}
-                  placeholder="e.g. 385c289d-a6b9-48e3-..."
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-[#5A6578] mb-1">
-                  RSA Private Key (PEM)
-                </label>
-                <textarea
-                  value={kalshiPem}
-                  onChange={(e) => setKalshiPem(e.target.value)}
-                  placeholder={'-----BEGIN RSA PRIVATE KEY-----\n...'}
-                  rows={4}
-                  className={`${inputClass} font-mono text-xs resize-none`}
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={saving || !kalshiKeyId.trim() || !kalshiPem.trim()}
-                className={goldBtnClass}
-              >
-                {saving ? 'Saving...' : 'Connect Kalshi'}
-              </button>
-            </form>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // WEBHOOKS TAB (logic preserved, restyled)
@@ -1146,7 +986,6 @@ const TABS: { key: SettingsTab; label: string; icon: typeof SettingsIcon }[] = [
   { key: 'team', label: 'Team', icon: Users },
   { key: 'billing', label: 'Billing', icon: CreditCard },
   { key: 'api-keys', label: 'API Keys', icon: Key },
-  { key: 'integrations', label: 'Integrations', icon: Plug },
   { key: 'webhooks', label: 'Webhooks', icon: Webhook },
   { key: 'notifications', label: 'Notifications', icon: Bell },
   { key: 'security', label: 'Security', icon: Shield },
@@ -1187,7 +1026,6 @@ export default function SettingsPage() {
       {tab === 'team' && <TeamTab />}
       {tab === 'billing' && <BillingTab />}
       {tab === 'api-keys' && <ApiKeysTab />}
-      {tab === 'integrations' && <IntegrationsTab />}
       {tab === 'webhooks' && <WebhooksTab />}
       {tab === 'notifications' && <NotificationsTab />}
       {tab === 'security' && <SecurityTab />}

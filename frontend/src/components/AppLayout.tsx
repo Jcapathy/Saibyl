@@ -4,7 +4,6 @@ import {
   LayoutDashboard,
   FolderOpen,
   Clock,
-  BarChart3,
   Search,
   Settings,
   LogOut,
@@ -14,17 +13,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import api from '@/lib/api';
-
-/* ------------------------------------------------------------------ */
-/*  Types                                                              */
-/* ------------------------------------------------------------------ */
-
-interface BillingStatus {
-  simulations_used: number;
-  simulations_limit: number;
-  agents_used?: number;
-  agents_limit?: number;
-}
+import type { BillingStatus } from '@/types';
 
 /* ------------------------------------------------------------------ */
 /*  Nav definitions                                                    */
@@ -43,7 +32,6 @@ const coreNav: NavItem[] = [
 ];
 
 const intelligenceNav: NavItem[] = [
-  { path: '/app/markets', label: 'Markets', Icon: BarChart3 },
   { path: '/app/guide', label: 'Guide', Icon: Search },
 ];
 

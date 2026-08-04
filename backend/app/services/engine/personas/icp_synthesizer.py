@@ -64,6 +64,7 @@ from app.services.engine.personas.pack_loader import (
     get_pack,
     load_all_packs,
 )
+from app.services.refs import enum_ref
 
 logger = structlog.get_logger()
 
@@ -521,8 +522,33 @@ def _build_adversarial(
     if not label:
         return None
 
-    role = data.get("role")
-    if role not in ADVERSARIAL_ROLES:
+    # The five roles are rendered to the model as a list, so they come back
+    # decorated, cased and `-`/`_`-swapped — `"Incumbent Power User"`,
+    # `"incumbent-power-user"`, `"[sunk_cost_consultant]"`. A bare `not in`
+    # compare read every one of those as unrecognised and **silently** made it a
+    # `category_skeptic`, which collapses four distinct cohorts into one bloc.
+    # The split is what the Founder lens is for: on the live run the entire
+    # negative headline was one cohort, and a run whose four roles had merged
+    # would have reported that as the market's verdict.
+    #
+    # `enum_ref` returns None on a genuine miss so the miss is countable, and
+    # the default is applied here, loudly, rather than hidden in a lookup.
+    role = enum_ref(data.get("role"), ADVERSARIAL_ROLES)
+    if role is None:
+        if data.get("role"):
+            logger.warning(
+                "icp_adversarial_role_unrecognised",
+                archetype=label,
+                returned=str(data.get("role"))[:60],
+                allowed=list(ADVERSARIAL_ROLES),
+                detail=(
+                    "role did not resolve to one of the five; defaulted to "
+                    "category_skeptic. Repeated misses collapse the cohort split "
+                    "the lens is built on."
+                ),
+            )
+        else:
+            logger.info("icp_adversarial_role_absent", archetype=label)
         role = "category_skeptic"
 
     name, grounded = _ground_adversarial(data, allowed_docs, label)
@@ -596,6 +622,20 @@ def _clamp(value: Any, low: float, high: float, default: float) -> float:
 # ---------------------------------------------------------------------------
 
 def _prior_archetype(pack_id: str | None, archetype_id: str | None) -> Archetype | None:
+    """The built-in archetype whose psychometrics this ICP archetype inherits.
+
+    The prior supplies the Big Five vector, the demographics and the posting
+    cadence — everything that shapes how the agent *behaves* rather than what it
+    wants. Substituting a different prior therefore substitutes a different
+    person, quietly, in every agent generated from this archetype.
+
+    So the two ways of not finding one are kept distinguishable. Naming no
+    archetype is a legitimate absence and the pack's heaviest member is the
+    right stand-in for "the typical member of this pack". Naming an archetype
+    the pack does not have is a **miss** — the model referred to something, and
+    handing back an unrelated profile under that name is the shape of defect
+    this codebase keeps finding.
+    """
     if not pack_id:
         return None
     try:
@@ -603,10 +643,24 @@ def _prior_archetype(pack_id: str | None, archetype_id: str | None) -> Archetype
     except KeyError:
         logger.info("icp_prior_pack_unknown", pack_id=pack_id)
         return None
+
     if archetype_id:
+        wanted = enum_ref(archetype_id, {a.id for a in pack.archetypes})
         for archetype in pack.archetypes:
-            if archetype.id == archetype_id:
+            if archetype.id == wanted:
                 return archetype
+        logger.warning(
+            "icp_prior_archetype_unknown",
+            pack_id=pack_id,
+            archetype_id=str(archetype_id)[:60],
+            available=[a.id for a in pack.archetypes],
+            detail=(
+                "named an archetype this pack does not contain; falling back to "
+                "the pack's heaviest archetype, which carries a different "
+                "psychometric profile into every agent built from it"
+            ),
+        )
+
     # Named a pack but not a usable archetype: the pack's heaviest archetype is
     # the closest thing to "the typical member of this pack".
     return max(pack.archetypes, key=lambda a: a.weight, default=None)

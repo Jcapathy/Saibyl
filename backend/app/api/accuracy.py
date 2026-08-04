@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from app.core.auth import get_current_org
 from app.core.database import get_supabase_admin
 from app.core.llm_client import llm_complete
+from app.services.intelligence.analysis_data import load_run_data, mean_interval
 
 log = structlog.get_logger()
 
@@ -21,18 +22,20 @@ class SubmitOutcomeBody(BaseModel):
     notes: str | None = None
 
 
-class ScoreResponse(BaseModel):
-    accuracy_score: float
-    predicted_sentiment: float
-    actual_sentiment: float
-    analysis: str
-
-
 @router.post("/score")
 async def score_prediction(body: SubmitOutcomeBody, auth: dict = Depends(get_current_org)):
     """Submit actual outcomes and get an accuracy score for a simulation's predictions."""
     log.info("score_prediction", simulation_id=body.simulation_id, org_id=auth["org_id"])
     admin = get_supabase_admin()
+
+    # Scoring a prediction against an outcome nobody reported is not scoring
+    # anything. This used to substitute 0.0, which stored — and told the
+    # customer — that the run had been validated against a neutral result.
+    if body.actual_sentiment is None:
+        raise HTTPException(
+            status_code=400,
+            detail="actual_sentiment is required to score a prediction against an outcome",
+        )
 
     # Get simulation
     sim = (
@@ -46,23 +49,29 @@ async def score_prediction(body: SubmitOutcomeBody, auth: dict = Depends(get_cur
     if not sim.data:
         raise HTTPException(status_code=404, detail="Simulation not found")
 
-    # Get simulation events to calculate predicted sentiment
-    events = (
-        admin.table("simulation_events")
-        .select("metadata")
-        .eq("simulation_id", body.simulation_id)
-        .execute()
-    ).data or []
+    # What the run actually predicted, read from measured valence. The metadata
+    # "sentiment" key this used to average was written by the drift formula
+    # removed in Phase 1, and an unmeasured run fell through to 0.0 — scoring a
+    # prediction the simulation never made.
+    run = load_run_data(body.simulation_id)
+    predicted = mean_interval(run.scored_events)
+    if predicted.n == 0:
+        log.warning(
+            "accuracy_no_measured_sentiment",
+            simulation_id=body.simulation_id,
+            events_total=run.events_total,
+            events_measured=run.events_measured,
+        )
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "This simulation has no measured sentiment, so there is no "
+                "prediction to score against the reported outcome."
+            ),
+        )
 
-    sentiments = []
-    for e in events:
-        meta = e.get("metadata") or {}
-        s = meta.get("sentiment")
-        if s is not None:
-            sentiments.append(float(s))
-
-    predicted_sentiment = sum(sentiments) / len(sentiments) if sentiments else 0.0
-    actual_sentiment = body.actual_sentiment if body.actual_sentiment is not None else 0.0
+    predicted_sentiment = predicted.mean
+    actual_sentiment = body.actual_sentiment
 
     # Calculate accuracy: 1.0 - normalized distance between predicted and actual
     sentiment_distance = abs(predicted_sentiment - actual_sentiment) / 2.0  # scale is -1 to 1, range is 2
@@ -88,7 +97,8 @@ async def score_prediction(body: SubmitOutcomeBody, auth: dict = Depends(get_cur
 Simulation: {sim.data.get('name', '')}
 Prediction goal: {sim.data.get('prediction_goal', '')}
 
-Predicted average sentiment: {predicted_sentiment:.3f}
+Predicted average sentiment: {predicted_sentiment:.3f} \
+(95% CI {predicted.lower:.3f} to {predicted.upper:.3f}, from {predicted.n} agents)
 Actual sentiment reported: {actual_sentiment:.3f}
 Accuracy score: {accuracy_score:.1%}
 

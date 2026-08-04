@@ -10,8 +10,6 @@ import LandingPage from '@/pages/LandingPage';
 import DashboardPage from '@/pages/DashboardPage';
 import GuidePage from '@/pages/GuidePage';
 import LoginPage from '@/pages/LoginPage';
-import MarketDetailPage from '@/pages/MarketDetailPage';
-import MarketsPage from '@/pages/MarketsPage';
 import NewSimulationPage from '@/pages/NewSimulationPage';
 import ProjectDetailPage from '@/pages/ProjectDetailPage';
 import ProjectsPage from '@/pages/ProjectsPage';
@@ -53,8 +51,6 @@ function AnimatedRoutes() {
           <Route path="simulations/:id" element={<PageTransition><SimulationDetailPage /></PageTransition>} />
           <Route path="simulations/:id/run" element={<SimulationRunPage />} />
           <Route path="simulations/:id/report" element={<PageTransition><ReportViewerPage /></PageTransition>} />
-          <Route path="markets" element={<PageTransition><MarketsPage /></PageTransition>} />
-          <Route path="markets/:id" element={<PageTransition><MarketDetailPage /></PageTransition>} />
           <Route path="simulations/:id/compare" element={<PageTransition><ComparisonPage /></PageTransition>} />
           <Route path="settings/*" element={<PageTransition><SettingsPage /></PageTransition>} />
         </Route>

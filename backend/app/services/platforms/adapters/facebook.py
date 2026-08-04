@@ -6,6 +6,8 @@ import uuid
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 
+import structlog
+
 from app.core.llm_client import llm_fast
 from app.services.platforms.base_adapter import (
     BasePlatformAdapter,
@@ -15,6 +17,9 @@ from app.services.platforms.base_adapter import (
     SimulationEvent,
 )
 from app.services.platforms.registry import register_adapter
+from app.services.refs import enum_ref
+
+logger = structlog.get_logger()
 
 _ACTION_PROMPT = (
     "You are {username} on Facebook. Persona: {persona}\n"
@@ -30,14 +35,19 @@ _ACTION_PROMPT = (
     "Keep posts under 63206 chars."
 )
 
+# Keyed on the enum's own values, which is what `enum_ref` matches against
+# after casefolding and decoration-stripping. It used to be keyed on uppercase
+# literals and read with `.get(rtype, ReactionType.LIKE)` — see `_decide_action`
+# for why that default was the defect.
 _FB_REACTION_MAP: dict[str, ReactionType] = {
-    "LIKE": ReactionType.LIKE,
-    "LOVE": ReactionType.LOVE,
-    "HAHA": ReactionType.HAHA,
-    "WOW": ReactionType.WOW,
-    "SAD": ReactionType.SAD,
-    "ANGRY": ReactionType.ANGRY,
+    ReactionType.LIKE.value: ReactionType.LIKE,
+    ReactionType.LOVE.value: ReactionType.LOVE,
+    ReactionType.HAHA.value: ReactionType.HAHA,
+    ReactionType.WOW.value: ReactionType.WOW,
+    ReactionType.SAD.value: ReactionType.SAD,
+    ReactionType.ANGRY.value: ReactionType.ANGRY,
 }
+_FB_REACTION_VERBS = frozenset(_FB_REACTION_MAP)
 
 
 def _engagement_score(post_meta: dict) -> float:
@@ -186,7 +196,7 @@ class FacebookAdapter(BasePlatformAdapter):
         if line.upper().startswith("COMMENT"):
             match = re.match(r"COMMENT\s+(\S+):\s*(.+)", line, re.IGNORECASE)
             if match:
-                pid, text = match.group(1), match.group(2)
+                pid, text = self.post_ref(match.group(1)), match.group(2)
                 c = await self.comment(agent["username"], pid, text)
                 self.record_action(self.agent_key(agent), round_number, f"Commented on {pid}: {text[:80]}")
                 return SimulationEvent(
@@ -199,10 +209,38 @@ class FacebookAdapter(BasePlatformAdapter):
         if line.upper().startswith("REACT"):
             match = re.match(r"REACT\s+(\S+)\s+(\S+)", line, re.IGNORECASE)
             if match:
-                pid, rtype = match.group(1), match.group(2).upper()
-                reaction = _FB_REACTION_MAP.get(rtype, ReactionType.LIKE)
+                pid, rtype = self.post_ref(match.group(1)), match.group(2)
+                # **An unrecognised verb is dropped, not defaulted.** This was
+                # `.get(rtype, ReactionType.LIKE)`: every `ANGRY.`, `angry`,
+                # `[ANGRY]` or `FURIOUS` the model produced — and the prompt
+                # renders the vocabulary slash-joined, so it comes back
+                # decorated — became a LIKE. Backlash is the signal this product
+                # is sold on, and that default *inverted* it while every counter
+                # still moved and every log still read clean.
+                #
+                # `enum_ref` absorbs the three ways a model restates a member of
+                # a list it was shown (decoration, casing, separator). What
+                # survives it is genuinely outside the vocabulary, and the
+                # choice between the two honest options is made here, in favour
+                # of dropping: a reaction whose *type* is unknown cannot be
+                # scored, and emitting it with an out-of-vocabulary
+                # `metadata.reaction` would carry the unknown into every
+                # downstream aggregate instead of stopping at this log line.
+                verb = enum_ref(rtype, _FB_REACTION_VERBS)
+                if verb is None:
+                    logger.warning(
+                        "reaction_verb_unrecognised",
+                        platform=self.platform_id,
+                        verb=rtype,
+                        detail="dropped rather than defaulted to LIKE; this "
+                               "agent's action is unmeasured this round",
+                    )
+                    return None
+                reaction = _FB_REACTION_MAP[verb]
                 await self.react(agent["username"], pid, reaction)
-                self.record_action(self.agent_key(agent), round_number, f"Reacted {rtype} to {pid}")
+                self.record_action(
+                    self.agent_key(agent), round_number, f"Reacted {reaction.value} to {pid}"
+                )
                 return SimulationEvent(
                     event_type="react", agent_id=agent.get("agent_id"), agent_username=agent["username"],
                     platform=self.platform_id, round_number=round_number,
@@ -212,7 +250,10 @@ class FacebookAdapter(BasePlatformAdapter):
                 )
 
         if line.upper().startswith("SHARE"):
-            pid = line.split(maxsplit=1)[1].strip() if len(line.split()) > 1 else ""
+            # The id only — not the rest of the line. See action_ref: a model
+            # that volunteers a reason ("UPVOTE [a1b2c3] - solid") used to make
+            # the whole tail the id, and post_ref cannot repair that.
+            pid = self.action_ref(line)
             if pid:
                 await self.react(agent["username"], pid, ReactionType.SHARE)
                 self.record_action(self.agent_key(agent), round_number, f"Shared post {pid}")

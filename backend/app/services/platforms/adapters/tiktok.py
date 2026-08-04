@@ -158,7 +158,7 @@ class TikTokAdapter(BasePlatformAdapter):
         if line.upper().startswith("DUET"):
             match = re.match(r"DUET\s+(\S+):\s*(.+)", line, re.IGNORECASE)
             if match:
-                pid, caption = match.group(1), match.group(2)
+                pid, caption = self.post_ref(match.group(1)), match.group(2)
                 p = await self.post(agent["username"], caption, metadata={"type": "duet", "duet_of": pid})
                 self.record_action(self.agent_key(agent), round_number, f"Duet of {pid}: {caption[:80]}")
                 return SimulationEvent(
@@ -171,7 +171,7 @@ class TikTokAdapter(BasePlatformAdapter):
         if line.upper().startswith("COMMENT"):
             match = re.match(r"COMMENT\s+(\S+):\s*(.+)", line, re.IGNORECASE)
             if match:
-                pid, text = match.group(1), match.group(2)
+                pid, text = self.post_ref(match.group(1)), match.group(2)
                 c = await self.comment(agent["username"], pid, text)
                 self.record_action(self.agent_key(agent), round_number, f"Commented on {pid}: {text[:80]}")
                 return SimulationEvent(
@@ -181,7 +181,10 @@ class TikTokAdapter(BasePlatformAdapter):
                 )
 
         if line.upper().startswith("LIKE"):
-            pid = line.split(maxsplit=1)[1].strip() if len(line.split()) > 1 else ""
+            # The id only — not the rest of the line. See action_ref: a model
+            # that volunteers a reason ("UPVOTE [a1b2c3] - solid") used to make
+            # the whole tail the id, and post_ref cannot repair that.
+            pid = self.action_ref(line)
             if pid:
                 await self.react(agent["username"], pid, ReactionType.LIKE)
                 self.record_action(self.agent_key(agent), round_number, f"Liked post {pid}")

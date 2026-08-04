@@ -16,6 +16,11 @@ from pydantic import BaseModel
 from app.core.auth import verify_api_key
 from app.core.database import get_supabase, get_supabase_admin
 from app.core.llm_client import llm_complete
+from app.services.intelligence.analysis_data import (
+    MeasuredEvent,
+    load_run_data,
+    mean_interval,
+)
 
 logger = structlog.get_logger()
 
@@ -81,6 +86,26 @@ class BatchRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Core scoring logic
 # ---------------------------------------------------------------------------
+def _agent_spread(events: list[MeasuredEvent]) -> float:
+    """Standard deviation of per-agent mean valence.
+
+    Clustered by agent for the same reason `mean_interval` is: ten posts from
+    one agent is one opinion repeated, and letting each post count separately
+    would read a single prolific agent as a divided room.
+    """
+    per_agent: dict[str, list[float]] = {}
+    for event in events:
+        key = event.agent_id or event.agent_username
+        per_agent.setdefault(key, []).append(float(event.valence))
+
+    means = [sum(vals) / len(vals) for vals in per_agent.values()]
+    if len(means) < 2:
+        return 0.0
+    mean = sum(means) / len(means)
+    return math.sqrt(sum((m - mean) ** 2 for m in means) / len(means))
+
+
+
 async def _compute_score(simulation_id: str, org_id: str) -> ScoreResponse:
     admin = get_supabase_admin()
 
@@ -105,37 +130,42 @@ async def _compute_score(simulation_id: str, org_id: str) -> ScoreResponse:
             detail=f"Simulation is '{sim['status']}' — score requires 'running' or 'complete'",
         )
 
-    # Pull sentiment values from events
-    events = (
-        admin.table("simulation_events")
-        .select("metadata")
-        .eq("simulation_id", simulation_id)
-        .execute()
-    ).data or []
+    # Measured sentiment, read from the `valence` column. The metadata
+    # "sentiment" key this used to average was written by the drift formula
+    # removed in Phase 1 — absent on every run measured since, and on an older
+    # run a function of the archetype preset rather than of anything an agent
+    # said. Reactions carry no text and off-topic events hold no view of the
+    # subject; `scored_events` excludes both rather than counting them as 0.0.
+    run = load_run_data(simulation_id)
+    scored = run.scored_events
+    valence = mean_interval(scored)
 
-    sentiments: list[float] = []
-    for e in events:
-        meta = e.get("metadata") or {}
-        s = meta.get("sentiment")
-        if s is not None:
-            sentiments.append(float(s))
-
-    if not sentiments:
+    if valence.n == 0:
+        # No measured sentiment means no score. Defaulting to the midpoint would
+        # publish "mixed outlook" as the headline verdict on a run where nobody
+        # measured anything.
+        logger.warning(
+            "saibyl_score_unmeasured",
+            simulation_id=simulation_id,
+            events_total=run.events_total,
+            events_measured=run.events_measured,
+        )
         raise HTTPException(
             status_code=422,
-            detail="No sentiment data available for this simulation",
+            detail=(
+                "No measured sentiment for this simulation — "
+                f"{run.events_measured} of {run.events_total} events measured, "
+                "none carrying a scoreable valence."
+            ),
         )
 
-    # Score = normalized average sentiment (0-100)
-    avg_sentiment = sum(sentiments) / len(sentiments)
+    # Score = normalized mean valence (0-100)
+    avg_sentiment = valence.mean
     score = round((avg_sentiment + 1) / 2 * 100)
 
-    # Controversy boost: high std_dev means polarized = viral
-    if len(sentiments) >= 2:
-        variance = sum((s - avg_sentiment) ** 2 for s in sentiments) / len(sentiments)
-        std_dev = math.sqrt(variance)
-        if std_dev > 0.5:
-            score = min(100, score + 10)
+    # Controversy boost: agents spread across the scale means polarized = viral
+    if valence.n >= 2 and _agent_spread(scored) > 0.5:
+        score = min(100, score + 10)
     score = max(0, min(100, score))
 
     # Categorize
@@ -158,7 +188,8 @@ async def _compute_score(simulation_id: str, org_id: str) -> ScoreResponse:
         f"Goal: {sim.get('prediction_goal', 'N/A')}\n"
         f"Saibyl Score: {score}/100 ({category.replace('_', ' ')})\n"
         f"Average sentiment: {avg_sentiment:.2f} (range -1 to 1)\n"
-        f"Sample size: {len(sentiments)} agent responses\n\n"
+        f"95% confidence band: {valence.lower:.2f} to {valence.upper:.2f}\n"
+        f"Sample size: {valence.n} agents across {len(scored)} scored events\n\n"
         f"Write in punchy, shareable language. No hedging. State the verdict clearly."
     )
 
@@ -172,7 +203,7 @@ async def _compute_score(simulation_id: str, org_id: str) -> ScoreResponse:
         summary = summary.strip().strip('"')
     except Exception as exc:
         logger.warning("score_summary_llm_failed", error=str(exc), simulation_id=simulation_id)
-        summary = f"Saibyl Score {score}/100 — {category.replace('_', ' ')} outlook based on {len(sentiments)} agent responses."
+        summary = f"Saibyl Score {score}/100 — {category.replace('_', ' ')} outlook based on {valence.n} agents."
 
     generated_at = datetime.now(UTC).isoformat()
 
@@ -181,7 +212,8 @@ async def _compute_score(simulation_id: str, org_id: str) -> ScoreResponse:
         simulation_id=simulation_id,
         score=score,
         category=category,
-        n_sentiments=len(sentiments),
+        agents=valence.n,
+        scored_events=len(scored),
     )
 
     return ScoreResponse(

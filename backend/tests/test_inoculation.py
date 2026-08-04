@@ -7,6 +7,8 @@ mostly about the cases where the honest answer is *we cannot tell*.
 """
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from app.services.billing.agent_pricing import (
@@ -15,6 +17,7 @@ from app.services.billing.agent_pricing import (
 )
 from app.services.engine.personas.icp_synthesizer import ProjectMaterial
 from app.services.intelligence.inoculation import (
+    _converted_agents,
     _evidence_claims,
     _proportion_interval,
     _sourced_numbers,
@@ -208,6 +211,215 @@ def test_a_number_without_evidence_language_passes():
 def test_sourced_numbers_reads_every_material_bucket():
     material = ProjectMaterial(own="a 12", competitor="b 34", market="c 56")
     assert {"12", "34", "56"} <= _sourced_numbers(material)
+
+
+def test_an_empty_sourced_set_condemns_the_founders_own_price():
+    """Why the missing `project_id` mattered, stated as the failure it caused.
+
+    The filter is right to be strict, and it has exactly one input. Starve it of
+    the material and it stops distinguishing an invented study from a price the
+    founder publishes — every draft is dropped, after a 6,000-token main-model
+    pass has already been paid for. This test exists so that a future change
+    that re-breaks the input fails here rather than in production.
+    """
+    body = "Our benchmark is the standard run of 100 agents."
+
+    assert _evidence_claims(body, _sourced_numbers(_MATERIAL)) == []
+    assert _evidence_claims(body, set()), "an empty material set must be the loud case"
+
+
+# ---------------------------------------------------------------------------
+# Drafting reads the project's material
+# ---------------------------------------------------------------------------
+
+class _Result:
+    def __init__(self, data):
+        self.data = data
+
+
+class _Table:
+    """Enough of the supabase builder for the drafting path."""
+
+    def __init__(self, admin, name):
+        self.admin = admin
+        self.name = name
+        self._insert: list[dict] | None = None
+
+    def select(self, columns, *_a, **_kw):
+        self.admin.selects.setdefault(self.name, []).append(columns)
+        return self
+
+    def eq(self, *_a, **_kw):
+        return self
+
+    def order(self, *_a, **_kw):
+        return self
+
+    def single(self):
+        return self
+
+    def insert(self, rows):
+        self._insert = rows
+        return self
+
+    def execute(self):
+        if self._insert is not None:
+            self.admin.inserted.extend(self._insert)
+            return _Result([
+                {**row, "id": f"asset-{i}"} for i, row in enumerate(self._insert)
+            ])
+        return _Result(self.admin.rows.get(self.name, []))
+
+
+class _Admin:
+    def __init__(self, rows):
+        self.rows = rows
+        self.selects: dict[str, list[str]] = {}
+        self.inserted: list[dict] = []
+
+    def table(self, name):
+        return _Table(self, name)
+
+
+_OBJECTION_ROW = {
+    "objection_key": "price-too-high-for-small-teams",
+    "label": "Price is too high for small teams",
+    "summary": "A two-person team would need a reason for the price.",
+    "quotes": [{"text": "can't justify $99 a month"}],
+    "agent_count": 12,
+    "event_count": 20,
+    "originating_cohort": "Buyer",
+    "cohort_spread": {},
+    "mean_intensity": 0.6,
+    "load_bearing_score": 22.0,
+}
+
+# Cites "benchmark" and "100", both of which the uploaded material contains. The
+# filter drops this asset when `sourced` is empty and keeps it when it is not,
+# which makes it the exact probe for the missing column.
+_GROUNDED_BODY = "Our benchmark is the standard run of 100 agents, at $99/mo."
+
+
+def _draft_env(monkeypatch, project_id, body=_GROUNDED_BODY):
+    from app.services.engine.personas import icp_synthesizer
+    from app.services.intelligence import analysis_data, inoculation
+
+    admin = _Admin({
+        "simulations": {"id": "sim-1", "project_id": project_id,
+                        "prediction_goal": "goal", "icp_profile_id": None},
+        "canonical_objections": [_OBJECTION_ROW],
+    })
+    seen: dict[str, object] = {}
+
+    def _gather(pid):
+        seen["project_id"] = pid
+        return _MATERIAL
+
+    async def _complete(**_kw):
+        return json.dumps({"assets": [{
+            "objection_key": "price-too-high-for-small-teams",
+            "asset_type": "pricing_rationale",
+            "title": "Why we price the way we do",
+            "body": body,
+            "hypothesis": "Small teams stop raising it.",
+        }]})
+
+    monkeypatch.setattr(inoculation, "get_supabase_admin", lambda: admin)
+    monkeypatch.setattr(inoculation, "llm_complete", _complete)
+    monkeypatch.setattr(icp_synthesizer, "gather_material", _gather)
+    monkeypatch.setattr(analysis_data, "_named_competitors", lambda _id: [])
+    return admin, seen
+
+
+@pytest.mark.asyncio
+async def test_drafting_reads_the_projects_material(monkeypatch):
+    """`project_id` was missing from the `.select()`, so `sourced` was always
+    empty and every drafted asset was dropped as fabricated."""
+    from app.services.intelligence.inoculation import draft_assets
+
+    admin, seen = _draft_env(monkeypatch, "proj-1")
+
+    created = await draft_assets("sim-1", "org-1")
+
+    assert seen["project_id"] == "proj-1", "the run's material was never read"
+    assert len(created) == 1
+    assert admin.inserted[0]["body"] == _GROUNDED_BODY
+    assert any("project_id" in cols for cols in admin.selects["simulations"])
+
+
+@pytest.mark.asyncio
+async def test_the_fabrication_filter_stays_strict_with_material_loaded(monkeypatch):
+    """Fixing the input must not soften the check. This is copy a founder may
+    publish as their own claim, so there is no partial version worth keeping."""
+    from app.services.intelligence.inoculation import draft_assets
+
+    _draft_env(monkeypatch, "proj-1", body=_FABRICATED)
+
+    with pytest.raises(ValueError):
+        await draft_assets("sim-1", "org-1")
+
+
+# ---------------------------------------------------------------------------
+# Who changed their mind
+# ---------------------------------------------------------------------------
+
+class _Ev:
+    def __init__(self, event_id, username):
+        self.id = event_id
+        self.agent_username = username
+        self.agent_id = event_id
+
+
+class _Run:
+    def __init__(self, events):
+        self.events = events
+
+
+def test_converted_agents_comes_from_the_canonical_event_ids():
+    """The list was always empty, and the docstring pre-excused it.
+
+    It re-derived membership by slugging each raw objection string with a
+    *second, incompatible* algorithm — `"-".join(s.lower().split())[:64]`
+    against the canonicalizer's `re.sub(r"[^a-z0-9]+", "-", ...)[:60]` — so a
+    verbatim identical objection produced two different keys and the set
+    intersection never matched anything. Membership now comes from the
+    clustering pass's own record of which events it assigned to the key.
+    """
+    parent = _Run([_Ev("p1", "ada"), _Ev("p2", "grace"), _Ev("p3", "linus")])
+    child = _Run([_Ev("c1", "grace")])
+
+    converted = _converted_agents(
+        parent,
+        child,
+        {"event_ids": ["p1", "p2"]},
+        {"event_ids": ["c1"]},
+    )
+
+    assert converted == ["ada"]
+
+
+def test_an_objection_absent_from_the_child_converts_everyone_who_voiced_it():
+    parent = _Run([_Ev("p1", "ada"), _Ev("p2", "grace")])
+    child = _Run([_Ev("c1", "ada")])
+
+    assert _converted_agents(parent, child, {"event_ids": ["p1", "p2"]}, None) == [
+        "ada", "grace"
+    ]
+
+
+def test_an_objection_absent_from_the_parent_converts_nobody():
+    parent = _Run([_Ev("p1", "ada")])
+    child = _Run([_Ev("c1", "ada")])
+
+    assert _converted_agents(parent, child, None, {"event_ids": ["c1"]}) == []
+
+
+def test_the_second_slug_algorithm_is_gone():
+    """One definition of key derivation, in `refs.slugify`. A duplicated strip
+    set is how these failures come back."""
+    from app.services.intelligence import inoculation
+
+    assert not hasattr(inoculation, "_normalised")
 
 
 # ---------------------------------------------------------------------------

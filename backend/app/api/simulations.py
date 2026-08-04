@@ -43,6 +43,29 @@ async def _safe_task(coro, name: str, simulation_id: str | None = None):
 router = APIRouter(tags=["simulations"])
 
 
+def _variants_carrying_copy(admin, simulation_id: str) -> int:
+    """How many of this run's variants have copy for an arena to be about.
+
+    Deliberately mirrors `services/engine/variants.load_arenas`, which is the
+    only thing that decides how many arenas actually execute: a variant row with
+    blank content falls back to the run's `prediction_goal`, which is not an
+    alternative under test — it is the control run a second time.
+
+    A lookup failure is raised, not counted as zero. Pricing a run from a failed
+    variant lookup is precisely how a user gets charged for arenas that never
+    run, and `load_arenas` already swallows this failure downstream (by design —
+    a run is worth more than a scoreboard). Swallowing it here as well would
+    make the overcharge unobservable on both ends.
+    """
+    rows = (
+        admin.table("simulation_variants")
+        .select("variant_key, content")
+        .eq("simulation_id", simulation_id)
+        .execute()
+    ).data or []
+    return sum(1 for row in rows if (row.get("content") or "").strip())
+
+
 # ---------------------------------------------------------------------------
 # Request bodies
 # ---------------------------------------------------------------------------
@@ -246,7 +269,29 @@ async def list_simulations(
         .range(offset, offset + limit - 1)
         .execute()
     )
-    return result.data
+
+    # The exact count was already being computed and then thrown away with the
+    # rest of the response object, so a client had the page but no way to learn
+    # there were others: 50 simulations rendered as one page of 20 and a pager
+    # that said "1 of 1".
+    #
+    # `total=None` rather than `len(items)` when PostgREST answers without a
+    # Content-Range: an unknown total and a total of one page are the same
+    # number and opposite facts, and guessing here is what produces a pager that
+    # confidently hides the rest of the user's work.
+    total = result.count
+    if total is None:
+        log.error(
+            "simulation_count_unavailable",
+            org_id=auth["org_id"],
+            note="count='exact' returned no count; total is unknown, not len(page)",
+        )
+    return {
+        "items": result.data or [],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @router.get("/{id}")
@@ -357,6 +402,41 @@ async def start_simulation(
         )
     if current_status == "running":
         raise HTTPException(status_code=409, detail="Simulation is already running.")
+
+    # A run is priced per arena — `estimate_simulation_cost` multiplies agent
+    # actions by `simulations.variants` — but the engine executes one arena per
+    # *variant row that has copy*. `POST /simulations` accepts `variants: 4` and
+    # writes no rows, so a run configured and never given copy was billed four
+    # arenas and ran one. Refused here, before the quota check and before any
+    # deduction, because credits are taken at start: after the deduction the
+    # only remedy is a manual refund.
+    #
+    # Refused rather than silently repriced to the arena count. A quote signs a
+    # shape; charging for a different one would make the price shown and the
+    # price taken disagree, which is the defect this guard exists to prevent,
+    # inverted.
+    configured_variants = sim.data.get("variants") or 1
+    if configured_variants > 1:
+        with_copy = _variants_carrying_copy(admin, id)
+        if with_copy < configured_variants:
+            log.warning(
+                "start_refused_variants_without_copy",
+                simulation_id=id,
+                org_id=auth["org_id"],
+                priced_variants=configured_variants,
+                variants_with_copy=with_copy,
+            )
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"This run is priced for {configured_variants} variants but only "
+                    f"{with_copy} carry copy. Every variant is a full arena and an "
+                    f"arena with no copy is never executed, so starting now would "
+                    f"charge for {configured_variants - with_copy} arena(s) that do "
+                    f"not run. Set the copy with PUT /api/variants/{id}, or send an "
+                    f"empty variant list there to run a single arena."
+                ),
+            )
 
     # Enforce billing quota
     from app.services.billing.stripe_service import check_simulation_quota

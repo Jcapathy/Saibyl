@@ -28,7 +28,6 @@ deterministic from the label rather than a random UUID.
 from __future__ import annotations
 
 import json
-import re
 from typing import Any
 
 import structlog
@@ -42,6 +41,7 @@ from app.services.intelligence.analysis_schema import (
     ObjectionSummary,
     PropagationPoint,
 )
+from app.services.refs import key_ref, slugify
 
 logger = structlog.get_logger()
 
@@ -78,6 +78,21 @@ _CHARS_PER_TOKEN = 3.6
 # Verbatim quotes kept per objection. Enough to show the range of framings
 # without turning the drill-down into a transcript.
 MAX_QUOTES = 5
+
+# Share of the parent's objections that must carry their key into a
+# re-simulation before the before/after comparison is trusted.
+#
+# Zero was the only condition checked, which made the *realistic* failure
+# invisible: the first live loop carried 0 of 46 and was caught, but "12 of 46
+# carried" produces the same class of report — most objections read as `died` or
+# `emerged`, most assets read as effective — and logged nothing at all. A ratio
+# is the health metric because a partial match is a partially invalid delta, not
+# a smaller valid one.
+#
+# 0.30 sits well below the 27-of-46 (0.59) the repaired live loop produced, so
+# an ordinary run with genuine churn in its objections does not cry wolf, and
+# well above the 12-of-46 (0.26) case the audit names as the one nobody sees.
+MIN_CARRYOVER_RATIO = 0.30
 
 _PRIOR_BLOCK = """
 === OBJECTIONS FROM THE PREVIOUS RUN OF THIS AUDIENCE ===
@@ -128,9 +143,46 @@ Return JSON: {{"groups": [{{"label": "...", "summary": "...", "members": [0, 1],
 No commentary."""
 
 
-def _slugify(label: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")
-    return slug[:60] or "objection"
+def _prior_index(priors: list[dict[str, str]] | None) -> dict[str, str]:
+    """Every form a prior key can be handed back in, mapped to the prior key.
+
+    Priors are rendered to the model as ``  {key} — "{label}"``. That is the
+    same copy-back pressure that produced `[<post_id>]` across every adapter:
+    what a model is *shown* is what it returns, decorated the way it was shown.
+    So the key comes back backticked, title-cased, wrapped in quotes, or as the
+    label sitting next to it on the same line — and an exact `.strip()` compare
+    misses every one of those, mints a fresh key from the label, and the
+    objection reads as one dying and an unrelated one appearing.
+
+    Three forms per prior, in precedence order: the key itself, the key
+    re-slugged (`Too-Expensive` resolving to `too-expensive`), and the prior's
+    label slugged (the model returning the label instead of the key). First
+    prior wins a contested form; priors arrive in load-bearing order, so the
+    heavier objection keeps the ambiguous string.
+    """
+    index: dict[str, str] = {}
+    for prior in priors or []:
+        key = str(prior.get("key") or "").strip()
+        if not key:
+            continue
+        for form in (key, key_ref(key), slugify(str(prior.get("label") or ""))):
+            if form:
+                index.setdefault(form, key)
+    return index
+
+
+def _resolve_prior_key(raw: object, prior_index: dict[str, str]) -> str | None:
+    """The prior key a model's returned `key` refers to, or None.
+
+    None means *no prior matched*, which the caller counts. It deliberately does
+    not fall back to a nearest prior: the prompt tells the model that a genuinely
+    new objection is a real finding, and forcing a match would fabricate
+    continuity, which fails in the same flattering direction as finding none.
+    """
+    proposed = str(raw or "").strip()
+    if not proposed:
+        return None
+    return prior_index.get(proposed) or prior_index.get(key_ref(proposed))
 
 
 def _collect_raw(events: list[MeasuredEvent]) -> dict[str, list[MeasuredEvent]]:
@@ -435,6 +487,12 @@ async def canonicalize_objections(
     success from a comparison that had matched nothing. Migration 021 asserts
     the key is "stable and deterministic from the label"; the key is, but the
     label is not, and that distinction is the entire defect.
+
+    Offering the priors is necessary and not sufficient. The returned key is
+    resolved through `_prior_index` rather than exact-matched, because a key
+    rendered into a prompt comes back decorated; and `keys_carried_over` is
+    checked as a **ratio**, because a partial carry-over produces the same
+    flattering report over the part that failed.
     """
     raw_index = _collect_raw(run.events)
     if not raw_index:
@@ -442,6 +500,7 @@ async def canonicalize_objections(
         return []
 
     prior_keys = {p["key"] for p in (priors or [])}
+    prior_index = _prior_index(priors)
 
     with usage_context(
         "objection_canonicalization",
@@ -466,6 +525,11 @@ async def canonicalize_objections(
     summaries: list[ObjectionSummary] = []
     seen_keys: set[str] = set()
     claimed: set[str] = set()
+    # Counted, not just logged: how many returned keys needed normalising is the
+    # only evidence that the copy-back pressure is real on this model, and how
+    # many matched nothing is what the carry-over ratio is made of.
+    keys_normalised = 0
+    keys_unmatched = 0
 
     for group in groups:
         if not isinstance(group, dict):
@@ -499,20 +563,45 @@ async def canonicalize_objections(
         # on this: the two runs' objections are lined up by key, so an objection
         # present in both must carry one key across both or it reads as one
         # dying and an unrelated one appearing.
+        #
+        # Normalised through `refs.key_ref` rather than compared with a bare
+        # `.strip()`. A `.strip()` matches only the key the model was shown in
+        # exactly the casing it was shown in; a backticked, title-cased or
+        # label-substituted key silently minted a *new* one, which is the
+        # failure this whole module's docstring is about.
         reused = str(group.get("key") or "").strip()
-        if reused and reused in prior_keys and reused not in seen_keys:
-            key = reused
+        resolved = _resolve_prior_key(reused, prior_index)
+        if resolved and resolved not in seen_keys:
+            key = resolved
+            if resolved != reused:
+                keys_normalised += 1
+                logger.info(
+                    "objection_key_normalised",
+                    returned=reused[:80],
+                    resolved=resolved,
+                    label=label[:60],
+                )
         else:
-            if reused and reused not in prior_keys:
+            if reused and resolved is None:
                 # The model invented a key rather than reusing one. Slugging the
                 # label instead keeps key derivation in one place.
+                keys_unmatched += 1
                 logger.info(
                     "objection_key_not_from_priors", proposed=reused[:60], label=label[:60]
                 )
-            key = _slugify(label)
+            elif resolved:
+                # Two groups claimed the same prior. Only the first can hold the
+                # key; the second becomes a new objection, which understates the
+                # carry-over rather than double-counting it.
+                logger.warning(
+                    "objection_prior_key_claimed_twice",
+                    key=resolved,
+                    label=label[:60],
+                )
+            key = slugify(label)
             suffix = 2
             while key in seen_keys:
-                key = f"{_slugify(label)}-{suffix}"
+                key = f"{slugify(label)}-{suffix}"
                 suffix += 1
         seen_keys.add(key)
 
@@ -531,21 +620,35 @@ async def canonicalize_objections(
     summaries.sort(key=lambda o: o.load_bearing_score, reverse=True)
 
     carried = len({o.key for o in summaries} & prior_keys)
-    if priors and not carried:
-        # The comparison has nothing to compare. Every prior objection will read
-        # as `died` and every new one as `emerged`, and every tested asset will
-        # score effective — a report of total success from a matched set of
-        # size zero. Loud, because the output looks like the best possible
-        # result rather than like a failure.
+    carry_ratio = round(carried / len(prior_keys), 4) if prior_keys else 0.0
+
+    if prior_keys and carry_ratio < MIN_CARRYOVER_RATIO:
+        # Every prior objection that failed to carry reads as `died`, every
+        # child objection that failed to match reads as `emerged`, and every
+        # asset written against one of them scores effective. At zero carry-over
+        # that produces a report of total success from a matched set of size
+        # zero — which is what the first live loop did.
+        #
+        # **The guard is a ratio, not a zero test.** A zero test only catches
+        # the total failure. "12 of 46 carried" produces the same shape of wrong
+        # answer over three quarters of the comparison and used to log nothing
+        # at all, which made the survivable failure the invisible one. Loud in
+        # both cases, because the output looks like the best possible result
+        # rather than like a failure.
         logger.error(
-            "objection_keys_share_nothing_with_parent",
+            "objection_keys_carried_over_too_few",
             simulation_id=run.simulation_id,
-            priors=len(priors),
+            priors=len(prior_keys),
             canonical=len(summaries),
+            keys_carried_over=carried,
+            keys_carried_over_ratio=carry_ratio,
+            minimum_ratio=MIN_CARRYOVER_RATIO,
+            keys_unmatched=keys_unmatched,
             detail=(
-                "no canonical objection reused a key from the parent run. The "
-                "before/after comparison will report every objection as died or "
-                "emerged and every asset as effective. Treat the delta as invalid."
+                f"{carried} of {len(prior_keys)} parent objections carried their "
+                "key into this run. The unmatched ones will report as died or "
+                "emerged and their assets as effective. Treat the delta as "
+                "measuring less than it appears to."
             ),
         )
 
@@ -557,6 +660,12 @@ async def canonicalize_objections(
         unassigned=len(set(raw_index) - claimed),
         priors_offered=len(prior_keys),
         keys_carried_over=carried,
+        keys_carried_over_ratio=carry_ratio,
+        # How many returned keys were decorated or label-substituted and had to
+        # be normalised to match. Non-zero is the evidence that an exact-match
+        # compare would have been silently minting new keys.
+        keys_normalised=keys_normalised,
+        keys_unmatched=keys_unmatched,
     )
     return summaries
 

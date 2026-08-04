@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from datetime import datetime
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel
+
+from app.services.refs import post_ref as _normalise_post_ref
 
 
 class ReactionType(StrEnum):
@@ -21,6 +25,34 @@ class ReactionType(StrEnum):
     UPVOTE = "upvote"
     DOWNVOTE = "downvote"
     AWARD = "award"
+    # LinkedIn's vocabulary. Present because the alternative was mapping all
+    # four onto LIKE, which is what `_LINKEDIN_REACTIONS` used to do: every
+    # `celebrate`, `support`, `insightful` and `curious` incremented the `like`
+    # bucket, so the breakdown the adapter maintained had exactly one non-zero
+    # key on every run and reported it as a finding.
+    CELEBRATE = "celebrate"
+    SUPPORT = "support"
+    INSIGHTFUL = "insightful"
+    CURIOUS = "curious"
+
+
+# What an adapter may emit, grouped by how the propagation graph treats it.
+#
+# **These strings are persisted** in `simulation_events.event_type` and are read
+# by the analysis pipeline, the exporters and the comparison API. They are a
+# closed vocabulary, not free text — see `EventType` below, which is what stops
+# a thirteenth adapter inventing a value the runner then misfiles.
+POST_EVENT_TYPES = frozenset({"post"})
+REPLY_EVENT_TYPES = frozenset({"comment", "react"})
+# Directed at another agent rather than at a post: it neither mints a post id
+# nor replies to one, so it takes no part in the graph.
+DIRECTED_EVENT_TYPES = frozenset({"dm"})
+KNOWN_EVENT_TYPES = POST_EVENT_TYPES | REPLY_EVENT_TYPES | DIRECTED_EVENT_TYPES
+
+# The same vocabulary as a type, so pydantic rejects an unrecognised value at
+# the moment an adapter constructs the event rather than in the runner, which
+# used to classify anything it did not recognise as a post.
+EventType = Literal["post", "comment", "react", "dm"]
 
 
 class Post(BaseModel):
@@ -43,7 +75,12 @@ class Comment(BaseModel):
 
 
 class SimulationEvent(BaseModel):
-    event_type: str  # post | comment | react | dm
+    # Closed vocabulary — see EventType. It was an unconstrained `str` set
+    # independently in twelve adapters, and the runner's classifier was a
+    # *negative* allow-list: anything that was not a comment or a react was
+    # treated as a post and claimed a post id, so a new event type would have
+    # silently overwritten a real parent in the propagation graph.
+    event_type: EventType
 
     # The agent's database id. This is what attributes an event to an agent.
     #
@@ -182,8 +219,36 @@ class BasePlatformAdapter(ABC):
 
         Use this at the point an id arrives from a model, before comparing it to
         anything.
+
+        Delegates to `app.services.refs.post_ref` rather than repeating the
+        strip set. It *was* repeated — as a literal here and a second literal in
+        the runner — and the two had already drifted by one character. That
+        drift is precisely how the 193-of-193 failure comes back with nothing in
+        the logs, so there is one definition and this is not it.
         """
-        return str(raw or "").strip("[]()<>{}\"'`,.:;! \t\n")
+        return _normalise_post_ref(raw)
+
+    @staticmethod
+    def action_ref(line: str) -> str:
+        """The post id out of a `VERB <post_id>` action line.
+
+        Every adapter's prompt asks for bare verb lines — `UPVOTE <post_id>`,
+        `LIKE <post_id>`, `SHARE <post_id>` — and every adapter used to read the
+        id as `line.split(maxsplit=1)[1].strip()`, which is *the rest of the
+        line*, not the id. A model that volunteers a reason —
+        `UPVOTE [a1b2c3] — solid point`, which is exactly what a persona prompt
+        encourages — yielded `a1b2c3] — solid point`.
+
+        `post_ref` could not repair that: it strips edges by design, so a stray
+        separator *inside* the value stays visible rather than being silently
+        healed into a plausible different id. The repair has to happen where the
+        line is split, so it happens here, once, for all twelve adapters.
+
+        Returns "" when the line carries no id, which callers already treat as
+        "no action".
+        """
+        match = re.match(r"^\s*\S+\s+(\S+)", str(line or ""))
+        return _normalise_post_ref(match.group(1)) if match else ""
 
     @abstractmethod
     async def initialize(self, config: dict, agents: list) -> None:

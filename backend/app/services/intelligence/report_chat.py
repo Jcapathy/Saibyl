@@ -2,6 +2,7 @@
 # ─────────────────────────────────────────────────────────
 # chat_with_report(report_id, message, conversation_history,
 #                  max_context_tools=3) -> ChatResponse
+# ReportNotReadyError
 # ─────────────────────────────────────────────────────────
 from __future__ import annotations
 
@@ -10,6 +11,7 @@ from uuid import UUID
 
 import redis
 import structlog
+from fastapi import HTTPException
 from pydantic import BaseModel
 
 from app.core.config import settings
@@ -50,6 +52,44 @@ class ChatResponse(BaseModel):
     sources: list[str]
 
 
+class ReportNotReadyError(HTTPException):
+    """Asked a question of a report that has no body yet.
+
+    `reports.markdown_content` is NULL from insert until the last section lands,
+    so every question asked while a report is generating used to reach
+    `markdown_content[:8000]` and 500 on a NoneType slice. Asking early is a
+    normal thing for a user to do; it is not a server fault, so it is a 409.
+
+    The report's `status` rides along because NULL content is the *same value*
+    for "still generating, ask again in a minute" and "generation failed, this
+    will never have a body" — opposite facts the caller cannot otherwise tell
+    apart. It is an `HTTPException` subclass so it propagates through the route
+    unchanged while still being catchable by name.
+    """
+
+    def __init__(self, report_id: UUID | str, status: str | None) -> None:
+        if status == "failed":
+            message = (
+                "This report failed to generate, so there is nothing to ask "
+                "questions about. Re-run the report to try again."
+            )
+        else:
+            message = (
+                "This report is still being written. Questions can be answered "
+                "once it finishes — its progress is at "
+                f"GET /api/reports/{report_id}/progress."
+            )
+        super().__init__(
+            status_code=409,
+            detail={
+                "code": "report_not_ready",
+                "report_id": str(report_id),
+                "status": status,
+                "message": message,
+            },
+        )
+
+
 def _get_redis() -> redis.Redis:
     return redis.from_url(settings.redis_url, decode_responses=True)
 
@@ -85,13 +125,26 @@ async def chat_with_report(
     # Load report context
     report = (
         admin.table("reports")
-        .select("markdown_content, simulation_id")
+        .select("markdown_content, simulation_id, status")
         .eq("id", str(report_id))
-        .single()
         .execute()
     )
-    report_data = report.data
-    markdown_content = report_data["markdown_content"]
+    if not report.data:
+        raise HTTPException(status_code=404, detail="Report not found")
+    report_data = report.data[0]
+
+    # Refused before the model is called, not after: an answer written from an
+    # empty report is a confident answer about nothing, and it would be billed.
+    markdown_content = (report_data.get("markdown_content") or "").strip()
+    if not markdown_content:
+        status = report_data.get("status")
+        logger.info(
+            "report_chat_refused_not_ready",
+            report_id=str(report_id),
+            status=status,
+        )
+        raise ReportNotReadyError(report_id, status)
+
     simulation_id = report_data["simulation_id"]
 
     # Restore or initialise conversation history

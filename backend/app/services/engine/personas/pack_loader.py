@@ -23,7 +23,22 @@ PACKS_DIR = Path(__file__).resolve().parents[4] / "data" / "persona_packs"
 # live in one row so that an edit and the pack the next run uses cannot drift.
 ICP_PACK_PREFIX = "icp_"
 
-# In-memory cache
+# Built-in packs, read from disk once per process.
+#
+# **Only packs from `PACKS_DIR` ever go in here.** Custom and compiled-ICP packs
+# come out of the database and are tenant-owned; writing them into a
+# process-global dict made two things true that must not be. A custom pack whose
+# id equalled a built-in's overwrote the built-in for **every** organisation
+# served by that worker, so one tenant's edit silently changed another tenant's
+# audience — and even without a collision, `get_pack` checks this dict first, so
+# the first org to load a custom pack served it to every subsequent caller of
+# that id. Both are cross-tenant, both are invisible: the run completes, the
+# report renders, and the agents are simply not the agents the founder
+# configured.
+#
+# Built-in packs are files and cannot change under a running process, which is
+# what makes caching them safe. Everything else is re-read, on the same
+# reasoning `_load_icp_pack` already documents.
 _pack_cache: dict[str, PersonaPack] = {}
 
 
@@ -118,7 +133,7 @@ class PackSummary(BaseModel):
 
 
 def load_all_packs() -> list[PersonaPack]:
-    """Load all persona packs from disk into memory cache."""
+    """Load the built-in persona packs from disk into the process cache."""
     global _pack_cache
     if _pack_cache:
         return list(_pack_cache.values())
@@ -142,7 +157,12 @@ def load_all_packs() -> list[PersonaPack]:
 
 
 def get_pack(pack_id: str) -> PersonaPack:
-    """Get a specific persona pack by ID (built-in, custom, or compiled ICP)."""
+    """Get a specific persona pack by ID (built-in, custom, or compiled ICP).
+
+    Built-ins are checked first and are the only cached tier, so a tenant pack
+    can never displace one. Custom and ICP packs cost a query per call, which is
+    the price of not serving one organization's audience to another.
+    """
     if not _pack_cache:
         load_all_packs()
     if pack_id in _pack_cache:
@@ -184,15 +204,45 @@ def _load_icp_pack(pack_id: str) -> PersonaPack | None:
     return None
 
 
+def _shadows_builtin(pack: PersonaPack, org_id: str | None = None) -> bool:
+    """True when a tenant pack claims a built-in's id. Loud, and refused.
+
+    The built-in wins, because a shared global must never be replaced by tenant
+    data. But the tenant's pack then never runs, and a pack that silently never
+    runs is the same lookup-miss-indistinguishable-from-absence shape as the
+    overwrite it replaced — so the collision is reported at ERROR with both the
+    id and the owner, which is what makes it fixable.
+    """
+    if pack.id not in _pack_cache:
+        return False
+    logger.error(
+        "custom_pack_shadows_builtin",
+        pack_id=pack.id,
+        organization_id=org_id,
+        detail=(
+            "a custom pack claims a built-in pack's id. The built-in is served "
+            "and the custom pack is ignored; rename the custom pack. It must "
+            "never be cached, because the cache is process-global and shared by "
+            "every organization this worker serves."
+        ),
+    )
+    return True
+
+
 def _load_custom_pack(pack_id: str) -> PersonaPack | None:
-    """Load a single custom pack from DB by pack_id."""
+    """Load a single custom pack from DB by pack_id.
+
+    Not cached: `_pack_cache` is process-global and this row is tenant-owned.
+    See the cache's own comment for what caching it did.
+    """
     try:
         from app.core.database import get_supabase_admin
         admin = get_supabase_admin()
         result = admin.table("custom_persona_packs").select("pack_data").eq("pack_id", pack_id).execute()
         if result.data:
             pack = PersonaPack.model_validate(result.data[0]["pack_data"])
-            _pack_cache[pack.id] = pack
+            if _shadows_builtin(pack):
+                return None
             return pack
     except Exception as e:
         logger.warning("custom_pack_load_failed", pack_id=pack_id, error=str(e))
@@ -200,7 +250,11 @@ def _load_custom_pack(pack_id: str) -> PersonaPack | None:
 
 
 def load_custom_packs_for_org(org_id: str) -> list[PersonaPack]:
-    """Load all custom packs for an organization from DB."""
+    """Load all custom packs for an organization from DB.
+
+    Not cached, for the same reason as `_load_custom_pack`: these rows belong to
+    one organization and `_pack_cache` belongs to the process.
+    """
     try:
         from app.core.database import get_supabase_admin
         admin = get_supabase_admin()
@@ -209,7 +263,8 @@ def load_custom_packs_for_org(org_id: str) -> list[PersonaPack]:
         for row in result.data:
             try:
                 pack = PersonaPack.model_validate(row["pack_data"])
-                _pack_cache[pack.id] = pack
+                if _shadows_builtin(pack, org_id):
+                    continue
                 packs.append(pack)
             except Exception as e:
                 logger.warning("custom_pack_parse_failed", error=str(e))

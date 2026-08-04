@@ -18,7 +18,6 @@ from app.api import (
     exports,
     icp,
     inoculation,
-    markets,
     ontologies,
     organizations,
     personas,
@@ -148,7 +147,6 @@ def create_app() -> FastAPI:
     app.include_router(analysis.router, prefix="/api")
     app.include_router(exports.router, prefix="/api")
     app.include_router(uploads.router, prefix="/api/uploads")
-    app.include_router(markets.router, prefix="/api/markets")
     app.include_router(accuracy.router, prefix="/api/accuracy")
     app.include_router(score.router, prefix="/api/score")
     app.include_router(comparison.router, prefix="/api/compare")

@@ -6,6 +6,8 @@ import uuid
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 
+import structlog
+
 from app.core.llm_client import llm_fast
 from app.services.platforms.base_adapter import (
     BasePlatformAdapter,
@@ -15,6 +17,8 @@ from app.services.platforms.base_adapter import (
     SimulationEvent,
 )
 from app.services.platforms.registry import register_adapter
+
+logger = structlog.get_logger()
 
 _MAX_NESTING = 3
 
@@ -49,6 +53,11 @@ class NewsCommentsAdapter(BasePlatformAdapter):
         self._posts: list[Post] = []
         self._comments: list[Comment] = []
         self._reactions: dict[str, dict[str, ReactionType]] = {}
+        # comment id -> upvotes. Comments are what the feed shows and what
+        # agents are asked to upvote, and `Comment` has no metadata dict to hold
+        # a counter, so the count lives here — per instance, like every other
+        # piece of arena state.
+        self._comment_upvotes: dict[str, int] = {}
         self._flagged: set[str] = set()
         # seed an article post
         article_title = config.get("article_title", "Breaking News Story")
@@ -122,27 +131,56 @@ class NewsCommentsAdapter(BasePlatformAdapter):
         return c
 
     async def react(self, agent_username: str, post_id: str, reaction: ReactionType) -> None:
+        """An upvote, on a comment or on the article.
+
+        **Comments first, because that is what the feed shows.** This adapter
+        renders `[{c.id}] author: text` for comments and asks for
+        `UPVOTE <comment_id>`, but resolved the reference against `self._posts`,
+        which holds only the seeded article — whose id is never displayed. Every
+        id an agent could type therefore matched nothing, so *100% of upvotes on
+        this platform were discarded*, silently, on every run.
+
+        The article stays reachable because `COMMENT:` targets `article.id`
+        directly, so it is a real id even though no agent is ever shown it.
+        """
         # V1 defect: the model echoes the id in the brackets the feed showed
         # it, so an un-normalised post_id never matches p.id. See post_ref.
         post_id = self.post_ref(post_id)
         self._reactions.setdefault(post_id, {})[agent_username] = reaction
+        for c in self._comments:
+            if c.id == post_id:
+                self._comment_upvotes[post_id] = self._comment_upvotes.get(post_id, 0) + 1
+                return
         for p in self._posts:
             if p.id == post_id:
                 p.metadata["upvotes"] = p.metadata.get("upvotes", 0) + 1
-                break
+                return
+        # A lookup miss and a legitimate absence must not be the same value.
+        logger.warning(
+            "reaction_target_not_found",
+            platform=self.platform_id,
+            target_id=post_id,
+            detail="an agent upvoted an id matching no comment or article in "
+                   "this arena",
+        )
 
     def get_state_snapshot(self) -> dict:
         return {
             "platform": self.platform_id,
             "articles": len([p for p in self._posts if p.metadata.get("type") == "article"]),
             "total_comments": len(self._comments),
+            "comment_upvotes": sum(self._comment_upvotes.values()),
             "flagged_comments": len(self._flagged),
         }
 
     # ------------------------------------------------------------------
     def _get_comment_depth(self, comment_id: str) -> int:
         depth = 0
-        current = comment_id
+        # Normalised on the way in even though today's only caller normalises
+        # first. `_flag_post` on Hacker News was inert for the whole of V1 for
+        # exactly this reason: a private helper that compares a model-supplied
+        # id raw is correct only for as long as every caller remembers.
+        current = self.post_ref(comment_id)
         for _ in range(_MAX_NESTING + 1):
             found = False
             for c in self._comments:
@@ -162,7 +200,8 @@ class NewsCommentsAdapter(BasePlatformAdapter):
         article_title = article.metadata.get("title", "News Article")
 
         comments_text = "\n".join(
-            f"[{c.id}] {c.author_username}: {c.content[:100]}"
+            f"[{c.id}] {c.author_username}: {c.content[:100]} "
+            f"({self._comment_upvotes.get(c.id, 0)} upvotes)"
             for c in self._comments[-10:]
         ) or "(no comments yet)"
 
@@ -196,7 +235,7 @@ class NewsCommentsAdapter(BasePlatformAdapter):
         if line.upper().startswith("REPLY"):
             match = re.match(r"REPLY\s+(\S+):\s*(.+)", line, re.IGNORECASE)
             if match:
-                cid, text = match.group(1), match.group(2)
+                cid, text = self.post_ref(match.group(1)), match.group(2)
                 c = await self.comment(agent["username"], cid, text)
                 self.record_action(self.agent_key(agent), round_number, f"Replied to {cid}: {text[:80]}")
                 return SimulationEvent(
@@ -207,7 +246,10 @@ class NewsCommentsAdapter(BasePlatformAdapter):
                 )
 
         if line.upper().startswith("UPVOTE"):
-            cid = line.split(maxsplit=1)[1].strip() if len(line.split()) > 1 else ""
+            # The id only — not the rest of the line. See action_ref: a model
+            # that volunteers a reason ("UPVOTE [a1b2c3] - solid") used to make
+            # the whole tail the id, and post_ref cannot repair that.
+            cid = self.action_ref(line)
             if cid:
                 await self.react(agent["username"], cid, ReactionType.UPVOTE)
                 self.record_action(self.agent_key(agent), round_number, f"Upvoted comment {cid}")

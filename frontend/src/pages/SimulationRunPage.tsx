@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SimulationSocket } from '@/lib/websocket';
@@ -17,83 +17,10 @@ const PLATFORM_STYLES: Record<string, { bg: string; text: string; dot: string }>
   YouTube:   { bg: 'bg-[#EF4444]/15', text: 'text-[#EF4444]',  dot: '#EF4444' },
 };
 
-function sentimentColor(score: number | null): string {
-  if (score === null) return '#64748B';
-  if (score >= 0.3)  return '#10B981';
-  if (score <= -0.3) return '#EF4444';
-  return '#F59E0B';
-}
-
-/* ── Mini SVG Sentiment Timeline ── */
-function SentimentTimeline({ events }: { events: { sentiment_score?: number | null }[] }) {
-  const scores = useMemo(() => {
-    const filtered = events
-      .filter((e) => e.sentiment_score != null)
-      .map((e) => e.sentiment_score as number);
-    return filtered.slice(-80); // keep last 80 points
-  }, [events]);
-
-  if (scores.length < 2) {
-    return (
-      <div className="w-full h-full flex items-center justify-center">
-        <p className="text-[11px] text-saibyl-muted font-mono">Waiting for sentiment data...</p>
-      </div>
-    );
-  }
-
-  const W = 800;
-  const H = 64;
-  const pad = 4;
-
-  const xStep = (W - pad * 2) / (scores.length - 1);
-  const toY = (s: number) => pad + ((1 - (s + 1) / 2) * (H - pad * 2));
-
-  const pathD = scores
-    .map((s, i) => `${i === 0 ? 'M' : 'L'} ${(pad + i * xStep).toFixed(1)} ${toY(s).toFixed(1)}`)
-    .join(' ');
-
-  const fillD = `${pathD} L ${(pad + (scores.length - 1) * xStep).toFixed(1)} ${H} L ${pad} ${H} Z`;
-
-  const lastScore = scores[scores.length - 1];
-  const lineColor = sentimentColor(lastScore);
-
-  return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      preserveAspectRatio="none"
-      className="w-full h-full"
-    >
-      {/* Zero line */}
-      <line x1={pad} y1={H / 2} x2={W - pad} y2={H / 2} stroke="rgba(255,255,255,0.06)" strokeWidth="1" strokeDasharray="4 4" />
-
-      {/* Fill under curve */}
-      <defs>
-        <linearGradient id="sgrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={lineColor} stopOpacity="0.25" />
-          <stop offset="100%" stopColor={lineColor} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={fillD} fill="url(#sgrad)" />
-
-      {/* Line */}
-      <path d={pathD} fill="none" stroke={lineColor} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
-
-      {/* Last dot */}
-      <circle
-        cx={(pad + (scores.length - 1) * xStep).toFixed(1)}
-        cy={toY(lastScore).toFixed(1)}
-        r="3"
-        fill={lineColor}
-      />
-    </svg>
-  );
-}
-
 /* ── Event Card ── */
 function EventCard({ evt }: { evt: SimulationStreamEvent }) {
   const platform = evt.platform ?? undefined;
   const style = platform ? PLATFORM_STYLES[platform] : null;
-  const score = evt.sentiment_score;
 
   return (
     <motion.div
@@ -104,7 +31,7 @@ function EventCard({ evt }: { evt: SimulationStreamEvent }) {
     >
       <div className="flex items-center justify-between mb-1.5">
         <span className="font-medium text-saibyl-platinum text-[12px] truncate max-w-[120px]">
-          {evt.agent_username || evt.event_type}
+          {evt.event_type}
         </span>
         {platform && style && (
           <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono ${style.bg} ${style.text}`}>
@@ -114,20 +41,7 @@ function EventCard({ evt }: { evt: SimulationStreamEvent }) {
         )}
       </div>
       {evt.content && (
-        <p className="text-saibyl-muted text-[11px] leading-relaxed line-clamp-2 mb-1.5">{evt.content}</p>
-      )}
-      {score != null && (
-        <div className="flex items-center gap-1.5">
-          <div className="flex-1 h-1 bg-white/[0.06] rounded-full overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all"
-              style={{ width: `${((score + 1) / 2) * 100}%`, background: sentimentColor(score) }}
-            />
-          </div>
-          <span className="font-mono text-[10px]" style={{ color: sentimentColor(score) }}>
-            {score > 0 ? '+' : ''}{score.toFixed(2)}
-          </span>
-        </div>
+        <p className="text-saibyl-muted text-[11px] leading-relaxed line-clamp-2">{evt.content}</p>
       )}
     </motion.div>
   );
@@ -279,18 +193,10 @@ export default function SimulationRunPage() {
             )}
           </div>
 
-          {/* Sentiment timeline */}
-          <div className="h-[88px] border-t border-white/[0.04] bg-saibyl-deep px-5 py-3 shrink-0">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] font-mono tracking-widest uppercase text-saibyl-muted">Sentiment Timeline</span>
-              {events.length > 0 && (
-                <span className="text-[10px] font-mono text-saibyl-muted">{events.filter(e => e.sentiment_score != null).length} samples</span>
-              )}
-            </div>
-            <div className="w-full h-[52px]">
-              <SentimentTimeline events={recentEvents} />
-            </div>
-          </div>
+          {/* Sentiment is deliberately absent from this page. Valence is scored
+              from event content after the run completes, so there is nothing to
+              plot while the swarm is still talking. The measured arc lives on
+              the report, built from the analysis artifact. */}
         </div>
 
         {/* Right panel — live event feed */}

@@ -26,40 +26,11 @@ import {
   type AnalysisResponse,
   type SimulationAnalysis,
 } from '@/lib/analysis';
+import type { Simulation, SimulationReport } from '@/types';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
-
-interface SourceDocument {
-  filename: string;
-  file_type: string;
-  word_count: number;
-  text: string;
-}
-
-interface Report {
-  id: string;
-  simulation_id: string;
-  status?: string;
-  sections: { section_type?: string; title: string; content: string }[];
-  full_markdown: string;
-  source_documents?: SourceDocument[];
-}
-
-interface SimDetail {
-  id: string;
-  name: string;
-  status: string;
-  prediction_goal: string;
-  platforms: string[];
-  agent_count: number;
-  max_rounds: number;
-  persona_pack_ids?: string[];
-  description?: string;
-  created_at: string;
-  completed_at: string | null;
-}
 
 const PLATFORM_NAMES: Record<string, string> = {
   twitter_x: 'X (Twitter)',
@@ -105,8 +76,8 @@ const BRAND = '#8B5CF6';
 export default function ReportPrintPage() {
   const { id: simId } = useParams<{ id: string }>();
 
-  const [report, setReport] = useState<Report | null>(null);
-  const [simulation, setSimulation] = useState<SimDetail | null>(null);
+  const [report, setReport] = useState<SimulationReport | null>(null);
+  const [simulation, setSimulation] = useState<Simulation | null>(null);
   const [analysis, setAnalysis] = useState<SimulationAnalysis | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -121,8 +92,8 @@ export default function ReportPrintPage() {
           api.get(`/simulations/${simId}`),
         ]);
         if (cancelled) return;
-        setReport(reportRes.data as Report);
-        setSimulation(simRes.data as SimDetail);
+        setReport(reportRes.data as SimulationReport);
+        setSimulation(simRes.data as Simulation);
       } catch {
         // Falls through to the "could not be loaded" state below.
       }
@@ -182,21 +153,17 @@ export default function ReportPrintPage() {
     );
   }
 
+  // Matched on title alone. The route embeds only `title` and `content` in
+  // each section, and `section_type` is not a column on `report_sections` at
+  // all — the clauses that tested it could never fire.
   const execSection =
-    report.sections.find(
-      (s) =>
-        /executive|summary|overview/i.test(s.title) ||
-        s.section_type === 'executive_summary',
-    ) ??
+    report.sections.find((s) => /executive|summary|overview/i.test(s.title)) ??
     report.sections[0] ??
     null;
 
   const conclusionSection =
-    report.sections.find(
-      (s) =>
-        /strategic.*implication|recommended.*action|conclusion/i.test(s.title) ||
-        s.section_type === 'conclusion' ||
-        s.section_type === 'recommendations',
+    report.sections.find((s) =>
+      /strategic.*implication|recommended.*action|conclusion/i.test(s.title),
     ) ?? null;
 
   const detailedSections = report.sections.filter(
@@ -311,7 +278,7 @@ export default function ReportPrintPage() {
               label="Platforms"
               value={simulation.platforms.map((p) => PLATFORM_NAMES[p] ?? p).join(', ')}
             />
-            <Field label="Agents" value={String(simulation.agent_count)} />
+            <Field label="Agents" value={simulation.agent_count?.toString() ?? '—'} />
             <Field label="Rounds" value={String(simulation.max_rounds)} />
           </div>
 
@@ -423,7 +390,7 @@ export default function ReportPrintPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <tbody>
               {[
-                ['Agents generated', String(simulation.agent_count)],
+                ['Agents generated', simulation.agent_count?.toString() ?? '—'],
                 ['Rounds', String(simulation.max_rounds)],
                 ['Platforms', simulation.platforms.map((p) => PLATFORM_NAMES[p] ?? p).join(', ')],
                 ...(simulation.persona_pack_ids?.length

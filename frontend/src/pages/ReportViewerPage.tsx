@@ -6,6 +6,7 @@ import { formatDistanceToNow } from 'date-fns';
 import api from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
 import { cleanContent, stripDuplicateTitle } from '@/lib/utils';
+import { REPORT_TERMINAL_STATUSES } from '@/lib/constants';
 import {
   isSupportedSchema,
   withSchemaDefaults,
@@ -26,30 +27,11 @@ import VariantScoreboardPanel from '@/components/analysis/VariantScoreboard';
 import EvidenceDrawer from '@/components/analysis/EvidenceDrawer';
 import Panel, { NoData } from '@/components/analysis/Panel';
 import InoculationWorkbench from '@/components/founder/InoculationWorkbench';
+import type { Simulation, SimulationReport } from '@/types';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
-
-interface Report {
-  id: string;
-  simulation_id: string;
-  status?: string;
-  sections: { section_type?: string; title: string; content: string }[];
-  full_markdown: string;
-}
-
-interface SimDetail {
-  id: string;
-  name: string;
-  status: string;
-  created_at: string;
-  completed_at?: string | null;
-  platforms?: string[];
-  agent_count?: number;
-  /** Set when this run is an inoculation re-simulation of another. */
-  parent_simulation_id?: string | null;
-}
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -111,8 +93,8 @@ function statusColor(status: string): string {
 export default function ReportViewerPage() {
   const { id: simId } = useParams<{ id: string }>();
 
-  const [report, setReport] = useState<Report | null>(null);
-  const [simulation, setSimulation] = useState<SimDetail | null>(null);
+  const [report, setReport] = useState<SimulationReport | null>(null);
+  const [simulation, setSimulation] = useState<Simulation | null>(null);
   const [analysis, setAnalysis] = useState<SimulationAnalysis | null>(null);
   const [analysisError, setAnalysisError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -154,16 +136,22 @@ export default function ReportViewerPage() {
         ]);
         if (cancelled) return;
 
-        const rpt = reportRes.data as Report;
+        const rpt = reportRes.data as SimulationReport;
         setReport(rpt);
         setSimulation(simRes.data);
         setLoading(false);
 
-        const incomplete =
-          rpt.status === 'generating' ||
-          rpt.status === 'pending' ||
-          (!rpt.full_markdown && rpt.sections.every((s) => !s.content));
-        if (incomplete && !cancelled) {
+        // A terminal status ends the poll outright. Testing only for emptiness
+        // is what made a failed report poll forever: a failure leaves no
+        // markdown and no section content, so "still empty" looked identical to
+        // "still writing" and the request repeated every five seconds for as
+        // long as the tab stayed open.
+        const stillWriting =
+          !REPORT_TERMINAL_STATUSES.includes(rpt.status ?? '') &&
+          (rpt.status === 'generating' ||
+            rpt.status === 'pending' ||
+            (!rpt.full_markdown && rpt.sections.every((s) => !s.content)));
+        if (stillWriting && !cancelled) {
           pollTimer = setTimeout(load, 5000);
         }
       } catch {
@@ -416,18 +404,29 @@ export default function ReportViewerPage() {
 
       {/* Content */}
       <div className="flex-1 overflow-auto p-8">
-        {report.status && report.status !== 'complete' && report.status !== 'completed' && (
-          <div className="mb-6 flex items-center gap-3 px-5 py-4 rounded-2xl bg-saibyl-insight-violet/10 border border-saibyl-insight-violet/20">
-            <span className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-saibyl-insight-violet opacity-75" />
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-saibyl-insight-violet" />
-            </span>
+        {report.status === 'failed' && (
+          <div className="mb-6 flex items-center gap-3 px-5 py-4 rounded-2xl bg-saibyl-negative/10 border border-saibyl-negative/20">
+            <span className="inline-flex h-3 w-3 rounded-full bg-saibyl-negative" />
             <span className="text-[14px] text-saibyl-platinum">
-              The written report is still generating. The measured findings below are complete
-              and do not depend on it.
+              The written report failed to generate and will not arrive. The measured findings
+              below are unaffected — they come from the analysis artifact, not the prose.
             </span>
           </div>
         )}
+
+        {report.status &&
+          !REPORT_TERMINAL_STATUSES.includes(report.status) && (
+            <div className="mb-6 flex items-center gap-3 px-5 py-4 rounded-2xl bg-saibyl-insight-violet/10 border border-saibyl-insight-violet/20">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-saibyl-insight-violet opacity-75" />
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-saibyl-insight-violet" />
+              </span>
+              <span className="text-[14px] text-saibyl-platinum">
+                The written report is still generating. The measured findings below are complete
+                and do not depend on it.
+              </span>
+            </div>
+          )}
 
         {/* Tab 0 — Findings */}
         {activeTab === 0 &&

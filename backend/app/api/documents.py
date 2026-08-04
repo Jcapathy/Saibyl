@@ -91,8 +91,23 @@ async def upload_document(
         .execute()
     ).data[0]
 
-    # Increment project asset count
-    admin.rpc("increment_asset_count", {"p_project_id": project_id}).execute()
+    # Increment project asset count.
+    #
+    # `projects.asset_count` is a denormalised counter, and the upload has
+    # already succeeded by this point: the object is in storage and the row is
+    # in `documents`. Letting an RPC failure become a 500 would tell the client
+    # its upload failed and invite a re-upload, producing a duplicate document
+    # for a wrong badge count. Logged at exception level with the ids needed to
+    # reconcile — loud and recoverable, not swallowed.
+    try:
+        admin.rpc("increment_asset_count", {"p_project_id": project_id}).execute()
+    except Exception:
+        log.exception(
+            "asset_count_increment_failed",
+            project_id=project_id,
+            document_id=doc["id"],
+            note="document row exists; projects.asset_count is now under-counted",
+        )
 
     # Trigger async processing
     asyncio.create_task(_safe_task(run_process_document(doc["id"]), "process_document"))
@@ -159,7 +174,20 @@ async def delete_document(id: str, auth: dict = Depends(get_current_org)):
     # Delete database record
     admin.table("documents").delete().eq("id", id).execute()
 
-    # Decrement project asset count
-    admin.rpc("decrement_asset_count", {"p_project_id": doc.data["project_id"]}).execute()
+    # Decrement project asset count. Same reasoning as the upload path in
+    # reverse: the storage object and the row are already gone, so a 500 here
+    # would report a failed delete for a delete that happened, and the client's
+    # retry would 404.
+    try:
+        admin.rpc(
+            "decrement_asset_count", {"p_project_id": doc.data["project_id"]}
+        ).execute()
+    except Exception:
+        log.exception(
+            "asset_count_decrement_failed",
+            project_id=doc.data["project_id"],
+            document_id=id,
+            note="document row deleted; projects.asset_count is now over-counted",
+        )
 
     return {"detail": "Document deleted"}

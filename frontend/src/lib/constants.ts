@@ -109,11 +109,61 @@ export function sentimentBarColor(v: number): string {
   return CHART_COLORS.negative;
 }
 
-/** Terminal statuses — simulation is done and won't change */
-export const TERMINAL_STATUSES = ['complete', 'completed', 'failed', 'stopped'];
+/* ── Simulation status ───────────────────────────────────────────── */
 
-/** Active statuses — simulation is in progress */
-export const ACTIVE_STATUSES = ['preparing', 'running'];
+/**
+ * Every value the backend writes to `simulations.status`, in lifecycle order.
+ *
+ * Written by `app/api/simulations.py` and `app/workers/simulation_tasks.py`.
+ * The column has no CHECK constraint, so nothing but this list stands between
+ * a new backend status and a page that silently stops polling — `analyzing`
+ * was missing here and froze the detail page for the whole measurement pass.
+ * Add to this list before adding to any of the sets below.
+ */
+export const SIMULATION_STATUSES = [
+  'draft',
+  'preparing',
+  'ready',
+  'running',
+  'analyzing',
+  'complete',
+  'stopped',
+  'failed',
+] as const;
 
-/** Idle statuses — simulation can be (re)started */
-export const IDLE_STATUSES = ['draft', 'ready', 'failed'];
+export type SimulationStatus = (typeof SIMULATION_STATUSES)[number];
+
+/**
+ * Terminal — the run is over and the status will not change again.
+ *
+ * `completed` is not written by the backend; it is accepted here because the
+ * scoring route still reads it and older rows may carry it.
+ */
+export const TERMINAL_STATUSES: string[] = ['complete', 'completed', 'failed', 'stopped'];
+
+/**
+ * In flight — keep polling.
+ *
+ * `analyzing` is the post-run measurement pass. It is not visible progress,
+ * but it is the window in which the report becomes available, so a page that
+ * stops polling here never shows the link to it.
+ */
+export const ACTIVE_STATUSES: string[] = ['preparing', 'running', 'analyzing'];
+
+/** Idle — the run can be started or restarted. */
+export const IDLE_STATUSES: string[] = ['draft', 'ready', 'failed'];
+
+/* ── Report status ───────────────────────────────────────────────── */
+
+/** Every value the backend writes to `reports.status`. */
+export const REPORT_STATUSES = ['pending', 'generating', 'complete', 'failed'] as const;
+
+export type ReportStatus = (typeof REPORT_STATUSES)[number];
+
+/**
+ * Report generation is over — stop polling.
+ *
+ * `failed` belongs here: a failed report has no markdown and no section
+ * content, so a poll that only tests for emptiness never terminates.
+ */
+export const REPORT_TERMINAL_STATUSES: string[] = ['complete', 'completed', 'failed'];

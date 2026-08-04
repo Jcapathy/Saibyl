@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
-import api from '@/lib/api';
+import api, { unwrapList } from '@/lib/api';
+import type { Simulation } from '@/types';
 
+/** `POST /comparison` — a per-run rollup, not a `simulations` row. */
 interface SimSummary {
   simulation_id: string;
   name: string;
@@ -9,30 +11,26 @@ interface SimSummary {
   agent_count: number;
   max_rounds: number;
   total_events: number;
-  avg_sentiment: number;
+  // Null when the run has no measured sentiment. It used to be computed from
+  // the dead `metadata.sentiment` key and defaulted to 0.0, so two unmeasured
+  // runs compared as identically neutral — a fabricated agreement.
+  avg_sentiment: number | null;
+  sentiment_agents?: number | null;
   top_platform: string;
   event_breakdown: Record<string, number>;
   platform_breakdown: Record<string, number>;
 }
 
-interface SimOption {
-  id: string;
-  name: string;
-  status: string;
-  created_at: string;
-  agent_count: number;
-}
-
 export default function ComparisonPage() {
-  const [simulations, setSimulations] = useState<SimOption[]>([]);
+  const [simulations, setSimulations] = useState<Simulation[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ simulations: SimSummary[]; analysis: string } | null>(null);
 
   useEffect(() => {
     api.get('/simulations', { params: { limit: 50 } }).then((r) => {
-      const completed = (Array.isArray(r.data) ? r.data : []).filter(
-        (s: SimOption) => ['complete', 'completed'].includes(s.status)
+      const completed = unwrapList<Simulation>(r.data).items.filter(
+        (s: Simulation) => ['complete', 'completed'].includes(s.status)
       );
       setSimulations(completed);
     }).catch(() => {});
@@ -83,7 +81,7 @@ export default function ComparisonPage() {
                       <div className="flex items-center justify-between">
                         <div>
                           <span className="text-[14px] font-medium text-saibyl-platinum">{sim.name}</span>
-                          <span className="text-[11px] text-saibyl-muted ml-3">{sim.agent_count} agents</span>
+                          <span className="text-[11px] text-saibyl-muted ml-3">{sim.agent_count ?? '—'} agents</span>
                           <span className="text-[11px] text-saibyl-muted ml-2">{new Date(sim.created_at).toLocaleDateString()}</span>
                         </div>
                         {isSelected && (
@@ -134,8 +132,8 @@ export default function ComparisonPage() {
                   <tr>
                     <td className="py-3 pr-4 text-saibyl-muted">Avg Sentiment</td>
                     {result.simulations.map((s) => (
-                      <td key={s.simulation_id} className={`text-center py-3 px-3 font-mono ${s.avg_sentiment > 0.2 ? 'text-saibyl-positive' : s.avg_sentiment < -0.2 ? 'text-saibyl-negative' : 'text-saibyl-muted'}`}>
-                        {s.avg_sentiment.toFixed(3)}
+                      <td key={s.simulation_id} className={`text-center py-3 px-3 font-mono ${s.avg_sentiment === null ? 'text-saibyl-muted' : s.avg_sentiment > 0.2 ? 'text-saibyl-positive' : s.avg_sentiment < -0.2 ? 'text-saibyl-negative' : 'text-saibyl-muted'}`}>
+                        {s.avg_sentiment === null ? <span title="No measured sentiment for this run — it is not comparable on this row.">not measured</span> : s.avg_sentiment.toFixed(3)}
                       </td>
                     ))}
                   </tr>

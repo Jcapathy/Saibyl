@@ -1,15 +1,10 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import api from '@/lib/api';
+import api, { unwrapList } from '@/lib/api';
 import { formatPlatforms } from '@/lib/constants';
 import StatusBadge from '@/components/StatusBadge';
 import { getErrorMessage } from '../lib/errors';
-
-interface Project {
-  id: string;
-  name: string;
-  description: string;
-}
+import type { Project, Simulation } from '@/types';
 
 interface Doc {
   id: string;
@@ -20,17 +15,6 @@ interface Doc {
   created_at: string;
 }
 
-interface Sim {
-  id: string;
-  name: string;
-  status: string;
-  platforms: string[];
-  max_rounds: number;
-  created_at: string;
-  project_id: string;
-  prediction_goal: string;
-}
-
 type Tab = 'documents' | 'simulations';
 
 export default function ProjectDetailPage() {
@@ -39,7 +23,7 @@ export default function ProjectDetailPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [tab, setTab] = useState<Tab>('documents');
   const [documents, setDocuments] = useState<Doc[]>([]);
-  const [simulations, setSimulations] = useState<Sim[]>([]);
+  const [simulations, setSimulations] = useState<Simulation[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
@@ -50,7 +34,7 @@ export default function ProjectDetailPage() {
     api.get(`/projects/${id}`).then((r) => setProject(r.data)).catch(() => {});
     loadDocuments();
     api.get('/simulations', { params: { project_id: id, limit: 50 } }).then((r) => {
-      setSimulations(Array.isArray(r.data) ? r.data : []);
+      setSimulations(unwrapList<Simulation>(r.data).items);
     }).catch(() => {});
   }, [id]);
 

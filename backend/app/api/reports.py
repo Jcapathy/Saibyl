@@ -9,7 +9,9 @@ from pydantic import BaseModel
 from app.core.auth import get_current_org
 from app.core.database import get_supabase_admin
 from app.services.engine.document_processor import _extract_text
+from app.services.intelligence.analysis_data import load_run_data
 from app.services.intelligence.report_agent import (
+    compute_polarization,
     get_report_progress,
     strip_react_artifacts,
 )
@@ -17,67 +19,6 @@ from app.services.intelligence.report_chat import chat_with_report
 from app.workers.report_tasks import run_generate_report
 
 log = structlog.get_logger()
-
-
-def _compute_polarization(events: list[dict]) -> dict:
-    """Compute polarization metrics from simulation event sentiment values.
-
-    Uses per-agent sentiment at the final round to compute the extreme-to-moderate
-    ratio.  Returns controversy_score (0-1), polarization_ratio (str like "2.7:1"),
-    and valence_switching_pct (int 0-100).
-    """
-    if not events:
-        return {"controversy_score": None, "polarization_ratio": None, "valence_switching_pct": None}
-
-    # Find the maximum round number (final round)
-    max_round = 0
-    for e in events:
-        rn = e.get("round_number") or 0
-        if rn > max_round:
-            max_round = rn
-
-    # Collect per-agent sentiment at the final round (deduplicated: last event wins)
-    agent_sentiments: dict[str, float] = {}
-    all_sentiments: list[float] = []
-    for e in events:
-        md = e.get("metadata") or {}
-        s = md.get("sentiment")
-        if s is None:
-            continue
-        try:
-            val = float(s)
-        except (ValueError, TypeError):
-            continue
-        all_sentiments.append(val)
-        rn = e.get("round_number") or 0
-        if rn == max_round and e.get("agent_id"):
-            agent_sentiments[e["agent_id"]] = val
-
-    # Use per-agent final-round sentiments for ratio; fall back to all sentiments
-    sentiments = list(agent_sentiments.values()) if agent_sentiments else all_sentiments
-    if not sentiments:
-        return {"controversy_score": None, "polarization_ratio": None, "valence_switching_pct": None}
-
-    # Extreme-to-moderate ratio: |sentiment| > 0.5 vs |sentiment| <= 0.5
-    extreme = sum(1 for s in sentiments if abs(s) > 0.5)
-    moderate = max(sum(1 for s in sentiments if abs(s) <= 0.5), 1)
-    ratio = round(extreme / moderate, 1)
-
-    # Valence switching: % of consecutive pairs that cross the zero line (all events)
-    switches = 0
-    for i in range(1, len(all_sentiments)):
-        if (all_sentiments[i] > 0) != (all_sentiments[i - 1] > 0):
-            switches += 1
-    switching_pct = round(switches / max(len(all_sentiments) - 1, 1) * 100)
-
-    # Normalize ratio to 0-1 scale (ratio of 5:1+ saturates at 1.0)
-    controversy_score = round(min(1.0, ratio / 5.0), 2)
-
-    return {
-        "controversy_score": controversy_score,
-        "polarization_ratio": f"{ratio}:1",
-        "valence_switching_pct": switching_pct,
-    }
 
 
 async def _safe_task(coro, name: str):
@@ -180,15 +121,12 @@ async def get_reports_by_simulation(sim_id: str, auth: dict = Depends(get_curren
         .execute()
     )
 
-    # Compute polarization metrics from simulation events
-    events = (
-        admin.table("simulation_events")
-        .select("metadata, round_number, agent_id")
-        .eq("simulation_id", sim_id)
-        .limit(2000)
-        .execute()
-    ).data or []
-    polarization = _compute_polarization(events)
+    # Polarization from measured valence. `load_run_data` pages past
+    # PostgREST's 1,000-row cap; the `.limit(2000)` this replaces truncated any
+    # larger run and reported the ratio of its first thousand events.
+    polarization = compute_polarization(load_run_data(sim_id).events)
+    if polarization["polarization_ratio"] is None:
+        log.info("report_polarization_unmeasured", simulation_id=sim_id)
 
     # Fetch source documents for the simulation's project
     source_documents: list[dict] = []

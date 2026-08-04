@@ -6,21 +6,7 @@ import api from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
 import RunConfigurator, { type RunShape } from '@/components/RunConfigurator';
 import FounderLensStep, { type FounderConfig } from '@/components/founder/FounderLensStep';
-
-interface Project {
-  id: string;
-  name: string;
-  description: string;
-}
-
-interface PersonaPack {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  archetype_count: number;
-  archetype_labels: string[];
-}
+import type { PersonaPack, Project } from '@/types';
 
 const PLATFORMS = [
   { id: 'twitter_x', name: 'Twitter / X', desc: 'Engagement-weighted feeds' },

@@ -1,15 +1,24 @@
 import { create } from 'zustand';
 
+/**
+ * One event as it arrives over the simulation websocket.
+ *
+ * These are the keys the backend actually sends (`ws_manager._send_catchup`).
+ * There is no sentiment field on this payload under any name: `valence` is
+ * scored from event content *after* the run finishes and lives only on the
+ * `simulation_events` row, reachable through `GET /simulations/{id}/evidence`.
+ * A live sentiment reading is therefore not something this stream can carry,
+ * and declaring one here only produced a chart that waited forever.
+ */
 export interface SimulationStreamEvent {
   event_type: string;
   simulation_id: string;
   timestamp: string;
   variant: string;
   round_number: number | null;
-  agent_username: string | null;
   platform: string | null;
   content: string | null;
-  sentiment_score: number | null;
+  metadata?: Record<string, unknown>;
   [key: string]: unknown;
 }
 

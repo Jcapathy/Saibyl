@@ -167,7 +167,7 @@ class DiscordAdapter(BasePlatformAdapter):
         if line.upper().startswith("REPLY"):
             match = re.match(r"REPLY\s+(\S+):\s*(.+)", line, re.IGNORECASE)
             if match:
-                pid, text = match.group(1), match.group(2)
+                pid, text = self.post_ref(match.group(1)), match.group(2)
                 c = await self.comment(agent["username"], pid, text)
                 self.record_action(self.agent_key(agent), round_number, f"Replied to {pid}: {text[:80]}")
                 return SimulationEvent(
@@ -179,7 +179,7 @@ class DiscordAdapter(BasePlatformAdapter):
         if line.upper().startswith("REACT"):
             match = re.match(r"REACT\s+(\S+)\s+(\S+)", line, re.IGNORECASE)
             if match:
-                pid = match.group(1)
+                pid = self.post_ref(match.group(1))
                 await self.react(agent["username"], pid, ReactionType.LIKE)
                 self.record_action(self.agent_key(agent), round_number, f"Reacted {match.group(2)} on {pid}")
                 return SimulationEvent(
@@ -192,7 +192,11 @@ class DiscordAdapter(BasePlatformAdapter):
         if line.upper().startswith("DM"):
             match = re.match(r"DM\s+(\S+):\s*(.+)", line, re.IGNORECASE)
             if match:
-                target, text = match.group(1), match.group(2)
+                # A handle the model copied off the feed, so it arrives
+                # decorated the way the feed displayed it. Stored in the
+                # event's metadata rather than compared against anything —
+                # identity is `agent_id` — but stored decorated is stored wrong.
+                target, text = self.post_ref(match.group(1)), match.group(2)
                 dm = self._send_dm(agent["username"], target, text)
                 self.record_action(self.agent_key(agent), round_number, f"DM to {target}: {text[:80]}")
                 return SimulationEvent(

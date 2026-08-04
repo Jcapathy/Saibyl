@@ -54,4 +54,42 @@ api.interceptors.response.use(
   }
 );
 
+/**
+ * A paged list response from the backend.
+ *
+ * `total` is null when the server could not obtain an exact count — it is NOT
+ * the same as zero, and it must never be inferred from `items.length`.
+ * Guessing "one page" is how a pager hides the user's own work: a customer
+ * with 50 simulations could never reach page 2 because `count="exact"` was
+ * computed server-side and then discarded.
+ */
+export interface Paged<T> {
+  items: T[];
+  total: number | null;
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * Read a list endpoint's body whether it arrives as a bare array or an
+ * envelope.
+ *
+ * One helper rather than an `Array.isArray` ternary at each of the four call
+ * sites: a duplicated unwrap is the "two sources of truth for one value" class,
+ * and the shape only has to drift at one reader for that page to silently
+ * render empty — no error, no counter, nothing to investigate.
+ *
+ * The bare-array branch is transitional. Delete it once every list endpoint
+ * returns an envelope, and this becomes a single property read.
+ */
+export function unwrapList<T>(body: T[] | Paged<T> | null | undefined): Paged<T> {
+  if (Array.isArray(body)) {
+    return { items: body, total: body.length };
+  }
+  if (!body || !Array.isArray(body.items)) {
+    return { items: [], total: null };
+  }
+  return { items: body.items, total: body.total ?? null };
+}
+
 export default api;

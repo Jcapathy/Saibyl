@@ -6,6 +6,8 @@ import uuid
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 
+import structlog
+
 from app.core.llm_client import llm_fast
 from app.services.platforms.base_adapter import (
     BasePlatformAdapter,
@@ -15,6 +17,8 @@ from app.services.platforms.base_adapter import (
     SimulationEvent,
 )
 from app.services.platforms.registry import register_adapter
+
+logger = structlog.get_logger()
 
 _ACTION_PROMPT = (
     "You are {username} on Hacker News. Persona: {persona}\n"
@@ -127,10 +131,25 @@ class HackerNewsAdapter(BasePlatformAdapter):
 
     # ------------------------------------------------------------------
     def _flag_post(self, post_id: str) -> None:
+        """Moderation weighting — `_hn_rank` divides by `1 + flags * 0.5`.
+
+        This was missed by the sweep that normalised `comment` and `react`
+        across all twelve adapters, because those are the three abstract methods
+        and this is a private helper reached only from `_decide_action`. It
+        compared a model-supplied id raw, so no FLAG ever matched a post and
+        HN's moderation weighting was inert on every run ever made.
+        """
+        post_id = self.post_ref(post_id)
         for p in self._posts:
             if p.id == post_id:
                 p.metadata["flags"] = p.metadata.get("flags", 0) + 1
-                break
+                return
+        logger.warning(
+            "flag_target_not_found",
+            platform=self.platform_id,
+            post_id=post_id,
+            detail="an agent flagged an id that matches no post in this arena",
+        )
 
     async def _decide_action(self, agent: dict, round_number: int) -> SimulationEvent | None:
         feed = await self.get_feed(agent["username"])
@@ -167,7 +186,7 @@ class HackerNewsAdapter(BasePlatformAdapter):
         if line.upper().startswith("COMMENT"):
             match = re.match(r"COMMENT\s+(\S+):\s*(.+)", line, re.IGNORECASE)
             if match:
-                pid, text = match.group(1), match.group(2)
+                pid, text = self.post_ref(match.group(1)), match.group(2)
                 c = await self.comment(agent["username"], pid, text)
                 self.record_action(self.agent_key(agent), round_number, f"Commented on {pid}: {text[:80]}")
                 return SimulationEvent(
@@ -177,7 +196,10 @@ class HackerNewsAdapter(BasePlatformAdapter):
                 )
 
         if line.upper().startswith("UPVOTE"):
-            pid = line.split(maxsplit=1)[1].strip() if len(line.split()) > 1 else ""
+            # The id only — not the rest of the line. See action_ref: a model
+            # that volunteers a reason ("UPVOTE [a1b2c3] - solid") used to make
+            # the whole tail the id, and post_ref cannot repair that.
+            pid = self.action_ref(line)
             if pid:
                 await self.react(agent["username"], pid, ReactionType.UPVOTE)
                 self.record_action(self.agent_key(agent), round_number, f"Upvoted post {pid}")
@@ -189,7 +211,10 @@ class HackerNewsAdapter(BasePlatformAdapter):
                 )
 
         if line.upper().startswith("FLAG"):
-            pid = line.split(maxsplit=1)[1].strip() if len(line.split()) > 1 else ""
+            # The id only — not the rest of the line. See action_ref: a model
+            # that volunteers a reason ("UPVOTE [a1b2c3] - solid") used to make
+            # the whole tail the id, and post_ref cannot repair that.
+            pid = self.action_ref(line)
             if pid:
                 self._flag_post(pid)
                 self.record_action(self.agent_key(agent), round_number, f"Flagged post {pid}")

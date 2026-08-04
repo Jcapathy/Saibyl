@@ -12,36 +12,36 @@ import {
   ArrowUpDown,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import api from '@/lib/api';
+import api, { unwrapList } from '@/lib/api';
+import { ACTIVE_STATUSES, SIMULATION_STATUSES } from '@/lib/constants';
+import type { Simulation } from '@/types';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                             */
 /* ------------------------------------------------------------------ */
 
-interface Simulation {
-  id: string;
-  name: string;
-  status: string;
-  created_at: string;
-  platforms?: string[];
-  agent_count?: number;
-  sentiment_score?: number;
-  project_name?: string;
-}
-
 type SortField = 'name' | 'status' | 'created_at' | 'agent_count';
 type SortDir = 'asc' | 'desc';
 
-const STATUS_FILTERS = ['all', 'running', 'complete', 'queued', 'draft', 'failed'] as const;
+/**
+ * Filter chips, driven off the backend's status list so a new status cannot
+ * become unfilterable. The previous hand-written list offered `queued`, which
+ * the backend never writes, and omitted `preparing`, `ready`, `analyzing` and
+ * `stopped` — four states a run can sit in with no way to select them.
+ */
+const STATUS_FILTERS = ['all', ...SIMULATION_STATUSES] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];
 
 const STATUS_COLOR: Record<string, string> = {
-  running: '#2563EB',
-  complete: '#22C55E',
+  draft:     '#8B5CF6',
+  preparing: '#F59E0B',
+  ready:     '#2563EB',
+  running:   '#2563EB',
+  analyzing: '#F59E0B',
+  complete:  '#22C55E',
   completed: '#22C55E',
-  queued: '#F59E0B',
-  draft: '#8B5CF6',
-  failed: '#EF4444',
+  stopped:   '#5A6578',
+  failed:    '#EF4444',
 };
 
 const PLATFORM_MAP: Record<string, string> = {
@@ -66,7 +66,7 @@ function normalizeStatus(s: string): string {
   return s === 'completed' ? 'complete' : s;
 }
 
-function formatAgentCount(n: number | undefined): string {
+function formatAgentCount(n: number | null | undefined): string {
   if (n == null) return '\u2014';
   if (n >= 1000) return `${Math.round(n / 1000)}K`;
   return String(n);
@@ -116,11 +116,11 @@ export default function SimulationsPage() {
       })
       .then((res) => {
         if (cancelled) return;
-        const data = res.data;
-        const items: Simulation[] = Array.isArray(data) ? data : data.items ?? [];
-        const t: number = Array.isArray(data) ? items.length : data.total ?? items.length;
+        const { items, total } = unwrapList<Simulation>(res.data);
         setSims(items);
-        setTotal(t);
+        // A null total means the server could not count. Fall back to what we
+        // can see rather than claiming a page count we do not have.
+        setTotal(total ?? items.length);
       })
       .catch(() => {
         if (cancelled) return;
@@ -401,7 +401,6 @@ export default function SimulationsPage() {
                   ['status', 'Status'],
                   [null, 'Platforms'],
                   ['agent_count', 'Agents'],
-                  [null, 'Sentiment'],
                   ['created_at', 'Created'],
                   [null, ''],
                 ] as const
@@ -426,7 +425,7 @@ export default function SimulationsPage() {
           <tbody>
             {filteredSims.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-center py-12 text-[#5A6578] text-sm">
+                <td colSpan={7} className="text-center py-12 text-[#5A6578] text-sm">
                   No simulations match your filters
                 </td>
               </tr>
@@ -478,7 +477,7 @@ export default function SimulationsPage() {
                           color,
                         }}
                       >
-                        {statusDot(sim.status, ns === 'running')}
+                        {statusDot(sim.status, ACTIVE_STATUSES.includes(ns))}
                         {ns.charAt(0).toUpperCase() + ns.slice(1)}
                       </span>
                     </td>
@@ -506,26 +505,10 @@ export default function SimulationsPage() {
                       {formatAgentCount(sim.agent_count)}
                     </td>
 
-                    {/* Sentiment */}
-                    <td className="px-4 py-3 text-xs text-[#8B97A8]">
-                      {ns === 'complete' && sim.sentiment_score != null ? (
-                        <span
-                          style={{
-                            color:
-                              sim.sentiment_score >= 0.6
-                                ? '#22C55E'
-                                : sim.sentiment_score >= 0.4
-                                  ? '#F59E0B'
-                                  : '#EF4444',
-                          }}
-                        >
-                          {sim.sentiment_score.toFixed(2)}
-                        </span>
-                      ) : (
-                        <span className="text-[#5A6578]">&mdash;</span>
-                      )}
-                      {/* TODO: Fetch sentiment from report endpoint */}
-                    </td>
+                    {/* No sentiment column. A simulation row carries no valence
+                        field, and the measured reading is only addressable one
+                        id at a time via /simulations/{id}/analysis — a column
+                        here would be one request per row, most of them 404. */}
 
                     {/* Created */}
                     <td className="px-4 py-3 font-mono text-xs text-[#5A6578] whitespace-nowrap">

@@ -2,13 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '@/lib/api';
-
-interface Project {
-  id: string;
-  name: string;
-  description: string;
-  asset_count: number;
-}
+import type { Project } from '@/types';
 
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);

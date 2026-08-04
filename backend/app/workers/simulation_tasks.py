@@ -8,6 +8,13 @@ from app.core.llm_client import _extract_json, llm_fast
 from app.services.billing.usage_ledger import usage_context
 from app.services.engine.document_processor import process_document
 from app.services.engine.ontology_generator import generate_ontology
+from app.services.platforms.base_adapter import (
+    DIRECTED_EVENT_TYPES,
+    KNOWN_EVENT_TYPES,
+    POST_EVENT_TYPES,
+    REPLY_EVENT_TYPES,
+)
+from app.services.refs import post_ref
 
 logger = structlog.get_logger()
 
@@ -303,7 +310,35 @@ Return a JSON object:
             *[_gen_pack_agent(p, a, plat, idx) for p, a, plat, idx in agent_specs],
             return_exceptions=True,
         )
-    agents_to_create = [r for r in results if isinstance(r, dict)]
+
+    # `return_exceptions=True` turns a failed task into a *value*, and the
+    # filter that used to sit here — `[r for r in results if isinstance(r, dict)]`
+    # — dropped those values with no log at all. The run then continued with a
+    # smaller swarm than the customer was quoted, every confidence interval drawn
+    # from fewer agents than the configuration asked for, and nothing anywhere
+    # saying so.
+    agents_to_create: list[dict] = []
+    for (pack, archetype, platform, _i), result in zip(agent_specs, results):
+        if isinstance(result, dict):
+            agents_to_create.append(result)
+            continue
+        logger.error(
+            "agent_generation_task_failed",
+            simulation_id=simulation_id,
+            archetype=archetype.label,
+            pack=pack.id,
+            platform=platform,
+            error=repr(result),
+        )
+    if len(agents_to_create) < len(agent_specs):
+        logger.error(
+            "swarm_undersized",
+            simulation_id=simulation_id,
+            requested=len(agent_specs),
+            created=len(agents_to_create),
+            detail="fewer agents than the run was configured for; intervals will "
+                   "be drawn from a smaller swarm than the customer was quoted",
+        )
 
     # Usernames must be unique within a simulation. Platform adapters address
     # agents by username and nothing else: they key agent memory on it, and the
@@ -351,43 +386,98 @@ Return a JSON object:
     return {"simulation_id": simulation_id, "agents": agent_count, "status": "ready"}
 
 
-def _check_stop_signal(simulation_id: str) -> bool:
-    """Check Redis for a stop signal."""
+def _stopped_in_db(simulation_id: str, admin=None) -> bool:
+    """Second opinion on a stop, from the row the API already updated.
+
+    `POST /simulations/{id}/stop` does two things: it sets the Redis flag *and*
+    it writes `status = 'stopped'`, so the database carries the same instruction
+    and does not depend on Redis being reachable.
+    """
+    try:
+        admin = admin or get_supabase_admin()
+        row = (
+            admin.table("simulations")
+            .select("status")
+            .eq("id", simulation_id)
+            .single()
+            .execute()
+        ).data
+        return (row or {}).get("status") == "stopped"
+    except Exception:
+        logger.exception("stop_signal_db_fallback_failed", simulation_id=simulation_id)
+        return False
+
+
+def _check_stop_signal(simulation_id: str, admin=None) -> bool:
+    """Has the user asked for this run to stop?
+
+    **A Redis error used to mean "no".** The user presses Stop, the API sets
+    both the Redis flag and `status = 'stopped'`, the UI shows the run as
+    stopped — and the worker, unable to reach Redis, kept running every
+    remaining round and charging for them. The failure that silences the signal
+    is exactly the failure nobody sees, because the interface already agrees
+    with the user.
+
+    So a Redis failure falls through to the row the API wrote, and both are
+    logged. If *both* are unreachable this still returns False, because there is
+    then no evidence either way and killing a paid run on no evidence is the
+    worse error — but it leaves two exception traces behind rather than none.
+    """
     try:
         import redis
 
         from app.core.config import settings
         r = redis.from_url(settings.redis_url, decode_responses=True)
-        return bool(r.get(f"simulation:{simulation_id}:stop"))
+        if bool(r.get(f"simulation:{simulation_id}:stop")):
+            return True
     except Exception:
-        return False
+        logger.exception(
+            "stop_signal_check_failed",
+            simulation_id=simulation_id,
+            detail="falling back to the simulation row; a stop must not be lost "
+                   "because Redis was unreachable",
+        )
+        return _stopped_in_db(simulation_id, admin)
+    return False
 
 
 _EVENT_INSERT_CHUNK = 20
 
-# Events that reply to or react to something. A `post` event's `target_id` is
-# its own adapter-side id, not a parent — treating it as one would make every
-# post its own ancestor and every cascade infinitely deep.
-_REPLY_EVENT_TYPES = ("comment", "react")
-
-# Decoration an agent wraps around a post id when it echoes one back.
+# How the propagation graph treats each event type is decided by
+# `base_adapter`, which is also what constrains the values an adapter may emit.
 #
-# **Found by the first live multi-variant run: 193 of 193 replies failed to
-# link.** Every adapter renders its feed as `[<id>] @author: text` and asks for
-# `COMMENT <post_id>: …`, and the model copies the id *with the brackets it was
-# displayed in* — inconsistently, which is worse than always. A five-sample
-# check happened to return five bare ids and read as a clean bill of health; the
-# same adapter over twelve actions returned two bare and ten bracketed.
+# It used to be decided here, by a *negative* allow-list — `if event_type not in
+# ("comment", "react")` — so anything the runner did not recognise was treated
+# as a post and claimed a ref, overwriting whatever real parent that ref already
+# pointed at. `event_type` was an unconstrained `str` set independently in
+# twelve adapters and discord already emitted a fourth value, `dm`. See
+# `base_adapter.EventType`.
 #
-# Normalising here rather than in twelve adapters: this is the one place that
-# compares a reference against a registered id, so it is the one place the two
-# have to agree on a form.
-_REF_DECORATION = "[]()<>{}\"'`,.:;! \t\n"
+# **Do not rename these strings** — they are persisted in
+# `simulation_events.event_type` and read by the analysis pipeline, the
+# exporters and the comparison API.
+_POST_EVENT_TYPES = POST_EVENT_TYPES
+_REPLY_EVENT_TYPES = REPLY_EVENT_TYPES
+_DIRECTED_EVENT_TYPES = DIRECTED_EVENT_TYPES
+_KNOWN_EVENT_TYPES = KNOWN_EVENT_TYPES
 
 
 def _normalise_ref(ref: object) -> str:
-    """An adapter-side post reference, stripped of whatever the model wrapped it in."""
-    return str(ref).strip(_REF_DECORATION)
+    """An adapter-side post reference, stripped of whatever the model wrapped it in.
+
+    **Found by the first live multi-variant run: 193 of 193 replies failed to
+    link.** Every adapter renders its feed as `[<id>] @author: text` and asks for
+    `COMMENT <post_id>: …`, and the model copies the id *with the brackets it was
+    displayed in* — inconsistently, which is worse than always. A five-sample
+    check happened to return five bare ids and read as a clean bill of health;
+    the same adapter over twelve actions returned two bare and ten bracketed.
+
+    Delegates to `services.refs.post_ref`. The strip set used to be a literal
+    here *and* a literal in `BasePlatformAdapter.post_ref`, and the two had
+    already drifted by one character — which is exactly how this failure comes
+    back with nothing in the logs.
+    """
+    return post_ref(ref)
 
 
 def _write_round_events(
@@ -413,6 +503,10 @@ def _write_round_events(
     # parent database id -> child database ids
     links: dict[str, list[str]] = {}
     unresolved = 0
+    # Event types no adapter is supposed to be able to emit. Counted rather than
+    # absorbed: the previous negative allow-list turned exactly this case into a
+    # silent overwrite of a real parent.
+    unknown_types: dict[str, int] = {}
 
     for i in range(0, len(round_events), _EVENT_INSERT_CHUNK):
         chunk = round_events[i : i + _EVENT_INSERT_CHUNK]
@@ -439,14 +533,36 @@ def _write_round_events(
             continue
 
         for row, saved in zip(chunk, inserted):
+            event_type = row["event_type"]
+            if event_type not in _KNOWN_EVENT_TYPES:
+                # Loud, and it claims nothing. Under the old negative
+                # allow-list this branch did not exist: an unrecognised type
+                # took the `post` path and wrote its ref into `post_event_ids`,
+                # so a thirteenth adapter's new verb would have re-pointed a
+                # live parent at itself and every reply under it would have
+                # linked to the wrong event — with the graph still full and no
+                # counter out of place.
+                unknown_types[event_type] = unknown_types.get(event_type, 0) + 1
+                continue
+
             ref = _normalise_ref(row.get("_ref") or "")
             if not ref:
                 continue
             arena = row["_arena"]
-            if row["event_type"] not in _REPLY_EVENT_TYPES:
+
+            if event_type in _POST_EVENT_TYPES:
                 # A post: register the id it minted so later replies resolve.
+                # Its `target_id` is its own adapter-side id, not a parent —
+                # treating it as one would make every post its own ancestor and
+                # every cascade infinitely deep.
                 post_event_ids[(arena[0], arena[1], ref)] = saved["id"]
                 continue
+
+            if event_type in _DIRECTED_EVENT_TYPES:
+                # Addressed to an agent, not to a post. Its `target_id` is the
+                # message's own id, so it neither mints a parent nor has one.
+                continue
+
             parent = post_event_ids.get((arena[0], arena[1], ref))
             if parent:
                 links.setdefault(parent, []).append(saved["id"])
@@ -465,6 +581,16 @@ def _write_round_events(
         links_made=sum(len(v) for v in links.values()),
         unresolved=unresolved,
     )
+
+    if unknown_types:
+        logger.error(
+            "unknown_event_type",
+            types=unknown_types,
+            known=sorted(_KNOWN_EVENT_TYPES),
+            detail="an adapter emitted an event type the runner does not "
+                   "classify; it took no part in the propagation graph. Add it "
+                   "to base_adapter.EventType and to one of the three groups.",
+        )
 
     for parent_id, child_ids in links.items():
         try:
@@ -644,7 +770,7 @@ async def run_simulation(simulation_id: str):
     try:
         for round_num in range(1, max_rounds + 1):
             # Check stop signal before each round
-            if _check_stop_signal(simulation_id):
+            if _check_stop_signal(simulation_id, admin):
                 logger.info("simulation_stopped", simulation_id=simulation_id, round=round_num)
                 admin.table("simulations").update({"status": "stopped"}).eq("id", simulation_id).execute()
                 return {"simulation_id": simulation_id, "status": "stopped", "total_events": total_events}
@@ -696,23 +822,40 @@ async def run_simulation(simulation_id: str):
                     )
                 return events
 
+            # Materialised so the results can be paired back to the arena that
+            # produced them — `gather` preserves order, and an unattributed
+            # failure log is barely better than no log.
+            arena_keys = list(adapters)
             with usage_context(
                 "agent_action",
                 simulation_id=simulation_id,
                 organization_id=org_id,
             ):
                 platform_results = await asyncio.gather(
-                    *[
-                        _run_arena_round(pid, vkey, adp)
-                        for (pid, vkey), adp in adapters.items()
-                    ],
+                    *[_run_arena_round(pid, vkey, adapters[(pid, vkey)])
+                      for pid, vkey in arena_keys],
                     return_exceptions=True,
                 )
 
+            # An arena that raised past `_run_arena_round`'s own handler used to
+            # be dropped by an `isinstance` filter with nothing logged, so a
+            # round that produced results for three of four arenas and a round
+            # that produced results for all four wrote the same line. One
+            # variant quietly missing a round is a scoreboard comparing unequal
+            # exposure.
             round_events = []
-            for result in platform_results:
+            for (pid, vkey), result in zip(arena_keys, platform_results):
                 if isinstance(result, list):
                     round_events.extend(result)
+                else:
+                    logger.error(
+                        "arena_round_task_failed",
+                        simulation_id=simulation_id,
+                        platform=pid,
+                        variant=vkey,
+                        round=round_num,
+                        error=repr(result),
+                    )
 
             if round_events:
                 written, unresolved = _write_round_events(

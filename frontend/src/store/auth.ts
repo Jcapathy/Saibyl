@@ -1,16 +1,10 @@
 import { create } from 'zustand';
 import api from '@/lib/api';
+import type { Organization } from '@/types';
 
 interface User {
   id: string;
   email: string;
-}
-
-interface Organization {
-  id: string;
-  name: string;
-  slug: string;
-  plan: string;
 }
 
 interface AuthState {

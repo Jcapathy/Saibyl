@@ -1,27 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Clock, Users, FileText, Activity, Zap, ArrowRight } from 'lucide-react';
+import { Clock, Users, FileText, Zap, ArrowRight } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import api from '@/lib/api';
-
-interface Simulation {
-  id: string;
-  name: string;
-  status: string;
-  created_at: string;
-  platforms?: string[];
-  agent_count?: number;
-  sentiment_score?: number;
-}
-
-interface BillingStatus {
-  plan: string;
-  simulations_used: number;
-  simulations_limit: number;
-  agents_used?: number;
-  agents_limit?: number;
-}
+import api, { unwrapList } from '@/lib/api';
+import { ACTIVE_STATUSES } from '@/lib/constants';
+import type { BillingStatus, Simulation } from '@/types';
 
 function formatCount(n: number | undefined | null): string {
   if (n == null) return '—';
@@ -30,18 +14,22 @@ function formatCount(n: number | undefined | null): string {
   return n.toString();
 }
 
+/** One entry per value in `SIMULATION_STATUSES`, plus the legacy `completed`. */
 const STATUS_COLORS: Record<string, string> = {
-  running: '#2563EB',
+  draft:     '#8B5CF6',
+  preparing: '#F59E0B',
+  ready:     '#2563EB',
+  running:   '#2563EB',
+  analyzing: '#F59E0B',
+  complete:  '#22C55E',
   completed: '#22C55E',
-  complete: '#22C55E',
-  queued: '#F59E0B',
-  failed: '#EF4444',
-  draft: '#8B5CF6',
+  stopped:   '#5A6578',
+  failed:    '#EF4444',
 };
 
 function StatusDot({ status }: { status: string }) {
   const color = STATUS_COLORS[status] ?? '#5A6578';
-  const isRunning = status === 'running';
+  const isRunning = ACTIVE_STATUSES.includes(status);
   return (
     <span className="relative flex h-2.5 w-2.5 shrink-0">
       {isRunning && (
@@ -125,8 +113,8 @@ export default function DashboardPage() {
           api.get('/simulations', { params: { limit: 100 } }),
           api.get('/billing/status'),
         ]);
-        setRecentSims(recentRes.data.items || recentRes.data);
-        setAllSims(allRes.data.items || allRes.data);
+        setRecentSims(unwrapList<Simulation>(recentRes.data).items);
+        setAllSims(unwrapList<Simulation>(allRes.data).items);
         setBilling(billRes.data);
       } catch {
         // Dashboard renders with fallback values
@@ -142,35 +130,30 @@ export default function DashboardPage() {
     (s) => s.status === 'completed' || s.status === 'complete',
   );
 
-  const avgSentiment = (() => {
-    const withScore = completedSims.filter(
-      (s) => s.sentiment_score != null,
-    );
-    if (withScore.length === 0) return null;
-    const sum = withScore.reduce((acc, s) => acc + (s.sentiment_score ?? 0), 0);
-    return (sum / withScore.length).toFixed(2);
-  })();
+  // There is deliberately no average-sentiment tile here. A simulation row
+  // carries no valence field of any name, and the only per-run reading —
+  // `GET /simulations/{id}/analysis` — is addressable one id at a time.
+  // Averaging across a list would mean N requests, most of which 404.
+
+  /** Past-tense phrasing for each status the backend can write. */
+  const STATUS_ACTIVITY: Record<string, { action: string; dotColor: string }> = {
+    draft:     { action: 'created',          dotColor: '#8B5CF6' },
+    preparing: { action: 'started preparing', dotColor: '#F59E0B' },
+    ready:     { action: 'ready to run',     dotColor: '#2563EB' },
+    running:   { action: 'started running',  dotColor: '#2563EB' },
+    analyzing: { action: 'being analysed',   dotColor: '#F59E0B' },
+    complete:  { action: 'completed',        dotColor: '#22C55E' },
+    completed: { action: 'completed',        dotColor: '#22C55E' },
+    stopped:   { action: 'stopped',          dotColor: '#5A6578' },
+    failed:    { action: 'failed',           dotColor: '#EF4444' },
+  };
 
   // Activity feed derived from recent sims
   const activityEntries = recentSims.slice(0, 5).map((sim) => {
-    let action: string;
-    let dotColor: string;
-    if (sim.status === 'completed' || sim.status === 'complete') {
-      action = 'completed';
-      dotColor = '#22C55E';
-    } else if (sim.status === 'running') {
-      action = 'started running';
-      dotColor = '#2563EB';
-    } else if (sim.status === 'failed') {
-      action = 'failed';
-      dotColor = '#EF4444';
-    } else if (sim.status === 'queued') {
-      action = 'queued';
-      dotColor = '#F59E0B';
-    } else {
-      action = 'created';
-      dotColor = '#8B5CF6';
-    }
+    const { action, dotColor } = STATUS_ACTIVITY[sim.status] ?? {
+      action: sim.status,
+      dotColor: '#5A6578',
+    };
     return {
       id: sim.id,
       text: `Simulation "${sim.name}" ${action}`,
@@ -186,8 +169,7 @@ export default function DashboardPage() {
           <Skeleton className="h-8 w-40" />
           <Skeleton className="h-10 w-40" />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Skeleton className="h-32" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <Skeleton className="h-32" />
           <Skeleton className="h-32" />
           <Skeleton className="h-32" />
@@ -217,7 +199,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard
           icon={<Clock className="w-5 h-5" />}
           label="Simulations"
@@ -263,16 +245,6 @@ export default function DashboardPage() {
           gradientTo="#2563EB"
           iconBg="rgba(34,197,94,0.1)"
           iconColor="#22C55E"
-        />
-        <StatCard
-          icon={<Activity className="w-5 h-5" />}
-          label="Avg Sentiment"
-          value={avgSentiment ?? '—'}
-          meta="across completed sims"
-          gradientFrom="#C9A227"
-          gradientTo="#8B5CF6"
-          iconBg="rgba(201,162,39,0.1)"
-          iconColor="#C9A227"
         />
       </div>
 

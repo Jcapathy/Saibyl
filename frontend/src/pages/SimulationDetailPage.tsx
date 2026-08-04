@@ -7,22 +7,7 @@ import StatusBadge from '@/components/StatusBadge';
 import VariantSetup from '@/components/marketing/VariantSetup';
 import { getErrorMessage } from '../lib/errors';
 import type { SimulationAgent } from '../lib/types';
-
-interface Simulation {
-  id: string;
-  name: string;
-  status: string;
-  prediction_goal: string;
-  platforms: string[];
-  max_rounds: number;
-  variants?: number;
-  agent_count: number;
-  persona_pack_ids: string[];
-  created_at: string;
-  completed_at: string | null;
-  project_id: string;
-  error_message: string | null;
-}
+import type { Simulation } from '@/types';
 
 /**
  * Redeem the quote the configurator stashed for this simulation, once.
@@ -135,9 +120,12 @@ export default function SimulationDetailPage() {
     }
   };
 
-  // Poll while running or preparing
+  // Poll for as long as the run is in flight. This reads the shared status set
+  // rather than its own list: the local copy omitted `analyzing`, so polling
+  // stopped the moment measurement began and the page sat on a stale status
+  // until the user reloaded it.
   useEffect(() => {
-    if (!sim || !['running', 'preparing'].includes(sim.status)) return;
+    if (!sim || !ACTIVE_STATUSES.includes(sim.status)) return;
     const interval = setInterval(loadSim, 4000);
     return () => clearInterval(interval);
   }, [sim?.status, loadSim]);
