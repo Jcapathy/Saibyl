@@ -103,6 +103,20 @@ class ICPArchetype(BaseModel):
     # Share of the buying audience. Normalised across the profile at compile.
     weight: float = Field(default=1.0, gt=0)
 
+    # One or two plain sentences: why this is one of your buyers, citing what
+    # the uploaded material says. The audience-review surface asks a founder to
+    # judge each archetype, and the target user has not heard the term ICP —
+    # they cannot assess "director / prohibitive switching cost" as evidence of
+    # anything. See `icp_synthesizer._grounded_rationale` for what keeps this
+    # honest: a sentence that paraphrases `role` back reads as evidence and is
+    # not, which is worse than the empty space the review UI showed before it.
+    #
+    # **Optional, and empty is a valid value.** Every profile stored before this
+    # field existed validates unchanged, which is why `ICP_SCHEMA_VERSION` did
+    # not move — a bump blanks the review surface until
+    # `frontend/src/lib/founder.ts` moves in the same commit.
+    rationale: str = ""
+
     role: str
     seniority: Seniority = "manager"
     budget_authority: BudgetAuthority = "influencer"
@@ -149,6 +163,13 @@ class AdversarialArchetype(BaseModel):
     label: str
     weight: float = Field(default=1.0, gt=0)
     role: AdversarialRole
+
+    # Same contract as `ICPArchetype.rationale`, and the same reason: a founder
+    # being shown an incumbent-aligned cohort needs to know why the run contains
+    # people arguing against them. Grounded in the material, never in what the
+    # model knows about a company — `core_argument` is the argument, this is the
+    # reason the cohort exists.
+    rationale: str = ""
 
     # The incumbent this archetype is aligned to, or None for an unnamed
     # category skeptic. Naming one requires `grounded_in`.

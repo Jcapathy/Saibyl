@@ -164,12 +164,23 @@ function BuyerCard({
       </div>
 
       {/*
-        A one-line "why we think this is one of your buyers" belongs here. The
-        synthesis response carries no such field today, and inventing a
-        rationale on the client would be the product asserting a reason it does
-        not have — so the space is simply left empty until the backend returns
-        one.
+        Why we think this is one of your buyers. The reader may never have
+        heard the term "ICP" and cannot judge an archetype from a role and a
+        switching-cost enum — this sentence is what makes the confirm-or-correct
+        decision possible at all.
+
+        Rendered only when the backend supplies one. It drops any rationale
+        that merely paraphrases the archetype's own fields, so an empty value
+        means "we could not point at anything in your material", and the honest
+        rendering of that is nothing. No placeholder, no "n/a": inventing a
+        reason here is the product asserting evidence it does not have, which
+        is the defect class this whole build exists to remove.
       */}
+      {archetype.rationale?.trim() ? (
+        <p className="mt-2.5 text-[12px] leading-relaxed text-saibyl-muted">
+          {archetype.rationale.trim()}
+        </p>
+      ) : null}
 
       {!editing ? (
         <>

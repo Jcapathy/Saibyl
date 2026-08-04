@@ -1,13 +1,14 @@
 import asyncio
 import json
+from collections.abc import Sequence
 
 import structlog
 
 from app.core.database import get_supabase_admin
 from app.core.llm_client import _extract_json, llm_fast
 from app.services.billing.usage_ledger import usage_context
-from app.services.engine.document_processor import process_document
 from app.services.engine.ontology_generator import generate_ontology
+from app.services.engine.personas.icp_synthesizer import source_text
 from app.services.platforms.base_adapter import (
     DIRECTED_EVENT_TYPES,
     KNOWN_EVENT_TYPES,
@@ -22,12 +23,6 @@ logger = structlog.get_logger()
 _AGENT_GEN_SEMAPHORE = asyncio.Semaphore(8)
 
 
-async def run_process_document(document_id: str):
-    result = await process_document(document_id)
-    logger.info("task_process_document_complete", document_id=document_id, chunks=len(result.chunks))
-    return {"document_id": document_id, "chunks": len(result.chunks)}
-
-
 async def run_generate_ontology(project_id: str):
     result = await generate_ontology(project_id)
     logger.info("task_generate_ontology_complete", project_id=project_id)
@@ -39,6 +34,85 @@ async def run_build_knowledge_graph(project_id: str, ontology_id: str):
     result = await build_graph(project_id, ontology_id)
     logger.info("task_build_knowledge_graph_complete", project_id=project_id)
     return {"knowledge_graph_id": result["id"]}
+
+
+def apportion(weights: Sequence[float], total: int) -> list[int]:
+    """Split `total` seats across `weights`. **Sums to `total`, exactly.**
+
+    Largest-remainder (Hamilton): every entry takes the floor of its quota, and
+    the seats the floors left over go to the largest fractional remainders.
+
+    **This is a billing invariant, not a tidiness one.** Credits are charged at
+    start from the agent count the customer selected (HANDOFF §4.3), so a run
+    that builds fewer agents than were requested is a run they paid for and did
+    not get. The previous arithmetic — `max(1, round(w / total_weight * n))` per
+    archetype against a truncating `remaining` counter — did exactly that: 48
+    requested allocated 45, and 85 of the 180 configurations in
+    `test_icp_multi_pack`'s grid missed their requested total in one direction
+    or the other. Confidence intervals are computed *across agents*
+    (`analysis_data.mean_interval`), so a short swarm also widens every band in
+    the artifact past what the quote implied — the same error HANDOFF §1a
+    records from the username collisions, arriving by a second route.
+
+    It is also what keeps the realised adversarial share honest. Rounding each
+    archetype independently was 10 percentage points out on a 30-agent swarm at
+    a single pack (20% realised against 30% configured, measured on the grid
+    below); largest-remainder is 3.3 points at its worst across the same grid.
+
+    `max(1, …)`'s intent survives: an archetype with non-zero weight that
+    rounded to nothing takes a seat **from** the largest allocation rather than
+    being added on top of it. Adding was the bug. Where there are fewer seats
+    than archetypes the total wins and the smallest-weight archetypes go
+    unrepresented, because the customer's agent count is the promise and an
+    archetype's presence is not.
+
+    Ties break on the larger quota and then the lower index, so the allocation
+    is a function of its inputs and nothing else — two runs of one configuration
+    cannot produce two audiences.
+    """
+    n = len(weights)
+    if n == 0 or total <= 0:
+        return [0] * n
+
+    positive = [i for i, w in enumerate(weights) if w > 0]
+    total_weight = sum(weights[i] for i in positive)
+    if not positive:
+        # No archetype carries usable weight. Splitting evenly is the only
+        # answer that still delivers the swarm the customer paid for; allocating
+        # none of it would be the failure this function exists to prevent.
+        logger.warning(
+            "apportion_no_positive_weights",
+            entries=n,
+            total=total,
+            detail="every weight was zero or negative; splitting the total evenly",
+        )
+        positive = list(range(n))
+        quotas = [total / n] * n
+    else:
+        quotas = [
+            weights[i] / total_weight * total if weights[i] > 0 else 0.0
+            for i in range(n)
+        ]
+
+    counts = [int(q) for q in quotas]
+    remainders = [quotas[i] - counts[i] for i in range(n)]
+    # Each quota loses strictly less than one seat to its floor, so the
+    # shortfall is smaller than `n` and every seat below is placed.
+    shortfall = total - sum(counts)
+    order = sorted(range(n), key=lambda i: (-remainders[i], -quotas[i], i))
+    for i in order[:shortfall]:
+        counts[i] += 1
+
+    starved = sorted((i for i in positive if counts[i] == 0), key=lambda i: (-weights[i], i))
+    for i in starved:
+        donors = [j for j in range(n) if counts[j] > 1]
+        if not donors:
+            break
+        donor = max(donors, key=lambda j: (counts[j], -j))
+        counts[donor] -= 1
+        counts[i] += 1
+
+    return counts
 
 
 def _context_block(archetype) -> str:
@@ -110,21 +184,39 @@ async def run_prepare_agents(simulation_id: str):
     admin.table("simulations").update({"status": "preparing"}).eq("id", simulation_id).execute()
     logger.info("prepare_agents_start", simulation_id=simulation_id, packs=len(persona_pack_ids))
 
-    # Get document context for grounding (parallel downloads)
-    docs = admin.table("documents").select("filename, storage_path").eq(
-        "project_id", project_id
-    ).eq("processing_status", "complete").execute().data
+    # Document context for grounding, from the **extracted text**.
+    #
+    # This used to download `storage_path` — the raw upload — and decode it as
+    # UTF-8. For a PDF, a DOCX, a deck or an image that is the file's bytes read
+    # as text: replacement characters and font-table fragments, spliced straight
+    # into the agent-generation prompt as "Document context". Every agent in a
+    # PDF-backed project was grounded in mojibake, and the failure was silent
+    # because `errors="replace"` never raises. Extracted text has lived at
+    # `processed_text_path` since the ingestion unification wrote one for every
+    # media type; `source_text` is the one reader of it, shared with ICP
+    # synthesis so the two cannot drift.
+    docs = admin.table("documents").select(
+        "id, filename, file_type, storage_path, processed_text_path"
+    ).eq("project_id", project_id).eq("processing_status", "complete").execute().data
 
-    async def _download_doc(storage_path: str) -> str:
+    async def _download_doc(doc: dict) -> str:
         try:
-            file_bytes = await asyncio.to_thread(
-                admin.storage.from_("project-media").download, storage_path
-            )
-            return file_bytes.decode("utf-8", errors="replace")[:5000] + "\n\n"
+            text = await asyncio.to_thread(source_text, admin, doc)
         except Exception:
+            # Not swallowed: grounding is what separates a synthesized audience
+            # from a generic pack, so a run whose agents saw less material than
+            # the project has must be reconstructible from the logs.
+            logger.exception(
+                "agent_doc_context_read_failed",
+                simulation_id=simulation_id,
+                document_id=doc.get("id"),
+                filename=doc.get("filename"),
+                detail="document excluded from agent grounding for this run",
+            )
             return ""
+        return text[:5000] + "\n\n"
 
-    doc_chunks = await asyncio.gather(*[_download_doc(d["storage_path"]) for d in docs[:3]])
+    doc_chunks = await asyncio.gather(*[_download_doc(d) for d in docs[:3]])
     doc_context = "".join(doc_chunks)
 
     prediction_goal = sim.get("prediction_goal", "")
@@ -185,20 +277,35 @@ async def run_prepare_agents(simulation_id: str):
         admin.table("simulations").update({"status": "failed"}).eq("id", simulation_id).execute()
         raise ValueError("No valid persona packs found")
 
-    total_weight = sum(a.weight for _, a in all_archetypes)
-    agents_per_platform = max(1, target_agent_count // len(platforms))
+    # Two apportionments, both exact. The swarm is *split* across platforms
+    # rather than replicated per platform (HANDOFF §7 — adding a platform is
+    # close to cost-neutral), and each platform's share is then split across
+    # archetypes. `agents_per_platform` used to be `max(1, target // len(...))`,
+    # which discards the remainder on the first line and then loses more of it
+    # per archetype on the second.
+    platform_totals = apportion([1.0] * len(platforms), target_agent_count)
+    archetype_weights = [a.weight for _, a in all_archetypes]
 
     agent_specs = []
-    for platform in platforms:
-        remaining = agents_per_platform
-        for pack, archetype in all_archetypes:
-            count = max(1, round(archetype.weight / total_weight * agents_per_platform))
-            if remaining <= 0:
-                break
-            count = min(count, remaining)
-            remaining -= count
+    for platform, platform_total in zip(platforms, platform_totals, strict=True):
+        counts = apportion(archetype_weights, platform_total)
+        for (pack, archetype), count in zip(all_archetypes, counts, strict=True):
             for i in range(count):
                 agent_specs.append((pack, archetype, platform, i))
+
+    if len(agent_specs) != target_agent_count:  # pragma: no cover - invariant guard
+        # `apportion` sums to its total by construction and this is the sum of
+        # two of them, so a mismatch means the invariant broke rather than that
+        # a configuration is unusual. Loud, because the customer has already
+        # been charged for `target_agent_count`.
+        logger.error(
+            "agent_allocation_total_mismatch",
+            simulation_id=simulation_id,
+            requested=target_agent_count,
+            allocated=len(agent_specs),
+            platforms=len(platforms),
+            archetypes=len(all_archetypes),
+        )
 
     async def _gen_pack_agent(pack, archetype, platform, i):
         async with _AGENT_GEN_SEMAPHORE:

@@ -28,17 +28,17 @@ from app.services.engine.personas.icp_synthesizer import (
     rebalance_adversarial,
 )
 from app.services.engine.personas.pack_loader import ICP_PACK_PREFIX, PersonaPack
+from app.workers.simulation_tasks import apportion
 
 BASE_PACK_ID = f"{ICP_PACK_PREFIX}deadbeef"
 PLATFORMS = ["hacker_news"]
 
 # The live Founder-lens run: 30 of 96 agents against 30% configured is 1.25
-# percentage points, and that figure is quoted as a product claim. It is the
-# *single-pack* accuracy, and it is a property of `run_prepare_agents`'
-# apportionment — independent `max(1, round(...))` per archetype with no
-# remainder redistribution — not of anything in this module. Segmentation is
-# held to it: the tests below compare against the single-pack case at the same
-# configuration rather than against a number chosen here.
+# percentage points, and that figure is quoted as a product claim. It is a
+# property of `run_prepare_agents`' apportionment, not of anything in this
+# module. Segmentation is held to it: the tests below compare against the
+# single-pack case at the same configuration rather than against a number
+# chosen here.
 _LIVE_SINGLE_PACK_DEVIATION = 0.0125
 
 
@@ -101,9 +101,12 @@ def _simulate_agents(
 ) -> tuple[int, int]:
     """Mirror `run_prepare_agents`' allocation and count the cohorts.
 
-    Deliberately a copy of the runner's arithmetic rather than a cleaner
-    equivalent: the property under test is what the runner will actually
-    allocate, including its `max(1, round(...))` and its `remaining` cut-off.
+    Calls the runner's own `apportion` rather than restating its arithmetic.
+    The previous version was a deliberate copy, and it aged into the second
+    source of truth §2a warns about: it pinned the old `max(1, round(...))`
+    behaviour, so the envelope it measured was a property of the copy as much as
+    of the runner. The structure around the call — split across platforms, then
+    across archetypes — is all that is reproduced here.
     """
     platforms = platforms or PLATFORMS
     all_archetypes = []
@@ -111,19 +114,11 @@ def _simulate_agents(
         for archetype in rebalance_adversarial(pack.archetypes, share):
             all_archetypes.append(archetype)
 
-    total_weight = sum(a.weight for a in all_archetypes)
-    per_platform = max(1, target_agents // len(platforms))
-
+    weights = [a.weight for a in all_archetypes]
     adversarial = 0
     total = 0
-    for _platform in platforms:
-        remaining = per_platform
-        for archetype in all_archetypes:
-            count = max(1, round(archetype.weight / total_weight * per_platform))
-            if remaining <= 0:
-                break
-            count = min(count, remaining)
-            remaining -= count
+    for platform_total in apportion([1.0] * len(platforms), target_agents):
+        for archetype, count in zip(all_archetypes, apportion(weights, platform_total)):
             total += count
             if archetype.is_adversarial:
                 adversarial += count
@@ -253,18 +248,29 @@ def test_realised_agent_share_survives_multiple_platforms():
 # ---------------------------------------------------------------------------
 # The envelope
 #
-# `run_prepare_agents` apportions with `max(1, round(weight / total * n))` per
-# archetype and truncates on a running remainder. That is coarse on its own —
-# the single-pack case is 10 percentage points out on a 30-agent swarm — and it
-# gets coarser as the archetype count rises, because each group rounds
-# independently. Segmentation raises the archetype count, so the property worth
-# asserting is not per-configuration equality (which the runner cannot deliver
-# for either design) but that **splitting does not widen the envelope**.
+# This section was written against the old apportionment — `max(1, round(weight
+# / total * n))` per archetype against a truncating running remainder — which
+# could not deliver per-configuration accuracy for *either* design. It was 10
+# percentage points out on a 30-agent swarm at a single pack (20% realised
+# against 30% configured), and it lost agents outright: 48 requested allocated
+# 45. So the only claim it could make was the relative one, that splitting does
+# not make things worse.
 #
-# Largest-remainder apportionment in `run_prepare_agents` would make both
-# columns exact and make this test uninteresting. That is the fix; this is the
-# guarantee until it lands.
+# `run_prepare_agents.apportion` is now largest-remainder, and the relative
+# claim is no longer the interesting one. The tests below assert the absolute
+# properties it delivers — the allocated total *equals* the requested total, and
+# the realised share sits inside a measured envelope — and keep the relative
+# claim underneath them, because `compile_packs` can still dilute the cohort by
+# how it deals archetypes into packs and that is this module's own defect to
+# guard against.
 # ---------------------------------------------------------------------------
+
+# Measured against the grid below (180 configurations, single-pack and
+# segmented) after the switch to largest-remainder: worst deviation 0.0333 in
+# both columns, against 0.1000 single / 0.0778 segmented before it. The bound is
+# the measurement plus a hair, not a target chosen for comfort — if a change
+# moves it, re-measure with `_envelope()` and move the constant deliberately.
+_APPORTIONMENT_ENVELOPE = 0.034
 
 # The four segment cells `_segment_key` can produce.
 _CELLS = (
@@ -320,8 +326,59 @@ def _envelope() -> tuple[float, float]:
     return single_worst, segmented_worst
 
 
+def test_every_configuration_allocates_exactly_the_agents_requested():
+    """The billing invariant, across 180 configurations, split or not.
+
+    Credits are charged at start from the agent count the customer selected
+    (HANDOFF §4.3). Under the old apportionment 85 of these 180 configurations
+    missed their requested total — 48 requested allocating 45 is the reported
+    case — so every one of those runs built a swarm the customer had paid more
+    for, and drew every confidence interval across fewer agents than the quote
+    implied.
+    """
+    missed = []
+    for buyers in (3, 4, 6):
+        for cohort in (2, 3, 4):
+            for agents in (30, 48, 96, 150, 200):
+                for share in (0.2, 0.3, 0.4, 0.5):
+                    profile = _grid_profile(buyers, cohort)
+                    for label, packs in (
+                        ("one", [compile_pack(profile, BASE_PACK_ID, PLATFORMS, share)]),
+                        ("many", compile_packs(profile, BASE_PACK_ID, PLATFORMS, share)),
+                    ):
+                        _, total = _simulate_agents(packs, share, agents)
+                        if total != agents:
+                            missed.append((label, buyers, cohort, agents, share, total))
+
+    assert not missed, f"{len(missed)} configurations lost or gained agents: {missed[:5]}"
+
+
+def test_the_reported_48_agent_case_allocates_48():
+    """The regression, pinned at the exact reported shape.
+
+    Three buyers, a four-strong incumbent cohort at 30%, segmented: **45 agents
+    where 48 were requested**. Three agents the customer was charged for and did
+    not receive, on one run.
+    """
+    packs = compile_packs(_grid_profile(3, 4), BASE_PACK_ID, PLATFORMS, 0.3)
+    adversarial, total = _simulate_agents(packs, 0.3, 48)
+
+    assert total == 48
+    assert abs(adversarial / total - 0.3) <= _APPORTIONMENT_ENVELOPE
+
+
+def test_the_realised_share_stays_inside_the_measured_envelope():
+    """Absolute accuracy, not just accuracy relative to the unsegmented case."""
+    single_worst, segmented_worst = _envelope()
+
+    assert single_worst <= _APPORTIONMENT_ENVELOPE, single_worst
+    assert segmented_worst <= _APPORTIONMENT_ENVELOPE, segmented_worst
+
+
 def test_segmentation_does_not_widen_the_share_envelope():
-    """The claim, across 180 configurations: same tolerance, split or not."""
+    """Kept underneath the absolute claim: `compile_packs` deals archetypes into
+    packs, and a bad deal still dilutes the cohort however exact the
+    apportionment downstream of it is."""
     single_worst, segmented_worst = _envelope()
 
     assert segmented_worst <= single_worst + 1e-9, (

@@ -106,6 +106,19 @@ export interface ICPArchetype {
   id: string;
   label: string;
   weight: number;
+  /**
+   * Why the synthesis believes this is one of your buyers, in a sentence,
+   * citing the uploaded material.
+   *
+   * Empty is a real answer and must render as nothing. The backend drops any
+   * rationale that only paraphrases the archetype's own fields back — a
+   * sentence that restates the role looks like evidence and is not. Never
+   * substitute placeholder text here.
+   *
+   * Optional so that profiles stored before the field existed still satisfy
+   * ICP_SCHEMA_VERSION 1 and keep rendering.
+   */
+  rationale?: string;
   role: string;
   seniority: Seniority;
   budget_authority: BudgetAuthority;
@@ -126,6 +139,8 @@ export interface AdversarialArchetype {
   id: string;
   label: string;
   weight: number;
+  /** See `ICPArchetype.rationale`. Empty renders as nothing. */
+  rationale?: string;
   role: string;
   /** Null unless uploaded competitor material licensed the name. */
   competitor_name: string | null;

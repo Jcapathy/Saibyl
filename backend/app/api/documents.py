@@ -17,6 +17,7 @@ from typing import Literal
 
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from pydantic import BaseModel
 
 from app.core.auth import get_current_org
 from app.core.database import get_supabase_admin
@@ -334,6 +335,94 @@ async def get_document(id: str, auth: dict = Depends(get_current_org)):
     if not result.data:
         raise HTTPException(status_code=404, detail="Document not found")
     return result.data
+
+
+class DocumentUpdate(BaseModel):
+    """What may be corrected on a document after upload.
+
+    `material_kind` is **required**, not `str | None`. An optional field would
+    make a body that omits it a 200 that changed nothing, and the caller cannot
+    tell that apart from a confirmed decision — which is the one thing this
+    field must never be ambiguous about.
+    """
+
+    material_kind: Literal["own", "competitor", "market"]
+
+
+@router.patch("/{id}")
+async def update_document(
+    id: str,
+    body: DocumentUpdate,
+    auth: dict = Depends(get_current_org),
+):
+    """Correct a document's material kind.
+
+    Until this existed, `material_kind` was settable only as a query parameter
+    at upload time and there was no way to change it afterwards. Two
+    consequences, both of them live:
+
+    - Every document uploaded before the control existed carries NULL, and
+      `gather_material` reads NULL as `own`. **Competitor grounding was
+      unreachable for every one of those projects** — not degraded, unreachable:
+      an adversarial archetype may name a competitor only from a document marked
+      `competitor` (PRD §4, DECISIONS_V2 §7), and no such document could exist.
+    - A founder who mislabelled a file had to delete and re-upload it, which
+      also re-runs ingestion and re-bills the storage.
+
+    **The kind is set only from an explicit request.** Ingestion writes its own
+    opinion to `material_kind_suggested` / `material_kind_confidence` and this
+    route does not read either of them, at any confidence. The guardrail is that
+    a human decided a document is competitor material; a classifier agreeing
+    with itself is not that decision, and promoting a suggestion here would make
+    the two indistinguishable everywhere downstream — see
+    `services/ingestion/classifier.py`.
+
+    Logged with the old and the new value because this changes what the *next*
+    synthesis grounds on: a competitor label appearing or disappearing changes
+    whether a named rival can be spoken in published copy, and that has to be
+    reconstructible from the logs after the fact.
+    """
+    admin = get_supabase_admin()
+
+    # Read scoped to the org, then write scoped to the org. The read is what
+    # produces the 404 and the `from` value; the `eq` on the update is not
+    # redundant with it, because dropping it would leave a cross-tenant write
+    # one refactor away from being reintroduced.
+    current = (
+        admin.table("documents")
+        .select("id, material_kind, project_id")
+        .eq("id", id)
+        .eq("organization_id", auth["org_id"])
+        .execute()
+    )
+    if not current.data:
+        raise HTTPException(status_code=404, detail="Document not found")
+    row = current.data[0]
+
+    # NULL is read as `own` everywhere downstream, so it is reported as `own`
+    # here too rather than as a second value meaning the same thing.
+    previous = row.get("material_kind") or "own"
+
+    updated = (
+        admin.table("documents")
+        .update({"material_kind": body.material_kind})
+        .eq("id", id)
+        .eq("organization_id", auth["org_id"])
+        .execute()
+    )
+    if not updated.data:  # pragma: no cover - the row was read one statement ago
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    log.info(
+        "document_material_kind_updated",
+        document_id=id,
+        project_id=row.get("project_id"),
+        organization_id=auth["org_id"],
+        material_kind_from=previous,
+        material_kind_to=body.material_kind,
+        detail="changes what the next ICP synthesis grounds on",
+    )
+    return updated.data[0]
 
 
 @router.delete("/{id}")

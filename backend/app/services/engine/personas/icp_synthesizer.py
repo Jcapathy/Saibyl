@@ -7,6 +7,7 @@
 #               adversarial_share=0.0) -> list[PersonaPack]
 # rebalance_adversarial(archetypes, share) -> list[Archetype]
 # gather_material(project_id) -> ProjectMaterial
+# source_text(admin, document_row) -> str
 # recompile_profile(profile_row) -> dict
 # ─────────────────────────────────────────────────────────
 """Derive the audience from the founder's own material (DECISIONS_V2 §3).
@@ -214,7 +215,7 @@ def _fair_share(demands: list[int], budget: int) -> list[int]:
     return allocation
 
 
-def _source_text(admin: Any, doc: dict[str, Any]) -> str:
+def source_text(admin: Any, doc: dict[str, Any]) -> str:
     """The extracted text for one document.
 
     Read from `processed_text_path`, which `services/ingestion/pipeline.py`
@@ -223,6 +224,11 @@ def _source_text(admin: Any, doc: dict[str, Any]) -> str:
     things the old single-path pipeline could produce. The fallback is logged so
     a project that is silently paying for re-extraction on every synthesis is
     visible rather than merely slow.
+
+    Public, and shared with `workers/simulation_tasks.run_prepare_agents`, which
+    had its own copy that read `storage_path` and decoded the raw bytes as UTF-8
+    — mojibake for every PDF. "The text of a document" is one question and this
+    is its one answer.
     """
     text_path = doc.get("processed_text_path")
     if text_path:
@@ -351,7 +357,7 @@ def gather_material(project_id: str) -> ProjectMaterial:
                 continue
 
             try:
-                text = _source_text(admin, doc)
+                text = source_text(admin, doc)
             except Exception as exc:
                 logger.warning(
                     "icp_material_read_failed",
@@ -544,6 +550,15 @@ RULES
 - "skepticism_triggers" are the things that make this archetype stop reading.
 - "disposition" is -1..1: how they lean BEFORE seeing the pitch, from switching
   cost and prior burns — not how much you think they will like it.
+- "rationale" is one or two plain sentences for the founder, who has never heard
+  the phrase "ideal customer profile": why THIS is one of their buyers. It must
+  point at something the material above actually says — a feature, a price, a
+  claim, a named tool, a stated problem — and say what that implies about who
+  buys. Do not restate the role, the seniority or the switching cost; those are
+  shown next to it already, and a sentence that repeats them reads to a founder
+  as evidence while containing none. Write it in the founder's own words, not in
+  sales vocabulary. If the material does not support a reason, return "" and put
+  the question in "gaps" — an empty rationale is better than a plausible one.
 {adversarial_rule}
 Return ONLY a JSON object:
 {{
@@ -559,6 +574,7 @@ Return ONLY a JSON object:
       "id": "kebab-case-id",
       "label": "Human readable label",
       "weight": 0.4,
+      "rationale": "1-2 sentences citing the material, or \\"\\"",
       "role": "their job",
       "seniority": "ic|manager|director|vp|c_level|founder",
       "budget_authority": "none|influencer|recommender|approver|owner",
@@ -579,6 +595,7 @@ Return ONLY a JSON object:
       "id": "kebab-case-id",
       "label": "Human readable label",
       "weight": 0.3,
+      "rationale": "1-2 sentences citing the material: why this cohort is in the room",
       "role": "{'|'.join(ADVERSARIAL_ROLES)}",
       "competitor_name": "name or null",
       "grounded_in": ["document-id", ...],
@@ -682,13 +699,22 @@ def _build_profile(
             detail="named without a competitor-material document; not usable for grounding",
         )
 
-    archetypes = [_build_archetype(a, i) for i, a in enumerate(data.get("archetypes") or [])]
+    # Computed once and shared: the vocabulary a rationale has to draw on to
+    # count as citing the material rather than restating the archetype.
+    material_words = _content_words(
+        f"{material.own}\n{material.competitor}\n{material.market}"
+    )
+
+    archetypes = [
+        _build_archetype(a, i, material_words)
+        for i, a in enumerate(data.get("archetypes") or [])
+    ]
     archetypes = [a for a in archetypes if a is not None][:_MAX_ARCHETYPES]
 
     adversarial_list: list[AdversarialArchetype] = []
     if adversarial:
         for i, a in enumerate(data.get("adversarial") or []):
-            built = _build_adversarial(a, i, allowed_docs)
+            built = _build_adversarial(a, i, allowed_docs, material_words)
             if built is not None:
                 adversarial_list.append(built)
         adversarial_list = adversarial_list[:_MAX_ADVERSARIAL]
@@ -704,6 +730,97 @@ def _build_profile(
     )
 
 
+# ---------------------------------------------------------------------------
+# The rationale, and the floor under it
+# ---------------------------------------------------------------------------
+
+_RATIONALE_MAX_CHARS = 320
+
+# Words carrying no evidential content. Deliberately short: this set is
+# subtracted from the *evidence* a rationale offers, so every word added to it
+# makes the check stricter, and a stricter check drops good rationales. Only
+# words that cannot be the thing a rationale cites belong here.
+_RATIONALE_STOPWORDS = frozenset("""
+about above after again against also although always among another any anyone
+anything are around because been before being below between both cannot could
+does doing done down during each either else even ever every from further have
+having here however into itself just less like likely many might more most much
+must never once only onto other others ours over perhaps rather really same
+seem seems several should since some someone something still such than that
+their theirs them themselves then there therefore these they thing things this
+those though through thus under until upon very were what when where whether
+which while whom will with within without would your yours
+""".split())
+
+
+def _content_words(text: str) -> set[str]:
+    """Lowercased words of four characters or more, minus the stopwords.
+
+    Four is where English function words mostly stop and nouns start; it is a
+    floor for a cheap overlap test, not a linguistic claim.
+    """
+    word = []
+    words: set[str] = set()
+    for ch in text.lower():
+        if ch.isalpha():
+            word.append(ch)
+            continue
+        if len(word) >= 4:
+            words.add("".join(word))
+        word = []
+    if len(word) >= 4:
+        words.add("".join(word))
+    return words - _RATIONALE_STOPWORDS
+
+
+def _grounded_rationale(
+    value: Any,
+    *,
+    own_vocabulary: str,
+    material_words: set[str],
+    label: str,
+) -> str:
+    """Keep the rationale only if it cites the material rather than the archetype.
+
+    The audience-review surface asks a founder — who has not heard the term ICP
+    — whether each synthesized buyer looks right. A sentence that restates the
+    role back at them ("a platform engineering lead who evaluates platform
+    engineering tools") *looks* like the evidence they were asked to judge and
+    contains none, and the frontend was correct to leave the space empty rather
+    than render filler. This is the same failure as Phase 1's bug #5 and Phase
+    2's fabricated statistic, one notch quieter: not an invented number, an
+    invented reason.
+
+    So the floor is one sentence long: the rationale must name **at least one
+    thing the uploaded material says that the archetype's own fields do not
+    already say**. Everything the model wrote is otherwise kept verbatim — this
+    drops, it does not rewrite, because a rewritten rationale is the product
+    asserting a reason on its own account.
+
+    Deliberately narrow, in the same way `_evidence_claims` is: it cannot tell a
+    thoughtful rationale from a fluent one. It catches the restatement, which is
+    the failure the empty space existed to avoid, and it is a floor under the
+    prompt rather than a substitute for it.
+    """
+    text = " ".join(str(value or "").split())[:_RATIONALE_MAX_CHARS]
+    if not text:
+        return ""
+
+    evidence = (_content_words(text) & material_words) - _content_words(own_vocabulary)
+    if not evidence:
+        logger.warning(
+            "icp_rationale_dropped",
+            archetype=label,
+            rationale=text[:160],
+            detail=(
+                "cites nothing in the uploaded material that the archetype's own "
+                "fields do not already state; dropped rather than shown as evidence"
+            ),
+        )
+        return ""
+    return text
+
+
 def _slug(value: str, fallback: str) -> str:
     cleaned = "".join(ch if ch.isalnum() else "-" for ch in value.lower()).strip("-")
     while "--" in cleaned:
@@ -711,15 +828,41 @@ def _slug(value: str, fallback: str) -> str:
     return cleaned[:48] or fallback
 
 
-def _build_archetype(data: dict[str, Any], index: int) -> ICPArchetype | None:
+def _build_archetype(
+    data: dict[str, Any],
+    index: int,
+    material_words: set[str],
+) -> ICPArchetype | None:
     label = str(data.get("label") or data.get("role") or "").strip()
     if not label:
         return None
+
+    # The archetype's own vocabulary, against which the rationale must add
+    # something. `role` is the field a lazy rationale paraphrases, and the rest
+    # are the fields the review UI already renders next to it.
+    own_vocabulary = " ".join([
+        label,
+        str(data.get("role") or ""),
+        str(data.get("seniority") or ""),
+        str(data.get("switching_cost") or ""),
+        *(str(v) for v in (data.get("incumbent_tooling") or [])),
+        *(str(v) for v in (data.get("evaluation_criteria") or [])),
+        *(str(v) for v in (data.get("skepticism_triggers") or [])),
+        *(str(v) for v in (data.get("goals") or [])),
+        *(str(v) for v in (data.get("pains") or [])),
+    ])
+
     try:
         return ICPArchetype(
             id=_slug(str(data.get("id") or label), f"archetype-{index + 1}"),
             label=label[:80],
             weight=max(float(data.get("weight") or 1.0), 0.01),
+            rationale=_grounded_rationale(
+                data.get("rationale"),
+                own_vocabulary=own_vocabulary,
+                material_words=material_words,
+                label=label,
+            ),
             role=str(data.get("role") or label)[:120],
             seniority=data.get("seniority") or "manager",
             budget_authority=data.get("budget_authority") or "influencer",
@@ -743,6 +886,7 @@ def _build_adversarial(
     data: dict[str, Any],
     index: int,
     allowed_docs: set[str],
+    material_words: set[str],
 ) -> AdversarialArchetype | None:
     """Build one adversarial archetype, grounding it before validation.
 
@@ -786,11 +930,24 @@ def _build_adversarial(
 
     name, grounded = _ground_adversarial(data, allowed_docs, label)
 
+    own_vocabulary = " ".join([
+        label,
+        role,
+        str(data.get("core_argument") or ""),
+        *(str(v) for v in (data.get("talking_points") or [])),
+    ])
+
     try:
         return AdversarialArchetype(
             id=_slug(str(data.get("id") or label), f"adversarial-{index + 1}"),
             label=label[:80],
             weight=max(float(data.get("weight") or 1.0), 0.01),
+            rationale=_grounded_rationale(
+                data.get("rationale"),
+                own_vocabulary=own_vocabulary,
+                material_words=material_words,
+                label=label,
+            ),
             role=role,
             competitor_name=name,
             grounded_in=grounded,
