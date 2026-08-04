@@ -25,6 +25,7 @@ from typing import Any
 import structlog
 
 from app.core.database import fetch_all, get_supabase_admin
+from app.services.engine.variants import DEFAULT_VARIANT_KEY, Arena, load_arenas
 from app.services.intelligence.analysis_schema import Interval, StanceSplit
 
 logger = structlog.get_logger()
@@ -56,6 +57,19 @@ class MeasuredEvent:
     intent: str | None
     is_novel_claim: bool
     objections: list[str]
+
+    # Which arena produced this. Under matched swarms the same agent appears in
+    # every arena, so `variant` is the only thing separating an agent's reaction
+    # to variant A from its reaction to variant B — grouping by agent alone
+    # would average a marketer's six headlines into one number.
+    variant: str = DEFAULT_VARIANT_KEY
+    # What this replied to or reacted to, as an event id. None for a top-level
+    # post and for every event written before migration 022.
+    target_event_id: str | None = None
+    # What the agent came away believing the subject said, in its own words.
+    # Compared against the variant's actual copy for takeaway accuracy — the
+    # PRD §6 metric reported on every objective.
+    takeaway: str | None = None
     # Which side of the room the agent that produced this is on. Read from the
     # agent row rather than inferred from the archetype label — a
     # label-matching rule would break the first time a founder renames an
@@ -104,6 +118,23 @@ class RunData:
     # Set when this run is an inoculation re-simulation. Its canonicalization
     # clusters against the parent's objections so the two runs' keys line up.
     parent_simulation_id: str | None = None
+
+    # ── The Marketing lens ──────────────────────────────────────────────
+    # What winning means for this run. None on every Founder- and Crisis-lens
+    # run, where sentiment stays the headline — which is also what every run
+    # created before Phase 3 reads as.
+    objective: str | None = None
+    # The arenas this run executed, in display order. Empty on a single-arena
+    # run: one arena is not a comparison, and an artifact carrying a
+    # one-variant scoreboard invites a reader to treat it as one.
+    arenas: list[Arena] = field(default_factory=list)
+
+    @property
+    def is_multi_variant(self) -> bool:
+        return len(self.arenas) > 1
+
+    def events_for(self, variant_key: str) -> list[MeasuredEvent]:
+        return [e for e in self.events if e.variant == variant_key]
 
     @property
     def scored_events(self) -> list[MeasuredEvent]:
@@ -160,6 +191,18 @@ def _named_competitors(icp_profile_id: str | None) -> list[str]:
     })
 
 
+def _configured_arenas(simulation_id: str, prediction_goal: str) -> list[Arena]:
+    """The run's arenas, or an empty list when it only ever had one.
+
+    `load_arenas` never returns empty — the runner must always have something to
+    execute. The artifact wants the opposite: a single-arena run has no
+    comparison to report, and handing the viewer a one-row scoreboard invites a
+    reader to treat one variant as a result.
+    """
+    arenas = load_arenas(simulation_id, prediction_goal)
+    return arenas if len(arenas) > 1 else []
+
+
 def load_run_data(simulation_id: str) -> RunData:
     """Load a run's agents and measured events."""
     admin = get_supabase_admin()
@@ -167,7 +210,7 @@ def load_run_data(simulation_id: str) -> RunData:
     sim = (
         admin.table("simulations")
         .select(
-            "id, organization_id, prediction_goal, max_rounds, lens, "
+            "id, organization_id, prediction_goal, max_rounds, lens, objective, "
             "founder_stage, adversarial_share, icp_profile_id, parent_simulation_id"
         )
         .eq("id", simulation_id)
@@ -210,9 +253,9 @@ def load_run_data(simulation_id: str) -> RunData:
     rows = fetch_all(
         admin.table("simulation_events")
         .select(
-            "id, agent_id, platform, round_number, event_type, content, "
-            "valence, stance, intensity, intent, is_novel_claim, objections, "
-            "measured_at, measure_model"
+            "id, agent_id, platform, variant, target_event_id, round_number, "
+            "event_type, content, valence, stance, intensity, intent, takeaway, "
+            "is_novel_claim, objections, measured_at, measure_model"
         )
         .eq("simulation_id", simulation_id)
         .order("id")
@@ -251,6 +294,11 @@ def load_run_data(simulation_id: str) -> RunData:
                 intent=row.get("intent"),
                 is_novel_claim=bool(row.get("is_novel_claim")),
                 objections=raw_objections if isinstance(raw_objections, list) else [],
+                # Every event written before Phase 3 carries "a", so a historical
+                # run reads as a single-arena run rather than as an unlabelled one.
+                variant=row.get("variant") or DEFAULT_VARIANT_KEY,
+                target_event_id=row.get("target_event_id"),
+                takeaway=row.get("takeaway"),
                 is_adversarial=bool(agent.get("is_adversarial")),
                 adversarial_role=agent.get("adversarial_role"),
             )
@@ -276,6 +324,15 @@ def load_run_data(simulation_id: str) -> RunData:
         lens=sim.get("lens"),
         founder_stage=sim.get("founder_stage"),
         parent_simulation_id=sim.get("parent_simulation_id"),
+        objective=sim.get("objective"),
+        # Read from the configured variants rather than from the distinct
+        # `variant` values on the events. An arena that produced zero events is
+        # a finding — a variant nobody engaged with — and deriving the list from
+        # the events would delete it from the scoreboard instead of showing it
+        # scoring nothing.
+        arenas=_configured_arenas(
+            simulation_id, sim.get("prediction_goal", "")
+        ),
     )
     logger.info(
         "run_data_loaded",

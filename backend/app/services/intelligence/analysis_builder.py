@@ -52,6 +52,7 @@ from app.services.intelligence.objection_canonicalizer import (
     persist_objections,
     prior_objections,
 )
+from app.services.intelligence.variant_scoreboard import build_scoreboard
 
 logger = structlog.get_logger()
 
@@ -531,6 +532,9 @@ async def build_simulation_analysis(
         flashpoints=_flashpoints(run, timeline, objections),
         propagation=_propagation(objections[:MAX_OBJECTIONS_IN_ARTIFACT], run),
         adversarial=_adversarial_disclosure(run),
+        # None on every single-arena run. Built last because it is the one block
+        # that reads the run's arenas rather than only its events.
+        scoreboard=build_scoreboard(run),
         quality=_quality(run, timeline, headline.valence.n),
     )
 
@@ -546,6 +550,13 @@ async def build_simulation_analysis(
         adversarial_agents=run.agents_adversarial,
         objections_crossing_from_adversarial=sum(
             1 for o in analysis.objections if o.crossed_into_buyers
+        ),
+        variants=len(run.arenas),
+        # Logged rather than only stored: a run that produced a scoreboard with
+        # no winner is the normal, honest outcome of an underpowered test, and
+        # it should be visible without opening the artifact.
+        scoreboard_winner=(
+            analysis.scoreboard.winner_variant_key if analysis.scoreboard else None
         ),
     )
     return analysis

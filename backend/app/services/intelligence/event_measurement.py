@@ -64,6 +64,11 @@ _CONTENTLESS_EVENT_TYPES = {"react", "reaction", "like", "repost", "vote"}
 
 _VALID_STANCES = {"support", "oppose", "undecided", "off_topic"}
 
+# The prompt asks for at most 12 words. This is the backstop, because a model
+# that ignores a word limit and returns the whole post would turn a summary
+# column into a second copy of `content`.
+_MAX_TAKEAWAY_CHARS = 160
+
 _SYSTEM = (
     "You are a discourse analyst. You score social media posts for how their "
     "author actually feels about a specific subject. You return only JSON. You "
@@ -92,12 +97,19 @@ For each post return:
 - "is_novel_claim": true only if the post introduces an assertion about the
   subject that no earlier post in this batch made. Restating an existing point
   is false.
+- "takeaway": at most 12 words stating what THIS AUTHOR believes the subject is
+  claiming or offering, in the author's own understanding — not what the subject
+  actually says, and not whether they liked it. This is used to detect a message
+  that spreads as something the author did not intend, so an author who has
+  misread the subject must produce the misreading here, faithfully. Use "" when
+  the post shows no view of what the subject claims.
 
 Posts:
 {posts}
 
 Return JSON exactly: {{"results": [{{"i": 0, "valence": 0.0, "stance": "...", \
-"intensity": 0.0, "objections": [], "intent": "none", "is_novel_claim": false}}]}}
+"intensity": 0.0, "objections": [], "intent": "none", "is_novel_claim": false, \
+"takeaway": ""}}]}}
 Return one entry per post, in order. No commentary."""
 
 
@@ -206,12 +218,23 @@ async def _measure_batch(
             continue
 
         intent = entry.get("intent")
+        # What the author thinks the subject is claiming. Left NULL when the
+        # model returns nothing usable, and a NULL is excluded from the takeaway
+        # accuracy denominator rather than scored as a miss — an unmeasured
+        # takeaway is not an inaccurate one.
+        takeaway = entry.get("takeaway")
+        takeaway = (
+            takeaway.strip()[:_MAX_TAKEAWAY_CHARS]
+            if isinstance(takeaway, str) and takeaway.strip()
+            else None
+        )
         updates.append({
             "id": event["id"],
             "valence": round(valence, 4),
             "stance": stance,
             "intensity": round(intensity, 4) if intensity is not None else None,
             "intent": intent if isinstance(intent, str) and intent else None,
+            "takeaway": takeaway,
             "is_novel_claim": bool(entry.get("is_novel_claim")),
             "objections": _normalize_objections(entry.get("objections")),
             "measured_at": now,

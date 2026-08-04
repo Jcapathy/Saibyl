@@ -21,8 +21,19 @@
  *     adversarial disclosure presents incumbent-aligned synthetic agents as
  *     ordinary market voices, which is the one thing PRD §4 forbids. Refusing to
  *     render is the correct failure there.
+ *
+ * 3 — Phase 3 adds `scoreboard`. Additive again, and again the version moved for
+ *     more than the new field: on a multi-variant run the `headline` stops being
+ *     the thing to read, because it averages every arena into one number that
+ *     describes none of them. A client rendering v3 without the scoreboard would
+ *     show a marketer one confident sentiment figure for a test whose entire
+ *     purpose was to separate six alternatives.
+ *
+ * **This constant must move in the same commit as the server's SCHEMA_VERSION.**
+ * The client refuses to render an unknown version, so a server bump without this
+ * mirror blanks every report in the product.
  */
-export const SUPPORTED_SCHEMA_VERSION = 2;
+export const SUPPORTED_SCHEMA_VERSION = 3;
 
 export type Stance = 'support' | 'oppose' | 'undecided' | 'off_topic';
 export type Confidence = 'low' | 'moderate' | 'high';
@@ -197,6 +208,91 @@ export interface Headline {
   top_objection_key: string | null;
 }
 
+export type Objective =
+  | 'clicks'
+  | 'foot_traffic'
+  | 'product_sale'
+  | 'service_sale'
+  | 'signup'
+  | 'awareness';
+
+/**
+ * The Virality Potential Score and its six components.
+ *
+ * **A separate axis from the objective metric, never blended into it.** A
+ * variant can spread widely and convert terribly, and one score hides the two
+ * cases a marketer must act on.
+ *
+ * **`null` is not zero anywhere in here.** A component that could not be
+ * measured is null and was dropped from the weighting; zero means measured and
+ * nothing happened. Rendering a null as 0 would show a variant failing at
+ * something the run never measured.
+ */
+export interface ViralityComponents {
+  score: number | null;
+  components_used: number;
+  components_total: number;
+  share_intent_rate: Interval;
+  /** The heaviest-weighted component — spread confined to one cohort is an echo chamber. */
+  cross_archetype_reach: number;
+  archetypes_reached: number;
+  archetypes_total: number;
+  /** null on a single-platform run: there was nowhere to jump to. */
+  cross_platform_jump: number | null;
+  restatement_rate: number | null;
+  /** Branching, not depth — adapters have no reply-to-reply, so the graph is two levels. */
+  cascade_branching: number | null;
+  velocity_rounds_to_peak: number | null;
+  velocity_normalised: number | null;
+}
+
+export interface VariantArchetypeSlice {
+  archetype: string;
+  objective_rate: Interval;
+  valence: Interval;
+  agent_count: number;
+  event_count: number;
+}
+
+export interface VariantScore {
+  variant_key: string;
+  label: string;
+  content: string;
+  /** The headline for this run's objective. A proportion over agents, not events. */
+  objective_rate: Interval;
+  /** Supporting, not headline — a variant that converts while everyone resents it is a finding. */
+  valence: Interval;
+  stance: StanceSplit;
+  virality: ViralityComponents;
+  /** Lexical overlap, deliberately crude. Label it as approximate wherever shown. */
+  takeaway_accuracy: number | null;
+  viral_but_off_message: boolean;
+  converts_but_wont_travel: boolean;
+  agent_count: number;
+  event_count: number;
+  event_ids: string[];
+  by_archetype: VariantArchetypeSlice[];
+}
+
+/**
+ * The N-way comparison. Absent on every single-arena run.
+ *
+ * `winner_variant_key` is null whenever the top two variants' intervals
+ * overlap, and `verdict` says so in words. **Render the verdict, not just the
+ * ordering** — the list is display order, and presenting row one as the winner
+ * when the server declined to name one puts a number the product refused to
+ * stand behind in front of a spend decision.
+ */
+export interface VariantScoreboard {
+  objective: Objective | null;
+  objective_intents: string[];
+  variants: VariantScore[];
+  winner_variant_key: string | null;
+  verdict: string;
+  viral_score_threshold: number;
+  off_message_threshold: number;
+}
+
 export interface SimulationAnalysis {
   schema_version: number;
   simulation_id: string;
@@ -211,6 +307,12 @@ export interface SimulationAnalysis {
   flashpoints: Flashpoint[];
   propagation: PropagationEdge[];
   adversarial: AdversarialDisclosure;
+  /**
+   * Null on every single-arena run. **When present, this is the headline** —
+   * `headline` above averages every arena into one number that describes none
+   * of them.
+   */
+  scoreboard: VariantScoreboard | null;
   quality: QualityBlock;
 }
 

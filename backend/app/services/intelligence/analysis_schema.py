@@ -3,6 +3,7 @@
 # SimulationAnalysis            — the whole artifact
 # TimelinePoint, PlatformSlice, ArchetypeSlice, CohortSlice, ObjectionSummary,
 # Flashpoint, PropagationEdge, AdversarialDisclosure, QualityBlock, Interval
+# VariantScoreboard, VariantScore, VariantArchetypeSlice, ViralityComponents
 # SCHEMA_VERSION
 # ─────────────────────────────────────────────────────────
 """The typed shape of `simulation_analysis.artifact`.
@@ -40,7 +41,19 @@ from pydantic import BaseModel, Field
 #     adversarial disclosure block would present incumbent-aligned synthetic
 #     agents as ordinary market voices, which is the one thing PRD §4 forbids.
 #     Refusing to render is the correct failure there.
-SCHEMA_VERSION = 2
+#
+# 3 — Phase 3 adds `scoreboard`. Additive again, and again the version moves for
+#     a reason beyond the new field: on a multi-variant run the *headline* stops
+#     being the thing to read. It aggregates every arena into one number, which
+#     is the average of six competing headlines and describes none of them. A
+#     client rendering v3 without the scoreboard would show a marketer a single
+#     confident sentiment figure for a test whose entire purpose was to separate
+#     six alternatives.
+#
+# **`SUPPORTED_SCHEMA_VERSION` in `frontend/src/lib/analysis.ts` must move in the
+# same commit.** The frontend refuses to render an unknown version, so a bump
+# without the mirror blanks every report in the product.
+SCHEMA_VERSION = 3
 
 Stance = Literal["support", "oppose", "undecided", "off_topic"]
 
@@ -243,6 +256,134 @@ class PropagationEdge(BaseModel):
     event_ids: list[str] = Field(default_factory=list)
 
 
+class ViralityComponents(BaseModel):
+    """The Virality Potential Score and the six components behind it.
+
+    **A separate axis from the objective metric, never blended into it**
+    (DECISIONS §6). A variant can spread widely and convert terribly; one score
+    hides the two cases a marketer must act on.
+
+    **None is not zero anywhere in here.** A component that could not be
+    measured is None and is dropped from the weighting, with the remaining
+    weights renormalised — counting it as zero would penalise a variant for a
+    gap in the instrumentation. `components_used` says how many actually
+    contributed, so a score built from three is not read as one built from six.
+    """
+
+    # 0–100, or None when nothing at all could be measured.
+    score: float | None = None
+    components_used: int = 0
+    components_total: int = 6
+
+    # Share of this arena's active agents whose measured intent was to share.
+    share_intent_rate: Interval = Field(
+        default_factory=lambda: Interval(mean=0.0, lower=0.0, upper=0.0, n=0)
+    )
+    # **The heaviest-weighted component.** Content that spreads only within the
+    # cohort it started in is an echo chamber, and a share count cannot tell the
+    # difference.
+    cross_archetype_reach: float = 0.0
+    archetypes_reached: int = 0
+    archetypes_total: int = 0
+
+    # None on a single-platform run — there is nowhere to jump to, and 0.0 would
+    # read as a failure to travel.
+    cross_platform_jump: float | None = None
+    # Share of agents who restated the message in their own words. None before
+    # migration 023, when nothing carried a takeaway.
+    restatement_rate: float | None = None
+
+    # Mean replies per post that attracted any. **Branching, not depth**:
+    # `BasePlatformAdapter.comment()` takes a post id across all twelve
+    # adapters, so there is no reply-to-reply and the graph is structurally two
+    # levels deep. A depth figure would read 2.0 for every variant that got one
+    # reply. None before migration 022, when no edges were stored.
+    cascade_branching: float | None = None
+
+    # Fast-burn versus slow-build. Reported raw because it shapes channel and
+    # budget timing rather than being better or worse — which is also why it is
+    # the lowest-weighted component.
+    velocity_rounds_to_peak: int | None = None
+    velocity_normalised: float | None = None
+
+
+class VariantArchetypeSlice(BaseModel):
+    """How one archetype responded to one variant.
+
+    The per-archetype breakdown is the reason matched swarms are worth the cost:
+    "who does this variant win, and who does it lose" is a different and more
+    actionable question than "which variant won overall".
+    """
+
+    archetype: str
+    objective_rate: Interval
+    valence: Interval
+    agent_count: int = 0
+    event_count: int = 0
+
+
+class VariantScore(BaseModel):
+    """One arena's result."""
+
+    variant_key: str
+    label: str = ""
+    content: str = ""
+
+    # The headline for this run's objective — a proportion over *agents*, so a
+    # variant that made one agent post six times does not outrank one that
+    # convinced six agents.
+    objective_rate: Interval
+    # Supporting, not headline (DECISIONS §6). A variant that converts while
+    # everyone resents it is a finding, and it is invisible without this.
+    valence: Interval
+    stance: StanceSplit = Field(default_factory=StanceSplit)
+
+    virality: ViralityComponents = Field(default_factory=ViralityComponents)
+    # Lexical overlap between what agents said the message was and what it
+    # actually said. Deliberately crude and labelled as such wherever rendered —
+    # a per-variant main-model pass would price the lens out of its tier, and
+    # asserting accuracy without measuring it is worse than an approximation
+    # that says what it is. None when nothing carried a takeaway.
+    takeaway_accuracy: float | None = None
+
+    # The two cases DECISIONS §6 exists to keep visible.
+    viral_but_off_message: bool = False
+    converts_but_wont_travel: bool = False
+
+    agent_count: int = 0
+    event_count: int = 0
+    event_ids: list[str] = Field(default_factory=list)
+    by_archetype: list[VariantArchetypeSlice] = Field(default_factory=list)
+
+
+class VariantScoreboard(BaseModel):
+    """The N-way comparison. Absent entirely on a single-arena run.
+
+    `winner_variant_key` is None whenever the top two variants' intervals
+    overlap, and `verdict` says so in words. **Do not "improve" that into always
+    naming a winner** — a marketer acts on the top row, and an ordering drawn
+    from overlapping bands launders sampling noise into a decision. This is the
+    same rule the inoculation loop's `unresolved` verdict encodes, for the same
+    reason.
+    """
+
+    # None when the run has no configured objective, in which case the intents
+    # below are the union of every committing action.
+    objective: str | None = None
+    objective_intents: list[str] = Field(default_factory=list)
+
+    # Ranked by the objective metric. The ordering is display order and is not
+    # itself a claim — `verdict` carries the claim.
+    variants: list[VariantScore] = Field(default_factory=list)
+    winner_variant_key: str | None = None
+    verdict: str = ""
+
+    # Stated so a reader can disagree with them rather than reverse-engineer
+    # them from the flags.
+    viral_score_threshold: float = 60.0
+    off_message_threshold: float = 0.25
+
+
 class QualityBlock(BaseModel):
     """What the artifact is and is not entitled to claim.
 
@@ -298,4 +439,12 @@ class SimulationAnalysis(BaseModel):
     flashpoints: list[Flashpoint] = Field(default_factory=list)
     propagation: list[PropagationEdge] = Field(default_factory=list)
     adversarial: AdversarialDisclosure = Field(default_factory=AdversarialDisclosure)
+    # Absent on every single-arena run, which is every Founder- and Crisis-lens
+    # run and every run created before Phase 3. One variant is not a comparison,
+    # and a one-row scoreboard invites a reader to treat it as one.
+    #
+    # **When this is present, it is the headline.** `headline` above aggregates
+    # every arena into one number, which is the average of six competing
+    # messages and describes none of them — see SCHEMA_VERSION 3.
+    scoreboard: VariantScoreboard | None = None
     quality: QualityBlock

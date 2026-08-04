@@ -1,0 +1,21 @@
+-- Migration 023: message takeaway accuracy
+--
+-- SAFE TO APPLY WHILE master IS DEPLOYED. One nullable column on
+-- `simulation_events`, with no default. `master` neither reads nor writes it.
+--
+-- PRD_V2 §6: "**Message takeaway accuracy** — what agents believe the ad said
+-- versus what it said — is reported for every objective."
+--
+-- A first-class column rather than a key in `metadata`, following the 018
+-- measurement layer. Everything the classifier produces is queryable in its own
+-- right, because the moment a measured value lives inside a jsonb blob it stops
+-- being something an aggregate can be built from without a scan, and starts
+-- being something a renderer reaches into directly — which is exactly the habit
+-- Phase 1 removed.
+--
+-- Populated by the same batched Haiku pass that writes `valence`, `stance`,
+-- `intent` and the rest, so it costs no additional call. NULL means the event
+-- was measured before this shipped, or the classifier declined to summarise —
+-- and a NULL is excluded from the accuracy denominator rather than counted as a
+-- miss. An unmeasured takeaway is not an inaccurate one.
+ALTER TABLE simulation_events ADD COLUMN IF NOT EXISTS takeaway TEXT;
