@@ -111,9 +111,25 @@ fix, the `isSupportedSchema` range fix, and the V1 A/B subsystem removal.
 
     This is §8's "Stripe tiers are still V1" item, but that entry undersells it:
     the tiers are not merely un-migrated, the billing UI is **actively broken**.
-    Not fixed here because picking the winning names is a commercial decision
-    and the V2 prices ($99/$299/$999) need new Stripe Products and Price IDs
-    regardless. **Owner decision required.**
+
+    ✅ **DECIDED 2026-08-04 by the user: `founder` / `growth` / `agency` at
+    $99 / $299 / $999 wins.** The other two vocabularies migrate to it. Still
+    open as *work* because it needs new Stripe Products and Price IDs — a rename
+    alone leaves `PLAN_PRICE_MAP` pointing at prices for the old tiers.
+
+    Scope when picking this up:
+    - `stripe_service.py` — `PLAN_PRICE_MAP`, `PLAN_LIMITS`, the cancellation
+      path at `:188` which currently writes `plan:"starter"` (a *paid* tier, so
+      churned customers keep paid entitlements — should be `free`)
+    - `SettingsPage.tsx:87-101` — delete the local maps; serve tiers from the
+      backend so this cannot drift a third time
+    - `agent_pricing.TIER_CREDIT_GRANTS` / `TIER_CAPS` already map both old and
+      new names; drop the old once nothing writes them
+    - migration `018:180-190` backfilled grants using a CASE that knows only V1
+      names and sent everything else to `ELSE 800` — orgs on the new names have
+      a stale grant below the 1,180 a free run costs
+    - `LandingPage.tsx` advertises 5,000/25,000/100,000 agents per sim against
+      enforced caps of 100/150/1,000 — a 50–100× overstatement that ships today
 
 ### The mechanism the drift came through
 
