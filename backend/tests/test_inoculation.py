@@ -314,12 +314,85 @@ def test_a_resimulation_is_not_charged_for_agents_it_never_generates():
     assert reused.actual_cost_usd < normal.actual_cost_usd
 
 
-def test_reuse_does_not_change_any_other_stage():
+def test_reuse_changes_generation_and_canonicalization_and_nothing_else():
+    """Two stages differ for a re-simulation, and the ledger says which two.
+
+    This test previously asserted that *only* generation moved. That was wrong
+    in the expensive direction: a re-simulation's clustering call carries the
+    parent's objections as priors, and the same run measured 3,162 output tokens
+    without them against 13,955 with them.
+    """
     normal = estimate_simulation_cost(100, 5, 2, 1, "standard")
     reused = estimate_simulation_cost(100, 5, 2, 1, "standard", reuse_agents=True)
 
-    for stage in ("agent_actions", "event_measurement", "objection_canonicalization", "report"):
+    for stage in ("agent_actions", "event_measurement", "report"):
         assert reused.breakdown[stage] == normal.breakdown[stage]
+    assert reused.breakdown["agent_generation"] == 0.0
+    assert (
+        reused.breakdown["objection_canonicalization"]
+        > normal.breakdown["objection_canonicalization"]
+    )
+
+
+def test_pre_positioned_assets_are_charged_on_every_action():
+    """An asset rides in `topic_block()`, so it is re-sent with every prompt.
+
+    Measured on the parent/child pair `f980fe0d` / `fa28d899` — same agents,
+    same platforms, six assets apart — at 312 against 1,654 input tokens per
+    action. Charging assets as a one-off would under-quote the largest stage of
+    the run by more than a factor of two.
+    """
+    without = estimate_simulation_cost(96, 5, 2, 1, "standard", reuse_agents=True)
+    with_six = estimate_simulation_cost(
+        96, 5, 2, 1, "standard", reuse_agents=True, inoculation_assets=6
+    )
+
+    assert with_six.breakdown["agent_actions"] > without.breakdown["agent_actions"] * 1.5
+    # Only the action stage moves — assets are not sent to the classifier or
+    # the report writer.
+    for stage in ("agent_generation", "event_measurement", "objection_canonicalization", "report"):
+        assert with_six.breakdown[stage] == without.breakdown[stage]
+
+
+def test_the_asset_surcharge_scales_with_the_number_of_assets():
+    def actions(n: int) -> float:
+        return estimate_simulation_cost(
+            96, 5, 2, 1, "standard", reuse_agents=True, inoculation_assets=n
+        ).breakdown["agent_actions"]
+
+    assert actions(0) < actions(1) < actions(6) < actions(12)
+
+
+def test_a_negative_asset_count_is_rejected():
+    with pytest.raises(ValueError):
+        estimate_simulation_cost(96, 5, 2, 1, "standard", inoculation_assets=-1)
+
+
+def test_the_measured_loop_is_quoted_above_what_it_cost():
+    """The margin floor, checked against the one live loop we have bills for.
+
+    From `llm_usage`, excluding the separately-quoted drafting pass and counting
+    one clustering call per run: `f980fe0d` cost **$2.307** and `fa28d899`
+    **$2.553**. A quote below either figure is a run served under the margin the
+    whole model exists to hold — and the child was the one that slipped, because
+    it was quoted as a cheaper version of its parent when it is a more expensive
+    one.
+
+    (The child's ledger total reads $2.660 because it was re-clustered after the
+    key-carryover fix. That second call is a repair, not what the run costs.)
+    """
+    parent = estimate_simulation_cost(96, 5, 2, 1, "standard")
+    child = estimate_simulation_cost(
+        96, 5, 2, 1, "standard", reuse_agents=True, inoculation_assets=6
+    )
+
+    assert parent.actual_cost_usd >= 2.307
+    # Above the as-billed total too, not just the clean one.
+    assert child.actual_cost_usd >= 2.660
+    # And the direction is the measured one: an asset-carrying re-simulation
+    # costs *more* than its parent, not less. The saving on agent generation is
+    # real and smaller than the surcharge on actions.
+    assert child.actual_cost_usd > parent.actual_cost_usd
 
 
 def test_asset_drafting_is_priced_as_its_own_stage():

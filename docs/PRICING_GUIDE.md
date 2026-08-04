@@ -1,6 +1,6 @@
 # Saibyl — Pricing Guide
 
-**Saido Labs LLC** · Internal · Last recalculated **2026-08-03** (Phase 2 live run)
+**Saido Labs LLC** · Internal · Last recalculated **2026-08-04** (ledger re-derivation)
 
 Two parts: **Part 1** is how pricing is disclosed to self-serve customers in the
 product. **Part 2** is how to quote a volume or annual deal on a call.
@@ -12,9 +12,31 @@ All figures come from the same cost model the product bills against
 cd backend && python scripts/quote.py
 ```
 
-> ### ⚠️ Costs went **up** on 2026-08-03. Run counts fell.
+> ### ⚠️ 2026-08-04 — the re-simulation was being under-charged
 >
-> **Standard run COGS $2.26 → $2.71**; blended agency mix $6.88 → **$7.35**;
+> **This one is not a rounding update.** A re-simulation carries its inoculation
+> assets in *every agent action prompt*, and nothing in the model charged for
+> that. Measured on the one live loop — same agents, same platforms, six assets
+> apart — the child run's action input was **5.3× its parent's** (312 → 1,654
+> tokens per call), and its clustering call cost **4.4×** more because it carries
+> the parent's objections as priors.
+>
+> The loop was quoted as a *discount* on an ordinary run, because it skips agent
+> generation. It skips generation and then spends more than it saved. Measured
+> COGS $2.55 against a quote of $2.38 — a 78.5% margin where the model targets
+> 80%. Above the 70% floor, so nothing alarmed. **Fixed; re-simulations now quote
+> above what the measured loop cost.**
+>
+> **Standard run COGS $2.71 → $2.74**; blended agency mix $7.35 → **$7.46**; tier
+> run counts **7/22/73 → 7/21/73** (only Growth moves). That small change is a
+> separate item — event measurement was calibrated on the lowest of four runs.
+> Prices, grants and the 80% margin are unchanged.
+>
+> ---
+>
+> ### Previously: costs went **up** on 2026-08-03. Run counts fell.
+>
+> **Standard run COGS $2.26 → $2.71**; blended agency mix $6.88 → $7.35;
 > tier run counts **8/26/88 → 7/22/73**. Prices, grants and the 80% margin are
 > unchanged — only the cost model moved.
 >
@@ -38,7 +60,9 @@ cd backend && python scripts/quote.py
 > is far shorter than a Reddit post body) and generation input is
 > document-dependent. Calibrating to one run's platform mix would under-quote
 > every other. The current figures over-quote compact adapters on purpose —
-> `ARCHITECTURE_V2.md` has the reasoning.
+> `ARCHITECTURE_V2.md` has the reasoning. The platform split is now measured
+> rather than inferred: **748 input tokens per action on Reddit + Twitter/X
+> against 312 on Hacker News + LinkedIn**, at a comparable run shape.
 >
 > ---
 >
@@ -58,9 +82,9 @@ credits per run. **This must be disclosed before they hit it, not after.**
 
 The reference unit for all advertised run counts:
 
-> **Standard run** = 100 agents × 5 rounds × 2 platforms × 1 variant → **$2.71 COGS**
+> **Standard run** = 100 agents × 5 rounds × 2 platforms × 1 variant → **$2.74 COGS**
 
-**One credit = $0.001 of COGS.** A standard run is 2,713 credits; the Founder
+**One credit = $0.001 of COGS.** A standard run is 2,736 credits; the Founder
 grant of $19.80 is 19,800. Credits are integers so a balance cannot drift, and
 conversion always rounds up — a run costing a fraction of a credit more than it
 charges is a run served at a loss.
@@ -90,17 +114,17 @@ every slider change, always visible before the Run button:
 ┌────────────────────────────────────────────────────┐
 │  150 agents · 8 rounds · 3 platforms · 4 variants   │
 │                                                     │
-│  This run will use  28,467 credits                  │
-│  Your balance       59,800  →  31,333 after         │
+│  This run will use  12,688 credits                  │
+│  Your balance       59,800  →  47,112 after         │
 │  Estimated runtime  ~16–32 minutes                  │
 │                                                     │
-│  ≈ 10.3 standard runs' worth of capacity            │
+│  ≈ 4.6 standard runs' worth of capacity             │
 └────────────────────────────────────────────────────┘
 ```
 
 The last line is the honesty line. A user who bought "21 standard runs" and
 configures a 4-variant 150-agent run should see immediately that it consumes
-half of them.
+nearly a quarter of them.
 
 ## 1.4 Required warning states
 
@@ -108,8 +132,8 @@ All four are implemented in `RunConfigurator.tsx`.
 
 | Trigger | Copy |
 |---|---|
-| Run > 30% of remaining balance | ⚠️ **This run uses 48% of your remaining credits.** You'll have 31,333 left this cycle — about 11 standard runs. |
-| Run > remaining balance | **Not enough credits.** This run needs 28,467; you have 19,800. → *Reduce to fit my balance* |
+| Run > 30% of remaining balance | ⚠️ **This run uses 34% of your remaining credits.** You'll have 24,424 left this cycle — about 8 standard runs. |
+| Run > remaining balance | **Not enough credits.** This run needs 12,688; you have 5,000. → *Reduce to fit my balance* |
 | Balance < 15% remaining | Heads up — after this run you'll have used most of this cycle's credits. |
 | Slider hits tier cap | 🔒 Founder caps this at 3 (variants). |
 
@@ -142,7 +166,7 @@ kind of claim this guide exists to prevent.
 |---|---:|---:|---:|---:|---:|
 | Free trial | $0 (one run) | $1.20 | 1,200 | 1 capped | — |
 | Founder | $99 | $19.80 | 19,800 | 7 | 80% |
-| Growth | $299 | $59.80 | 59,800 | 22 | 80% |
+| Growth | $299 | $59.80 | 59,800 | 21 | 80% |
 | Agency | $999 | $199.80 | 199,800 | 73 | 80% |
 | Enterprise | Custom annual | see Part 2 | | | 68–78% |
 
@@ -154,11 +178,21 @@ would make the tier unusable, and 800 credits no longer did. That relationship i
 asserted by `test_the_free_grant_covers_one_free_run`, because it has now gone
 stale twice.
 
-Run counts **fell** against the previous revision (Founder 8 → 7, Growth 26 → 22,
-Agency 88 → 73). The grants, the prices and the 80% margin are all unchanged;
-only the cost model moved, after the 2026-08-03 recalibration found the report
-writes six sections and was quoted for four (`ARCHITECTURE_V2.md`). The same
-COGS dollars buy fewer runs than the previous model claimed.
+> ⚠️ **The free grant has 20 credits of headroom** — a free run costs 1,180 of
+> the 1,200 granted, or 98.3% of it. That is not headroom, it is a coincidence,
+> and it has been under 30 credits since the grant moved to 1,200. **Any stage
+> repricing at all can consume it, and the symptom is a signup that cannot run
+> the one run the tier promises.** Raising the grant to 1,400 costs $0.22 per
+> free trial and removes a recurring failure; it has not been done because the
+> grant is a published commercial number. **Decision needed.**
+
+Run counts **fell** again at the 2026-08-04 re-derivation, but only Growth moved:
+**7/22/73 → 7/21/73**, on a standard run going $2.71 → $2.74. Growth sat at 21.9
+runs and was rounding up in the advertised figure. The previous revision
+(2026-08-03) was the larger fall — Founder 8 → 7, Growth 26 → 22, Agency 88 → 73,
+after the recalibration found the report writes six sections and was quoted for
+four (`ARCHITECTURE_V2.md`). The grants, the prices and the 80% margin are
+unchanged throughout; only the cost model moved.
 
 This is the direction DECISIONS §15c did not anticipate. That decision passed a
 *corrected downward* cost base through to price and run counts rose, which is
@@ -195,15 +229,15 @@ than refusing.
 
 ## 2.1 Ask this before quoting anything
 
-**The same "400 runs/month" is worth between $4,933 and $22,668 per month
+**The same "400 runs/month" is worth between $4,975 and $23,069 per month
 depending on run shape.** Volume alone is not a quote.
 
 | If their runs are… | COGS/run | COGS/mo @400 | Quote/mo | Annual prepay |
 |---|---:|---:|---:|---:|
-| All standard | $2.71 | $1,085 | $4,933 | $53,273 |
-| Blended agency mix | $7.35 | $2,938 | $13,357 | $144,252 |
-| All 8-variant marketing* | $10.54 | $4,218 | $19,171 | $207,051 |
-| All growth-size* | $12.47 | $4,987 | $22,668 | $244,809 |
+| All standard | $2.74 | $1,094 | $4,975 | $53,725 |
+| Blended agency mix | $7.46 | $2,986 | $13,572 | $146,582 |
+| All 8-variant marketing* | $10.73 | $4,291 | $19,506 | $210,664 |
+| All growth-size* | $12.69 | $5,075 | $23,069 | $249,145 |
 
 Three questions that pin the number down:
 
@@ -222,44 +256,53 @@ real but no longer extreme.)
 
 | Shape | Config | COGS | vs standard |
 |---|---|---:|---:|
-| Light | 50ag / 5rd / 2pf / 1v | $1.81 | 0.7× |
-| **Standard** | **100ag / 5rd / 2pf / 1v** | **$2.71** | **1.0×** |
-| Marketing* | 100ag / 5rd / 1pf / 8v | $10.54 | 3.9× |
-| Founder-max* | 100ag / 8rd / 3pf / 3v | $7.02 | 2.6× |
-| Growth* | 150ag / 8rd / 3pf / 4v | $12.47 | 4.6× |
-| Heavy* | 250ag / 12rd / 4pf / 8v | $53.50 | 19.7× |
-| *Blended agency mix* | *55/30/13/2 weighting* | *$7.35* | *2.7×* |
+| Light | 50ag / 5rd / 2pf / 1v | $1.82 | 0.7× |
+| **Standard** | **100ag / 5rd / 2pf / 1v** | **$2.74** | **1.0×** |
+| Marketing* | 100ag / 5rd / 1pf / 8v | $10.73 | 3.9× |
+| Founder-max* | 100ag / 8rd / 3pf / 3v | $7.13 | 2.6× |
+| Growth* | 150ag / 8rd / 3pf / 4v | $12.69 | 4.6× |
+| Heavy* | 250ag / 12rd / 4pf / 8v | $54.61 | 20.0× |
+| *Blended agency mix* | *55/30/13/2 weighting* | *$7.46* | *2.7×* |
+| Re-simulation† | 96ag / 5rd / 2pf / 1v, 6 assets | $3.13 | 1.1× |
 
 \* Multi-variant shapes are **not runnable yet** — the engine runs one arena
 (`MAX_RUNNABLE_VARIANTS = 1`). They are priced here for planning only. Do not
 quote a variant count a customer can actually configure until Phase 3 ships
 N-way matched swarms.
 
+† **A re-simulation costs more than the run it repeats, not less.** It skips
+agent generation, which is the intuition, and then carries its assets in every
+action prompt, which costs more than it saved. A founder running the full
+inoculation loop — parent run, one drafting pass, one re-simulation — consumes
+**$5.97, or 2.18 standard runs**, not one and a bit. Quote the loop, not the
+run, and never write an "unlimited re-tests" clause on the assumption that a
+re-test is cheap.
+
 ## 2.3 Volume band table — standard runs · **QUOTE THIS ONE**
 
 **Use this for every contract starting before Phase 3 ships N-way matched
-swarms.** Priced at **$2.71/run COGS** — the only run shape the engine can
+swarms.** Priced at **$2.74/run COGS** — the only run shape the engine can
 actually execute today, since `MAX_RUNNABLE_VARIANTS = 1`.
 
 | Runs/mo | Margin | COGS/mo | **PRICE/mo** | $/run | Annual prepay | Gross profit/yr |
 |---:|---:|---:|---:|---:|---:|---:|
-| 100 | 80% | $271 | **$1,357** | $13.57 | $14,650 | $11,395 |
-| 200 | 78% | $543 | **$2,466** | $12.33 | $26,637 | $20,126 |
-| 300 | 78% | $814 | **$3,700** | $12.33 | $39,955 | $30,188 |
-| 400 | 78% | $1,085 | **$4,933** | $12.33 | $53,273 | $40,251 |
-| 500 | 78% | $1,356 | **$6,166** | $12.33 | $66,592 | $50,314 |
-| 750 | 75% | $2,035 | **$8,139** | $10.85 | $87,901 | $63,484 |
-| 1,000 | 75% | $2,713 | **$10,852** | $10.85 | $117,202 | $84,646 |
-| 1,500 | 72% | $4,070 | **$14,534** | $9.69 | $156,966 | $108,132 |
-| 2,000 | 72% | $5,426 | **$19,379** | $9.69 | $209,289 | $144,177 |
-| 3,000 | 70% | $8,139 | **$27,130** | $9.04 | $293,004 | $195,336 |
-| 5,000 | 70% | $13,565 | **$45,217** | $9.04 | $488,340 | $325,560 |
+| 100 | 80% | $274 | **$1,368** | $13.68 | $14,774 | $11,491 |
+| 200 | 78% | $547 | **$2,487** | $12.44 | $26,863 | $20,296 |
+| 300 | 78% | $821 | **$3,731** | $12.44 | $40,294 | $30,444 |
+| 400 | 78% | $1,094 | **$4,975** | $12.44 | $53,725 | $40,592 |
+| 500 | 78% | $1,368 | **$6,218** | $12.44 | $67,156 | $50,740 |
+| 750 | 75% | $2,052 | **$8,208** | $10.94 | $88,646 | $64,022 |
+| 1,000 | 75% | $2,736 | **$10,944** | $10.94 | $118,195 | $85,363 |
+| 1,500 | 72% | $4,104 | **$14,657** | $9.77 | $158,297 | $109,049 |
+| 2,000 | 72% | $5,472 | **$19,543** | $9.77 | $211,063 | $145,399 |
+| 3,000 | 70% | $8,208 | **$27,360** | $9.12 | $295,488 | $196,992 |
+| 5,000 | 70% | $13,680 | **$45,600** | $9.12 | $492,480 | $328,320 |
 
 Generate for an exact volume: `python scripts/quote.py --runs 400 --shape 100,5,2,1 --annual`
 
 **Why this and not the blended table.** The blended agency mix assumes 45% of
 runs are multi-variant. The engine runs one arena, so every run a customer can
-execute today is single-variant. Quoting $33/run against runs that cost $2.71
+execute today is single-variant. Quoting $34/run against runs that cost $2.74
 reads as a 78% margin and is in fact far higher — pleasant right up until the
 customer works it out at renewal, which is the worst possible moment for a
 number you cannot defend.
@@ -269,23 +312,23 @@ Phase 3 addition — see §2.6.
 
 ## 2.3b Volume band table — blended agency mix · **PHASE 3 ONWARD**
 
-Priced at **$7.35/run COGS**, assuming the 55/30/13/2 mix. **Do not quote this
+Priced at **$7.46/run COGS**, assuming the 55/30/13/2 mix. **Do not quote this
 for a contract that begins before N-way matched swarms ship.** It becomes the
 default the moment they do.
 
 | Runs/mo | Margin | COGS/mo | **PRICE/mo** | $/run | Annual prepay | Gross profit/yr |
 |---:|---:|---:|---:|---:|---:|---:|
-| 100 | 80% | $735 | **$3,673** | $36.73 | $39,669 | $30,854 |
-| 200 | 78% | $1,469 | **$6,678** | $33.39 | $72,126 | $54,495 |
-| 300 | 78% | $2,204 | **$10,018** | $33.39 | $108,189 | $81,743 |
-| 400 | 78% | $2,938 | **$13,357** | $33.39 | $144,252 | $108,991 |
-| 500 | 78% | $3,673 | **$16,696** | $33.39 | $180,316 | $136,238 |
-| 750 | 75% | $5,510 | **$22,039** | $29.38 | $238,017 | $171,901 |
-| 1,000 | 75% | $7,346 | **$29,385** | $29.38 | $317,355 | $229,201 |
-| 1,500 | 72% | $11,019 | **$39,355** | $26.24 | $425,030 | $292,798 |
-| 2,000 | 72% | $14,692 | **$52,473** | $26.24 | $566,706 | $390,397 |
-| 3,000 | 70% | $22,039 | **$73,462** | $24.49 | $793,388 | $528,926 |
-| 5,000 | 70% | $36,731 | **$122,436** | $24.49 | $1,322,314 | $881,543 |
+| 100 | 80% | $746 | **$3,732** | $37.32 | $40,310 | $31,352 |
+| 200 | 78% | $1,493 | **$6,786** | $33.93 | $73,291 | $55,375 |
+| 300 | 78% | $2,239 | **$10,179** | $33.93 | $109,936 | $83,063 |
+| 400 | 78% | $2,986 | **$13,572** | $33.93 | $146,582 | $110,751 |
+| 500 | 78% | $3,732 | **$16,966** | $33.93 | $183,227 | $138,439 |
+| 750 | 75% | $5,599 | **$22,394** | $29.86 | $241,860 | $174,677 |
+| 1,000 | 75% | $7,465 | **$29,859** | $29.86 | $322,480 | $232,902 |
+| 1,500 | 72% | $11,197 | **$39,990** | $26.66 | $431,893 | $297,527 |
+| 2,000 | 72% | $14,930 | **$53,320** | $26.66 | $575,858 | $396,702 |
+| 3,000 | 70% | $22,394 | **$74,648** | $24.88 | $806,201 | $537,467 |
+| 5,000 | 70% | $37,324 | **$124,414** | $24.88 | $1,343,668 | $895,779 |
 
 **Annual prepay** = 12 × monthly, less 10% for paying up front. That discount is
 a cash-flow trade, not a margin concession — it does not move COGS.

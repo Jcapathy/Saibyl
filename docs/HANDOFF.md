@@ -1,6 +1,6 @@
 # Saibyl V2 — Session Handoff
 
-**Saido Labs LLC** · Updated 2026-08-03 (Phase 2 built and verified live)
+**Saido Labs LLC** · Updated 2026-08-04 (cost model re-derived from the ledger)
 
 Read this first in a new session. It is written to be read cold, with no memory
 of previous sessions. It is the current state, the standing rules, what Phase 1
@@ -10,6 +10,11 @@ and Phase 2 built and why, and what has to happen next.
 a defect whose symptom was a *perfect score* — every counter-asset reported as
 effective, from a comparison that had matched nothing. §1b. Disbelieve perfect
 scores.
+
+**The second most important thing:** the 2026-08-04 ledger pass found that a
+re-simulation was being under-charged, and what concealed it was a *comment* — a
+plausible sentence explaining why the number should be lower, sitting above the
+code, repeated in DECISIONS, and pinned by a passing test. §1c.
 
 **Read in this order:**
 
@@ -34,24 +39,28 @@ them rather than repeating them.
 
 ## 0. Start here — the work queue, in order
 
-Phase 2 is done and verified. Nothing below is half-finished; these are the
-decisions and follow-ups it surfaced. **Items 1 and 2 need a human answer before
-any code is written.**
+Phase 2 is done and verified. Items 3 and 4 below are **done** as of 2026-08-04
+and are kept in the table with their outcomes, because what they found changed
+items 5 and 7. Nothing is half-finished. **Items 1, 2, 6 and 7 need a human
+answer before any code is written.**
 
 | # | Item | Type | Blocking |
 |---|---|---|---|
 | 1 | **Re-check any contract quoted before 2026-08-03.** The tables are regenerated (below), but a deal already signed against $2.26/run carries ~20% less margin than its band table claimed. Nothing to build — a review. | Review | Renewals |
-| 2 | **Clean re-run of the inoculation loop** (~$2.70 COGS). The measured delta's *magnitude* is contaminated — 3 of 6 assets carried a fabricated statistic that is now blocked. Mechanism is proven; effect size is not citable. | Decision | Citing any delta figure |
-| 3 | **Re-derive `ICP_SYNTHESIS` and `INOCULATION_DRAFT`** from `llm_usage` (§7 query). One live pass each is not a calibration; they are the only estimated profiles left. | Work | Quote accuracy |
-| 4 | **Re-derive `OBJECTION_CANONICALIZATION`.** Its measured output was capped at the old ceiling, so the current figure is a floor, not a measurement. | Work | Quote accuracy |
-| 5 | **Per-adapter `AGENT_ACTION` profile.** One number cannot serve a compact feed (Hacker News, 312 input tokens) and a body-carrying one (750). Today's value is a cross-platform ceiling on purpose. | Work | Quote precision |
-| 6 | **Phase 3 — Marketing lens.** N-way matched swarms, per-objective intent metrics, Virality Potential Score. Entry notes in §9.4. | Phase | — |
+| 2 | **Clean re-run of the inoculation loop** (~$5.97 COGS at the corrected model, not $2.70 — see item 6). The measured delta's *magnitude* is contaminated: 3 of 6 assets carried a fabricated statistic that is now blocked. Mechanism is proven; effect size is not citable. | Decision | Citing any delta figure |
+| 3 | ~~Re-derive `ICP_SYNTHESIS` and `INOCULATION_DRAFT`~~ **Done 2026-08-04.** Both outputs checked against one live pass; `INOCULATION_DRAFT` output raised 5,000 → 5,700. Inputs held at their ceilings — both are document-dependent, same as `AGENT_GENERATION`. Still one pass each; re-derive when a project with substantial uploads runs. | Done | — |
+| 4 | ~~Re-derive `OBJECTION_CANONICALIZATION`~~ **Done 2026-08-04.** It is a ceiling, not a floor: input bought 728 phrasings against an 800 cap, and the output was reconstructed from the response structure at ~9,400 against the 10,000 priced. Unchanged for ordinary runs; a **re-simulation** now has its own profile at 4.4× the output. §1c. | Done | — |
+| 5 | **Per-adapter `AGENT_ACTION` profile.** Now measured, not inferred: **748** input tokens per action on Reddit + Twitter/X against **312** on Hacker News + LinkedIn, same shape. Blocked twice over — `llm_usage` has no platform column, so calls are not attributable; and per-adapter pricing makes platform choice change price, which cuts against "platforms are cost-neutral". **Needs a product decision before the schema work.** | Decision + Work | Quote precision |
+| 6 | **The free grant has 20 credits of headroom** — a free run costs 1,180 of 1,200. Not new (the previous revision left 24) and not caused by the recalibration, but any repricing consumes it and the failure lands at signup. 1,400 costs $0.22 a trial. | Decision | A broken signup |
+| 7 | **Phase 3 — Marketing lens.** N-way matched swarms, per-objective intent metrics, Virality Potential Score. Entry notes in §9.4. | Phase | — |
 
-Everything in §8 is the older backlog and is unchanged.
+Everything in §8 is the older backlog, plus three new entries from the 2026-08-04
+pass.
 
-**If you do nothing else, read §1b.** Phase 2's worst defect reported a perfect
-score, and the reason it was caught at all is that a perfect score was treated as
-suspicious rather than as success.
+**If you do nothing else, read §1b and §1c.** Phase 2's worst defect reported a
+perfect score. The 2026-08-04 defect was defended by a comment explaining why the
+number was low. Both survived a green test suite; the second was *asserted* by
+one.
 
 ---
 
@@ -64,10 +73,10 @@ suspicious rather than as success.
 | Phase 0 | Complete — dead-code purge, route-collision fix, schema drift, cost model, usage ledger |
 | Phase 1 | **Complete and verified end to end** |
 | Phase 2 | Built and **verified end to end live**. Four defects found and fixed — see §1b. |
-| Verification | ruff clean · pytest 187 passed · `tsc --noEmit` clean · `eslint --quiet` clean · `vite build` OK · app boots, 116 routes, no duplicate registrations |
+| Verification | ruff clean · pytest 193 passed · `tsc --noEmit` clean · `eslint --quiet` clean · `vite build` OK · app boots, 116 routes, no duplicate registrations |
 | Live runs | Four. Phase 1: `05f1d879`, `03de92ef`. Phase 2: `f980fe0d` (Founder lens, 30% adversarial) and `fa28d899` (its inoculation re-simulation). |
 | Migrations | 017, 018, **020, 021** applied. **019 still not applied — it waits for the merge.** |
-| Cost model | Recalibrated 2026-08-03. **Standard run COGS $2.26 → $2.71**; tier runs 8/26/88 → 7/22/73; free grant 800 → 1,200 credits. All tables regenerated from `scripts/quote.py`. |
+| Cost model | Re-derived 2026-08-04 from `llm_usage`. **Standard run COGS $2.71 → $2.74**; tier runs 7/22/73 → **7/21/73**; a re-simulation **$2.38 → $3.13** and the full loop $5.97. Free grant unchanged at 1,200. All tables regenerated from `scripts/quote.py`. §1c. |
 | Working tree | `.~lock.*` and `test_flow.py` are pre-existing untracked. Ignore them. |
 
 Commit list: `git log --oneline master..v2` — deliberately not enumerated here,
@@ -233,6 +242,75 @@ Worth knowing so a future session does not re-litigate it:
 
 **Follow-ups from this run are in §0.** They are decisions and calibration, not
 unfinished code.
+
+---
+
+## 1c. The re-simulation was under-charged, and a comment is what hid it
+
+The 2026-08-04 pass was assigned §0 items 3 and 4 — re-derive the two estimated
+profiles and the one capped one from `llm_usage`. It did that (see
+`ARCHITECTURE_V2.md`, the 2026-08-04 entry). The ledger then volunteered
+something nobody had asked about, and it is the more important finding.
+
+**A re-simulation carries its inoculation assets in every agent action prompt.**
+Assets ride in `topic_block()`, which is rebuilt per call, so six assets at 700
+characters each were re-sent across all 2,880 action prompts of the child run.
+Nothing in the cost model charged for it.
+
+The parent/child pair is the cleanest controlled comparison in the ledger — same
+96 agents, same 5 rounds, same two adapters, six assets apart:
+
+| | `f980fe0d` parent | `fa28d899` child |
+|---|---:|---:|
+| agent action, input tokens | 312 | **1,654** |
+| canonicalization, output tokens | 8,000 *(capped)* | **13,955** |
+| measured COGS | $2.31 | **$2.55** |
+| quoted | $2.67 | **$2.38** |
+
+Measured figures exclude the drafting pass, which is quoted separately, and count
+one clustering call per run — the child's raw ledger total is $2.66 because it was
+re-clustered after the key-carryover fix.
+
+The child cost more than its parent and was quoted for less. 78.5% margin against
+an 80% target — above the 70% floor, so `reconcile_run_cost` logged nothing. The
+miss is small; what makes it worth a section is that the run the Founder lens is
+sold on was the one run in the product never checked against its own bill.
+
+The canonicalization line has its own cause: a re-simulation's clustering call
+carries the parent's objections as priors, and the same run measured 3,162 output
+tokens without that block against 13,955 with it. Both stages now have
+re-simulation profiles.
+
+### The transferable part
+
+**The defect was defended by a comment.** `_stage_costs` explained that dropping
+agent generation "makes the second run of the loop cheaper than the first — which
+is exactly the right incentive for the step the product is sold on." True about
+generation, false about the run, and satisfying enough that nobody checked. It
+was repeated as fact in `DECISIONS §4` and **asserted by a passing test**
+(`test_reuse_does_not_change_any_other_stage`).
+
+That is three layers of documentation agreeing with each other and none of them
+agreeing with the ledger. Phase 2's lesson was *disbelieve a perfect score*; this
+one is narrower and worth having next to it:
+
+> **A comment explaining why a number is favourable is a place to look, not a
+> reason to stop looking.** When the pleasing story and the measurement disagree,
+> the story is usually older.
+
+### What is now true
+
+- A re-simulation of the reference shape quotes at **$3.13**, above the $2.66 the
+  measured one cost. The full loop — parent, drafting pass, re-simulation — is
+  **$5.97**, or 2.18 standard runs. Quote the loop, not the run.
+- `estimate_simulation_cost` takes `inoculation_assets`; the start endpoint
+  derives it from `inoculation_asset_ids`.
+- **A re-simulation cannot be started against a quote** (409). `issue_quote`
+  knows neither flag and `consume_quote` checks only the shape, so a
+  parent-shaped quote would validate against the child and charge the wrong
+  price. §8 item 17 has the real fix.
+- The measured pair is now a test floor: a quote for either run must not fall
+  below what that run actually cost.
 
 ---
 
@@ -493,7 +571,8 @@ input is **document-dependent** — the prompt carries `doc_context[:2000]` and
 that project's short Markdown files did not fill the slice a PDF deck would.
 
 Net effect: standard run COGS **$2.26 → $2.71**, tier runs **8/26/88 → 7/22/73**.
-The pricing tables are not regenerated — §0 item 1.
+The 2026-08-04 pass took it to **$2.74** and **7/21/73**; every table is
+regenerated at that base.
 
 **Re-derive whenever prompts change.** Every prompt edit moves these:
 
@@ -525,6 +604,13 @@ runs and the engine runs one arena — quoting it today over-charges against wha
 customer can execute. Reasoning and rejected alternatives: DECISIONS §15d. **The
 sample contract language needs counsel review before use.**
 
+> ✅ **Regenerated 2026-08-04 at $2.74/run COGS.** Standard run $2.71 → $2.74,
+> blended agency mix $7.35 → $7.46, tier run counts 7/22/73 → **7/21/73**. Only
+> Growth moves, and only because it sat at 21.9 runs. Driven by `EVENT_MEASUREMENT`,
+> which had been calibrated on the lowest of four measured runs. The larger change
+> in the same pass does not touch the standard run at all: a **re-simulation** goes
+> $2.38 → $3.13. §1c.
+>
 > ✅ **Regenerated 2026-08-03 at $2.71/run COGS.** Every table in the guide, the
 > PRD's tier and reference tables, and DECISIONS §15d now come from
 > `scripts/quote.py` against the current model. Verified by re-running the tool
@@ -537,27 +623,35 @@ sample contract language needs counsel review before use.**
 > pricing rests on; the run count is the derived figure, and it was always
 > disclosed as approximate and shape-dependent.
 >
-> **The free grant moved 800 → 1,200 credits.** A 25-agent trial now costs 1,176,
-> so 800 would have failed the one run the free tier promises — at signup. That
-> relationship is now pinned by `test_the_free_grant_covers_one_free_run`, and
-> the advertised paid run counts by `test_paid_tier_run_counts_are_whole_runs`,
-> because this is the second time the grant has silently gone stale.
+> **The free grant moved 800 → 1,200 credits.** A 25-agent trial cost 1,176 at
+> that revision and 1,180 now, so 800 would have failed the one run the free tier
+> promises — at signup. That relationship is pinned by
+> `test_the_free_grant_covers_one_free_run`, and the advertised paid run counts by
+> `test_paid_tier_run_counts_are_whole_runs`, because this is the second time the
+> grant has silently gone stale. **20 credits of headroom is not enough to stop a
+> third — §0 item 6.**
 >
 > ⚠️ **Contracts signed before this date** were quoted off $2.26/run and carry
 > ~20% less margin than their band table showed. Review at renewal.
 
 ---
 
-Phase 2 added two stages that are **estimated, not measured**, and they are the
-only two in the model that are: `icp_synthesis` and `inoculation_draft`. Both are
-deliberately biased high — an over-quoted stage costs a customer credits they can
-see, an under-quoted one is served at a loss nobody notices. Re-derive both from
-the ledger after the first live Founder-lens runs; the stages are already
-attributed, so the data will be there.
+**Every profile is now derived from the ledger.** `icp_synthesis` and
+`inoculation_draft` were the last two estimates and were checked against one live
+pass each on 2026-08-04. Both *outputs* landed on their schema-derived estimates
+(4,487 against 4,500; 5,641 against 5,000, which moved to 5,700). Both *inputs*
+are held at their ceilings, because the measured runs did not fill the material
+budget — the same document-dependence that keeps `AGENT_GENERATION` high. One
+pass is a check, not a calibration; re-derive when a project with substantial
+uploads runs.
 
-A re-simulation is quoted with `reuse_agents=True` and pays no
-`agent_generation`: it copies its parent's agents and provably makes zero
-generation calls.
+**A re-simulation is quoted with `reuse_agents=True` and `inoculation_assets=N`.**
+It pays no `agent_generation` — its agents are copied and it provably makes zero
+generation calls — and it pays a per-asset surcharge on **every action**, plus a
+larger canonicalization profile because its clustering call carries the parent's
+objections as priors. **It is the more expensive of the two runs, not the
+cheaper.** §1c. Anything in an older document that says otherwise predates the
+measurement.
 
 ---
 
@@ -646,6 +740,32 @@ where noted.
     uploaded material. It will miss a fabricated claim phrased without numbers
     ("independently audited", "used by major banks"). The prompt prohibition is
     the first line; this is a floor under it, not a filter.
+
+**New from the 2026-08-04 ledger pass:**
+
+15. **`llm_usage` has no platform dimension.** Agent-action spend cannot be
+    attributed to an adapter, which is the schema half of §0 item 5. The 748 vs
+    312 split is measurable only because those two runs happened to use one
+    adapter family each; a mixed run tells you nothing. The fix is a column plus
+    a `usage_context` argument — small. The product question above it is not.
+16. **`AGENT_ACTION` output is one observation for the asset surcharge.** Input
+    is corroborated by construction (`ASSET_BODY_IN_PROMPT` = 700 characters
+    bounds it at ~205 tokens against 224 measured); output, +7 tokens per asset,
+    is a single parent/child difference of +41 across six assets. Carried per
+    asset rather than flat so it fails safe as the count grows, but it is the
+    thinnest number in the model. Re-derive on the next loop.
+17. **`issue_quote` cannot price a re-simulation.** It takes a bare shape and
+    knows neither `reuse_agents` nor `inoculation_assets`; `consume_quote`
+    validates only agents/rounds/platforms/variants, so a parent-shaped quote
+    validates cleanly against a child. Closed for now by refusing a quote on any
+    run with a parent (409). The real fix carries both fields on `run_quotes`
+    and into the HMAC canonical string, which is a migration. Not urgent — no
+    client issues a quote for a child today — but it is a **silent
+    under-charge** if one ever does, which is the failure class this model
+    exists to prevent.
+18. **The free grant has 20 credits of headroom.** §0 item 6. Repeated here
+    because it is the item most likely to be discovered by a customer rather
+    than by a test.
 
 **Open product questions** (DECISIONS §17): which countries fall in which
 regional tier; the blended agency run mix (55/30/13/2) is still an assumption;

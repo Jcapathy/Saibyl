@@ -167,10 +167,16 @@ def test_the_free_grant_covers_one_free_run():
         caps.max_agents, caps.max_rounds, caps.max_platforms, caps.max_variants
     )
 
-    assert TIER_CREDIT_GRANTS["free"] >= free_run.credits, (
+    # The bound is >= 0 rather than a headroom percentage because the grant is a
+    # commercial number and not this test's to set. It is worth knowing that the
+    # margin is 20 credits — 1.7%, and under 30 ever since the grant moved to
+    # 1,200 — so the message reports it on the way past. Any stage repricing at
+    # all consumes it, and the failure lands at signup.
+    headroom = TIER_CREDIT_GRANTS["free"] - free_run.credits
+    assert headroom >= 0, (
         f"free grant is {TIER_CREDIT_GRANTS['free']} credits but a free run at "
         f"the tier cap costs {free_run.credits} — the free tier cannot complete "
-        f"its one run"
+        f"its one run. Headroom was {headroom} credits."
     )
     assert TIER_CREDIT_GRANTS["trial"] == TIER_CREDIT_GRANTS["free"]
 
@@ -184,7 +190,7 @@ def test_paid_tier_run_counts_are_whole_runs():
     )
 
     standard = estimate_simulation_cost(*STANDARD_RUN).credits
-    for tier, advertised in (("founder", 7), ("growth", 22), ("agency", 73)):
+    for tier, advertised in (("founder", 7), ("growth", 21), ("agency", 73)):
         affordable = TIER_CREDIT_GRANTS[tier] // standard
         assert affordable == advertised, (
             f"{tier} affords {affordable} standard runs; PRICING_GUIDE §1.6 and "

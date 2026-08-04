@@ -1228,6 +1228,169 @@ cite this delta as a calibration figure.
 
 ---
 
+## [PHASE 2 | 2026-08-04] The re-simulation was being under-charged, and three profiles re-derived
+
+HANDOFF §0 items 3 and 4 — re-derive the estimated and ceiling-capped stages from
+`llm_usage`. That was the assignment. The ledger answered it and then volunteered
+something nobody had asked about.
+
+### What the assignment found
+
+**`ICP_SYNTHESIS` and `INOCULATION_DRAFT`** were the two stages in the model that
+had never been measured. One live pass each, which is a check and not a
+calibration, and the check is worth having:
+
+| Stage | Estimated | Measured | Action |
+|---|---|---|---|
+| `icp_synthesis` | 14,000 / 4,500 | 2,419 / **4,487** | output confirmed; input held |
+| `inoculation_draft` | 4,500 / 5,000 | 2,532 / **5,641** | output raised to 5,700 |
+
+Both outputs were derived from the response schema and both landed near it, which
+is the part that matters — the schema is what bounds the response. `INOCULATION_DRAFT`
+was *under*-estimated on a run that drafted the maximum twelve assets, so there is
+no larger case above it and the figure moved.
+
+Both inputs are held at their ceilings for the reason `AGENT_GENERATION` is:
+the measured runs did not fill the material budget. Calibrating a
+document-dependent input to a thin-document run under-quotes every project that
+uploads a real deck.
+
+**`OBJECTION_CANONICALIZATION`** was flagged as a floor rather than a measurement,
+because its one large observation was truncated at the old 8,000 ceiling. It is
+neither — it is a ceiling, and the reason it looked like a floor is now legible.
+Input bought 728 phrasings at 13,950 tokens, and `MAX_DISTINCT_STRINGS` truncates
+the shortlist at 800, so no run can present materially more. Output cannot be
+measured directly, but the clusterer returns members as *indices*, which makes the
+response size reconstructable: fitting the two untruncated runs (124 phrasings /
+19 groups → 2,587; 601 / 17 → 4,972) gives ~88 tokens per group plus ~7.4 per
+phrasing, predicting **9,435** for the truncated run — consistent with a response
+cut off at 8,000, and under the 10,000 already priced. Left unchanged; two points
+do not justify tuning three significant figures.
+
+**`EVENT_MEASUREMENT`** was not on the list and should have been. Its profile was
+78 in / 87 out, calibrated on `03de92ef` alone. Across four runs the per-event
+input measures 78 / 81 / 99 / 88 — the profile sat at the *minimum* of its own
+observations, so every Founder-lens run under-quoted it by ~26%. Raised to 99/92,
+the maximum on each axis. This is $0.02 on a standard run; a profile sitting at
+the floor of its range is a calibration error regardless of size.
+
+### What the ledger volunteered
+
+**A re-simulation carries its inoculation assets in every single agent action
+prompt, and nothing charged for it.**
+
+The pair that shows it is the cleanest controlled comparison in the ledger:
+`f980fe0d` and `fa28d899` are the same 96 agents, the same 5 rounds, the same two
+adapters, differing only in the six assets the child pre-positions.
+
+| | parent | child |
+|---|---:|---:|
+| agent action, input | 312 | **1,654** |
+| agent action, output | 175 | 216 |
+| canonicalization, output | 8,000 *(capped)* | **13,955** |
+| measured COGS | $2.307 | **$2.553** |
+| quoted | $2.674 | **$2.378** |
+
+Figures exclude the drafting pass, which is quoted on its own, and count one
+clustering call per run. The child's raw ledger total is $2.660 because it was
+re-clustered after the key-carryover fix; that second call is a repair, not what
+the run costs — and note the quote was under *both* numbers.
+
+Assets ride in `topic_block()` and `topic_block()` is rebuilt per call, so six
+assets at `ASSET_BODY_IN_PROMPT` = 700 characters each are re-sent across all
+2,880 action prompts. 224 tokens per asset per action, corroborated by
+construction at ~205. The canonicalization figure has a second cause: a
+re-simulation's clustering call carries the parent's objections as priors, and the
+*same run* measured 3,162 output tokens without that block against 13,955 with it.
+
+The child was quoted **$2.378** against $2.553 of measured spend — a **78.5%**
+margin where the model targets 80%, and 77.6% against the as-billed total. Above
+the 70% floor, so `reconcile_run_cost` logged nothing and nothing alarmed. The
+size of the miss is not the point; its direction is, and so is the fact that the
+only run in the product that had *never* been checked against its own bill was
+the one the Founder lens is sold on.
+
+**The failure was in a comment.** `_stage_costs` asserted that dropping the
+generation stage "makes the second run of the loop cheaper than the first — which
+is exactly the right incentive for the step the product is sold on." Pleasing,
+load-bearing, and false. A re-simulation skips generation and then spends more
+than it saved. `DECISIONS §4` carried the same claim, and `test_reuse_does_not_
+change_any_other_stage` asserted it — a green test pinning a belief the ledger
+contradicts. All three are corrected.
+
+This is Phase 1's bug #6 in a new place. There, objection canonicalization was 24%
+of measured spend and 0% of the quote. Here, an entire stage's *unit of work*
+changed underneath a profile that still looked calibrated, and the thing that
+concealed it was a plausible story about why the number should be lower.
+
+### Changes
+
+- `INOCULATION_ASSET_ACTION` — 225 in / 7 out, charged per asset **per action**.
+- `OBJECTION_CANONICALIZATION_RESIM` — 14,000 / 16,000, selected when the run has
+  a parent. Priced at `CLUSTER_MAX_TOKENS` rather than at the single observation,
+  which already sat at 87% of it with an unusually small phrasing set.
+- `estimate_simulation_cost` and `check_credit_budget` take `inoculation_assets`;
+  `POST /simulations/{id}/start` derives it from `inoculation_asset_ids`.
+- **A re-simulation cannot be started against a quote.** `issue_quote` knows
+  neither flag and `consume_quote` validates only agents/rounds/platforms/variants,
+  so a parent-shaped quote would validate cleanly against the child and charge for
+  the wrong run. Refused with a 409 rather than silently ignored.
+- Five tests, including the measured loop as a floor: the quote for either run of
+  `f980fe0d`/`fa28d899` must not fall below what that run actually cost.
+
+### Effect on published numbers
+
+Standard run COGS **$2.71 → $2.74**, blended agency mix **$7.35 → $7.46**, tier
+run counts **7/22/73 → 7/21/73**. Only Growth moves, and only because it sat at
+21.9. All tables regenerated from `scripts/quote.py`.
+
+A re-simulation of the reference shape is now **$3.13**, and the full loop —
+parent, drafting pass, re-simulation — is **$5.97**, or 2.18 standard runs.
+
+**The free grant now has 20 credits of headroom** on a 1,180-credit free run.
+That is 1.7%, it has been under 30 since the grant moved to 1,200, and it is not
+caused by this pass — the previous revision left 24. Any stage repricing consumes
+it and the symptom is a signup that cannot complete its one promised run.
+Unresolved; the grant is a commercial number.
+
+### Reconciliation — every measured run against the corrected model
+
+No live run was made for this pass; it is a pricing change, and the ledger
+already holds four runs to check it against. Quote versus what each actually
+cost, one clustering call per run, drafting priced separately:
+
+| Run | Quoted | Measured | Ratio |
+|---|---:|---:|---:|
+| `05f1d879` 24ag/3rd | $1.168 | $1.191 | **0.98×** |
+| `03de92ef` 100ag/5rd | $2.736 | $2.418 | 1.13× |
+| `f980fe0d` 96ag/5rd Founder | $2.674 | $2.307 | 1.16× |
+| `fa28d899` re-simulation | $3.127 | $2.553 | 1.22× |
+
+The over-quoting is `AGENT_ACTION` held at 750 tokens against runs that measured
+312 and 633 — deliberate, and the reason is in the profile's comment.
+
+**`05f1d879` quotes below its bill, and it is a legacy artifact rather than a live
+defect.** That run made **9 Opus report calls on 72 events** — more than the
+497-event run's 8 — because it predates the depth-scaling fix by 46 minutes.
+Today's `report_section_count(72)` gives 2 sections, so 4 written; that run wrote
+about 6. Re-running the same shape on current code would land near 1.1×. It is
+the oldest run in the ledger and the only one whose report stage does not match
+the code that would produce it, which is worth remembering before citing it for
+anything else.
+
+### What this does not fix
+
+`AGENT_ACTION` is still one number across twelve adapters, and the split is now
+measured rather than inferred: **748 input tokens per action on Reddit +
+Twitter/X against 312 on Hacker News + LinkedIn**, same shape. The profile is the
+higher one, so compact adapters are over-quoted on purpose. A per-adapter profile
+needs a `platform` dimension on `llm_usage`, which does not exist — action calls
+are not attributable to an adapter today — and it makes platform choice change
+price, which contradicts "adding a platform is close to cost-neutral" in the
+direction customers will notice. HANDOFF §0 item 5.
+
+---
+
 ## Known issues carried into Phase 2
 
 Recorded here so they are not rediscovered. Items 1, 2 and 7 from the Phase 1
@@ -1270,3 +1433,22 @@ list are resolved above.
    Written by the removed drift formula. Nothing reads it — `react_tools` was
    switched to the artifact — but it is stale data that will read as real to
    anyone querying the table directly.
+9. **`llm_usage` has no platform dimension**, so agent-action spend cannot be
+   attributed to an adapter. This is what blocks a per-adapter `AGENT_ACTION`
+   profile: the split is measured at the *run* level (748 tokens per action on
+   Reddit + Twitter/X against 312 on Hacker News + LinkedIn) only because those
+   two runs happened to be single-family. A mixed run tells you nothing. Fixing
+   it is a column plus a `usage_context` argument — the harder half is the
+   product question in HANDOFF §0 item 5.
+10. **`issue_quote` cannot price a re-simulation.** It takes a bare shape and
+    knows neither `reuse_agents` nor `inoculation_assets`, and `consume_quote`
+    validates only agents/rounds/platforms/variants — so a parent-shaped quote
+    validates cleanly against a child and charges for the wrong run. Closed for
+    now by refusing a quote on any run with a parent (409); the real fix is
+    carrying both fields on `run_quotes` and into the signature, which is a
+    migration. Not urgent: no client issues a quote for a child today.
+11. **The free grant has 20 credits of headroom.** A free run costs 1,180 of the
+    1,200 granted. Not caused by the 2026-08-04 pass — the previous revision left
+    24 — but any stage repricing at all consumes it, and the failure lands at
+    signup. 1,400 costs $0.22 a trial and ends it. Needs a decision, because the
+    grant is a published commercial number.

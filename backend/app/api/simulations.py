@@ -337,7 +337,7 @@ async def start_simulation(
         admin.table("simulations")
         .select(
             "id, is_ab_test, status, agent_count, max_rounds, platforms, "
-            "variants, parent_simulation_id"
+            "variants, parent_simulation_id, inoculation_asset_ids"
         )
         .eq("id", id)
         .eq("organization_id", auth["org_id"])
@@ -377,11 +377,32 @@ async def start_simulation(
     # generating them, so it makes zero generation calls and must not be
     # charged for them.
     reuse_agents = bool(sim.data.get("parent_simulation_id"))
+    # It does, however, carry its assets in every single action prompt. Measured
+    # at 5.3x the parent's action input on the first live loop — the saving on
+    # generation and the surcharge on actions are separate facts, and quoting
+    # only the first one under-charged the re-simulation by roughly a fifth.
+    inoculation_assets = len(sim.data.get("inoculation_asset_ids") or [])
 
     # Credits are charged at start, not at completion. Deducting on completion
     # would let a user with one run's worth of credits start ten runs at once
     # and have every balance check pass; a failed run still consumed compute.
     quote_id = body.quote_id if body else None
+    # A quote prices a shape, and a re-simulation is not just a shape: it skips
+    # agent generation and carries its assets in every action prompt. `issue_quote`
+    # knows neither, and `consume_quote` only checks agents/rounds/platforms/
+    # variants — so a quote issued for the parent's shape would validate cleanly
+    # against the child and charge for the wrong run. Re-simulations are priced
+    # through the budget path below, which does know. Refused rather than
+    # silently ignored, because a caller that sent a quote expects it honoured.
+    if quote_id and reuse_agents:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "A re-simulation cannot be started against a quote. Its price "
+                "depends on the assets it carries, which a run quote does not "
+                "cover. Start it without a quote_id."
+            ),
+        )
     if quote_id:
         try:
             quote = consume_quote(
@@ -397,7 +418,7 @@ async def start_simulation(
         # the price charged.
         budget = check_credit_budget(
             auth["org_id"], agent_count, max_rounds, platforms, variants,
-            reuse_agents=reuse_agents,
+            reuse_agents=reuse_agents, inoculation_assets=inoculation_assets,
         )
         if not budget.allowed:
             raise HTTPException(status_code=402, detail=budget.message)

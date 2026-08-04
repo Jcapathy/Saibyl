@@ -114,11 +114,22 @@ structurally two runs. The free tier gets one.
 **Rejected — detect and recommend only.** Much cheaper. Rejected because it
 throws away the defensibility *and* the natural second-run trigger in one move.
 
-**What would change this:** if re-simulation cost makes the loop unsellable —
-but at $2.71 per standard run, the detect-then-verify pair is **$4.94** of COGS
-against a $99/mo tier, and the re-simulation is the cheaper of the two because it
-copies its parent's agents rather than generating them. It is not close to being
-the constraint.
+**What would change this:** if re-simulation cost makes the loop unsellable. It
+does not, but the margin is narrower than this entry claimed until 2026-08-04,
+and the correction is worth recording because the error was in the *direction*
+of the argument rather than its size.
+
+The claim was that a re-simulation is the cheaper of the two runs, because it
+copies its parent's agents instead of generating them. It does copy them, and it
+is still the **more expensive** run. Its assets are pre-positioned through
+`topic_block()`, which means they are re-sent with every agent action prompt —
+measured at 312 input tokens per action in the parent against 1,654 in the child.
+The generation it skips is worth less than the assets it carries.
+
+The full loop — parent run, one drafting pass, one re-simulation — is **$5.97**
+of COGS at the current model against a $99/mo tier whose grant is $19.80. Three
+loops a month, not four. Still not the constraint, and no longer a figure that
+gets better the more of the loop a founder uses.
 
 ---
 
@@ -389,11 +400,11 @@ what actually rations.
 then 3.3×. The old grants (~30 runs at $499, ~100 at $1,499) came from a V1
 strategy doc written before any cost model existed and had never been validated
 against anything — so cutting the price did **not** require cutting margin, only
-sizing the grant honestly. $299 at 80% still buys 22 standard runs or 5
+sizing the grant honestly. $299 at 80% still buys 21 standard runs or 5
 eight-variant runs a month.
 
 **Why credits, not runs.** A "run" varies by roughly 20× across the tier caps —
-standard is $2.71, a 250-agent 8-variant run is $53.50. A grant denominated in
+standard is $2.74, a 250-agent 8-variant run is $54.61. A grant denominated in
 runs is therefore unbounded compute. Runs survive as sales language against a
 defined reference run only.
 
@@ -470,20 +481,20 @@ recalibration moves prices again, in whichever direction the measurement goes.
 ## 15d. Quote what runs today; sell variants as a dated addition
 
 **Chose:** every contract beginning before Phase 3 is quoted from the
-**standard-run** band table (`PRICING_GUIDE.md` §2.3, **$2.71/run COGS** as of
-2026-08-03), not the blended agency mix. The matched-variant capability is
+**standard-run** band table (`PRICING_GUIDE.md` §2.3, **$2.74/run COGS** as of
+2026-08-04), not the blended agency mix. The matched-variant capability is
 written into the contract as a planned addition at a defined price, explicitly
 unavailable at the effective date, with no fees accruing until the customer
 elects it.
 
 **Why.** The blended mix assumes 45% multi-variant runs and the engine runs one
-arena (`MAX_RUNNABLE_VARIANTS = 1`). Quoting $33/run for runs that cost $2.71
+arena (`MAX_RUNNABLE_VARIANTS = 1`). Quoting $34/run for runs that cost $2.74
 reads as a 78% margin and is in fact far higher. The customer discovers the gap
 at renewal — the worst moment to be holding a number you cannot defend — and the
 thing they will remember is the margin, not the product.
 
-**Note on the cost base.** The per-run figure has now moved twice — $3.23 →
-$2.26 → $2.71 — as the cost model was corrected against measured usage. The
+**Note on the cost base.** The per-run figure has now moved three times — $3.23 →
+$2.26 → $2.71 → $2.74 — as the cost model was corrected against measured usage. The
 decision is unaffected: it is about *which table* to quote, not what the numbers
 in it are. Always take the figure from `PRICING_GUIDE.md` §2.3 rather than from
 this page, and regenerate with `python scripts/quote.py` if in any doubt.

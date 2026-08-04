@@ -1,7 +1,8 @@
 # PUBLIC INTERFACE
 # ─────────────────────────────────────────────────────────
 # estimate_simulation_cost(agent_count, rounds, platforms=1, variants=1,
-#                          depth="standard", action_model=None)
+#                          depth="standard", action_model=None,
+#                          reuse_agents=False, inoculation_assets=0)
 #                                              -> SimulationCostEstimate
 # report_section_count(measured_events, depth="standard") -> int
 # credits_for(cost_usd) -> int
@@ -26,9 +27,17 @@ tier caps, so "30 runs" is anywhere from $65 to $5,445 of COGS. One credit is
 $0.001 of measured COGS, which makes the balance an integer and makes a grant
 mean the same thing at every run shape.
 
-The token profiles below are conservative starting estimates. Once llm_usage
-has real data, recalibrate them from measured medians — that is the whole
-point of the ledger.
+**Every profile below is now derived from the `llm_usage` ledger**, across four
+live runs. Each carries its measured figures and the reason for any deliberate
+gap between what was measured and what is charged — the gaps are the interesting
+part, and they are all in the same direction. An over-quoted stage costs a
+customer credits they can see and query; an under-quoted one is served at a loss
+nobody notices until the margin report.
+
+Re-derive whenever a prompt changes, with the query in HANDOFF.md §7. Every
+prompt edit in this codebase moves these, and two of the three defects the
+2026-08-04 pass found were stages whose *unit of work* had changed underneath a
+figure that still looked calibrated.
 """
 from __future__ import annotations
 
@@ -179,11 +188,17 @@ class _StageProfile(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# MEASURED from the `llm_usage` ledger, 2026-08-02, across two live runs:
-# 25 agents / 3 rounds / 2 platforms, and the reference standard run
-# (100 / 5 / 2 / 1). Figures are per unit of work, calibrated at the standard
-# shape. Re-derive with the query in HANDOFF.md §5 whenever prompts change —
-# every prompt edit in this codebase moves these.
+# MEASURED from the `llm_usage` ledger. Figures are per unit of work, calibrated
+# at the standard shape. The four runs referenced below by id:
+#
+#   05f1d879   24 agents /  3 rounds, reddit + twitter_x         Phase 1
+#   03de92ef  100 agents /  5 rounds, reddit + twitter_x         Phase 1 reference
+#   f980fe0d   96 agents /  5 rounds, hacker_news + linkedin     Phase 2 Founder lens
+#   fa28d899   96 agents /  5 rounds, hacker_news + linkedin     its re-simulation
+#
+# The last two are the same agents on the same platforms differing only in the
+# six inoculation assets the child carries, which is why so much of the
+# 2026-08-04 pass could be attributed rather than guessed at.
 # ---------------------------------------------------------------------------
 
 # One agent action: persona + feed slice + memory in, a single action line out.
@@ -207,7 +222,40 @@ class _StageProfile(BaseModel):
 #
 # The real fix is a per-adapter profile. Until then this number is a ceiling
 # across platforms rather than an average of them, and that is on purpose.
+#
+# Confirmed 2026-08-04 against all four measured runs. The platform split is now
+# a measurement rather than an inference — same shape, different adapters:
+#   reddit + twitter_x   (100ag/5rd)  748 in / 170 out  <- this profile
+#   hacker_news + linkedin (96ag/5rd) 312 in / 175 out
+# 2.4x apart on input at a comparable shape. HANDOFF §0 item 5.
 AGENT_ACTION = _StageProfile(input_tokens=750, output_tokens=170)
+
+# What one pre-positioned inoculation asset adds to *every* agent action in a
+# re-simulation. Charged per asset per action, on top of AGENT_ACTION.
+#
+# **This is the largest single mispricing the ledger has surfaced**, and it was
+# hiding behind a stage that looked already-calibrated. Assets ride in
+# `topic_block()`, so they are re-sent with every action prompt — 6 assets on a
+# 96-agent, 5-round run is 2,880 prompts each carrying the full block.
+#
+# Measured on the cleanest controlled pair in the ledger: parent `f980fe0d` and
+# child `fa28d899` are the same 96 agents, same 5 rounds, same two adapters,
+# differing only in the six assets the child carries.
+#
+#   parent  312 in / 175 out      child  1,654 in / 216 out
+#
+# That is +1,342 input over 6 assets = 224 each, and +41 output. The input
+# figure is corroborated by construction: `ASSET_BODY_IN_PROMPT` caps an asset
+# at 700 characters plus its title, which is ~205 tokens.
+#
+# Quoting a re-simulation without this under-charged its largest stage by 2.2x.
+# The loop was advertised as *cheaper* than its parent because it skips agent
+# generation — true, and it was hiding an action bill that had roughly doubled.
+#
+# The output figure is one observation of a plausible mechanism (an agent given
+# more material to react to writes more), so it is carried per asset rather than
+# flat, which is the direction that fails safe as the asset count grows.
+INOCULATION_ASSET_ACTION = _StageProfile(input_tokens=225, output_tokens=7)
 
 # One agent generated during the prepare phase. Measured at 1,901/548 and
 # 1,900/537 on the two Phase 1 runs — constant, as expected: the prompt is one
@@ -225,7 +273,20 @@ AGENT_GENERATION = _StageProfile(input_tokens=1900, output_tokens=550)
 # Per-event measurement, batched ~25 events per call. Output was badly
 # under-estimated: the classifier returns six fields per event including an
 # objections array, which costs more than the 40 tokens originally assumed.
-EVENT_MEASUREMENT = _StageProfile(input_tokens=78, output_tokens=87)
+#
+# Recalibrated 2026-08-04 to the highest of four measured runs rather than the
+# first one. Per event, from `llm_usage` totals divided by measured events:
+#
+#   03de92ef  78 in / 87 out      <- the old profile, calibrated on this alone
+#   05f1d879  81 in / 92 out
+#   f980fe0d  99 in / 92 out      <- Founder lens; adversarial content is longer
+#   fa28d899  88 in / 78 out
+#
+# 78 was the floor of that range, not its centre, so every Founder-lens run
+# under-quoted the stage by ~26% on input. The absolute sum is small — this is
+# $0.02 on a standard run — but a profile that sits at the minimum of its own
+# observations is a calibration error regardless of size, and the fix is free.
+EVENT_MEASUREMENT = _StageProfile(input_tokens=99, output_tokens=92)
 
 # Objection canonicalization: one main-model call over the run's distinct
 # objection phrasings, charged once per run. Its input is the number of
@@ -237,39 +298,102 @@ EVENT_MEASUREMENT = _StageProfile(input_tokens=78, output_tokens=87)
 # never do, so a Founder-lens run generates materially more distinct phrasings
 # at the same event count.
 #
-# Measured on the first live Founder-lens run at 13,950 in / 8,000 out — but the
-# **output was capped**, so 8,000 is a floor and not a measurement. Priced here
-# at 10,000 out, above the observed cap and below the raised 16,000 ceiling.
-# Re-derive from `llm_usage` after the next run, when the output is free to find
-# its own level.
+# Re-derived 2026-08-04 (HANDOFF §0 item 4). The figure stands, and the reason
+# it previously read as a floor is now understood.
+#
+# **Input is a genuine ceiling.** 13,950 tokens bought 728 phrasings, which is
+# 91% of `MAX_DISTINCT_STRINGS` (800) — the shortlist is truncated past that, so
+# no run can present materially more. 14,000 is the top of the stage, not a
+# sample from its middle.
+#
+# **Output could not be measured directly**, because the one large observation
+# was truncated at the old 8,000 ceiling. It is reconstructed instead from the
+# structure of the response, which the clusterer makes tractable: members come
+# back as indices, so output = per-group text + one index per phrasing. Fitting
+# the two untruncated ordinary runs —
+#
+#   124 phrasings / 19 groups -> 2,587 out
+#   601 phrasings / 17 groups -> 4,972 out
+#
+# — gives ~88 tokens per group plus ~7.4 per phrasing, which predicts 9,435 for
+# the truncated run's 728 phrasings / 46 groups. That is consistent with an
+# output cut off at 8,000 and it lands under the 10,000 already priced here.
+#
+# Left unchanged rather than tuned to the fit: two points do not justify three
+# significant figures, and 10,000 is above the reconstruction in the safe
+# direction. **Do replace this with a direct measurement** the next time an
+# ordinary run of ~700 phrasings completes under the 16,000 ceiling.
 OBJECTION_CANONICALIZATION = _StageProfile(input_tokens=14000, output_tokens=10000)
+
+# The same stage on a re-simulation, which is a different and much larger job.
+#
+# A re-simulation's clustering call carries the parent's canonical objections as
+# priors and must decide, group by group, whether each one is a prior said again
+# — the reuse of keys the entire before/after comparison depends on. Measured on
+# the same run with and without that block, which is as controlled as this gets:
+#
+#   fa28d899, no priors    5,496 in /  3,162 out
+#   fa28d899, 46 priors    6,926 in / 13,955 out
+#
+# Identical 271 phrasings; 4.4x the output. Charging a re-simulation the
+# ordinary profile under-quoted it by a third of its main-model spend.
+#
+# Priced at the hard ceiling rather than the observation: `CLUSTER_MAX_TOKENS`
+# is 16,000 and the single measurement already sat at 87% of it with an
+# unusually *small* phrasing set (271 against the parent's 728). A larger
+# re-simulation would very likely exceed 13,955, and there is nowhere above
+# 16,000 for it to go. Keep this in step with `CLUSTER_MAX_TOKENS` in
+# `objection_canonicalizer.py` — not imported from there because that module
+# imports the usage ledger, and the cycle is not worth the tidiness.
+OBJECTION_CANONICALIZATION_RESIM = _StageProfile(input_tokens=14000, output_tokens=16000)
 
 # ICP synthesis: one main-model pass over the founder's uploaded material,
 # charged once per synthesis rather than per run.
 #
-# **ESTIMATED, not measured** — unlike every profile above it, which came out of
-# `llm_usage`. Input is the material budget in icp_synthesizer (24k characters
-# of the team's own material, 12k of competitor material, 6k of market context,
-# plus the pack catalogue and the schema) at roughly 3.6 characters per token.
-# Output is a whole profile: up to six buyer archetypes and four adversarial
-# ones, each with seven or eight list fields.
+# Input is the material budget in icp_synthesizer (24k characters of the team's
+# own material, 12k of competitor material, 6k of market context, plus the pack
+# catalogue and the schema) at roughly 3.6 characters per token. Output is a
+# whole profile: up to six buyer archetypes and four adversarial ones, each with
+# seven or eight list fields.
 #
-# Re-derive from the ledger after the first live Founder-lens runs, with the
-# query in HANDOFF.md §7. Until then this is the one stage in the model whose
-# quote has not been checked against reality, and it is priced deliberately
-# toward the high side — an over-quoted stage costs a customer credits they can
-# see, while an under-quoted one is served at a loss nobody notices.
+# Checked against the ledger 2026-08-04 (HANDOFF §0 item 3). One live pass:
+# **2,419 in / 4,487 out**.
+#
+# - **Output is confirmed.** 4,487 against 4,500 estimated. The estimate was
+#   derived from the schema, and the schema is what bounds the response, so one
+#   observation landing on it is meaningful rather than lucky.
+# - **Input is left at the ceiling on purpose.** 2,419 is not a shifted mean,
+#   it is a run whose material did not fill the budget — the same effect as
+#   AGENT_GENERATION's `doc_context[:2000]` above. 14,000 is what a project that
+#   uploads a real deck plus competitor material will actually present.
+#   Calibrating to 2,419 would under-quote every well-documented project in
+#   order to be exact on a thin one.
+#
+# One pass is not a calibration and this is still the high-side figure. Re-derive
+# when a synthesis runs against a project with substantial uploads — that is the
+# observation that would move the input, and nothing else should.
 ICP_SYNTHESIS = _StageProfile(input_tokens=14_000, output_tokens=4_500)
 
 # Inoculation asset drafting: one main-model pass over a run's top objections
 # with their verbatim quotes, producing two publishable assets per objection.
 #
-# **ESTIMATED, not measured**, like ICP synthesis. Input is up to six objections
-# with four quotes each plus the schema; output is up to twelve assets of
-# 80–250 words with a hypothesis apiece. Re-derive from `llm_usage` after the
-# first live loop — the stage is already attributed as `inoculation_draft`, so
-# the data will be there.
-INOCULATION_DRAFT = _StageProfile(input_tokens=4_500, output_tokens=5_000)
+# Input is up to six objections with four quotes each plus the schema; output is
+# up to twelve assets of 80-250 words with a hypothesis apiece.
+#
+# Checked against the ledger 2026-08-04 (HANDOFF §0 item 3). One live pass:
+# **2,532 in / 5,641 out**.
+#
+# - **Output raised 5,000 -> 5,700.** The one observation exceeded the estimate,
+#   and it did so on a run that drafted the *maximum* twelve assets, so there is
+#   no larger case waiting above it. An under-quoted stage is the one failure
+#   mode this model is built to avoid, and this stage was under-quoted.
+# - **Input left at 4,500.** Measured 2,532 against a construction ceiling of
+#   6 objections x 4 quotes x 400 characters (`ObjectionQuote.text`) plus the
+#   schema, which is ~2,700 tokens of quotes alone. 4,500 covers the full-width
+#   case; the measured run did not hit it.
+#
+# One pass is not a calibration. Re-derive after the next live loop.
+INOCULATION_DRAFT = _StageProfile(input_tokens=4_500, output_tokens=5_700)
 
 # Report generation, per **written** section (ReACT tool calls plus the
 # write-up). The loop's evidence is capped — the seeded artifact at 6,000
@@ -374,6 +498,7 @@ def estimate_simulation_cost(
     depth: str = "standard",
     action_model: str | None = None,
     reuse_agents: bool = False,
+    inoculation_assets: int = 0,
 ) -> SimulationCostEstimate:
     """Estimate what a run will cost to serve, and what to charge for it.
 
@@ -383,7 +508,13 @@ def estimate_simulation_cost(
     `reuse_agents` drops the generation stage entirely. Set for an inoculation
     re-simulation, whose agents are copied from its parent rather than generated
     — the run makes zero generation calls, so quoting for them would be billing
-    for compute that is never performed.
+    for compute that is never performed. It also switches objection
+    canonicalization onto its re-simulation profile, because a run with a parent
+    is exactly a run whose clustering call carries the parent's priors.
+
+    `inoculation_assets` is how many assets this run pre-positions. Each one
+    rides in every action prompt, so it is charged per asset per action — the
+    two flags together are what make a re-simulation's quote resemble its bill.
     """
     if agent_count > MAX_AGENTS:
         raise ValueError(f"Agent count cannot exceed {MAX_AGENTS:,}")
@@ -391,11 +522,14 @@ def estimate_simulation_cost(
         raise ValueError("Agent count and rounds must be positive")
     if platforms <= 0 or variants <= 0:
         raise ValueError("Platforms and variants must be positive")
+    if inoculation_assets < 0:
+        raise ValueError("Inoculation asset count cannot be negative")
     if depth not in DEPTH_PRESETS:
         raise ValueError(f"depth must be one of {DEPTH_PRESETS}")
 
     breakdown, action_units, generation_units, section_units = _stage_costs(
-        agent_count, rounds, variants, depth, action_model, reuse_agents
+        agent_count, rounds, variants, depth, action_model, reuse_agents,
+        inoculation_assets,
     )
     action_cost = breakdown["agent_actions"]
     generation_cost = breakdown["agent_generation"]
@@ -449,6 +583,7 @@ def _stage_costs(
     depth: str,
     action_model: str | None = None,
     reuse_agents: bool = False,
+    inoculation_assets: int = 0,
 ) -> tuple[dict[str, Decimal], int, int, int]:
     """Cost of each pipeline stage for a run shape.
 
@@ -475,9 +610,14 @@ def _stage_costs(
     #
     # An inoculation re-simulation reuses the *parent's* agents, copied row for
     # row, so it generates none at all. Charging for generation there would bill
-    # for LLM calls the run provably never makes, and the honest quote is also
-    # the one that makes the second run of the loop cheaper than the first —
-    # which is exactly the right incentive for the step the product is sold on.
+    # for LLM calls the run provably never makes.
+    #
+    # This was once described here as making the second run of the loop cheaper
+    # than the first. **The ledger says otherwise** — the measured pair came in
+    # at $2.31 for the parent run and $2.55 for the child, because the assets the
+    # child carries are re-sent with every action prompt and cost more than the
+    # generation it skips. The saving is real; it is not the whole story, and a
+    # comment asserting the net direction was how the surcharge stayed invisible.
     generation_units = 0 if reuse_agents else agent_count
     # Nearly every action produces an event: measured 497 from 500. The old 80%
     # assumption came from agents answering NOTHING, which they now rarely do —
@@ -490,12 +630,31 @@ def _stage_costs(
     # under-counted the report by two Opus-written sections on every run.
     written_sections = section_units + REPORT_FIXED_SECTIONS
 
+    # Pre-positioned assets are re-sent with every action prompt, so they scale
+    # with the whole action stage rather than being a one-off. This is the shape
+    # of the cost, not a surcharge bolted on: `topic_block()` is rebuilt per
+    # call, and there is no caching between agents.
+    action_profile = AGENT_ACTION
+    if inoculation_assets:
+        action_profile = _StageProfile(
+            input_tokens=AGENT_ACTION.input_tokens
+            + INOCULATION_ASSET_ACTION.input_tokens * inoculation_assets,
+            output_tokens=AGENT_ACTION.output_tokens
+            + INOCULATION_ASSET_ACTION.output_tokens * inoculation_assets,
+        )
+
+    # A run with a parent is a run whose clustering call carries the parent's
+    # objections as priors, which is a materially bigger call — see the profile.
+    canonicalization = (
+        OBJECTION_CANONICALIZATION_RESIM if reuse_agents else OBJECTION_CANONICALIZATION
+    )
+
     breakdown = {
-        "agent_actions": _stage_cost(AGENT_ACTION, action_units, fast_model),
+        "agent_actions": _stage_cost(action_profile, action_units, fast_model),
         "agent_generation": _stage_cost(AGENT_GENERATION, generation_units, fast_model),
         "event_measurement": _stage_cost(EVENT_MEASUREMENT, measurement_units, fast_model),
         # Once per run, on the main model, regardless of run size.
-        "objection_canonicalization": _stage_cost(OBJECTION_CANONICALIZATION, 1, main_model),
+        "objection_canonicalization": _stage_cost(canonicalization, 1, main_model),
         "report": _stage_cost(REPORT_SECTION, written_sections, main_model),
     }
     return breakdown, action_units, generation_units, section_units
@@ -646,6 +805,7 @@ def check_credit_budget(
     variants: int = 1,
     depth: str = "standard",
     reuse_agents: bool = False,
+    inoculation_assets: int = 0,
 ) -> BudgetCheck:
     """Check whether an org can afford a run, in credits.
 
@@ -659,7 +819,8 @@ def check_credit_budget(
     """
     balance, _granted, _plan = get_credit_balance(org_id)
     estimate = estimate_simulation_cost(
-        agent_count, rounds, platforms, variants, depth, reuse_agents=reuse_agents
+        agent_count, rounds, platforms, variants, depth,
+        reuse_agents=reuse_agents, inoculation_assets=inoculation_assets,
     )
 
     required = estimate.credits
