@@ -95,9 +95,15 @@ router = APIRouter(tags=["reports"])
 
 class GenerateReportBody(BaseModel):
     simulation_id: str
-    variant: str = "a"
     evidence_depth: str = "deep"  # shallow, standard, deep, exhaustive
     max_sections: int | None = None
+
+    # `variant` was here and did nothing — it reached a log line and no further.
+    # A report covers the whole run, and on a matched-swarm run that is the
+    # point: the scoreboard compares the arenas, so a per-arena report would be
+    # the one thing the Marketing lens exists to replace. Dropped rather than
+    # kept as an ignored field, because an accepted parameter that has no effect
+    # is a promise the API does not keep.
 
 
 class ChatBody(BaseModel):
@@ -128,7 +134,7 @@ async def generate_report(body: GenerateReportBody, auth: dict = Depends(get_cur
         raise HTTPException(status_code=404, detail="Simulation not found")
 
     asyncio.create_task(_safe_task(
-        run_generate_report(body.simulation_id, body.variant, body.evidence_depth, body.max_sections),
+        run_generate_report(body.simulation_id, body.evidence_depth, body.max_sections),
         "generate_report",
     ))
     return {"status": "started"}

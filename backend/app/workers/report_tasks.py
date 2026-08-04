@@ -39,15 +39,25 @@ def _org_for(simulation_id: str) -> str | None:
 
 async def run_generate_report(
     simulation_id: str,
-    variant: str = "a",
     evidence_depth: str = "deep",
     max_sections: int | None = None,
 ):
-    """Generate intelligence report from simulation results."""
+    """Generate intelligence report from simulation results.
+
+    **There is no `variant` parameter and there was never a working one.** It
+    existed as `variant: str = "a"`, was passed to nothing, and appeared only in
+    the log line — which then announced `variant=a` on every run, including the
+    first live matched-swarm run, implying the report covered one arena of three.
+
+    A report covers the whole run. It reads `simulation_analysis`, whose
+    scoreboard carries every arena, and `build_lens_context` hands the writer all
+    of them plus the instruction not to name a winner the measurement did not
+    support. Removing the parameter is what makes the log true.
+    """
     from app.services.billing.usage_ledger import usage_context
     from app.services.intelligence.report_agent import ReACTConfig, generate_report
 
-    logger.info("task_generate_report_started", simulation_id=simulation_id, variant=variant)
+    logger.info("task_generate_report_started", simulation_id=simulation_id)
     config = ReACTConfig(evidence_depth=evidence_depth, section_count=max_sections)
 
     with usage_context(
