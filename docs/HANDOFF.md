@@ -65,7 +65,7 @@ half-finished.
 | 1 | **Live multi-variant run — the Phase 3 gate.** ← **the work.** Everything else in Phase 3 is built and static-green. **Three variants at ~25–30 agents, deliberately underpowered** (~$1.50–2.00 COGS) so the *overlap refusal* actually fires and the "no winner" path is exercised rather than assumed. A larger run more likely produces a clean winner and leaves the refusal untested. §9.5. | Gate | Closing Phase 3 |
 | 2 | **Re-check any contract quoted before 2026-08-03.** A deal signed against $2.26/run carries ~20% less margin than its band table claimed. Nothing to build — a review, at renewal. | Review | Renewals |
 | 3 | **Clean re-run of the inoculation loop** (~$5.97 COGS). The measured delta's *magnitude* is contaminated: 3 of 6 assets carried a fabricated statistic that is now blocked. Mechanism is proven; effect size is not citable. Do this when there is a reason to cite a delta figure, not before. | Decision | Citing any delta figure |
-| 4 | **Phase 4** — Crisis lens migration, `clients` layer + org switcher, calibration loop, V2 README, merge to `master` on approval (which is when 019 applies). | Phase | — |
+| 4 | **Phase 4** — Crisis lens migration, `clients` layer + org switcher, calibration loop, V2 README, V2 README. **The merge and 019 are done** — Phase 4 starts on one codebase. | Phase | — |
 | — | ~~Re-derive `ICP_SYNTHESIS` and `INOCULATION_DRAFT`~~ **Done 2026-08-04.** Outputs checked against one live pass each; `INOCULATION_DRAFT` raised 5,000 → 5,700. Inputs held at their ceilings — document-dependent, same as `AGENT_GENERATION`. | Done | — |
 | — | ~~Re-derive `OBJECTION_CANONICALIZATION`~~ **Done 2026-08-04.** A ceiling, not a floor: input bought 728 phrasings against an 800 cap; output reconstructed at ~9,400 against the 10,000 priced. Unchanged for ordinary runs; a **re-simulation** now has its own profile. §1c. | Done | — |
 
@@ -84,15 +84,15 @@ argument for closing the cost model and building.
 
 | | |
 |---|---|
-| Branch | `v2`, pushed to `origin/v2`, in sync |
-| `master` | Untouched, still deployed to Render. **Do not merge without approval.** |
+| Branch | **Merged.** `master` and `v2` are the same commit and both pushed. New work can go on either; keep them aligned or delete `v2`. |
+| `master` | **Carries all of Phases 0–3 and is deployed.** Merged 2026-08-04 as a clean fast-forward — `master` had zero commits `v2` did not. |
 | Phase 0 | Complete — dead-code purge, route-collision fix, schema drift, cost model, usage ledger |
 | Phase 1 | **Complete and verified end to end** |
 | Phase 2 | Built and **verified end to end live**. Four defects found and fixed — see §1b. |
 | Phase 3 | **Built; static gate passed. Awaiting a live end-to-end run** — see §0 item 1. |
 | Verification | ruff clean · pytest 230 passed · `tsc --noEmit` clean · `eslint --quiet` clean · `vite build` OK · app boots, 119 routes, no duplicate registrations |
 | Live runs | Four, all pre-Phase-3. Phase 1: `05f1d879`, `03de92ef`. Phase 2: `f980fe0d` (Founder lens, 30% adversarial) and `fa28d899` (its inoculation re-simulation). **No multi-variant run has ever executed.** |
-| Migrations | 017, 018, **020, 021, 022, 023** applied. **019 still not applied — it waits for the merge.** |
+| Migrations | 017, 018, **019, 020, 021, 022, 023 — all applied.** 019 went in at the merge, in the correct order: deploy first, index second. 377 rows renamed, 0 duplicate groups left, 2,730 agents intact. |
 | Cost model | Re-derived 2026-08-04 from `llm_usage`. **Standard run COGS $2.71 → $2.74**; tier runs 7/22/73 → **7/21/73**; a re-simulation **$2.38 → $3.13** and the full loop $5.97. Free grant unchanged at 1,200. All tables regenerated from `scripts/quote.py`. §1c. |
 | Working tree | `.~lock.*` and `test_flow.py` are pre-existing untracked. Ignore them. |
 
@@ -130,15 +130,32 @@ and no historical agent became adversarial. Column types were checked against
 `bool NOT NULL DEFAULT false`, no drift. `get_advisors` reports no RLS lint on
 any of the three new tables.
 
-### Migration written and NOT applied
+### 019 — applied at the merge, 2026-08-04
 
-**019 — DO NOT APPLY BEFORE THE MERGE.** Agent-username uniqueness. `master`
-has no generation-time dedup and collides on essentially every run, so creating
-the unique index while `master` is the deployed branch would fail agent
-insertion on every new simulation — an immediate outage of the live product.
-Apply it in the same window as the merge, *after* the deploy that carries the
-dedup. Dry-run against production: one pass leaves 0 duplicates, and no existing
-username contains the `~` separator. See §1a.
+Agent-username uniqueness. **It was held back for three phases on purpose**, and
+the interlock was real rather than caution: `master` had no generation-time dedup
+(verified by `git show master:…/simulation_tasks.py` on the day), so creating the
+unique index while `master` was deployed would have failed agent insertion on
+every new simulation. Today's own 26-agent run logged three `agent_username_deduped`
+events — a ~12% collision rate that becomes three insert failures, and a dead run,
+without the dedup in front of it.
+
+The order that matters, and the only order that works:
+
+1. Merge `v2` → `master`
+2. **Deploy** — this is what puts the dedup into production
+3. *Then* apply 019
+
+Executed in that order. Deploy confirmed live by probing `/api/variants/objectives`,
+which returned **401 rather than 404** — the route exists, so the new code is
+serving. Then applied: 377 rows renamed across 44 simulations, **0 duplicate
+groups remaining**, 2,730 agents and 11,999 events intact, one pass as the
+dry-run predicted.
+
+**What it does not repair:** historical event attribution. There is no record of
+which of nine identically-named agents produced a given event, so pre-fix runs
+keep understated agent counts and confidence intervals wider than truth. **Do not
+use any run created before 2026-08-04 as a calibration baseline for agent counts.**
 
 **Standing lesson (from 017):** `IF NOT EXISTS` guards hide type drift. Before
 adding a column that may already exist by hand, check
@@ -179,16 +196,16 @@ Layer 3 exists because layers 1 and 2 are conventions enforced by code somebody
 will eventually change. **If you add a new agent-creation path, a new adapter, or
 an import, you get layer 3 for free and must not rely on the other two.**
 
-### Migration 019 is deliberately NOT applied
+### Migration 019 — applied 2026-08-04, layer 3 is live
 
-**Do not apply it until `v2` is merged to `master`.** `master`'s
-`run_prepare_agents` has no dedup and produces collisions on essentially every
-run, so adding the unique index while `master` is deployed would fail agent
-insertion on every new simulation — an immediate outage of the live product.
+All three layers are now in force. The constraint went in at the merge, after
+the deploy that carries the dedup; the reasoning and the numbers are in §1
+above. 377 rows renamed, 0 duplicate groups remaining.
 
-Apply it in the same window as the merge, *after* the deploy that carries the
-generation-time dedup. The rename step was dry-run against production: one pass
-leaves **0 duplicates**, and no existing username contains the `~` separator.
+Layer 3 is the one that matters going forward: layers 1 and 2 are conventions
+enforced by code somebody will eventually change, and the index is the only
+place the invariant holds regardless of who writes the next caller. **A new
+agent-creation path gets it for free and must not rely on the other two.**
 
 ### What cannot be repaired
 
@@ -697,10 +714,8 @@ where noted.
    names so nothing breaks, but new Products, regional Price IDs and
    card-country gating on `organizations.pricing_region` are unbuilt.
 
-4a. **Migration 019 is written but not applied — apply it at the merge.** It
-   adds the unique index on `(simulation_id, username)`. Applying it before
-   `master` carries the generation-time dedup would break agent insertion on the
-   live product. See §1a.
+4a. ~~Migration 019 is written but not applied~~ **Applied 2026-08-04 at the
+   merge.** The unique index on `(simulation_id, username)` is live. §1a.
 
 **Quality and correctness:**
 
@@ -948,7 +963,7 @@ numbers do not carry.
 
 | Phase | Scope |
 |---|---|
-| **4** | Crisis lens migration, `clients` layer + org switcher, calibration loop, V2 README on the repo, merge to `master` on approval — which is when migration 019 applies. |
+| **4** | Crisis lens migration, `clients` layer + org switcher, durable background jobs, calibration loop, V2 README. **The merge and migration 019 landed 2026-08-04**, so Phase 4 begins on a single codebase — and the legacy `is_ab_test` / `variant_a_config` / `variant_b_config` / `winner_variant` columns can now be dropped, since nothing deployed reads them. |
 
 **Before starting Phase 4:** the Crisis lens wants propagation velocity, which is
 what the event graph added in Phase 3 now makes measurable — but it will also
