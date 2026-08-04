@@ -37,29 +37,54 @@ const useCases = [
   { title: 'Marketing', tag: 'Enterprise', tagColor: '#10B981', question: 'Will this campaign go viral or flop?', desc: 'Test campaign creative and messaging across target demographics before launch.', result: '91% positive reception probability' },
 ];
 
+// ⚠ EVERY NUMBER HERE IS AN ADVERTISED CLAIM AND MUST MATCH WHAT IS ENFORCED.
+//
+// This block previously advertised 5,000 / 25,000 / 100,000 agents per
+// simulation against enforced caps of 100 / 150 / 250 — a 50-400x
+// overstatement that shipped. It also promised "All 8 platforms" when there
+// are twelve adapters and no paid tier can select more than six.
+//
+// The source of truth is `agent_pricing.TIER_CAPS` in the backend. It is not
+// imported here because this page renders before auth and has no org, so the
+// values are transcribed — which means **this comment is the only thing
+// keeping them honest.** If you change TIER_CAPS, change these in the same
+// commit. §2a of HANDOFF lists "two sources of truth for one value" as a
+// failure class this codebase has already shipped.
+//
+// TIER_CAPS at time of writing:
+//   founder     100 agents,  8 rounds,  3 platforms,  3 variants
+//   growth      150 agents, 10 rounds,  4 platforms,  5 variants
+//   agency      250 agents, 12 rounds,  6 platforms,  8 variants
+//   enterprise  1,000 agents, 20 rounds, 12 platforms, 8 variants
+//
+// Monthly simulation counts are deliberately NOT advertised: `PLAN_LIMITS` is
+// still keyed on the V1 names (starter/pro/enterprise), so a founder/growth/
+// agency org falls through to the starter limit. Advertising a number that no
+// enforced limit corresponds to is how this block went wrong the first time.
+// Restore the line once PLAN_LIMITS carries the shipping tier names.
 const pricingPlans = [
   {
-    name: 'Analyst', price: '$149', period: '/mo', featured: false,
-    desc: 'For teams getting started with social prediction',
-    items: ['10 simulations/month', 'Up to 5,000 agents per simulation', '50,000 agents/month total', '3 platforms', '3 persona packs', 'Basic reports', 'Email support'],
+    name: 'Founder', price: '$99', period: '/mo', featured: false,
+    desc: 'For a founder validating an idea before building it',
+    items: ['Up to 100 agents per simulation', 'Up to 8 rounds', '3 platforms', '3 message variants per test', 'Audience derived from your own material', 'Full measured reports', 'Email support'],
     cta: 'Get Started', ctaLink: '/signup',
   },
   {
-    name: 'Strategist', price: '$499', period: '/mo', featured: true,
-    desc: 'For teams that need comprehensive coverage',
-    items: ['50 simulations/month', 'Up to 25,000 agents per simulation', '500,000 agents/month total', 'All 8 platforms', '8 persona packs', 'Advanced reports + PDF/CSV export', 'API access', 'Priority support'],
+    name: 'Growth', price: '$299', period: '/mo', featured: true,
+    desc: 'For teams testing messages before they spend on them',
+    items: ['Up to 150 agents per simulation', 'Up to 10 rounds', '4 platforms', '5 message variants per test', 'All 16 persona packs', 'PDF/CSV export', 'API access', 'Priority support'],
     cta: 'Get Started', ctaLink: '/signup',
   },
   {
-    name: 'War Room', price: '$1,499', period: '/mo', featured: false,
-    desc: 'For organizations running high-stakes simulations',
-    items: ['200 simulations/month', 'Up to 100,000 agents per simulation', '2,000,000 agents/month total', 'All 8 platforms', 'All 16 persona packs', 'Custom report templates', 'Webhook integrations', 'Dedicated account manager'],
+    name: 'Agency', price: '$999', period: '/mo', featured: false,
+    desc: 'For agencies running work across multiple clients',
+    items: ['Up to 250 agents per simulation', 'Up to 12 rounds', '6 platforms', '8 message variants per test', 'All 16 persona packs', 'Custom report templates', 'Webhook integrations', 'Dedicated account manager'],
     cta: 'Get Started', ctaLink: '/signup',
   },
   {
     name: 'Enterprise', price: 'Custom', period: '', featured: false,
     desc: 'For maximum-scale analysis with dedicated infrastructure',
-    items: ['Unlimited simulations', '500,000+ agents per simulation', 'Unlimited monthly volume', 'Custom persona creation', 'White-label reports', 'SSO/SAML', 'SLA guarantee', 'Dedicated infrastructure'],
+    items: ['Up to 1,000 agents per simulation', 'Up to 20 rounds', 'All 12 platforms', 'Custom persona creation', 'White-label reports', 'SSO/SAML', 'SLA guarantee', 'Dedicated infrastructure'],
     cta: 'Contact Sales', ctaLink: 'mailto:info@saidolabs.com',
   },
 ];
@@ -149,7 +174,13 @@ export default function LandingPage() {
 
           {/* Subtitle */}
           <motion.p {...stagger(3)} className="text-lg text-[#8B97A8] max-w-2xl mx-auto leading-relaxed mb-10">
-            Simulate public reactions across 8 platforms with up to 1M synthetic agents. Get structured intelligence reports before you publish, launch, or announce.
+            {/* "8 platforms with up to 1M synthetic agents" was here. There are
+                twelve adapters, and the largest enforced cap is 1,000 agents —
+                a 1,000x overstatement in the first sentence a visitor reads.
+                The claim worth making is what the product actually does that
+                nothing else does: every number traces to something an agent
+                said. Do not restore a scale number that TIER_CAPS cannot back. */}
+            Simulate public reactions across 12 platforms, with an audience derived from your own material rather than picked from a list. Every number in the report traces back to what an agent actually said.
           </motion.p>
 
           {/* CTAs */}
