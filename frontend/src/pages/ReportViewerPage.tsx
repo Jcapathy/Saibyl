@@ -8,6 +8,8 @@ import { getErrorMessage } from '@/lib/errors';
 import { cleanContent, stripDuplicateTitle } from '@/lib/utils';
 import {
   isSupportedSchema,
+  withSchemaDefaults,
+  SUPPORTED_SCHEMA_VERSION,
   type AnalysisResponse,
   type SimulationAnalysis,
 } from '@/lib/analysis';
@@ -180,13 +182,15 @@ export default function ReportViewerPage() {
         if (!isSupportedSchema(payload.schema_version)) {
           // Refuse rather than render a version this client does not know. A
           // partially-understood artifact would silently drop fields, which is
-          // how a chart ends up quietly missing a series.
+          // how a chart ends up quietly missing a series. Only ever reached now
+          // when the artifact is *newer* than this build — an older one renders,
+          // because the schema is additive.
           setAnalysisError(
-            `This analysis uses schema version ${payload.schema_version}; this app renders version 1. Reload to pick up the current build.`,
+            `This analysis uses schema version ${payload.schema_version}; this app renders up to version ${SUPPORTED_SCHEMA_VERSION}. Reload to pick up the current build.`,
           );
           return;
         }
-        setAnalysis(payload.artifact);
+        setAnalysis(withSchemaDefaults(payload.artifact));
       } catch (err) {
         if (!cancelled) {
           setAnalysisError(

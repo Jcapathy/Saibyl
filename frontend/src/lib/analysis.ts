@@ -396,7 +396,53 @@ export const TRAJECTORY_COPY: Record<Trajectory, string> = {
   flat: 'Sentiment did not move beyond its confidence bands',
 };
 
-/** Whether this client can render the artifact it was handed. */
+/**
+ * Whether this client can render the artifact it was handed.
+ *
+ * **Older is fine; newer is not.** The two directions are not symmetric and
+ * treating them as one rule was a mistake this caught at the merge.
+ *
+ * An artifact *older* than this client is missing fields the client knows
+ * about, and every one of them was added additively — a v1 artifact has no
+ * `scoreboard` and no `by_cohort`, which is exactly what a single-arena run
+ * with no adversarial cohort looks like anyway. Rendering it is correct.
+ *
+ * An artifact *newer* than this client carries fields the client has never
+ * heard of, and the failure there is silent: the page renders, looks complete,
+ * and quietly omits a block it does not know exists. That is the case the
+ * refusal is for — a v2 client showing a v3 matched-swarm run would present one
+ * pooled sentiment figure for a test whose whole purpose was to separate six
+ * messages, with nothing on screen to say so.
+ *
+ * Strict equality blanked every report written before the current version. On
+ * the day it shipped that was four artifacts in internal orgs; the next time it
+ * would have been every report a customer had ever run.
+ */
 export function isSupportedSchema(version: number): boolean {
-  return version === SUPPORTED_SCHEMA_VERSION;
+  return Number.isFinite(version) && version >= 1 && version <= SUPPORTED_SCHEMA_VERSION;
+}
+
+/**
+ * Fill in the collections an older artifact predates.
+ *
+ * Applied once at the load boundary rather than guarded at each of the six
+ * places that read these — a guard per call site is a guard someone forgets on
+ * the seventh, and the failure is a white screen from `undefined.length`.
+ *
+ * Only ever substitutes *empty*, never a value. An absent `by_cohort` means the
+ * run had no cohort split, which is what an empty list already means; it does
+ * not mean zero, and nothing here invents a number.
+ */
+export function withSchemaDefaults(analysis: SimulationAnalysis): SimulationAnalysis {
+  return {
+    ...analysis,
+    sentiment_timeline: analysis.sentiment_timeline ?? [],
+    by_platform: analysis.by_platform ?? [],
+    by_archetype: analysis.by_archetype ?? [],
+    by_cohort: analysis.by_cohort ?? [],
+    objections: analysis.objections ?? [],
+    flashpoints: analysis.flashpoints ?? [],
+    propagation: analysis.propagation ?? [],
+    scoreboard: analysis.scoreboard ?? null,
+  };
 }

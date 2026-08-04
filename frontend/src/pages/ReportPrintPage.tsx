@@ -22,6 +22,7 @@ import { cleanContent, stripDuplicateTitle } from '@/lib/utils';
 import {
   formatSigned,
   isSupportedSchema,
+  withSchemaDefaults,
   type AnalysisResponse,
   type SimulationAnalysis,
 } from '@/lib/analysis';
@@ -131,7 +132,7 @@ export default function ReportPrintPage() {
         if (cancelled) return;
         const payload = res.data as AnalysisResponse;
         if (isSupportedSchema(payload.schema_version)) {
-          setAnalysis(payload.artifact);
+          setAnalysis(withSchemaDefaults(payload.artifact));
         }
       } catch {
         // An unanalysed run prints without charts and says so.
