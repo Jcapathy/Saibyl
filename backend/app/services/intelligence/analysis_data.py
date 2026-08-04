@@ -101,6 +101,9 @@ class RunData:
 
     lens: str | None = None
     founder_stage: str | None = None
+    # Set when this run is an inoculation re-simulation. Its canonicalization
+    # clusters against the parent's objections so the two runs' keys line up.
+    parent_simulation_id: str | None = None
 
     @property
     def scored_events(self) -> list[MeasuredEvent]:
@@ -165,7 +168,7 @@ def load_run_data(simulation_id: str) -> RunData:
         admin.table("simulations")
         .select(
             "id, organization_id, prediction_goal, max_rounds, lens, "
-            "founder_stage, adversarial_share, icp_profile_id"
+            "founder_stage, adversarial_share, icp_profile_id, parent_simulation_id"
         )
         .eq("id", simulation_id)
         .single()
@@ -272,6 +275,7 @@ def load_run_data(simulation_id: str) -> RunData:
         named_competitors=_named_competitors(sim.get("icp_profile_id")),
         lens=sim.get("lens"),
         founder_stage=sim.get("founder_stage"),
+        parent_simulation_id=sim.get("parent_simulation_id"),
     )
     logger.info(
         "run_data_loaded",

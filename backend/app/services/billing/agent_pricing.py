@@ -187,11 +187,31 @@ class _StageProfile(BaseModel):
 # ceiling. Calibrated at the standard shape, which means small runs are
 # over-quoted (safe) and very large ones may be under-quoted — which is what
 # `reconcile_run_cost`'s margin-floor check exists to catch.
+#
+# **Deliberately not recalibrated** from the first Founder-lens run, which
+# measured 312 in / 175 out at the same nominal shape — 2.4x lower on input.
+# The cause is the platform mix, not a shifted mean: that run used Hacker News
+# and LinkedIn, whose feed slice is a compact `[id] title (points)` line per
+# post, where the Phase 1 calibration ran on adapters that put post bodies in
+# the feed. Calibrating down to 312 would under-quote every Twitter and Reddit
+# run to make Hacker News runs exact. 750 over-quotes the compact adapters,
+# which is the safe direction.
+#
+# The real fix is a per-adapter profile. Until then this number is a ceiling
+# across platforms rather than an average of them, and that is on purpose.
 AGENT_ACTION = _StageProfile(input_tokens=750, output_tokens=170)
 
 # One agent generated during the prepare phase. Measured at 1,901/548 and
-# 1,900/537 on the two runs — genuinely constant, as expected: the prompt is
-# one archetype plus a fixed slice of document context.
+# 1,900/537 on the two Phase 1 runs — constant, as expected: the prompt is one
+# archetype plus a fixed slice of document context.
+#
+# **Deliberately not recalibrated** from the Founder-lens run's 1,459 / 376. The
+# input is document-dependent — the prompt carries `doc_context[:2000]`, and
+# that project's two short Markdown files do not fill the slice the way a PDF
+# deck does. The output is tail-heavy rather than low-mean: the same run had a
+# profile truncate at 900 tokens against a 376-token mean, which is why the
+# ceiling moved to 1,400. Calibrating to the mean of a thin-document run would
+# under-quote every project that uploads a real deck.
 AGENT_GENERATION = _StageProfile(input_tokens=1900, output_tokens=550)
 
 # Per-event measurement, batched ~25 events per call. Output was badly
@@ -202,9 +222,19 @@ EVENT_MEASUREMENT = _StageProfile(input_tokens=78, output_tokens=87)
 # Objection canonicalization: one main-model call over the run's distinct
 # objection phrasings, charged once per run. Its input is the number of
 # *distinct* phrasings, which grows with run size but far slower than events do
-# — 124 distinct from 72 events, 601 from 497. Sized here for a standard run's
-# ~600 phrasings against the MAX_DISTINCT_STRINGS ceiling.
-OBJECTION_CANONICALIZATION = _StageProfile(input_tokens=11000, output_tokens=6000)
+# — 124 distinct from 72 events, 601 from 497, 728 from 480 on a Founder-lens
+# run with an adversarial cohort.
+#
+# The cohort is why this moved: incumbent-aligned agents raise objections buyers
+# never do, so a Founder-lens run generates materially more distinct phrasings
+# at the same event count.
+#
+# Measured on the first live Founder-lens run at 13,950 in / 8,000 out — but the
+# **output was capped**, so 8,000 is a floor and not a measurement. Priced here
+# at 10,000 out, above the observed cap and below the raised 16,000 ceiling.
+# Re-derive from `llm_usage` after the next run, when the output is free to find
+# its own level.
+OBJECTION_CANONICALIZATION = _StageProfile(input_tokens=14000, output_tokens=10000)
 
 # ICP synthesis: one main-model pass over the founder's uploaded material,
 # charged once per synthesis rather than per run.
@@ -233,12 +263,29 @@ ICP_SYNTHESIS = _StageProfile(input_tokens=14_000, output_tokens=4_500)
 # the data will be there.
 INOCULATION_DRAFT = _StageProfile(input_tokens=4_500, output_tokens=5_000)
 
-# Report generation, per section (ReACT tool calls plus the write-up). The
-# original 18,000-token input estimate was over 3x reality: the loop's evidence
-# is capped — the seeded artifact at 6,000 characters and each tool observation
-# at 5,000 — so a section's context cannot run away. Output was under-estimated
-# by a similar factor, because sections are long.
-REPORT_SECTION = _StageProfile(input_tokens=5650, output_tokens=4250)
+# Report generation, per **written** section (ReACT tool calls plus the
+# write-up). The loop's evidence is capped — the seeded artifact at 6,000
+# characters and each tool observation at 5,000 — so a section's context cannot
+# run away.
+#
+# Recalibrated from the first live Founder-lens run: 8 Opus calls, 44,603 in /
+# 25,917 out across 6 written sections = 7,434 / 4,320 each. The previous
+# 5,650 / 4,250 was derived per *priced* section, and the two counts were not
+# the same number — see REPORT_FIXED_SECTIONS.
+REPORT_SECTION = _StageProfile(input_tokens=7450, output_tokens=4320)
+
+# Sections the report writes on top of its outline: an executive summary and a
+# conclusion ("Strategic Implications & Recommended Actions"). Both are
+# main-model calls of ordinary section length; neither comes out of
+# `report_section_count`.
+#
+# **Found by the first live Founder-lens run.** `report_section_count(480,
+# "standard")` returned 4, the outline produced 4 sections, and the report then
+# wrote 6 — so a third of the largest main-model stage in the run was never
+# quoted. This is the same defect as Phase 1's #9 and #10 one level up: not the
+# report being written at the wrong depth, nor its spend going unmetered, but
+# the *unit count* in the quote disagreeing with what the writer actually does.
+REPORT_FIXED_SECTIONS = 2
 
 
 def _stage_cost(profile: _StageProfile, units: int, model: str) -> Decimal:
@@ -430,6 +477,10 @@ def _stage_costs(
     # feed to post.
     measurement_units = action_units
     section_units = report_section_count(measurement_units, depth)
+    # What the writer actually produces: the outline's sections plus the
+    # executive summary and the conclusion. Quoting `section_units` alone
+    # under-counted the report by two Opus-written sections on every run.
+    written_sections = section_units + REPORT_FIXED_SECTIONS
 
     breakdown = {
         "agent_actions": _stage_cost(AGENT_ACTION, action_units, fast_model),
@@ -437,7 +488,7 @@ def _stage_costs(
         "event_measurement": _stage_cost(EVENT_MEASUREMENT, measurement_units, fast_model),
         # Once per run, on the main model, regardless of run size.
         "objection_canonicalization": _stage_cost(OBJECTION_CANONICALIZATION, 1, main_model),
-        "report": _stage_cost(REPORT_SECTION, section_units, main_model),
+        "report": _stage_cost(REPORT_SECTION, written_sections, main_model),
     }
     return breakdown, action_units, generation_units, section_units
 

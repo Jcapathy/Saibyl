@@ -41,7 +41,8 @@ from __future__ import annotations
 
 import json
 import math
-from typing import Any
+import re
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -57,6 +58,12 @@ from app.services.intelligence.inoculation_schema import (
     ObjectionMeasurement,
     Verdict,
 )
+
+if TYPE_CHECKING:
+    # Import-time only. `gather_material` is imported inside the function that
+    # uses it, so pulling the module in here would add a load-order dependency
+    # for a type annotation and nothing else.
+    from app.services.engine.personas.icp_synthesizer import ProjectMaterial
 
 logger = structlog.get_logger()
 
@@ -149,6 +156,16 @@ Draft {ASSETS_PER_OBJECTION} candidate assets per objection. Asset types:
 {competitor_rule}
 
 RULES
+- **You have no evidence. Do not invent any.** You do not know this team's
+  customer count, retention, benchmark results, study outcomes, correlation
+  coefficients, sample sizes, or dates. Asked to answer "there is no proof this
+  works", the honest asset says what the team does not yet know and what they
+  will run to find out. It does NOT say "in our 14-case dataset, rank-order
+  correlation was 0.74". That sentence is a fabrication a founder might publish
+  as their own claim, and it is the single worst thing you can produce here.
+- Numbers are allowed only when they appear in the material above, or when they
+  describe something the team controls and has stated (its own price, its own
+  tier limits). Every other figure must be omitted, not estimated.
 - An asset is something a team can publish tomorrow. Write the actual copy, not
   advice about what the copy should say. "Address concerns about pricing" is
   not an asset; a pricing rationale page is.
@@ -168,6 +185,53 @@ Return ONLY JSON:
     "body": "the publishable copy, 80-250 words",
     "hypothesis": "what this should do, and to whom"}}
 ]}}"""
+
+
+# Words that turn a number into an evidentiary claim. "$99/mo" is a price the
+# team sets; "ρ = 0.74 across 14 cases" is a research finding, and a model that
+# has never seen a study will produce one on request.
+_EVIDENCE_WORDS = (
+    "correlation", "spearman", "pearson", "ρ", "rho", "r =", "r=",
+    "p-value", "p <", "p<", "significance", "confidence interval",
+    "dataset", "data set", "sample", "n =", "n=", "cases", "study",
+    "studies", "trial", "benchmark", "accuracy", "precision", "recall",
+    "customers", "users report", "retention", "churn rate", "nps",
+    "% of our", "% of customers", "% of users", "surveyed", "respondents",
+)
+
+_NUMBER_RE = re.compile(r"\d+(?:\.\d+)?%?")
+
+
+def _evidence_claims(body: str, sourced_numbers: set[str]) -> list[str]:
+    """Sentences that pair a number with evidence language and cite nothing.
+
+    A prompt rule is a request; this is the check. Phase 1's bug #5 was the
+    report inventing "~58% of all SMB objections on Reddit", and the fix there
+    was to make the measured object impossible to route around. The asset
+    drafter has no measured object to route to — it is writing prose about the
+    founder's own product — so the equivalent protection is to refuse to store a
+    statistic that the uploaded material cannot support.
+
+    Deliberately narrow. A price, a tier limit, or a round number the material
+    already contains passes; only a figure wearing the clothes of a research
+    finding is caught. False negatives are expected — this is a floor, not a
+    filter, and the prompt rule above is the first line.
+    """
+    flagged = []
+    for sentence in re.split(r"(?<=[.!?])\s+", body):
+        lowered = sentence.lower()
+        if not any(word in lowered for word in _EVIDENCE_WORDS):
+            continue
+        numbers = [n for n in _NUMBER_RE.findall(sentence) if n not in sourced_numbers]
+        if numbers:
+            flagged.append(sentence.strip()[:300])
+    return flagged
+
+
+def _sourced_numbers(material: ProjectMaterial) -> set[str]:
+    """Every number the uploaded material actually contains."""
+    text = f"{material.own}\n{material.competitor}\n{material.market}"
+    return set(_NUMBER_RE.findall(text))
 
 
 async def draft_assets(
@@ -194,8 +258,14 @@ async def draft_assets(
             "measurable objection to inoculate against."
         )
 
+    from app.services.engine.personas.icp_synthesizer import gather_material
     from app.services.intelligence.analysis_data import _named_competitors
     named = _named_competitors(sim.get("icp_profile_id"))
+
+    # The numbers the founder's own material actually contains. Anything
+    # statistical outside this set is something the model made up.
+    project_id = sim.get("project_id")
+    sourced = _sourced_numbers(gather_material(project_id)) if project_id else set()
 
     with usage_context(
         "inoculation_draft", simulation_id=simulation_id, organization_id=org_id
@@ -242,6 +312,28 @@ async def draft_assets(
                 detail="no competitor grounded in uploaded material",
             )
             continue
+
+        # Fabricated evidence about the founder's own product. Dropped, not
+        # flagged: this is copy the founder may publish verbatim as their own
+        # claim, and unlike a competitor name there is no partial version of it
+        # worth keeping — the asset's whole argument rests on the invented
+        # figure. Found on the first live run, where a disclosure answering
+        # "there is no proof this works" asserted a 14-case dataset and a
+        # Spearman's rho of 0.74, neither of which exists.
+        fabricated = _evidence_claims(body, sourced)
+        if fabricated:
+            logger.warning(
+                "inoculation_asset_dropped_fabricated_evidence",
+                objection_key=key,
+                title=title[:80],
+                claims=fabricated,
+                detail=(
+                    "asset asserts a statistic the uploaded material does not "
+                    "contain; it would be published as the founder's own claim"
+                ),
+            )
+            continue
+
         rows.append({
             "simulation_id": simulation_id,
             "organization_id": org_id,

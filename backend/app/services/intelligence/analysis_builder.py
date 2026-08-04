@@ -50,6 +50,7 @@ from app.services.intelligence.analysis_schema import (
 from app.services.intelligence.objection_canonicalizer import (
     canonicalize_objections,
     persist_objections,
+    prior_objections,
 )
 
 logger = structlog.get_logger()
@@ -503,7 +504,12 @@ async def build_simulation_analysis(
     """Build and persist the analysis artifact for a finished run."""
     run = load_run_data(simulation_id)
 
-    objections = await canonicalize_objections(run)
+    # A re-simulation clusters against its parent's canonical objections so the
+    # two runs' keys line up. Without this the before/after comparison matches
+    # nothing and reports every asset as effective — see canonicalize_objections.
+    objections = await canonicalize_objections(
+        run, prior_objections(run.parent_simulation_id)
+    )
     # Cohort attribution runs before persistence so the stored objections and
     # the artifact's copies agree on where each objection started.
     _attribute_objection_cohorts(run, objections)

@@ -13,8 +13,11 @@ from app.services.billing.agent_pricing import (
     estimate_inoculation_draft_cost,
     estimate_simulation_cost,
 )
+from app.services.engine.personas.icp_synthesizer import ProjectMaterial
 from app.services.intelligence.inoculation import (
+    _evidence_claims,
     _proportion_interval,
+    _sourced_numbers,
     _verdict,
     asset_prompt_block,
 )
@@ -135,6 +138,76 @@ def test_a_significant_rise_is_not_effective():
 
 def test_a_shrink_without_separated_intervals_is_not_effective():
     assert _delta("shrank", False).effective is False
+
+
+# ---------------------------------------------------------------------------
+# Fabricated evidence
+#
+# Found on the first live run: asked to answer "there is no proof synthetic
+# feedback predicts real behavior", the drafter invented the proof and put it in
+# three assets. This is Phase 1's bug #5 one level over — the report was stopped
+# from writing its own numbers, and the asset drafter never was.
+# ---------------------------------------------------------------------------
+
+# Verbatim from the live run. Kept as the fixture because a paraphrase would
+# drift away from the thing that actually happened.
+_FABRICATED = (
+    "In our 14-case internal dataset, the rank-order of objections matched "
+    "real-user feedback in 11 cases (Spearman's ρ = 0.74)."
+)
+
+_MATERIAL = ProjectMaterial(
+    own="Founder $99/mo, Growth $299/mo. A standard run is 100 agents, 5 rounds, "
+        "2 platforms and costs 2,265 credits."
+)
+
+
+def test_a_fabricated_correlation_is_caught():
+    claims = _evidence_claims(_FABRICATED, _sourced_numbers(_MATERIAL))
+    assert claims, "the invented Spearman's rho was not flagged"
+
+
+def test_prices_the_material_states_are_not_flagged():
+    """$99/mo is a price the team sets, not a research finding."""
+    body = "Our pricing is $99/mo because a standard run costs us real compute."
+    assert _evidence_claims(body, _sourced_numbers(_MATERIAL)) == []
+
+
+def test_a_number_in_the_material_survives_evidence_language():
+    """A figure the material states is sourced, even in an evidential sentence.
+
+    Both halves have to be true for this to test anything: "benchmark" is in
+    `_EVIDENCE_WORDS`, and 100 is in the uploaded material. A sentence missing
+    either would pass without exercising the exemption at all.
+    """
+    body = "Our benchmark is the standard run of 100 agents."
+    assert "benchmark" in body.lower()
+    assert "100" in _sourced_numbers(_MATERIAL)
+    assert _evidence_claims(body, _sourced_numbers(_MATERIAL)) == []
+
+
+def test_an_invented_customer_count_is_caught():
+    body = "Across 412 customers, retention held at 94%."
+    assert _evidence_claims(body, _sourced_numbers(_MATERIAL))
+
+
+def test_copy_with_no_numbers_passes():
+    body = (
+        "We have not yet run a controlled study comparing our output to real "
+        "outcomes. Here is the study we intend to run, and when."
+    )
+    assert _evidence_claims(body, _sourced_numbers(_MATERIAL)) == []
+
+
+def test_a_number_without_evidence_language_passes():
+    """Narrow by design — only figures wearing the clothes of a finding."""
+    body = "Setup takes about 15 minutes and the first run completes in 20."
+    assert _evidence_claims(body, _sourced_numbers(_MATERIAL)) == []
+
+
+def test_sourced_numbers_reads_every_material_bucket():
+    material = ProjectMaterial(own="a 12", competitor="b 34", market="c 56")
+    assert {"12", "34", "56"} <= _sourced_numbers(material)
 
 
 # ---------------------------------------------------------------------------

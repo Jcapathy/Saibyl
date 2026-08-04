@@ -1069,6 +1069,165 @@ nothing.
 
 ---
 
+## [PHASE 2 | 2026-08-03] Cost model: the report was under-counted by two sections
+
+Measured against the first live Founder-lens run, the estimate came in at 0.955x
+of actual. The aggregate was fine; the composition was not, and two errors were
+cancelling.
+
+**The report writes more sections than it prices.** `report_section_count`
+returned 4, the outline produced 4, and the report then wrote **6** — it appends
+an executive summary and a conclusion, neither of which comes out of that
+function. A third of the largest main-model stage in every run was never quoted.
+This is Phase 1's #9 and #10 one level up: not the report being written at the
+wrong depth, nor its spend going unmetered, but the *unit count in the quote*
+disagreeing with what the writer does. `REPORT_FIXED_SECTIONS = 2` closes it, and
+`REPORT_SECTION` is recalibrated per **written** section — estimate now $0.8715
+against $0.8709 measured.
+
+**Canonicalization was under-quoted** at 11,000/6,000 against 13,950/8,000
+measured — and the output was capped, so the measurement is a floor. Priced at
+14,000/10,000, to be re-derived once the raised ceiling lets output find its
+level.
+
+**Two profiles deliberately left alone.** `AGENT_ACTION` measured 312 input
+against a profile of 750, and `AGENT_GENERATION` 1,459 against 1,900. Neither is
+a shifted mean:
+
+- Agent-action input is **platform-dependent**. This run used Hacker News and
+  LinkedIn, whose feed slice is a compact `[id] title (points)` line; the Phase 1
+  calibration ran on adapters that put post bodies in the feed. Calibrating down
+  to 312 would under-quote every Twitter and Reddit run in order to make Hacker
+  News runs exact. The real fix is a per-adapter profile; until then 750 is a
+  ceiling across platforms rather than an average of them, on purpose.
+- Agent-generation input is **document-dependent** — the prompt carries
+  `doc_context[:2000]`, and this project's two short Markdown files do not fill
+  the slice a PDF deck would.
+
+**Consequence, which is a pricing decision and not a code one.** Standard-run
+COGS moves $2.26 → **$2.71**, and tier run counts fall: Founder 8 → 7, Growth
+26 → 22, Agency 88 → 73. `PRICING_GUIDE.md` §2.3's table and every enterprise
+quote derived from $2.26 now understate cost by ~20%. The tables are **not**
+regenerated here — DECISIONS §15c set the precedent of passing a corrected cost
+base through to price when costs fell, and the same question arriving in the
+opposite direction deserves an explicit decision rather than a silent edit.
+
+---
+
+## [PHASE 2 | 2026-08-03] The first live Founder-lens run, and the four defects it found
+
+Parent `f980fe0d` — 96 agents / 5 rounds / 2 platforms, `pre_launch_positioning`,
+30% adversarial, against Saibyl's own product brief plus one competitor
+document. Child `fa28d899`, same audience, six assets pre-positioned.
+
+**None of the four were visible to static verification. 187 tests passed
+throughout.** That is now the second phase in a row where the test suite was
+green and the live run was not, which should be read as a statement about what
+tests can do rather than about these tests.
+
+### 1. Objection keys did not survive across runs — the loop measured nothing
+
+**The most serious defect in Phase 2, and it failed in the most flattering
+possible direction.** The parent produced 46 canonical objections, the child 39,
+and they shared **zero keys**. Every parent objection therefore read as `died`,
+every child objection as `emerged`, and **all six tested assets scored
+effective** — a report of total success from a comparison that had matched
+nothing.
+
+Migration 021 asserts that `objection_key` is "stable and deterministic from the
+label". The key is; **the label is not.** Clustering runs independently per
+simulation and names the same objection differently the second time.
+
+**Fix.** `canonicalize_objections` takes the parent's objections as priors and
+the clustering prompt instructs the model to reuse an existing key when a group
+is the same objection said again. Keys carried over went 0 → 27 of 46, and
+`assets_effective` 6/6 → **3/6**. Verdicts now spread across shrank 7, died 7,
+unresolved 29, unchanged 3, emerged 1.
+
+A `objection_keys_share_nothing_with_parent` error fires at ERROR level when a
+re-simulation carries nothing over, because the symptom of this bug is a
+perfect score and nobody investigates a perfect score.
+
+### 2. The asset drafter fabricated evidence
+
+Asked to answer *"no proof synthetic feedback predicts real behavior"*, the
+drafter **invented the proof** — "in our 14-case internal dataset, the
+rank-order of objections matched real-user feedback in 11 cases (Spearman's
+ρ = 0.74)" — and carried it into three assets. No such dataset exists; the
+uploaded material lists the absence of validation data as a *gap*.
+
+This is Phase 1's bug #5 one level over. The report was stopped from writing its
+own numbers by making the measured object impossible to route around. The asset
+drafter has no measured object to route to — it writes prose about the founder's
+own product — so the equivalent protection is refusing to store the claim.
+
+**Fix.** An explicit prompt prohibition, plus `_evidence_claims`, which drops any
+asset pairing a number with evidential language when that number is not in the
+uploaded material. Dropped rather than flagged: this is copy a founder may
+publish verbatim as their own claim, and unlike a competitor name there is no
+partial version worth keeping — the asset's whole argument rests on the invented
+figure.
+
+The detector is deliberately narrow, and the prompt rule is the first line. A
+price the team sets passes; a correlation coefficient does not.
+
+### 3. Agent generation truncated again — bug #3, third occurrence
+
+`_context_block` made the generation prompt richer, the model matched it with a
+longer answer, and one profile in 96 ran past `max_tokens=900` into a topic-less
+stub. Mean output is 376 tokens, so this is tail variance — and **the tail gets
+fatter as the ICP gets richer**, meaning the failure rate rises exactly as
+synthesis gets better.
+
+Raised to 1,400. The Phase 1 guard test pinned the literal `900`, so it failed on
+the *fix* rather than on the regression; it now asserts a floor.
+
+### 4. Canonicalization ran at exactly its ceiling
+
+`completion_tokens` came back as exactly `CLUSTER_MAX_TOKENS`. It survived only
+because the JSON closed before the cut and `_extract_json` discards trailing
+prose. The adversarial cohort is what pushed it: **728 distinct phrasings**
+against Phase 1's 601 at a comparable event count, because incumbent-aligned
+agents raise objections buyers do not.
+
+Raised to 16,000 — and the re-canonicalization in fix #1 then used **13,955**,
+which the old ceiling would have truncated outright. A near-ceiling warning now
+fires at 90%.
+
+### What the run confirmed
+
+- **Adversarial allocation: 30 of 96 = 31.2%** against 30% configured — the
+  weight-rebalancing risk in HANDOFF §1b holds at the standard shape.
+- **96 of 96 distinct usernames**, 480 events, **0 orphaned** — the Phase 1
+  identity fix holds on a compiled ICP pack, a new agent-creation path.
+- Measurement 480/480, 100% coverage, zero batch failures, both runs.
+- **The cohort split did its job**: headline −0.146, buyers −0.049 (CI −0.155 to
+  **+0.057**, spanning zero), adversarial −0.359 (CI −0.425 to −0.293). The
+  intervals do not overlap. The entire negative headline is the cohort the run
+  was configured to include, and without `by_cohort` a founder reads it as a
+  market verdict.
+- The grounding guardrail held live: two adversarial archetypes named Remesh
+  **with** the competitor document cited, two argued unnamed. The drafted
+  comparison page cited only what the material says and concedes "most teams
+  should not replace real-audience research with Saibyl".
+- Pre-positioning reaches agents: **20–28% of events per round** reference the
+  published material, confirming `topic_block` delivery.
+- `report_progress_publish_failed` did not kill the report with Redis absent —
+  Phase 1's bug #4 fix working.
+
+### The measured delta, and why its magnitude is not trustworthy
+
+Three of six assets moved their objection beyond the bands; three did not, one of
+those in the wrong direction. That mixed result is the loop behaving correctly.
+
+**The headline swing of −0.146 → +0.457 is contaminated**, because three of the
+six assets carried the fabricated ρ = 0.74 claim, so the swarm was partly
+reacting to invented proof. The mechanism is validated; the effect size is not.
+A re-run under the fabricated-evidence guard would drop those assets. Do not
+cite this delta as a calibration figure.
+
+---
+
 ## Known issues carried into Phase 2
 
 Recorded here so they are not rediscovered. Items 1, 2 and 7 from the Phase 1

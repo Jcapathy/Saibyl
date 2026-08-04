@@ -6,8 +6,10 @@ Read this first in a new session. It is written to be read cold, with no memory
 of previous sessions. It is the current state, the standing rules, what Phase 1
 and Phase 2 built and why, and what has to happen next.
 
-**The single most important thing on this page:** Phase 2 is written and passes
-every static check, and **has never executed once**. §1b says what that means.
+**The single most important thing on this page:** Phase 2's first live run found
+a defect whose symptom was a *perfect score* — every counter-asset reported as
+effective, from a comparison that had matched nothing. §1b. Disbelieve perfect
+scores.
 
 **Read in this order:**
 
@@ -37,10 +39,11 @@ them rather than repeating them.
 | `master` | Untouched, still deployed to Render. **Do not merge without approval.** |
 | Phase 0 | Complete — dead-code purge, route-collision fix, schema drift, cost model, usage ledger |
 | Phase 1 | **Complete and verified end to end** |
-| Phase 2 | **Built and statically verified. NOT run live.** See §1b. |
-| Verification | ruff clean · pytest 180 passed · `tsc --noEmit` clean · `eslint --quiet` clean · `vite build` OK · app boots, 116 routes, no duplicate registrations |
-| Live runs | Two, both Phase 1: `05f1d879` (25 agents) and `03de92ef` (standard, 100/5/2/1). **No Founder-lens run has ever executed.** |
-| Cost model | Measured for Phase 1's five stages. **`icp_synthesis` and `inoculation_draft` are estimated** and must be re-derived from `llm_usage`. |
+| Phase 2 | Built and **verified end to end live**. Four defects found and fixed — see §1b. |
+| Verification | ruff clean · pytest 187 passed · `tsc --noEmit` clean · `eslint --quiet` clean · `vite build` OK · app boots, 116 routes, no duplicate registrations |
+| Live runs | Four. Phase 1: `05f1d879`, `03de92ef`. Phase 2: `f980fe0d` (Founder lens, 30% adversarial) and `fa28d899` (its inoculation re-simulation). |
+| Migrations | 017, 018, **020, 021** applied. **019 still not applied — it waits for the merge.** |
+| Cost model | Recalibrated 2026-08-03. **Standard run COGS $2.26 → $2.71**; tier runs 8/26/88 → 7/22/73. `PRICING_GUIDE` tables are stale — §7. |
 | Working tree | `.~lock.*` and `test_flow.py` are pre-existing untracked. Ignore them. |
 
 Commit list: `git log --oneline master..v2` — deliberately not enumerated here,
@@ -137,44 +140,57 @@ agent counts**, including the two Phase 1 live runs.
 
 ---
 
-## 1b. ⚠️ Phase 2 is built but has never run
+## 1b. Phase 2 has run live once, and it found four defects
 
-Everything below in §9 describes code that passes every static check and has
-**not executed once against a real model or a real database**. Phase 1's own
-lesson is the reason that distinction is in a banner: **ten defects, four of them
-only at the reference scale, none visible to static verification.** A 25-agent
-run is not a proxy for a real one, and a green test suite is not a proxy for
-either.
+Migrations **020** and **021** are applied. The full Founder-lens loop ran end to
+end on 2026-08-03: parent `f980fe0d`, child `fa28d899`, 96 agents / 5 rounds /
+2 platforms / 30% adversarial, ~$4.6 of measured COGS across both runs.
 
-**What has to happen before Phase 2 can be called complete:**
+**All four defects were invisible to a green test suite.** That is now two phases
+running. Detail in `ARCHITECTURE_V2.md`; the one that matters most:
 
-1. Apply migrations **020** and **021** to production. Both are additive and
-   safe under `master`; nothing in Phase 2 runs without them.
-2. Synthesize an ICP against a project with real uploaded material, and read
-   the result. §3 of DECISIONS says the fallback is form-first if synthesis is
-   unreliable — this is the test that decides it.
-3. Run a Founder-lens simulation at the standard shape with an adversarial share
-   above zero. Check the artifact's `by_cohort` and `adversarial` blocks, and
-   check the report actually carries the stage's questions and its limits.
-4. Draft assets, re-simulate, and read the delta. **Specifically check that the
-   loop is capable of returning `unresolved` and `ineffective`** — a first run
-   where every asset "works" is more likely a broken verdict than a good draft.
-5. Re-derive `ICP_SYNTHESIS` and `INOCULATION_DRAFT` from `llm_usage` with the
-   query in §7. They are the only estimated profiles in the cost model.
+> **Objection keys did not survive across runs.** Parent and child shared **zero**
+> canonical objection keys, so every objection read as `died` or `emerged` and
+> **all six assets scored effective**. The loop reported total success having
+> matched nothing. Fixed by clustering the child against the parent's objections;
+> keys carried 0 → 27 of 46 and `assets_effective` 6/6 → 3/6.
 
-**Two specific things to distrust in the first live run**, because they are
-where this build is most likely to be wrong:
+**The lesson worth carrying forward:** this bug's symptom was a perfect score.
+Nobody investigates a perfect score, which is why `canonicalize_objections` now
+logs at ERROR when a re-simulation carries no keys over. **If a future run
+reports that every asset worked, disbelieve it before celebrating it.**
 
-- **The adversarial cohort's realised share.** Allocation is by archetype weight
-  and rounds to whole agents, so a 30% request on a small swarm may land well
-  off. The artifact reports configured and realised separately — check they are
-  close at the standard shape, and check `run_prepare_agents` is not silently
-  allocating zero adversarial agents.
-- **`_converted_agents` matching.** It pairs agents across the two runs on
-  username, which is sound only because `create_resimulation` copies rows
-  verbatim. If the copy ever changes, that list silently becomes wrong rather
-  than empty. It is illustrative only — every number in a delta comes from
-  `canonical_objections` — but it will be read as evidence.
+The other three: the drafter fabricated a validation statistic and put it in
+publishable copy; agent generation truncated again (bug #3, third occurrence);
+canonicalization ran at exactly its token ceiling and survived on luck.
+
+### Still outstanding
+
+1. **The measured delta's magnitude is contaminated.** Three of the six tested
+   assets carried the fabricated ρ = 0.74 claim, so the −0.146 → +0.457 headline
+   swing is partly a measurement of how a market reacts to invented proof. The
+   mechanism is validated; **do not cite the effect size**. A re-run under the
+   new guard would drop those assets — roughly $2.50 of COGS.
+2. **The pricing tables are stale.** Standard-run COGS moved $2.26 → $2.71 and
+   tier run counts fell to 7 / 22 / 73. `PRICING_GUIDE.md` §2.3 and any
+   enterprise quote derived from $2.26 understate cost by ~20%. Deliberately not
+   regenerated — see §7.
+3. **`ICP_SYNTHESIS` and `INOCULATION_DRAFT` are still estimated.** One live pass
+   each is not a calibration. Re-derive with the §7 query after the next runs.
+4. **`AGENT_ACTION` needs a per-adapter profile.** One number cannot serve both a
+   compact feed (Hacker News, 312 input tokens) and a body-carrying one (750).
+
+### Two things to distrust in the next run
+
+- **`_converted_agents` matching.** It pairs agents across runs on username,
+  sound only because `create_resimulation` copies rows verbatim. If the copy
+  changes, the list silently becomes wrong rather than empty. Illustrative only —
+  every number in a delta comes from `canonical_objections` — but it reads as
+  evidence.
+- **Objection key continuity, again.** 27 of 46 carried over, which means 19 did
+  not. Some of those are genuinely absent from the child; some may be the same
+  objection the model declined to match. The `keys_carried_over` field in the
+  canonicalization log is the number to watch.
 
 ---
 
@@ -422,12 +438,27 @@ Units differ per stage: `agent_action` and `agent_generation` are per call,
 
 ### Enterprise quoting, as of now
 
-**Quote the standard-run table** (`PRICING_GUIDE.md` §2.3, $2.26/run COGS) for
-every contract starting before Phase 3, and write the variant entitlement in as a
-dated addition using the clause in §2.6a. The blended table (§2.3b) assumes 45%
-multi-variant runs and the engine runs one arena — quoting it today over-charges
-against what a customer can execute. Reasoning and rejected alternatives:
-DECISIONS §15d. **The sample contract language needs counsel review before use.**
+**Quote the standard-run table** (`PRICING_GUIDE.md` §2.3) for every contract
+starting before Phase 3, and write the variant entitlement in as a dated addition
+using the clause in §2.6a. The blended table (§2.3b) assumes 45% multi-variant
+runs and the engine runs one arena — quoting it today over-charges against what a
+customer can execute. Reasoning and rejected alternatives: DECISIONS §15d. **The
+sample contract language needs counsel review before use.**
+
+> ⚠️ **The §2.3 table's cost base is stale.** It is built on $2.26/run COGS. The
+> 2026-08-03 recalibration moved that to **$2.71** after finding the report was
+> quoted for 4 sections and writes 6. Tier run counts fall from 8/26/88 to
+> **7/22/73**. Any quote issued off the current table understates cost by ~20%.
+>
+> The table is deliberately **not** regenerated. DECISIONS §15c set the
+> precedent of passing a corrected cost base straight through to price — but
+> that was when costs *fell* and run counts *rose*. The same question arriving in
+> the opposite direction reduces advertised runs on tiers already sold, and that
+> is a commercial decision, not a code one. Options are (a) hold price and
+> publish the lower run counts, (b) hold run counts and absorb the margin, or
+> (c) hold both and re-examine whether `AGENT_ACTION`'s cross-platform ceiling
+> is costing more than it protects. **Decide before the next enterprise quote
+> goes out.**
 
 ---
 

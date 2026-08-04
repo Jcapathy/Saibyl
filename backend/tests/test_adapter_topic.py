@@ -7,6 +7,7 @@ output is a measurement.
 from __future__ import annotations
 
 import inspect
+import re
 
 import pytest
 
@@ -110,17 +111,28 @@ def test_every_adapter_passes_the_topic_into_its_prompt(adapters):
 
 
 def test_agent_generation_has_room_for_a_full_profile():
-    """max_tokens=400 truncated 20 of 25 profiles mid-JSON on the fast model.
+    """A truncated profile becomes a stub agent that knows nothing about the topic.
 
-    A truncated profile fails json.loads and falls back to a stub that knows
-    nothing about the topic — which is what turned the missing-topic bug from a
-    quality problem into a zero-event run.
+    `max_tokens=400` truncated 20 of 25 profiles mid-JSON, which is what turned
+    the missing-topic bug from a quality problem into a zero-event run. Raising
+    it to 900 fixed that — and then the Founder lens added an ICP context block
+    to the same prompt, the model matched the richer prompt with a longer answer,
+    and profiles started truncating again on the first live run.
+
+    So this asserts a **floor**, not a literal. Pinning the exact number made the
+    test fail on the fix rather than on the regression, which is backwards: what
+    matters is that there is headroom above the ~376-token mean, not that the
+    ceiling is any particular value.
     """
     from app.workers import simulation_tasks
 
     source = inspect.getsource(simulation_tasks.run_prepare_agents)
-    assert "max_tokens=400" not in source
-    assert "max_tokens=900" in source
+    match = re.search(r"max_tokens=(\d+)", source)
+    assert match, "agent generation no longer sets max_tokens explicitly"
+    assert int(match.group(1)) >= 1400, (
+        f"agent generation max_tokens is {match.group(1)}; profiles truncate "
+        "below ~1400 once an ICP context block is in the prompt"
+    )
 
 
 def test_agent_usernames_are_deduped_before_insert():

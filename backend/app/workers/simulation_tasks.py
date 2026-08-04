@@ -222,7 +222,17 @@ Return a JSON object:
                     # fails json.loads and falls through to the stub profile
                     # below. A stub agent has no knowledge of the topic, so the
                     # cost of being stingy here is a whole run of bland agents.
-                    max_tokens=900,
+                    #
+                    # 900 then failed again on the first live Founder-lens run:
+                    # `_context_block` adds up to eight lines of ICP grounding,
+                    # the model matches a richer prompt with a longer answer,
+                    # and one profile in 96 ran past the ceiling mid-string.
+                    # Mean output is only ~376 tokens, so this is variance in
+                    # the tail rather than a shifted average — and the tail gets
+                    # fatter as the ICP gets *richer*, which means the failure
+                    # rate rises exactly as synthesis gets better. Headroom is
+                    # cheap here; a stub agent is not.
+                    max_tokens=1400,
                 )
                 profile_data = json.loads(_extract_json(raw))
 

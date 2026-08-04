@@ -50,22 +50,61 @@ logger = structlog.get_logger()
 # clusters they would join.
 MAX_DISTINCT_STRINGS = 800
 
-# Output budget for the clustering call. Sized for the worst realistic case:
-# ~300 phrasings collapsing into ~60 groups, each with a label, a summary, and
-# a list of integer indices. Members are indices rather than echoed strings
-# precisely so this budget scales with group count, not input count.
-CLUSTER_MAX_TOKENS = 8000
+# Output budget for the clustering call. Members are indices rather than echoed
+# strings precisely so this budget scales with group count, not input count.
+#
+# Was 8,000, sized for "~300 phrasings collapsing into ~60 groups". The first
+# live Founder-lens run produced **728** distinct phrasings and consumed exactly
+# 8,000 output tokens. It survived only because the JSON object closed before
+# the cut and `_extract_json` discards the truncated prose after it — one more
+# group and `json.loads` raises and the caller falls back to one canonical
+# objection per phrasing, which is the failure this function's docstring
+# describes as quiet and total.
+#
+# The adversarial cohort is what pushed it there: incumbent-aligned agents raise
+# objections buyers do not, so a Founder-lens run generates materially more
+# distinct phrasings than the Phase 1 standard run's 601 at a comparable event
+# count. Doubling the ceiling buys room for that; **batched clustering remains
+# the real fix** for very large runs — see MAX_DISTINCT_STRINGS.
+CLUSTER_MAX_TOKENS = 16000
+
+# Fraction of the ceiling above which the clustering output is treated as having
+# very likely been cut off. Measured as characters rather than tokens because
+# `llm_complete` returns text and not usage — approximate, and deliberately so:
+# the point is to make a near-miss loud, not to measure it precisely.
+_CEILING_WARN_RATIO = 0.9
+_CHARS_PER_TOKEN = 3.6
 
 # Verbatim quotes kept per objection. Enough to show the range of framings
 # without turning the drill-down into a transcript.
 MAX_QUOTES = 5
+
+_PRIOR_BLOCK = """
+=== OBJECTIONS FROM THE PREVIOUS RUN OF THIS AUDIENCE ===
+The same swarm was simulated before, and produced these canonical objections.
+This run is being compared against that one, objection by objection.
+
+{priors}
+
+**If a group you form is the same objection as one above, return that
+objection's exact `key`.** Same objection means answering one would answer the
+other — the wording will differ, because these are different agents saying it a
+second time. This is the whole basis of the comparison: an objection that is
+present in both runs must carry the same key in both, or it will read as one
+objection dying and an unrelated one appearing.
+
+Only omit `key` when a group is genuinely an objection that does not appear
+above. Do not force a match: a new objection with a new key is a real and useful
+finding.
+=== END PREVIOUS RUN ===
+"""
 
 _PROMPT = """These are objections raised about: {goal}
 
 Each line is one distinct phrasing, numbered, with how many times it was raised:
 
 {strings}
-
+{prior_block}
 Group them into canonical objections. Two phrasings belong to the same group
 only if answering one would answer the other. "Too expensive" and "no annual
 discount" are different objections even though both concern price. Conversely
@@ -84,7 +123,8 @@ Every number from 0 to {last_index} must appear in exactly one group. Do not
 invent objections that no phrasing supports. Do not merge groups to reach a
 target count.
 
-Return JSON: {{"groups": [{{"label": "...", "summary": "...", "members": [0, 1]}}]}}
+Return JSON: {{"groups": [{{"label": "...", "summary": "...", "members": [0, 1],
+"key": "reuse-a-previous-key-or-omit"}}]}}
 No commentary."""
 
 
@@ -103,7 +143,9 @@ def _collect_raw(events: list[MeasuredEvent]) -> dict[str, list[MeasuredEvent]]:
 
 
 async def _cluster(
-    goal: str, raw_index: dict[str, list[MeasuredEvent]]
+    goal: str,
+    raw_index: dict[str, list[MeasuredEvent]],
+    priors: list[dict[str, str]] | None = None,
 ) -> list[dict[str, Any]]:
     """Group distinct phrasings. Returns [] on failure.
 
@@ -135,6 +177,13 @@ async def _cluster(
         f'[{i}] "{raw}" ({len(evts)}x)' for i, (raw, evts) in enumerate(shortlist)
     )
 
+    prior_block = ""
+    if priors:
+        prior_lines = "\n".join(
+            f'  {p["key"]} — "{p["label"]}"' for p in priors
+        )
+        prior_block = _PRIOR_BLOCK.format(priors=prior_lines)
+
     try:
         response = await llm_complete(
             messages=[
@@ -144,12 +193,31 @@ async def _cluster(
                         goal=goal or "(not specified)",
                         strings=lines,
                         last_index=len(shortlist) - 1,
+                        prior_block=prior_block,
                     ),
                 }
             ],
             temperature=0.0,
             max_tokens=CLUSTER_MAX_TOKENS,
         )
+        # A stage that quietly survives at its own ceiling is a stage that fails
+        # on the next run without anyone changing a line of code. That is
+        # precisely what happened here: the first live Founder-lens run consumed
+        # exactly the budget, parsed by luck, and reported nothing unusual.
+        approx_tokens = len(response) / _CHARS_PER_TOKEN
+        if approx_tokens >= CLUSTER_MAX_TOKENS * _CEILING_WARN_RATIO:
+            logger.warning(
+                "objection_clustering_near_ceiling",
+                approx_output_tokens=int(approx_tokens),
+                ceiling=CLUSTER_MAX_TOKENS,
+                distinct=len(shortlist),
+                detail=(
+                    "clustering output is within 10% of max_tokens. The next "
+                    "larger run will truncate and fall back to one objection "
+                    "per phrasing. Raise CLUSTER_MAX_TOKENS or batch the "
+                    "clustering."
+                ),
+            )
         parsed = json.loads(_extract_json(response))
     except Exception as exc:
         logger.warning(
@@ -327,19 +395,60 @@ def _build_summary(
     )
 
 
-async def canonicalize_objections(run: RunData) -> list[ObjectionSummary]:
-    """Cluster a run's raw objections and rank them by load-bearing weight."""
+def prior_objections(simulation_id: str | None) -> list[dict[str, str]]:
+    """The parent run's canonical objections, as (key, label) pairs.
+
+    Empty for an ordinary run. Passed into clustering so a re-simulation can
+    reuse the parent's keys — see `canonicalize_objections`.
+    """
+    if not simulation_id:
+        return []
+    try:
+        rows = (
+            get_supabase_admin()
+            .table("canonical_objections")
+            .select("objection_key, label")
+            .eq("simulation_id", simulation_id)
+            .order("load_bearing_score", desc=True)
+            .execute()
+        ).data or []
+    except Exception:
+        logger.exception("prior_objections_lookup_failed", simulation_id=simulation_id)
+        return []
+    return [{"key": r["objection_key"], "label": r["label"]} for r in rows]
+
+
+async def canonicalize_objections(
+    run: RunData, priors: list[dict[str, str]] | None = None
+) -> list[ObjectionSummary]:
+    """Cluster a run's raw objections and rank them by load-bearing weight.
+
+    `priors` carries the parent run's canonical objections when this run is an
+    inoculation re-simulation. **Without them the whole loop is meaningless**,
+    and it fails in the most flattering possible direction.
+
+    Clustering labels are generated per run. The first live loop produced 46
+    canonical objections in the parent and 39 in the child with **zero keys in
+    common**, because the same objection was named differently the second time.
+    Every parent objection therefore read as `died`, every child objection as
+    `emerged`, and all six tested assets scored as effective — a report of total
+    success from a comparison that had matched nothing. Migration 021 asserts
+    the key is "stable and deterministic from the label"; the key is, but the
+    label is not, and that distinction is the entire defect.
+    """
     raw_index = _collect_raw(run.events)
     if not raw_index:
         logger.info("no_objections_raised", simulation_id=run.simulation_id)
         return []
+
+    prior_keys = {p["key"] for p in (priors or [])}
 
     with usage_context(
         "objection_canonicalization",
         simulation_id=run.simulation_id,
         organization_id=run.organization_id,
     ):
-        groups = await _cluster(run.prediction_goal, raw_index)
+        groups = await _cluster(run.prediction_goal, raw_index, priors)
 
     if not groups:
         groups = _fallback_groups(raw_index)
@@ -385,11 +494,26 @@ async def canonicalize_objections(run: RunData) -> list[ObjectionSummary]:
         # objection is one occurrence, not two.
         unique: dict[str, MeasuredEvent] = {e.id: e for e in events}
 
-        key = _slugify(label)
-        suffix = 2
-        while key in seen_keys:
-            key = f"{_slugify(label)}-{suffix}"
-            suffix += 1
+        # A key carried over from the previous run, when this objection is the
+        # same one said again. Everything the inoculation loop reports depends
+        # on this: the two runs' objections are lined up by key, so an objection
+        # present in both must carry one key across both or it reads as one
+        # dying and an unrelated one appearing.
+        reused = str(group.get("key") or "").strip()
+        if reused and reused in prior_keys and reused not in seen_keys:
+            key = reused
+        else:
+            if reused and reused not in prior_keys:
+                # The model invented a key rather than reusing one. Slugging the
+                # label instead keeps key derivation in one place.
+                logger.info(
+                    "objection_key_not_from_priors", proposed=reused[:60], label=label[:60]
+                )
+            key = _slugify(label)
+            suffix = 2
+            while key in seen_keys:
+                key = f"{_slugify(label)}-{suffix}"
+                suffix += 1
         seen_keys.add(key)
 
         summaries.append(
@@ -405,12 +529,34 @@ async def canonicalize_objections(run: RunData) -> list[ObjectionSummary]:
         )
 
     summaries.sort(key=lambda o: o.load_bearing_score, reverse=True)
+
+    carried = len({o.key for o in summaries} & prior_keys)
+    if priors and not carried:
+        # The comparison has nothing to compare. Every prior objection will read
+        # as `died` and every new one as `emerged`, and every tested asset will
+        # score effective — a report of total success from a matched set of
+        # size zero. Loud, because the output looks like the best possible
+        # result rather than like a failure.
+        logger.error(
+            "objection_keys_share_nothing_with_parent",
+            simulation_id=run.simulation_id,
+            priors=len(priors),
+            canonical=len(summaries),
+            detail=(
+                "no canonical objection reused a key from the parent run. The "
+                "before/after comparison will report every objection as died or "
+                "emerged and every asset as effective. Treat the delta as invalid."
+            ),
+        )
+
     logger.info(
         "objections_canonicalized",
         simulation_id=run.simulation_id,
         distinct_raw=len(raw_index),
         canonical=len(summaries),
         unassigned=len(set(raw_index) - claimed),
+        priors_offered=len(prior_keys),
+        keys_carried_over=carried,
     )
     return summaries
 
