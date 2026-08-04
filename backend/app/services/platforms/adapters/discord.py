@@ -87,6 +87,9 @@ class DiscordAdapter(BasePlatformAdapter):
         return p
 
     async def comment(self, agent_username: str, post_id: str, content: str) -> Comment:
+        # V1 defect: the model echoes the id in the brackets the feed showed
+        # it, so an un-normalised post_id never matches p.id. See post_ref.
+        post_id = self.post_ref(post_id)
         c = Comment(
             id=uuid.uuid4().hex[:12],
             post_id=post_id,
@@ -99,6 +102,9 @@ class DiscordAdapter(BasePlatformAdapter):
         return c
 
     async def react(self, agent_username: str, post_id: str, reaction: ReactionType) -> None:
+        # V1 defect: the model echoes the id in the brackets the feed showed
+        # it, so an un-normalised post_id never matches p.id. See post_ref.
+        post_id = self.post_ref(post_id)
         self._reactions.setdefault(post_id, {})[agent_username] = reaction.value
 
     def get_state_snapshot(self) -> dict:

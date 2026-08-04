@@ -229,44 +229,83 @@ def test_cascade_is_branching_and_is_measured_from_the_graph():
 
 # ── The two derived flags ────────────────────────────────
 
-def test_viral_but_off_message_needs_both_halves():
-    """High spread plus a takeaway that shares no vocabulary with the copy."""
-    events = [
+_THREE = [
+    Arena(variant_key="a", label="Bold", content="Ship faster with zero setup"),
+    Arena(variant_key="b", label="Safe", content="Reliable tooling for teams"),
+    Arena(variant_key="c", label="Cheap", content="Affordable pricing for startups"),
+]
+
+
+def _spreading(idx_base: int, key: str, takeaway: str, n: int = 12):
+    """Agents that spread the message, across cohorts and platforms."""
+    return [
         _event(
-            i, "a", f"a{i}",
+            idx_base + i, key, f"{key}{i}",
             intent="share",
             archetype=("Buyer" if i % 2 else "Skeptic"),
             platform=("reddit" if i % 2 else "linkedin"),
-            takeaway="completely unrelated aquarium maintenance advice",
+            takeaway=takeaway,
         )
-        for i in range(20)
+        for i in range(n)
     ]
-    events += [_event(100 + i, "b", f"b{i}") for i in range(20)]
 
+
+def test_off_message_is_relative_to_the_other_variants():
+    """One variant understood far worse than its peers is the actionable case.
+
+    The absolute threshold this replaced (0.25) fired on two of three variants
+    on the first live run, where the measured accuracies were 0.07, 0.07 and
+    0.14 — a flag that fires on almost everything is noise wearing the clothes
+    of a finding. Lexical overlap between a twelve-word paraphrase and a
+    marketing sentence is inherently low; there is no absolute level at which it
+    means off-message.
+    """
+    events = (
+        _spreading(0, "a", "completely unrelated aquarium maintenance advice")
+        + _spreading(100, "b", "reliable tooling built for teams")
+        + _spreading(200, "c", "affordable pricing aimed at startups")
+    )
+    board = build_scoreboard(
+        _run(events, _THREE, archetypes=("Buyer", "Skeptic"),
+             platforms=("reddit", "linkedin"))
+    )
+    by_key = {v.variant_key: v for v in board.variants}
+
+    assert by_key["a"].viral_but_off_message
+    assert not by_key["b"].viral_but_off_message
+    assert not by_key["c"].viral_but_off_message
+
+
+def test_nothing_is_flagged_when_the_variants_sit_together():
+    """The first live run's actual shape: all three similar, none separable.
+
+    Silence here is the honest reading of "this metric did not separate them".
+    """
+    events = (
+        _spreading(0, "a", "ship faster with zero setup")
+        + _spreading(100, "b", "reliable tooling built for teams")
+        + _spreading(200, "c", "affordable pricing aimed at startups")
+    )
+    board = build_scoreboard(
+        _run(events, _THREE, archetypes=("Buyer", "Skeptic"),
+             platforms=("reddit", "linkedin"))
+    )
+
+    assert not any(v.viral_but_off_message for v in board.variants)
+
+
+def test_two_variants_are_never_flagged_off_message():
+    """With two arenas, 'worse than the other' is a coin-flip dressed as a finding."""
+    events = (
+        _spreading(0, "a", "completely unrelated aquarium maintenance advice")
+        + _spreading(100, "b", "reliable tooling built for teams")
+    )
     board = build_scoreboard(
         _run(events, _TWO, archetypes=("Buyer", "Skeptic"),
              platforms=("reddit", "linkedin"))
     )
-    arena = next(v for v in board.variants if v.variant_key == "a")
 
-    assert arena.takeaway_accuracy is not None
-    assert arena.takeaway_accuracy < board.off_message_threshold
-    assert arena.viral_but_off_message
-
-
-def test_an_accurate_takeaway_is_not_flagged_off_message():
-    events = [
-        _event(i, "a", f"a{i}", intent="share",
-               takeaway="ship faster with zero setup")
-        for i in range(10)
-    ]
-    events += [_event(100 + i, "b", f"b{i}") for i in range(10)]
-
-    board = build_scoreboard(_run(events, _TWO))
-    arena = next(v for v in board.variants if v.variant_key == "a")
-
-    assert arena.takeaway_accuracy > board.off_message_threshold
-    assert not arena.viral_but_off_message
+    assert not any(v.viral_but_off_message for v in board.variants)
 
 
 def test_thresholds_are_published_in_the_artifact():

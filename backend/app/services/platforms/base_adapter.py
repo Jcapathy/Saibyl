@@ -161,6 +161,30 @@ class BasePlatformAdapter(ABC):
         """
         return agent.get("agent_id") or agent.get("username", "")
 
+    @staticmethod
+    def post_ref(raw: object) -> str:
+        """A post id an agent typed back, stripped of what it wrapped around it.
+
+        **Every adapter renders its feed as `[<id>] @author: text` and then asks
+        for `COMMENT <post_id>: …`. The model copies the id along with the
+        brackets it was shown in — inconsistently.** So `post_id` arrives as
+        `[a1b2c3]` about four times in five and as `a1b2c3` the rest, and every
+        `if p.id == post_id` in this package silently fails on the first form.
+
+        The consequences were live for the whole of V1: reactions never found
+        their post, so `upvotes`/`likes` never incremented, so `_hot_score`
+        ranked every feed by recency alone. Nothing errored. The feed simply was
+        not the feed the design describes, on every run ever made.
+
+        Found on 2026-08-04 by the first run that compared a reference against a
+        stored id — 193 of 193 replies failed to resolve — which is the general
+        lesson: a value nothing checks is a value nothing is enforcing.
+
+        Use this at the point an id arrives from a model, before comparing it to
+        anything.
+        """
+        return str(raw or "").strip("[]()<>{}\"'`,.:;! \t\n")
+
     @abstractmethod
     async def initialize(self, config: dict, agents: list) -> None:
         """Set up platform state, assign agents."""

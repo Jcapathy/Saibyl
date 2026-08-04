@@ -88,6 +88,9 @@ class NewsCommentsAdapter(BasePlatformAdapter):
         return p
 
     async def comment(self, agent_username: str, post_id: str, content: str) -> Comment:
+        # V1 defect: the model echoes the id in the brackets the feed showed
+        # it, so an un-normalised post_id never matches p.id. See post_ref.
+        post_id = self.post_ref(post_id)
         # Determine nesting depth
         parent_comment_id = None
         # If post_id refers to a comment, nest under it (up to limit)
@@ -119,6 +122,9 @@ class NewsCommentsAdapter(BasePlatformAdapter):
         return c
 
     async def react(self, agent_username: str, post_id: str, reaction: ReactionType) -> None:
+        # V1 defect: the model echoes the id in the brackets the feed showed
+        # it, so an un-normalised post_id never matches p.id. See post_ref.
+        post_id = self.post_ref(post_id)
         self._reactions.setdefault(post_id, {})[agent_username] = reaction
         for p in self._posts:
             if p.id == post_id:

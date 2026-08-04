@@ -270,17 +270,26 @@ def verify(sim_id: str) -> int:
             )
 
     # 6. Cost reconciliation — the margin gate.
-    cost = (
-        admin.rpc("simulation_llm_cost", {"sim_id": sim_id}).execute()
-    ).data
+    # The parameter is `sim_uuid`, not `sim_id`. Migration 017 named it that and
+    # nothing else calls it, so the mismatch surfaced only here.
+    # Summed here rather than through `simulation_llm_cost`, whose shape through
+    # PostgREST is per-stage rows and whose parameter is `sim_uuid` — two
+    # surprises in one call, in a script whose whole job is to be believed.
+    ledger = (
+        admin.table("llm_usage")
+        .select("cost_usd")
+        .eq("simulation_id", sim_id)
+        .execute()
+    ).data or []
+    cost = sum(float(r.get("cost_usd") or 0) for r in ledger)
     quoted = estimate_simulation_cost(
         AGENTS, ROUNDS, platforms=len(PLATFORMS), variants=len(VARIANTS)
     ).actual_cost_usd
-    print(f"\n  measured COGS         ${float(cost or 0):.3f}")
+    print(f"\n  measured COGS         ${cost:.3f}")
     print(f"  quoted                ${quoted:.3f}")
-    if cost and float(cost) > quoted:
+    if cost > quoted:
         failures.append(
-            f"measured ${float(cost):.3f} exceeds the quote ${quoted:.3f} — the "
+            f"measured ${cost:.3f} exceeds the quote ${quoted:.3f} — the "
             f"run was served below the margin it was priced at"
         )
 

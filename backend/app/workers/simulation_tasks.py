@@ -370,6 +370,25 @@ _EVENT_INSERT_CHUNK = 20
 # post its own ancestor and every cascade infinitely deep.
 _REPLY_EVENT_TYPES = ("comment", "react")
 
+# Decoration an agent wraps around a post id when it echoes one back.
+#
+# **Found by the first live multi-variant run: 193 of 193 replies failed to
+# link.** Every adapter renders its feed as `[<id>] @author: text` and asks for
+# `COMMENT <post_id>: …`, and the model copies the id *with the brackets it was
+# displayed in* — inconsistently, which is worse than always. A five-sample
+# check happened to return five bare ids and read as a clean bill of health; the
+# same adapter over twelve actions returned two bare and ten bracketed.
+#
+# Normalising here rather than in twelve adapters: this is the one place that
+# compares a reference against a registered id, so it is the one place the two
+# have to agree on a form.
+_REF_DECORATION = "[]()<>{}\"'`,.:;! \t\n"
+
+
+def _normalise_ref(ref: object) -> str:
+    """An adapter-side post reference, stripped of whatever the model wrapped it in."""
+    return str(ref).strip(_REF_DECORATION)
+
 
 def _write_round_events(
     admin,
@@ -420,21 +439,32 @@ def _write_round_events(
             continue
 
         for row, saved in zip(chunk, inserted):
-            ref = row.get("_ref")
+            ref = _normalise_ref(row.get("_ref") or "")
             if not ref:
                 continue
             arena = row["_arena"]
             if row["event_type"] not in _REPLY_EVENT_TYPES:
                 # A post: register the id it minted so later replies resolve.
-                post_event_ids[(arena[0], arena[1], str(ref))] = saved["id"]
+                post_event_ids[(arena[0], arena[1], ref)] = saved["id"]
                 continue
-            parent = post_event_ids.get((arena[0], arena[1], str(ref)))
+            parent = post_event_ids.get((arena[0], arena[1], ref))
             if parent:
                 links.setdefault(parent, []).append(saved["id"])
             else:
                 # A reply to something outside this arena's own posts — a
                 # seeded feed item, or a post from a round whose insert failed.
                 unresolved += 1
+
+    # Logged per round, not just aggregated at the end. The first live run
+    # reported `unresolved_parents=193` and no link count at all, so "the graph
+    # is empty" and "the graph is fine" produced almost the same log line.
+    logger.info(
+        "event_graph_round",
+        events=len(round_events),
+        parents_registered=len(post_event_ids),
+        links_made=sum(len(v) for v in links.values()),
+        unresolved=unresolved,
+    )
 
     for parent_id, child_ids in links.items():
         try:

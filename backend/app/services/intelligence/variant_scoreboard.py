@@ -317,10 +317,29 @@ def _words(text: str) -> list[str]:
     return [w for w in cleaned.split() if w not in _STOPWORDS]
 
 
-# Below this, a takeaway set is treated as having drifted off the message.
-_OFF_MESSAGE_BELOW = 0.25
-# Above this, a variant is spreading. Both thresholds are stated in the artifact
-# rather than hidden here, so a reader can disagree with them.
+# How far below the run's best takeaway accuracy a variant must sit before it is
+# called off-message.
+#
+# **Relative, not absolute — and that is a correction, not a preference.** This
+# was an absolute 0.25 until the first live multi-variant run measured the metric
+# at 0.07, 0.07 and 0.14 across three variants. An absolute cut of 0.25 fired on
+# two of three, and a flag that fires on almost everything is noise wearing the
+# clothes of a finding.
+#
+# The mistake was mine and it was a familiar one: 0.25 was a number I picked, not
+# a number I measured, sitting in a codebase whose whole discipline is that those
+# are different things. Lexical overlap between a twelve-word paraphrase and a
+# marketing sentence is *inherently* low; there is no absolute level at which it
+# means "off-message".
+#
+# What a marketer can act on is a variant that is understood **worse than its
+# alternatives** — a comparison the matched swarm makes valid, since all three
+# faced the same audience. So the flag now needs a real gap between variants, and
+# is silent when they sit together, which is the honest reading of "this metric
+# did not separate them".
+_OFF_MESSAGE_RELATIVE_GAP = 0.40
+# Above this, a variant is spreading. Stated in the artifact rather than hidden
+# here, so a reader can disagree with it.
 _VIRAL_ABOVE = 60.0
 # Objective-metric mean above which a variant is "converting" for the two
 # derived flags.
@@ -392,12 +411,9 @@ def build_scoreboard(run: RunData) -> VariantScoreboard | None:
                 agent_count=n_active,
                 event_count=len(events),
                 event_ids=[e.id for e in events],
-                viral_but_off_message=bool(
-                    virality.score is not None
-                    and virality.score >= _VIRAL_ABOVE
-                    and accuracy is not None
-                    and accuracy < _OFF_MESSAGE_BELOW
-                ),
+                # Set by `_flag_off_message` once every arena is scored — it is
+                # a statement about this variant relative to the others.
+                viral_but_off_message=False,
                 converts_but_wont_travel=bool(
                     objective_rate.mean >= _CONVERTING_ABOVE
                     and virality.score is not None
@@ -406,6 +422,12 @@ def build_scoreboard(run: RunData) -> VariantScoreboard | None:
                 by_archetype=by_archetype,
             )
         )
+
+    # Off-message is decided across the run, not per variant, so it cannot be
+    # computed in the loop above. The matched swarm is what makes the comparison
+    # legitimate: all variants faced the same audience, so "understood worse than
+    # its alternatives" is a real statement where "below 0.25" was not.
+    _flag_off_message(scores)
 
     ranked = sorted(scores, key=lambda s: s.objective_rate.mean, reverse=True)
     winner, verdict = _resolve_winner(ranked)
@@ -419,7 +441,7 @@ def build_scoreboard(run: RunData) -> VariantScoreboard | None:
         # Named in the artifact so a reader can disagree with the thresholds
         # rather than reverse-engineer them from the flags.
         viral_score_threshold=_VIRAL_ABOVE,
-        off_message_threshold=_OFF_MESSAGE_BELOW,
+        off_message_threshold=_OFF_MESSAGE_RELATIVE_GAP,
     )
 
     logger.info(
@@ -432,6 +454,34 @@ def build_scoreboard(run: RunData) -> VariantScoreboard | None:
         silent_arenas=[s.variant_key for s in ranked if s.event_count == 0],
     )
     return board
+
+
+def _flag_off_message(scores: list[VariantScore]) -> None:
+    """Mark variants that spread while being understood worse than their peers.
+
+    Silent when the variants' takeaway accuracies sit together, which is the
+    honest reading of "this metric did not separate them" — and, on the first
+    live run, the true one: 0.07, 0.07 and 0.14 are not three different levels
+    of comprehension, they are one crude measure with noise on it.
+
+    Requires at least three arenas. With two, "worse than the other" is a
+    coin-flip dressed as a finding.
+    """
+    measured = [s for s in scores if s.takeaway_accuracy is not None]
+    if len(measured) < 3:
+        return
+
+    best = max(s.takeaway_accuracy or 0.0 for s in measured)
+    if best <= 0.0:
+        return
+
+    for score in measured:
+        gap = (best - (score.takeaway_accuracy or 0.0)) / best
+        score.viral_but_off_message = bool(
+            score.virality.score is not None
+            and score.virality.score >= _VIRAL_ABOVE
+            and gap >= _OFF_MESSAGE_RELATIVE_GAP
+        )
 
 
 def _resolve_winner(ranked: list[VariantScore]) -> tuple[str | None, str]:

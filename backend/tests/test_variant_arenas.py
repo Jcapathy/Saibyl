@@ -178,6 +178,49 @@ def test_events_are_written_even_when_nothing_links():
     assert unresolved == 1
 
 
+def test_a_bracketed_reference_still_links():
+    """The defect the first live multi-variant run found: 193 of 193 replies lost.
+
+    Every adapter renders its feed as `[<id>] @author: text` and asks for
+    `COMMENT <post_id>: …`, and the model copies the id **with the brackets it
+    was shown in**. Inconsistently, which is worse than always — a five-sample
+    check returned five bare ids and read as healthy, while the same adapter
+    over twelve actions returned ten bracketed.
+    """
+    admin, seen = _Admin(), {}
+    _write_round_events(admin, [_event("post", ("reddit", "a"), "abc123")], seen)
+    _, unresolved = _write_round_events(
+        admin, [_event("comment", ("reddit", "a"), "[abc123]")], seen
+    )
+
+    assert unresolved == 0
+    assert admin.store["rows"][1]["target_event_id"] == "db-0"
+
+
+def test_reference_decoration_is_stripped_from_both_sides():
+    """A post whose own id arrives decorated must register under the bare form."""
+    admin, seen = _Admin(), {}
+    _write_round_events(admin, [_event("post", ("reddit", "a"), "(abc123)")], seen)
+    _, unresolved = _write_round_events(
+        admin, [_event("comment", ("reddit", "a"), "abc123.")], seen
+    )
+
+    assert unresolved == 0
+
+
+def test_normalising_does_not_collapse_distinct_ids():
+    """Stripping decoration must not make two different posts the same post."""
+    from app.workers.simulation_tasks import _normalise_ref
+
+    assert _normalise_ref("[abc123]") == "abc123"
+    assert _normalise_ref("abc123") == "abc123"
+    assert _normalise_ref("  abc123,") == "abc123"
+    assert _normalise_ref("[abc124]") != _normalise_ref("[abc123]")
+    # An id that is only decoration resolves to nothing rather than to a shared
+    # empty key that every stray reference would collide on.
+    assert _normalise_ref("[]") == ""
+
+
 def test_transient_keys_never_reach_the_database():
     admin, seen = _Admin(), {}
     _write_round_events(admin, [_event("post", ("reddit", "a"), "post_1")], seen)
