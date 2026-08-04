@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import api from '@/lib/api';
 import { PLATFORM_NAMES, TERMINAL_STATUSES, ACTIVE_STATUSES, IDLE_STATUSES } from '@/lib/constants';
 import StatusBadge from '@/components/StatusBadge';
+import VariantSetup from '@/components/marketing/VariantSetup';
 import { getErrorMessage } from '../lib/errors';
 import type { SimulationAgent } from '../lib/types';
 
@@ -291,6 +292,24 @@ export default function SimulationDetailPage() {
           </motion.div>
         ))}
       </div>
+
+      {/* Variants under test — only while the run can still be configured.
+          Once it starts they freeze, because the scoreboard's claim is that the
+          arenas differed only in their copy. */}
+      {isIdle && !running && (
+        <div className="glass rounded-2xl p-6 mb-6">
+          <p className="text-[15px] font-medium text-saibyl-platinum mb-1">
+            Test more than one message
+          </p>
+          <p className="text-[12px] text-saibyl-muted mb-4">
+            Add two or more variants and the same audience reacts to each in its
+            own isolated arena, so the differences are attributable to the copy
+            rather than to who happened to be in the room. Leave it empty for an
+            ordinary single-message run.
+          </p>
+          <VariantSetup simulationId={id!} />
+        </div>
+      )}
 
       {/* Primary Action */}
       <div className="glass rounded-2xl p-6 mb-6">

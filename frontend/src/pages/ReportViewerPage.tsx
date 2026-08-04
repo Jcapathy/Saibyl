@@ -20,6 +20,7 @@ import SentimentArc from '@/components/analysis/SentimentArc';
 import GroupBreakdown from '@/components/analysis/GroupBreakdown';
 import ObjectionMap from '@/components/analysis/ObjectionMap';
 import FlashpointList from '@/components/analysis/FlashpointList';
+import VariantScoreboardPanel from '@/components/analysis/VariantScoreboard';
 import EvidenceDrawer from '@/components/analysis/EvidenceDrawer';
 import Panel, { NoData } from '@/components/analysis/Panel';
 import InoculationWorkbench from '@/components/founder/InoculationWorkbench';
@@ -428,6 +429,23 @@ export default function ReportViewerPage() {
         {activeTab === 0 &&
           (analysis ? (
             <>
+              {/* On a multi-variant run the scoreboard comes first and the
+                  headline is demoted, because the headline aggregates every
+                  arena into one number — the average of several competing
+                  messages, describing none of them. Reversing this order would
+                  put a meaningless figure at the top of a matched-swarm test. */}
+              {analysis.scoreboard ? (
+                <>
+                  <VariantScoreboardPanel
+                    scoreboard={analysis.scoreboard}
+                    onDrillDown={drillDown}
+                  />
+                  <p className="text-[11px] text-saibyl-muted mb-3">
+                    The figures below pool every variant. On a matched-swarm test
+                    they describe the audience, not any one message.
+                  </p>
+                </>
+              ) : null}
               <HeadlineStats headline={analysis.headline} quality={analysis.quality} />
               {/* Above the quality notice, not below it. The headline mixes
                   both cohorts, so a reader who has just looked at a negative

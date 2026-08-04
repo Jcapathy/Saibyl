@@ -28,6 +28,7 @@ from app.api import (
     score,
     simulations,
     uploads,
+    variants,
     webhooks,
     ws,
 )
@@ -135,6 +136,7 @@ def create_app() -> FastAPI:
     app.include_router(personas.router, prefix="/api/persona-packs")
     app.include_router(icp.router, prefix="/api/icp")
     app.include_router(inoculation.router, prefix="/api/inoculation")
+    app.include_router(variants.router, prefix="/api/variants")
     app.include_router(platforms.router, prefix="/api/platforms")
     app.include_router(webhooks.router, prefix="/api/webhooks")
     app.include_router(billing.router, prefix="/api/billing")

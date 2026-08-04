@@ -226,7 +226,84 @@ RULES — these are disclosure obligations, not style preferences:
 """
         )
 
-    return "\n".join(blocks)
+    blocks.append(_scoreboard_block((analysis or {}).get("scoreboard")))
+    return "\n".join(b for b in blocks if b)
+
+
+def _scoreboard_block(scoreboard: dict | None) -> str:
+    """The variant comparison, as prompt text.
+
+    Empty for every single-arena run, which is every Founder- and Crisis-lens run
+    and everything made before Phase 3.
+
+    The rule this block exists to enforce is the one the scoreboard itself
+    encodes: **when the server declined to name a winner, the report must not
+    name one either.** A writer handed six ranked rows and no instruction will
+    describe the top one as the winner, because that is what a ranked list reads
+    like — and the whole point of computing intervals is that an ordering drawn
+    from overlapping bands is not a result. This is Phase 1's bug #5 in the shape
+    it would take on a Marketing run: not inventing a number, but inventing a
+    conclusion the numbers do not carry.
+    """
+    if not scoreboard:
+        return ""
+
+    variants = scoreboard.get("variants") or []
+    if not variants:
+        return ""
+
+    lines = []
+    for v in variants:
+        rate = v.get("objective_rate") or {}
+        virality = v.get("virality") or {}
+        score = virality.get("score")
+        flags = []
+        if v.get("viral_but_off_message"):
+            flags.append("VIRAL BUT OFF-MESSAGE")
+        if v.get("converts_but_wont_travel"):
+            flags.append("CONVERTS BUT WON'T TRAVEL")
+        lines.append(
+            f"  - {v.get('label') or v.get('variant_key')}: "
+            f"objective {rate.get('mean', 0):.1%} "
+            f"(95% CI {rate.get('lower', 0):.1%}–{rate.get('upper', 0):.1%}, "
+            f"n={rate.get('n', 0)} agents), "
+            f"virality {'not measured' if score is None else f'{score:.0f}/100'}"
+            + (f" — {', '.join(flags)}" if flags else "")
+        )
+
+    winner = scoreboard.get("winner_variant_key")
+    if winner:
+        ruling = (
+            f"A winner IS supported: variant `{winner}`. Its interval clears the "
+            f"runner-up's. You may state it as the leading variant."
+        )
+    else:
+        ruling = (
+            "NO WINNER IS SUPPORTED. The leading variants' confidence intervals "
+            "overlap. You MUST NOT name a winner, describe one variant as "
+            "'best' or 'the strongest performer', or recommend spending behind "
+            "one on the basis of this ordering. Report that the test did not "
+            "separate them and say what would — more agents, or more rounds."
+        )
+
+    return f"""
+VARIANT SCOREBOARD — this run tested {len(variants)} messages against one shared audience
+Objective: {scoreboard.get('objective') or 'none set; committing intent used'}
+{chr(10).join(lines)}
+
+VERDICT FROM THE MEASUREMENT: {scoreboard.get('verdict', '')}
+
+RULES — these are measurement obligations, not style preferences:
+  - {ruling}
+  - The ordering above is display order. It is not itself a claim.
+  - Virality is a SEPARATE axis from the objective metric. Never blend them into
+    one judgement. A variant that spreads and does not convert, or converts and
+    does not spread, is the finding — not a contradiction to reconcile.
+  - Where a virality component reads 'not measured', do not describe it as zero
+    or as a weakness of the variant. It was not measured.
+  - The run's overall sentiment figures pool every arena. They describe the
+    audience, not any one message. Do not attribute them to a variant.
+"""
 
 
 class ReportOutline(BaseModel):
