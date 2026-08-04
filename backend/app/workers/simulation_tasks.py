@@ -363,6 +363,92 @@ def _check_stop_signal(simulation_id: str) -> bool:
         return False
 
 
+_EVENT_INSERT_CHUNK = 20
+
+# Events that reply to or react to something. A `post` event's `target_id` is
+# its own adapter-side id, not a parent — treating it as one would make every
+# post its own ancestor and every cascade infinitely deep.
+_REPLY_EVENT_TYPES = ("comment", "react")
+
+
+def _write_round_events(
+    admin,
+    round_events: list[dict],
+    post_event_ids: dict[tuple[str, str, str], str],
+) -> tuple[int, int]:
+    """Insert a round's events and link them into the propagation graph.
+
+    Returns (written, unresolved_parents).
+
+    Two passes, because the graph is expressed in ids that do not exist until
+    the rows do. The adapters have always emitted `target_id`; the runner used
+    to drop it, which is why cascade depth and reply branching were not
+    measurable from stored data. It is resolved here rather than in the
+    adapters because only the runner knows the database ids.
+
+    The second pass groups children by parent and issues one UPDATE per distinct
+    parent rather than one per child. A busy post attracts many replies, so this
+    is typically an order of magnitude fewer round trips.
+    """
+    written = 0
+    # parent database id -> child database ids
+    links: dict[str, list[str]] = {}
+    unresolved = 0
+
+    for i in range(0, len(round_events), _EVENT_INSERT_CHUNK):
+        chunk = round_events[i : i + _EVENT_INSERT_CHUNK]
+        payload = [
+            {k: v for k, v in row.items() if not k.startswith("_")} for row in chunk
+        ]
+        inserted = (
+            admin.table("simulation_events").insert(payload).execute()
+        ).data or []
+        written += len(inserted)
+
+        # Postgres returns inserted rows in the order they were supplied, which
+        # is what pairs a row with its database id. If that ever stops holding,
+        # the zip below silently mislabels the graph rather than failing — so
+        # the length is checked instead of assumed.
+        if len(inserted) != len(chunk):
+            logger.error(
+                "event_insert_count_mismatch",
+                supplied=len(chunk),
+                returned=len(inserted),
+                detail="cannot pair events with their ids; skipping graph links "
+                       "for this chunk rather than linking them wrongly",
+            )
+            continue
+
+        for row, saved in zip(chunk, inserted):
+            ref = row.get("_ref")
+            if not ref:
+                continue
+            arena = row["_arena"]
+            if row["event_type"] not in _REPLY_EVENT_TYPES:
+                # A post: register the id it minted so later replies resolve.
+                post_event_ids[(arena[0], arena[1], str(ref))] = saved["id"]
+                continue
+            parent = post_event_ids.get((arena[0], arena[1], str(ref)))
+            if parent:
+                links.setdefault(parent, []).append(saved["id"])
+            else:
+                # A reply to something outside this arena's own posts — a
+                # seeded feed item, or a post from a round whose insert failed.
+                unresolved += 1
+
+    for parent_id, child_ids in links.items():
+        try:
+            admin.table("simulation_events").update(
+                {"target_event_id": parent_id}
+            ).in_("id", child_ids).execute()
+        except Exception:
+            # The events themselves are stored and measurable. Losing an edge
+            # costs the cascade metric, not the run.
+            logger.exception("event_graph_link_failed", parent_event_id=parent_id)
+
+    return written, unresolved
+
+
 async def run_simulation(simulation_id: str):
     """Run simulation using platform adapters."""
     from datetime import UTC, datetime
@@ -443,37 +529,87 @@ async def run_simulation(simulation_id: str):
     from app.services.platforms.registry import get_adapter, load_all_adapters
     load_all_adapters()
 
-    adapters = {}
+    # One arena per variant under test, each with its own adapter instance and
+    # therefore its own feed and its own per-agent memory. DECISIONS §5: the
+    # agents are shared across arenas and that sharing is the whole basis of the
+    # comparison — see services/engine/variants.py.
+    from app.services.engine.variants import load_arenas
+    arenas = load_arenas(simulation_id, prediction_goal)
+
+    # Keyed on (platform, variant) rather than platform. Every arena gets a
+    # fresh `get_adapter()` instance; if that ever returns a shared object the
+    # variants silently end up in one conversation together.
+    adapters: dict[tuple[str, str], object] = {}
     for platform_id in platforms_list:
-        try:
-            adapter = get_adapter(platform_id)
-            # Get agents for this platform
-            platform_agents = [
-                {
-                    # Identity. Adapters key memory on this and stamp it on
-                    # every event they emit; `username` is a display handle.
-                    "agent_id": a["id"],
-                    "username": a["username"],
-                    "persona": a.get("profile", {}).get("bio", ""),
-                    "variant": a.get("variant", "a"),
-                    "profile": a.get("profile", {}),
-                }
-                for a in agents if a.get("platform") == platform_id
-            ]
-            if platform_agents:
+        # Built once and handed to every arena for this platform — the same
+        # agent rows, by id, in each. This is the matched swarm.
+        platform_agents = [
+            {
+                # Identity. Adapters key memory on this and stamp it on
+                # every event they emit; `username` is a display handle.
+                "agent_id": a["id"],
+                "username": a["username"],
+                "persona": a.get("profile", {}).get("bio", ""),
+                # The arena's key, not the agent row's. `simulation_agents.variant`
+                # is a V1 artifact that every row carries as "a"; under matched
+                # swarms an agent belongs to every arena, so a per-agent variant
+                # has no meaning. The runner stamps the arena on the event.
+                "variant": None,
+                "profile": a.get("profile", {}),
+            }
+            for a in agents if a.get("platform") == platform_id
+        ]
+        if not platform_agents:
+            continue
+        for arena in arenas:
+            try:
+                adapter = get_adapter(platform_id)
                 await adapter.initialize(
                     config={
-                        "prediction_goal": prediction_goal,
+                        # The arena's copy is the subject its agents react to.
+                        # This is the only difference between arenas.
+                        "prediction_goal": arena.content,
                         "simulation_id": simulation_id,
                         "pre_positioned": pre_positioned,
                     },
-                    agents=platform_agents,
+                    agents=[dict(a, variant=arena.variant_key) for a in platform_agents],
                 )
-                adapters[platform_id] = adapter
-        except Exception as e:
-            logger.warning("adapter_init_failed", platform=platform_id, error=str(e))
+                adapters[(platform_id, arena.variant_key)] = adapter
+            except Exception as e:
+                logger.warning(
+                    "adapter_init_failed",
+                    platform=platform_id,
+                    variant=arena.variant_key,
+                    error=str(e),
+                )
 
-    logger.info("simulation_start", simulation_id=simulation_id, agents=len(agents), rounds=max_rounds, platforms=list(adapters.keys()))
+    if not adapters:
+        admin.table("simulations").update({
+            "status": "failed",
+            "error_message": "No platform arena could be initialised. Check that "
+                             "the configured platforms are registered adapters.",
+        }).eq("id", simulation_id).execute()
+        logger.error("no_arenas_initialised", simulation_id=simulation_id)
+        return {"simulation_id": simulation_id, "status": "failed", "events": 0}
+
+    # Adapter-internal post id -> database event id, for the event graph.
+    #
+    # Keyed by arena because an adapter's ids ("post_3") are unique only within
+    # the instance that minted them — two arenas both produce a "post_3" and
+    # they are different posts. Spans the whole run rather than one round: a
+    # round-4 comment routinely replies to a round-1 post.
+    post_event_ids: dict[tuple[str, str, str], str] = {}
+    unresolved_targets = 0
+
+    logger.info(
+        "simulation_start",
+        simulation_id=simulation_id,
+        agents=len(agents),
+        rounds=max_rounds,
+        platforms=platforms_list,
+        arenas=[a.variant_key for a in arenas],
+        adapter_instances=len(adapters),
+    )
 
     try:
         for round_num in range(1, max_rounds + 1):
@@ -483,8 +619,10 @@ async def run_simulation(simulation_id: str):
                 admin.table("simulations").update({"status": "stopped"}).eq("id", simulation_id).execute()
                 return {"simulation_id": simulation_id, "status": "stopped", "total_events": total_events}
 
-            # Run all platforms concurrently within each round
-            async def _run_platform_round(platform_id, adapter):
+            # Run every arena concurrently within each round. An arena is one
+            # (platform, variant) pair, so an 8-variant run on 2 platforms runs
+            # 16 of these — the same swarm, sixteen separate conversations.
+            async def _run_arena_round(platform_id, variant_key, adapter):
                 events = []
                 try:
                     async for event in adapter.run_round(round_num):
@@ -502,13 +640,30 @@ async def run_simulation(simulation_id: str):
                             "agent_id": event.agent_id
                             or agent_lookup.get(event.agent_username),
                             "platform": event.platform,
-                            "variant": event.variant,
+                            # The arena's key, from the runner. Taking this from
+                            # `event.variant` would trust twelve adapters to
+                            # echo back what they were handed, and one of them
+                            # forgetting would put two variants in one column of
+                            # the scoreboard.
+                            "variant": variant_key,
                             "round_number": event.round_number,
                             "content": event.content[:1000] if event.content else None,
                             "metadata": event.metadata or {},
+                            # Transient, stripped before insert. `target_id` is
+                            # the adapter's own id for the post this event *is*
+                            # (for a post) or the post it replies to (for a
+                            # comment or a reaction).
+                            "_arena": (platform_id, variant_key),
+                            "_ref": event.target_id,
                         })
                 except Exception as e:
-                    logger.warning("round_failed", platform=platform_id, round=round_num, error=str(e))
+                    logger.warning(
+                        "round_failed",
+                        platform=platform_id,
+                        variant=variant_key,
+                        round=round_num,
+                        error=str(e),
+                    )
                 return events
 
             with usage_context(
@@ -517,7 +672,10 @@ async def run_simulation(simulation_id: str):
                 organization_id=org_id,
             ):
                 platform_results = await asyncio.gather(
-                    *[_run_platform_round(pid, adp) for pid, adp in adapters.items()],
+                    *[
+                        _run_arena_round(pid, vkey, adp)
+                        for (pid, vkey), adp in adapters.items()
+                    ],
                     return_exceptions=True,
                 )
 
@@ -527,9 +685,11 @@ async def run_simulation(simulation_id: str):
                     round_events.extend(result)
 
             if round_events:
-                for i in range(0, len(round_events), 20):
-                    admin.table("simulation_events").insert(round_events[i:i+20]).execute()
-                total_events += len(round_events)
+                written, unresolved = _write_round_events(
+                    admin, round_events, post_event_ids
+                )
+                total_events += written
+                unresolved_targets += unresolved
 
             logger.info("round_complete", simulation_id=simulation_id, round=round_num, events=len(round_events))
     except Exception as e:
@@ -558,8 +718,33 @@ async def run_simulation(simulation_id: str):
         logger.error("simulation_zero_events", simulation_id=simulation_id)
         return {"simulation_id": simulation_id, "status": "failed", "total_events": 0}
 
-    # Track usage: agent-rounds consumed
-    agent_rounds = len(agents) * max_rounds
+    # The propagation graph, as actually built. Worth logging rather than
+    # inferring later: a run whose replies never resolved to parents produces a
+    # cascade metric of zero, which reads as "nothing propagated" rather than as
+    # "nothing was linked".
+    logger.info(
+        "event_graph_built",
+        simulation_id=simulation_id,
+        posts_registered=len(post_event_ids),
+        unresolved_parents=unresolved_targets,
+        arenas=len(arenas),
+    )
+    if unresolved_targets and unresolved_targets > total_events * 0.25:
+        logger.warning(
+            "event_graph_mostly_unresolved",
+            simulation_id=simulation_id,
+            unresolved=unresolved_targets,
+            events=total_events,
+            detail="more than a quarter of replies could not be linked to a "
+                   "parent; cascade depth and branching will understate",
+        )
+
+    # Track usage: agent-rounds consumed. Multiplied by arenas because every
+    # agent acts once per round *in each arena* — that multiplication is exactly
+    # what `estimate_simulation_cost` charges for as `agent_count * rounds *
+    # variants`, and the two must agree or the reconciliation compares a
+    # single-arena figure against an N-arena bill.
+    agent_rounds = len(agents) * max_rounds * len(arenas)
     try:
         admin.table("simulations").update({
             "agent_rounds_consumed": agent_rounds,
@@ -673,4 +858,17 @@ async def run_simulation(simulation_id: str):
 
 
 async def run_simulation_ab(simulation_id: str):
+    """Deprecated alias for `run_simulation`. Kept for the V1 `is_ab_test` path.
+
+    In V1 this was the A/B entry point and it called `run_simulation` once, so
+    variant B was never run — the scoreboard compared a variant against nothing
+    and V1 shipped that for months. It is now genuinely an alias, because
+    `run_simulation` runs every configured arena.
+
+    A run reaches this instead of `run_simulation` only through the legacy
+    `simulations.is_ab_test` flag, which `master` still writes. Both paths now
+    do the same correct thing. The flag and its `variant_a_config` /
+    `variant_b_config` columns go at the Phase 4 merge, when `master` stops
+    reading them — see migration 022's header.
+    """
     return await run_simulation(simulation_id)

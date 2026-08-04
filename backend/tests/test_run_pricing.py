@@ -174,21 +174,47 @@ def test_a_quote_cannot_be_replayed_against_another_org():
     assert _sign(_payload()) != _sign(_payload(org_id="org-2"))
 
 
-# ── Variants: priced but not yet runnable ────────────────
+# ── Variants: N-way matched swarms ───────────────────────
 
-def test_engine_runs_exactly_one_arena():
+def test_the_variant_cap_never_runs_ahead_of_the_engine():
     """Guards a billing gap, not a feature.
 
-    The cost model scales agent-action cost with variants, but nothing executes
-    more than one arena: every agent is assigned variant "a", the runner never
-    branches on variant, and run_simulation_ab calls run_simulation once. A
-    4-variant quote would charge 4x for one arena's work.
+    The cost model has always scaled agent-action cost with variants. Until
+    Phase 3 nothing executed more than one arena, so a 4-variant quote charged
+    4x for one arena's work — which is why this constant exists at all.
 
-    Phase 3 raises MAX_RUNNABLE_VARIANTS to 8 when N-way matched swarms ship.
+    It is now 8, and the engine builds one adapter instance per (platform,
+    variant). The pairing is what matters: this asserts the runner actually
+    branches on arena, so the constant cannot be raised again ahead of the code
+    that earns it.
     """
-    from app.services.billing.agent_pricing import MAX_RUNNABLE_VARIANTS
+    import inspect
 
-    assert MAX_RUNNABLE_VARIANTS == 1
+    from app.services.billing.agent_pricing import MAX_RUNNABLE_VARIANTS
+    from app.workers import simulation_tasks
+
+    assert MAX_RUNNABLE_VARIANTS == 8
+
+    source = inspect.getsource(simulation_tasks.run_simulation)
+    assert "load_arenas" in source, "the runner must resolve arenas per variant"
+    assert "(platform_id, arena.variant_key)" in source, (
+        "adapters must be keyed on (platform, variant) — keying on platform "
+        "alone puts every variant in one shared conversation"
+    )
+
+
+def test_each_arena_gets_its_own_adapter_instance():
+    """Isolation is structural: adapters own their feed and their memory.
+
+    `get_adapter` returning a shared object would put every variant in one
+    conversation while still labelling the events differently — a scoreboard
+    that looks fine and measures nothing.
+    """
+    from app.services.platforms.registry import get_adapter, load_all_adapters
+
+    load_all_adapters()
+    first, second = get_adapter("reddit"), get_adapter("reddit")
+    assert first is not second
 
 
 def test_no_tier_can_configure_more_variants_than_the_engine_runs():
@@ -204,12 +230,15 @@ def test_tier_caps_still_differ_on_the_dimensions_that_do_work():
     assert tier_caps("founder").max_rounds < tier_caps("growth").max_rounds
 
 
-def test_multi_variant_quote_is_refused():
+def test_a_runnable_variant_count_is_quotable_and_more_is_refused():
+    """The quote boundary tracks the engine, in both directions."""
+    from app.services.billing.agent_pricing import MAX_RUNNABLE_VARIANTS
     from app.services.billing.run_quote import QuoteError, _validate_shape
 
-    _validate_shape(100, 5, 2, 1)  # single arena is fine
-    with pytest.raises(QuoteError, match="not available yet"):
-        _validate_shape(100, 5, 2, 4)
+    _validate_shape(100, 5, 2, 1)
+    _validate_shape(100, 5, 2, MAX_RUNNABLE_VARIANTS)
+    with pytest.raises(QuoteError):
+        _validate_shape(100, 5, 2, MAX_RUNNABLE_VARIANTS + 1)
 
 
 def test_cost_model_can_still_price_a_hypothetical_multi_variant_run():

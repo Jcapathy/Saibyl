@@ -133,20 +133,24 @@ TIER_CAPS = {
     "enterprise": RunCaps(max_agents=1_000, max_rounds=20, max_platforms=12, max_variants=8),
 }
 
-# How many variant arenas the engine can actually run. **One.**
+# How many variant arenas the engine can actually run.
 #
-# The cost model prices variants correctly — action cost scales with them,
-# generation cost does not — but nothing executes more than one arena:
-# `run_prepare_agents` assigns every agent variant "a", the runner never
-# branches on variant, and `run_simulation_ab` calls `run_simulation` once.
+# **Was 1 until Phase 3.** The cost model has always priced variants correctly —
+# action cost scales with them, generation cost does not — but nothing executed
+# more than one arena, so quoting a 4-variant run charged four times the
+# agent-action cost for one arena's worth of work. Billing for compute that is
+# never performed, so the cap lived here rather than with the caller.
 #
-# Quoting a 4-variant run therefore charges four times the agent-action cost
-# for one arena's worth of work. That is billing for compute that is never
-# performed, so the cap is enforced here rather than left to the caller.
+# The engine now runs one adapter instance per (platform, variant), each with
+# its own feed and its own per-agent memory, over one shared swarm — see
+# `services/engine/variants.py`. This constant is the gate on that, and it must
+# not move ahead of the engine again: raising it without arenas is the exact
+# defect it was introduced to prevent.
 #
-# **Phase 3 raises this to 8** when N-way matched swarms ship. That is the only
-# change needed — TIER_CAPS above already holds the intended per-tier values.
-MAX_RUNNABLE_VARIANTS = 1
+# 8 rather than unlimited because `TIER_CAPS` tops out at 8 and because an
+# 8-variant run already costs ~4x a standard one — the ceiling is a spend
+# guardrail, not a technical limit.
+MAX_RUNNABLE_VARIANTS = 8
 
 _DEFAULT_PLAN = "starter"
 
