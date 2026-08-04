@@ -62,10 +62,10 @@ half-finished.
 
 | # | Item | Type | Blocking |
 |---|---|---|---|
-| 1 | **Live multi-variant run — the Phase 3 gate.** ← **the work.** Everything else in Phase 3 is built and static-green. **Three variants at ~25–30 agents, deliberately underpowered** (~$1.50–2.00 COGS) so the *overlap refusal* actually fires and the "no winner" path is exercised rather than assumed. A larger run more likely produces a clean winner and leaves the refusal untested. §9.5. | Gate | Closing Phase 3 |
+| 1 | **Phase 4** ← **the work.** Crisis lens, `clients` layer + org switcher, durable background jobs, calibration. Starts on one codebase: the merge and 019 landed 2026-08-04. First cheap win — drop the legacy `is_ab_test` / `variant_a_config` / `variant_b_config` / `winner_variant` columns, since nothing deployed reads them. | Phase | — |
 | 2 | **Re-check any contract quoted before 2026-08-03.** A deal signed against $2.26/run carries ~20% less margin than its band table claimed. Nothing to build — a review, at renewal. | Review | Renewals |
 | 3 | **Clean re-run of the inoculation loop** (~$5.97 COGS). The measured delta's *magnitude* is contaminated: 3 of 6 assets carried a fabricated statistic that is now blocked. Mechanism is proven; effect size is not citable. Do this when there is a reason to cite a delta figure, not before. | Decision | Citing any delta figure |
-| 4 | **Phase 4** — Crisis lens migration, `clients` layer + org switcher, calibration loop, V2 README, V2 README. **The merge and 019 are done** — Phase 4 starts on one codebase. | Phase | — |
+| 4 | ⚠️ **The Marketing lens is measured but uncalibrated.** Two live runs put the *same* three messages in opposite orders — 42/42/35% then 23/15/8%, Proof-led last then first. The scoreboard correctly refused to name a winner both times, but that variance **is** the finding: at 26 agents this test cannot separate anything. Before the lens is sold, establish how many agents it takes to resolve a difference worth acting on. Phase 4 calibration. | Work | Selling the lens |
 | — | ~~Re-derive `ICP_SYNTHESIS` and `INOCULATION_DRAFT`~~ **Done 2026-08-04.** Outputs checked against one live pass each; `INOCULATION_DRAFT` raised 5,000 → 5,700. Inputs held at their ceilings — document-dependent, same as `AGENT_GENERATION`. | Done | — |
 | — | ~~Re-derive `OBJECTION_CANONICALIZATION`~~ **Done 2026-08-04.** A ceiling, not a floor: input bought 728 phrasings against an 800 cap; output reconstructed at ~9,400 against the 10,000 priced. Unchanged for ordinary runs; a **re-simulation** now has its own profile. §1c. | Done | — |
 
@@ -89,7 +89,7 @@ argument for closing the cost model and building.
 | Phase 0 | Complete — dead-code purge, route-collision fix, schema drift, cost model, usage ledger |
 | Phase 1 | **Complete and verified end to end** |
 | Phase 2 | Built and **verified end to end live**. Four defects found and fixed — see §1b. |
-| Phase 3 | **Built; static gate passed. Awaiting a live end-to-end run** — see §0 item 1. |
+| Phase 3 | **Complete and verified live.** Two multi-variant runs: `398bf601` (found the graph defect) and `37530696` (confirmed the fix — 208/208 replies linked, 6/6 virality components). |
 | Verification | ruff clean · pytest 230 passed · `tsc --noEmit` clean · `eslint --quiet` clean · `vite build` OK · app boots, 119 routes, no duplicate registrations |
 | Live runs | Four, all pre-Phase-3. Phase 1: `05f1d879`, `03de92ef`. Phase 2: `f980fe0d` (Founder lens, 30% adversarial) and `fa28d899` (its inoculation re-simulation). **No multi-variant run has ever executed.** |
 | Migrations | 017, 018, **019, 020, 021, 022, 023 — all applied.** 019 went in at the merge, in the correct order: deploy first, index second. 377 rows renamed, 0 duplicate groups left, 2,730 agents intact. |

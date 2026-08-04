@@ -1532,14 +1532,68 @@ multi-variant run the `headline` stops being the thing to read, so a client
 rendering v3 without the scoreboard would show a marketer one confident sentiment
 figure for a test whose whole purpose was to separate six alternatives.
 
-### Verification
+### Verification, and what the live runs found
 
-ruff clean · pytest **230 passed** (187 at the start of the day) · `tsc --noEmit`
+ruff clean · pytest **270 passed** (187 at the start of the day) · `tsc --noEmit`
 clean · `eslint --quiet` clean · `vite build` OK · app boots, 119 routes, no
 duplicate registrations.
 
-**No live run yet.** That is the outstanding half of the Phase 3 gate, and on two
-phases running it is where every real defect has come from.
+**Two live runs, both 3 variants / 26 agents / 3 rounds, deliberately
+underpowered** so the overlap refusal had a real chance to fire rather than being
+proved only by unit tests.
+
+`398bf601` — the first. It proved the arenas and broke the graph:
+
+- **234 events = 26 agents × 3 rounds × 3 arenas.** The arenas are genuinely
+  separate; a shared adapter would have produced 78.
+- **`winner: None`.** The refusal fired live.
+- **193 of 193 replies failed to link.** Cause below.
+- Measured $1.44 against $1.70 quoted — margin held.
+
+`37530696` — after the fix:
+
+- **`unresolved_parents=0` across every round and every arena.** 77 events → 23
+  posts + 54 links in round one, and 77 of 78 linked in rounds two and three,
+  which also proves the map spans rounds.
+- **`winner: None` again** — and the *ordering changed between the two runs*
+  (Fear/Speed/Proof → Proof/Speed/Fear) on the same copy and the same audience.
+  That is the refusal being right rather than cautious: the ranking is noise, and
+  two runs put it in two different orders.
+
+### The defect the first run found, which predates Phase 3
+
+Every adapter renders its feed as `[<id>] @author: text` and asks for
+`COMMENT <post_id>: …`. **The model copies the id with the brackets it was shown
+in, inconsistently** — a five-sample check returned five bare ids and read as
+healthy; the same adapter over twelve actions returned ten bracketed.
+
+The graph was the visible casualty. The real one is older: `if p.id == post_id`
+appears in `react()` in **all twelve adapters**, so reactions never found their
+post, `upvotes`/`likes` never incremented, and `_hot_score` ranked every feed by
+recency alone — on every run ever made, with nothing ever erroring. Phase 3 only
+surfaced it because it is the first code that compares a model-supplied reference
+against a stored id.
+
+Fixed at source: `BasePlatformAdapter.post_ref` strips the decoration, applied in
+`comment()` and `react()` across all twelve, and in the runner for the graph.
+Tests are parameterised over the whole registry — the defect was identical in
+twelve places, so proving a fix in one proves nothing.
+
+### A threshold that was invented rather than measured
+
+`viral_but_off_message` compared takeaway accuracy against an absolute **0.25**.
+The first live run measured 0.07, 0.07 and 0.14, so it fired on two of three
+variants. **A flag that fires on almost everything is noise wearing the clothes
+of a finding** — the failure class this codebase keeps catching, shipped this
+time by the code that was supposed to catch it.
+
+Lexical overlap between a twelve-word paraphrase and a marketing sentence is
+inherently low; there is no absolute level at which it means off-message. It is
+now **relative**: a variant is off-message when it is understood materially worse
+than its peers, which the matched swarm makes a legitimate comparison since all
+of them faced the same audience. It needs three or more arenas, and it stays
+silent when the variants sit together — the honest reading of "this metric did
+not separate them", and the true reading of both live runs.
 
 ---
 
