@@ -91,6 +91,18 @@ class DiscoveryQuery(BaseModel):
     # (DECISIONS §3) applies to the queries too.
     derived_from: list[str] = Field(default_factory=list)
 
+    # Companies negated out of `query` as search operators, in the order they
+    # appear in it. Empty is a real and common state — the incumbent angle
+    # cannot negate the vendor it is asking about (`companies using Datadog
+    # -Datadog` finds nothing), so those are caught by the post-filter in
+    # `extraction.verify_candidates` instead. Read the full set off
+    # `CategoryExclusions`, which is what is actually enforced; this field says
+    # only what made it into this one query's text.
+    #
+    # Defaults empty so discovery runs stored before exclusions existed still
+    # load: `store.create_run` persists these rows as JSON.
+    excluded_terms: list[str] = Field(default_factory=list)
+
 
 class SearchResult(BaseModel):
     """One retrieved source, from whichever provider the adapter wraps.

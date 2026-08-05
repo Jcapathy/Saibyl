@@ -22,7 +22,8 @@ returns the same queries, in the same order, every time. That is not tidiness:
 the queries are the one part of discovery a founder can read and argue with
 before spending credits, and a query set that varies run to run cannot be
 argued with. It also means the compiler is testable by assertion rather than by
-eyeball, which is how `test_gtm_query_compiler` pins it.
+eyeball, which is how `tests/test_gtm_discovery.py` pins the angles and
+`tests/test_gtm_exclusions.py` pins what they leave out.
 
 **Adversarial archetypes produce no queries.** The incumbent-aligned cohort
 exists so a simulation contains the objection a pure-buyer swarm misses
@@ -35,12 +36,29 @@ a list of people whose entire position is that they are not buying.
 standing in. The founder's ICP has a gap there and `ICPProfile.gaps` is where
 that is already surfaced; a generic query would spend credits pretending it
 isn't.
+
+**Every query excludes the founder's own category.** The three angles above are
+good at finding the vendor as well as the buyer — `companies using Datadog
+"observability tooling"` describes Datadog's homepage more exactly than it
+describes any of Datadog's customers — and until this was applied, a founder
+searching for buyers was handed their own competitors. The set comes from
+`exclusions.build_exclusions`, which derives it from the profile's own
+`competitors[]` and `incumbent_tooling` rather than from a list of vendor names
+somebody typed; read that module for why those two fields and not others.
+
+It is applied **here**, once, to whatever each builder returned, rather than
+inside the three builders. A fourth angle would otherwise ship without it and
+nothing would fail — which is precisely how the defect this fixes reached a
+live user. `excluded_terms` on the returned query records what was negated, so
+the estimate preview can show the founder what is being kept out before they
+pay for the search.
 """
 from __future__ import annotations
 
 import structlog
 
 from app.services.engine.personas.icp_schema import ICPArchetype, ICPProfile
+from app.services.gtm.exclusions import CategoryExclusions, build_exclusions
 from app.services.gtm.schema import QUERY_ANGLES, DiscoveryQuery
 
 log = structlog.get_logger()
@@ -174,6 +192,28 @@ _BUILDERS = {
 }
 
 
+def _apply_exclusions(
+    candidate: DiscoveryQuery,
+    exclusions: CategoryExclusions,
+) -> DiscoveryQuery:
+    """Negate the founder's own category out of one compiled query.
+
+    Mutates nothing: returns the query with the negatives appended to `query`
+    and recorded on `excluded_terms`. A name the query already asks for
+    positively is not negated — `negative_terms_for` decides that, and the
+    post-filter in `extraction.verify_candidates` catches what it has to leave
+    in.
+    """
+    terms = exclusions.negative_terms_for(candidate.query)
+    if not terms:
+        return candidate
+    negatives = " ".join(f"-{_quote(term)}" for term in terms)
+    return candidate.model_copy(update={
+        "query": f"{candidate.query} {negatives}",
+        "excluded_terms": terms,
+    })
+
+
 def compile_queries(
     profile: ICPProfile,
     *,
@@ -194,6 +234,7 @@ def compile_queries(
     if max_queries <= 0:
         return []
 
+    exclusions = build_exclusions(profile)
     queries: list[DiscoveryQuery] = []
     seen: set[str] = set()
     skipped: list[str] = []
@@ -209,11 +250,12 @@ def compile_queries(
             if key in seen:
                 # Two archetypes that differ only in seniority can compile to
                 # the same incumbent query. Dropping the duplicate is free;
-                # paying for it twice is not.
+                # paying for it twice is not. Keyed on the query before its
+                # negatives, which are a deterministic function of it.
                 skipped.append(f"{archetype.id}:{angle}:duplicate")
                 continue
             seen.add(key)
-            queries.append(candidate)
+            queries.append(_apply_exclusions(candidate, exclusions))
 
     truncated = len(queries) - max_queries
     if truncated > 0:
@@ -229,5 +271,11 @@ def compile_queries(
         # founder assumed is visible rather than inferred from a short list.
         skipped_angles=skipped,
         truncated_at_cap=max(0, truncated),
+        # How many of the compiled queries carry a negative term. A profile with
+        # competitors whose queries all show zero here means the exclusion set
+        # was built and then negated nothing — a different fact from a profile
+        # that had nothing to exclude, and the two must not read the same.
+        excluded_available=len(exclusions.companies),
+        queries_with_exclusions=sum(1 for q in queries if q.excluded_terms),
     )
     return queries

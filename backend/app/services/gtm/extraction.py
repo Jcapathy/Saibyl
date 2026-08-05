@@ -4,7 +4,7 @@
 #                    include_contacts=False, client=None, model=None)
 #                                                    -> list[Candidate]
 # verify_candidates(proposed, results, archetype, *, query, angle,
-#                   include_contacts=False)          -> list[Candidate]
+#                   include_contacts=False, exclusions=None) -> list[Candidate]
 # normalise(text) -> str
 # ─────────────────────────────────────────────────────────
 """Turn retrieved sources into candidates, and refuse to invent anything.
@@ -38,10 +38,19 @@ The founder's entire reason to act on this list is that the numbers in it came
 from somewhere, and one invented headcount discovered by hand costs the
 credibility of every other row.
 
+**A competitor is not a buyer, and this is where that is enforced.** The
+compiler negates the founder's own category out of the query text, but a
+negative term is an instruction to a search provider rather than a control, and
+the incumbent angle cannot negate the vendor it is asking about at all —
+`companies using Datadog -Datadog` returns nothing. So `verify_candidates`
+drops a candidate that matches `CategoryExclusions`, on name or on domain
+stem, and that drop is the enforced half of the pair. See `exclusions.py`.
+
 **Nothing is silently dropped.** Every rejection — unreturned URL, unsupported
-quote, contact carrying a personal email — is counted and logged with its
-reason. A discovery that found twenty companies and stored four is a fact about
-the sources, and it has to be visible as one rather than read as a thin market.
+quote, contact carrying a personal email, a company that sells what the founder
+sells — is counted and logged with its reason. A discovery that found twenty
+companies and stored four is a fact about the sources, and it has to be visible
+as one rather than read as a thin market.
 """
 from __future__ import annotations
 
@@ -55,6 +64,7 @@ from pydantic import ValidationError
 from app.core.config import settings
 from app.services.billing.usage_ledger import record_llm_call
 from app.services.engine.personas.icp_schema import ICPArchetype, ICPProfile
+from app.services.gtm.exclusions import CategoryExclusions, build_exclusions
 from app.services.gtm.privacy import CONTACT_BLOCKED_DOMAINS, rejects_as_personal_data
 from app.services.gtm.schema import (
     EVIDENCED_FIELDS,
@@ -318,6 +328,10 @@ async def extract_candidates(
         query=query,
         angle=angle,
         include_contacts=include_contacts,
+        # Built from the same profile the compiler built it from, and by the
+        # same pure function, so what the estimate promised to keep out is
+        # exactly what is kept out here.
+        exclusions=build_exclusions(profile),
     )
 
 
@@ -409,19 +423,30 @@ def verify_candidates(
     query: str,
     angle: QueryAngle,
     include_contacts: bool = False,
+    exclusions: CategoryExclusions | None = None,
 ) -> list[Candidate]:
     """Keep what the sources support; blank what they do not.
 
     Pure. Given the same inputs it returns the same candidates, which is what
     makes "an unevidenced field is None rather than invented" a test rather
     than an intention.
+
+    `exclusions` is the founder's own category — companies that sell what they
+    sell, which the search returns because they match the query better than any
+    buyer does. `None` means no set was supplied and nothing is excluded; that
+    is reachable only from a direct call, since `extract_candidates` always
+    builds one, and the outcome is recorded on `gtm_candidates_verified` so a
+    run that filtered nothing cannot be mistaken for a run with nothing to
+    filter.
     """
     by_url = {r.url: r for r in results}
     snippets = {r.url: normalise(r.snippet) for r in results}
 
     kept: list[Candidate] = []
+    excluded_names: list[str] = []
     rejections: dict[str, int] = {
         "unreturned_source_url": 0,
+        "sells_what_the_founder_sells": 0,
         "no_surviving_evidence": 0,
         "unknown_evidence_field": 0,
         "evidence_unreturned_url": 0,
@@ -439,6 +464,19 @@ def verify_candidates(
         if not raw.company_name.strip():
             rejections["no_company_name"] += 1
             continue
+
+        # Checked before anything else, and against `raw.domain` rather than
+        # the verified one. An unevidenced domain may not populate a field on a
+        # stored record — that is the rule this module exists for — but it is
+        # sound grounds for *removing* a row, because the cost of being wrong
+        # runs the safe way: one lead lost, versus a competitor presented to
+        # the founder as somebody to sell to.
+        if exclusions is not None:
+            hit = exclusions.match(raw.company_name, raw.domain)
+            if hit is not None:
+                rejections["sells_what_the_founder_sells"] += 1
+                excluded_names.append(f"{raw.company_name.strip()}~{hit.name}")
+                continue
 
         source = by_url.get(raw.source_url)
         if source is None:
@@ -513,5 +551,13 @@ def verify_candidates(
         # stored four of twenty is legible as a source problem rather than as
         # a thin market.
         dropped=dropped,
+        # `candidate~matched_exclusion` per drop, so a wrong exclusion is
+        # traceable to the profile field that produced it rather than showing
+        # up as a company that quietly never appeared.
+        excluded_as_competitor=excluded_names,
+        # False here on a live run means the post-filter did not run at all,
+        # which is a different fact from "it ran and matched nothing".
+        exclusions_applied=exclusions is not None,
+        exclusions_available=len(exclusions.companies) if exclusions else 0,
     )
     return kept

@@ -25,7 +25,7 @@ from app.services.gtm import store
 from app.services.gtm.discovery import (
     DiscoveryRefusedError,
     DiscoveryUnavailableError,
-    preview_queries,
+    preview_discovery,
     reconcile_run,
     run_discovery,
 )
@@ -212,23 +212,34 @@ async def estimate(
     max_queries: int = Query(default=MAX_QUERIES_PER_DISCOVERY, ge=1),
     auth: dict = Depends(get_current_org),
 ):
-    """What this discovery would search for, and what it would cost.
+    """What this discovery would search for, what it would leave out, and what
+    it would cost.
 
     Returns the compiled queries themselves. The compiler is deterministic, so
     these are exactly the searches that will run — which makes this the screen
     where a founder who has never heard the phrase "ICP" can see, in plain
     words, what the product is about to go and look for.
+
+    `excluded` is the other half of that, and it exists because the first
+    version of this screen showed only the searches. A founder looking at
+    `companies using Datadog` has no way to tell whether the result will be
+    Datadog's customers or Datadog, and the live answer was Datadog. So the
+    companies discovery will refuse to return are named here, each with the
+    reason it is on the list, *before* any credits are spent — a wrong name is
+    then a profile field the founder can go and correct rather than a result
+    they have already paid for.
     """
     profile_row = _fetch_profile(icp_profile_id, auth["org_id"])
     try:
-        queries = preview_queries(profile_row, max_queries=max_queries)
+        preview = preview_discovery(profile_row, max_queries=max_queries)
     except DiscoveryUnavailableError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    cost = estimate_discovery_cost(len(queries))
-    budget = check_discovery_budget(auth["org_id"], len(queries))
+    cost = estimate_discovery_cost(len(preview.queries))
+    budget = check_discovery_budget(auth["org_id"], len(preview.queries))
     return {
-        "queries": [q.model_dump(mode="json") for q in queries],
+        "queries": [q.model_dump(mode="json") for q in preview.queries],
+        "excluded": preview.exclusions.model_dump(mode="json"),
         "estimate": cost.model_dump(),
         "budget": budget.model_dump(),
     }

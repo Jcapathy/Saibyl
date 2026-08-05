@@ -97,18 +97,30 @@ def test_the_compiler_returns_the_same_queries_every_time():
 
 
 def test_one_archetype_yields_the_three_angles_with_exact_queries():
+    """The exact query text, negatives included.
+
+    The trailing `-Datadog -"New Relic"` is the fix for a live defect: a founder
+    searching for buyers was handed the vendors they compete with. It is pinned
+    in the exact-text assertion rather than tested separately, so an angle that
+    stops excluding cannot pass this file. `test_gtm_exclusions.py` covers why
+    those two names are on the list and what happens to them on the way back.
+    """
     queries = query_compiler.compile_queries(_profile())
     by_angle = {q.angle: q.query for q in queries}
 
     assert by_angle["firmographic"] == (
-        '"observability tooling" "platform engineer" director companies'
+        '"observability tooling" "platform engineer" director companies '
+        '-Datadog -"New Relic"'
     )
+    # The one angle that cannot negate its own subject: `companies using
+    # Datadog -Datadog` finds nothing. Datadog is dropped after the search
+    # instead — see `test_gtm_exclusions.py`.
     assert by_angle["incumbent_tooling"] == (
         'companies using Datadog OR "New Relic" "observability tooling"'
     )
     assert by_angle["pain_trigger"] == (
         '"alert fatigue from noisy dashboards" "platform engineer" '
-        '"observability tooling"'
+        '"observability tooling" -Datadog -"New Relic"'
     )
 
 

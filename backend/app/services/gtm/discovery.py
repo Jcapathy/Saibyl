@@ -2,9 +2,9 @@
 # ─────────────────────────────────────────────────────────
 # run_discovery(project_id, org_id, profile_row, *, max_queries=None,
 #               created_by=None, adapter=None) -> dict
-# preview_queries(profile_row, *, max_queries=None) -> list[DiscoveryQuery]
+# preview_discovery(profile_row, *, max_queries=None) -> DiscoveryPreview
 # reconcile_run(run) -> dict
-# DiscoveryRefusedError, DiscoveryUnavailableError
+# DiscoveryPreview, DiscoveryRefusedError, DiscoveryUnavailableError
 # DISCOVERY_DEADLINE_SECONDS, QUERY_CONCURRENCY
 # discovery_deadline_seconds(queries) -> int
 # ─────────────────────────────────────────────────────────
@@ -52,6 +52,7 @@ received 7 it was indefensible.
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
@@ -62,6 +63,7 @@ from app.services.billing.agent_pricing import BudgetCheck, deduct_credits
 from app.services.billing.usage_ledger import usage_context
 from app.services.engine.personas.icp_schema import ICPArchetype, ICPProfile
 from app.services.gtm import store
+from app.services.gtm.exclusions import CategoryExclusions, build_exclusions
 from app.services.gtm.extraction import extract_candidates
 from app.services.gtm.pricing import (
     GTM_DISCOVERY_STAGE,
@@ -166,20 +168,36 @@ def _profile_of(profile_row: dict[str, Any]) -> ICPProfile:
         ) from exc
 
 
-def preview_queries(
+@dataclass(frozen=True)
+class DiscoveryPreview:
+    """What a discovery would search for, and what it would leave out."""
+
+    queries: list[DiscoveryQuery]
+    exclusions: CategoryExclusions
+
+
+def preview_discovery(
     profile_row: dict[str, Any],
     *,
     max_queries: int | None = None,
-) -> list[DiscoveryQuery]:
-    """The queries this ICP would run, without spending anything.
+) -> DiscoveryPreview:
+    """What this ICP would run, without spending anything.
 
-    The founder sees these before committing credits. The compiler is
-    deterministic, so what this returns is what runs.
+    The founder sees this before committing credits. Both halves are pure
+    functions of the same profile, so what this returns is what runs — which is
+    the whole point of the screen, and the reason the exclusions travel with the
+    queries rather than being fetched separately. A preview whose two halves
+    were computed from two reads could disagree with itself.
     """
     profile = _profile_of(profile_row)
-    return compile_queries(
-        profile,
-        max_queries=min(max_queries or MAX_QUERIES_PER_DISCOVERY, MAX_QUERIES_PER_DISCOVERY),
+    return DiscoveryPreview(
+        queries=compile_queries(
+            profile,
+            max_queries=min(
+                max_queries or MAX_QUERIES_PER_DISCOVERY, MAX_QUERIES_PER_DISCOVERY
+            ),
+        ),
+        exclusions=build_exclusions(profile),
     )
 
 

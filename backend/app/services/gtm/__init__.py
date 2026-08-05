@@ -2,10 +2,11 @@
 # ─────────────────────────────────────────────────────────
 # schema          — DiscoveryQuery, SearchResult, Candidate, Contact, evidence
 # query_compiler  — compile_queries(profile) -> list[DiscoveryQuery]
+# exclusions      — build_exclusions(profile) -> CategoryExclusions
 # search_adapter  — SearchAdapter.search(query) -> list[SearchResult]
 # extraction      — extract_candidates(...) / verify_candidates(...)
 # scoring         — score_candidates(candidates, archetype)
-# discovery       — run_discovery(...) / preview_queries(...)
+# discovery       — run_discovery(...) / preview_discovery(...)
 # privacy         — contact_discovery_gate(org_id), the reasoning behind it
 # pricing         — estimate_discovery_cost / check_discovery_budget
 # store           — every read and write, including real deletion
@@ -25,6 +26,12 @@ Four stages, each its own module so each is testable on its own:
     search_adapter   searches -> sources, behind a swappable interface
     extraction       sources -> candidates, with every field evidenced or None
     scoring          candidates -> a ranking, with the arithmetic shown
+
+`exclusions.py` cuts across two of those. It derives, from the profile alone,
+which companies sell what the founder sells — and `query_compiler` negates them
+out of the searches while `extraction` drops them out of the results. Both read
+the one function, because a search that promised to keep a competitor out and a
+filter that let it back in is the defect this feature shipped with.
 
 `privacy.py` is not a utility module. Read its docstring before touching the
 contact gate — it is the boundary between Saibyl being a tool and Saibyl being
