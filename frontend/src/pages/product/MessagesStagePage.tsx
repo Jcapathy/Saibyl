@@ -46,7 +46,10 @@ export default function MessagesStagePage() {
         const items = unwrapList<Simulation>(r.data).items;
         setRuns(items);
         const compared = items.find(
-          (s) => isFinished(s.status) && (s.variants ?? 1) > 1,
+          (s) =>
+            isFinished(s.status) &&
+            !s.parent_simulation_id &&
+            (s.variants ?? 1) > 1,
         );
         if (!compared) {
           setBoard(null);
@@ -77,7 +80,8 @@ export default function MessagesStagePage() {
   }, [load]);
 
   const compared = runs.find(
-    (s) => isFinished(s.status) && (s.variants ?? 1) > 1,
+    (s) =>
+      isFinished(s.status) && !s.parent_simulation_id && (s.variants ?? 1) > 1,
   );
   const setupHref = `/app/marketing?project=${product.id}`;
 

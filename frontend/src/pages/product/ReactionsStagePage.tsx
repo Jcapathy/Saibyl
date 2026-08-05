@@ -48,7 +48,16 @@ export default function ReactionsStagePage() {
       .then((r) => {
         const items = unwrapList<Simulation>(r.data).items;
         setRuns(items);
-        const finished = items.find((s) => isFinished(s.status));
+        /* Not simply the newest finished run. A re-simulation exists to
+           answer the parent's objections and carries none of its own, so
+           picking it made this page say "nothing has been grouped out of it
+           yet" on a product whose rail, two inches to the left, correctly
+           said "4 objections found". The server learned this in 62bf0fd; the
+           page did not, and an acceptance reader found the two disagreeing on
+           one screen. */
+        const finished = items.find(
+          (s) => isFinished(s.status) && !s.parent_simulation_id,
+        );
         if (!finished) {
           setObjections([]);
           return null;
@@ -74,7 +83,9 @@ export default function ReactionsStagePage() {
     load();
   }, [load]);
 
-  const finished = runs.find((s) => isFinished(s.status));
+  const finished = runs.find(
+    (s) => isFinished(s.status) && !s.parent_simulation_id,
+  );
   const inFlight = runs.find((s) => isUnderway(s.status));
 
   // Axis B rides along as a query parameter so the run configurator opens on the

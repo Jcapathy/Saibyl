@@ -76,13 +76,28 @@ export function sourceFiles(): SourceFile[] {
 }
 
 /** The surfaces the staged rail is made of — the primary path a founder walks. */
+/**
+ * Files a founder walking the five steps actually sees rendered.
+ *
+ * `AudienceReview.tsx` is on this list because step 1 renders it. It was left
+ * off the first version, and an acceptance reader found seven `disabled`
+ * controls inside it — one of them explained only by a hover-only `title`
+ * attribute, which is no explanation on a touch screen. That is exactly the
+ * failure this file's own header warns about: a test scoped to the files that
+ * already pass it is a test of the scope.
+ *
+ * The rule for adding to this list: if a component renders on `/app/home` or
+ * on any `/app/products/:id/*` screen, it belongs here.
+ */
 export function railFiles(): SourceFile[] {
   return sourceFiles().filter(
     (f) =>
       f.path.startsWith('src/pages/product/') ||
       f.path.startsWith('src/components/stages/') ||
       f.path === 'src/lib/stages.ts' ||
-      f.path === 'src/components/AppLayout.tsx',
+      f.path === 'src/lib/status.ts' ||
+      f.path === 'src/components/AppLayout.tsx' ||
+      f.path === 'src/components/founder/AudienceReview.tsx',
   );
 }
 
@@ -103,11 +118,38 @@ export function renderedStrings(file: SourceFile): string[] {
   const out: string[] = [];
   const code = file.code;
 
-  // JSX text between tags. Requires a letter so `{'; '}` and punctuation-only
-  // fragments do not count as copy.
-  for (const match of code.matchAll(/>([^<>{}]*[A-Za-z][^<>{}]*)</g)) {
+  /*
+    JSX text between tags.
+
+    Interpolations are blanked to a placeholder rather than excluded, because
+    excluding them threw away most of the copy in this codebase. The first
+    version required `[^<>{}]*`, so any text node containing a `{...}` was
+    skipped whole — and an acceptance reader proved it by pasting
+    `<p>Your ICP has {5} adversarial cohorts in this arena</p>` into a stage
+    page and watching the suite stay green. Dynamic copy is how most sentences
+    here are written, so a scan that cannot see it is a scan of the easy half.
+
+    Only *simple* interpolations are blanked — `{[^{}]*}` matches a value
+    insertion like `{count}` and does not match a nested block such as
+    `{cond && (<p>…</p>)}`. Braces are then still excluded from the text match,
+    so a nested block continues to block it. That distinction is the point: a
+    value insertion is part of a sentence, a nested block is structure, and the
+    sentences inside the block get matched on their own pass.
+  */
+  const withoutInterpolations = code.replace(/\{[^{}]*\}/g, ' … ');
+  /*
+    `(?<!=)>` so an arrow function does not open a match. `(s) => isFinished(...)`
+    ends in `>` and the scan happily ran from there to the next `<` several
+    lines later, reporting a route literal in a template string as founder copy.
+    A false positive trains a reader to ignore the test, which is worse than the
+    hole it was added to close.
+  */
+  const JSX_TEXT = /(?<!=)>([^<>{}]*[A-Za-z][^<>{}]*)</g;
+  for (const match of withoutInterpolations.matchAll(JSX_TEXT)) {
     const text = match[1].trim();
-    if (text) out.push(text);
+    // Prose does not contain statement punctuation. Anything that does is a
+    // fragment of code the match ran through, not something rendered.
+    if (text && !/[;=`]/.test(text)) out.push(text);
   }
 
   /*

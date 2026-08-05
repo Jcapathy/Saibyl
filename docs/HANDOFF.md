@@ -177,7 +177,7 @@ item 1 and work down.**
 | 3 | **Phase 4** — Crisis lens, `clients` layer + org switcher, durable background jobs, calibration. One codebase now. Audit items 19–22 overlap durable jobs; do them together. | Phase | — |
 | 4 | ⚠️ **The Marketing lens is measured but uncalibrated.** Two live runs put the *same* three messages in opposite orders — 42/42/35% then 23/15/8%, Proof-led last then first. The scoreboard correctly refused to name a winner both times, but that variance **is** the finding: at 26 agents this test cannot separate anything. Before the lens is sold, establish how many agents resolve a difference worth acting on. | Work | Selling the lens |
 | 5 | **Re-check any contract quoted before 2026-08-03.** A deal signed against $2.26/run carries ~20% less margin than its band table claimed. A review, at renewal. | Review | Renewals |
-| 6 | **Clean re-run of the inoculation loop** (~$5.97 COGS). The measured delta's *magnitude* is contaminated: 3 of 6 assets carried a fabricated statistic now blocked. Mechanism proven; effect size not citable. Do this when there is a reason to cite a delta, not before. | Decision | Citing any delta figure |
+| 6 | **Clean re-run of the inoculation loop** (~$6.44 COGS). The measured delta's *magnitude* is contaminated: 3 of 6 assets carried a fabricated statistic now blocked. Mechanism proven; effect size not citable. Do this when there is a reason to cite a delta, not before. | Decision | Citing any delta figure |
 
 Everything in §8 is the older backlog. **Where §8 and `V1_AUDIT.md` overlap, the
 audit is more current** — it was produced by a systematic sweep on 2026-08-04 and
@@ -445,9 +445,19 @@ one is narrower and worth having next to it:
 
 ### What is now true
 
-- A re-simulation of the reference shape quotes at **$3.13**, above the $2.66 the
+- A re-simulation of the reference shape quotes at **$3.34**, above the $2.66 the
   measured one cost. The full loop — parent, drafting pass, re-simulation — is
-  **$5.97**, or 2.18 standard runs. Quote the loop, not the run.
+  **$6.44**, or 2.14 standard runs. Quote the loop, not the run.
+
+  > Both figures were **$3.13** and **$5.97** until the subject-brief change on
+  > 2026-08-05, and this heading says "What is now true", so they were corrected
+  > in place rather than dated. An acceptance reader found them still standing
+  > here while §0 of the same file already quoted $6.44 — one document asserting
+  > two current prices, which is the shape of the defect §1c exists to describe.
+  >
+  > The loop only reproduces at **96 agents**, not 100. That shape is in no
+  > `SHAPES` entry; it comes from the two ledger runs the figure was measured on,
+  > `f980fe0d` and `fa28d899`.
 - `estimate_simulation_cost` takes `inoculation_assets`; the start endpoint
   derives it from `inoculation_asset_ids`.
 - **A re-simulation cannot be started against a quote** (409). `issue_quote`

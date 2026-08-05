@@ -46,6 +46,11 @@ const JARGON = [
   'canonical',
   'valence',
   'simulation',
+  // The word the design replaced. A founder has a *product*; a consultant has
+  // projects, and the noun decides who the page thinks it is talking to. It was
+  // missing from this list entirely, so an acceptance reader found it rendering
+  // on step 1 — inside the very file named as the register to match.
+  'project',
 ];
 
 /**
@@ -139,20 +144,34 @@ describe('1. Jargon', () => {
 
 describe('2. No dead ends', () => {
   it('every empty state on the rail renders a way forward', () => {
-    // `EmptyState` requires an `action`, so the structural guarantee is in the
-    // type. This asserts the guarantee is still the one being used: no rail
-    // file hand-rolls an empty state that bypasses it.
+    /*
+      Proximity, not presence.
+
+      The first version asked whether a link existed *anywhere in the file*,
+      and every rail page already contains one — so it could not fail. An
+      acceptance reader proved it by pasting a literal dead end into a stage
+      page and watching the suite stay green.
+
+      A way forward now has to sit within 12 lines of the phrase that says
+      there is nothing here, which is roughly "in the same block on the same
+      screen". `EmptyState` remains the structural guarantee — it requires an
+      `action` and the type refuses a screen without one — and this is the
+      check that the guarantee is the one actually being used.
+    */
+    const NEARBY = 12;
+    const EMPTY_PHRASE = /(No .{0,40} yet|Nothing .{0,40} yet)/i;
+    const WAY_FORWARD = /<(Link|Guarded|EmptyState|button)\b|\baction[=:]/;
+
     const offenders: string[] = [];
     for (const file of railFiles()) {
-      const usesEmptyState = /<EmptyState\b/.test(file.code);
-      const handRolled = /(No .{0,40} yet|Nothing .{0,40} yet)/i.test(file.code);
-      if (handRolled && !usesEmptyState && !/data-empty-state/.test(file.code)) {
-        // A hand-rolled empty phrase is allowed only if a link or button sits
-        // in the same file — a screen that says there is nothing here and
-        // offers nothing is where a founder closes the tab.
-        const hasWayForward = /<(Link|Guarded|button)\b/.test(file.code);
-        if (!hasWayForward) offenders.push(file.path);
-      }
+      const lines = file.code.split(/\r?\n/);
+      lines.forEach((line, i) => {
+        if (!EMPTY_PHRASE.test(line)) return;
+        const near = lines
+          .slice(Math.max(0, i - NEARBY), i + NEARBY)
+          .join(' ');
+        if (!WAY_FORWARD.test(near)) offenders.push(`${file.path}:${i + 1}`);
+      });
     }
     expect(offenders).toEqual([]);
   });
@@ -272,6 +291,15 @@ describe('4. Inheritance is declared', () => {
 const NOT_CLICKABLE: Record<string, string> = {
   '/app/simulations/:p/run': 'entered by the configurator after a run starts',
   '/app/simulations/:p/report/print': 'opened by the print flow, not by a link',
+  // Superseded by `/app/home`, which is where signup and login now land. The
+  // route is kept so an existing bookmark resolves rather than bouncing to the
+  // landing page, and it is deliberately unlinked — a second home in the
+  // sidebar is how a founder ends up on the one that is not the product.
+  //
+  // This entry exists because the test caught it. Pointing login at the rail
+  // orphaned the dashboard in the same commit, and the reachability walk said
+  // so on the next run.
+  '/app/dashboard': 'superseded by /app/home; kept only so a bookmark resolves',
 };
 
 describe('5. Reachability', () => {

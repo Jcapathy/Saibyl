@@ -280,9 +280,18 @@ export default function AudienceStagePage() {
               Loading…
             </p>
           ) : documents.length === 0 ? (
+            /* "Pick a file above" pointed at a control the reader had to go and
+               find. The button opens it, which is the difference between naming
+               a way forward and being one. */
             <p className="text-[12.5px] text-saibyl-muted">
-              Nothing uploaded yet. Pick a file above — the deck is usually the
-              best first one.
+              Nothing uploaded yet — the deck is usually the best first one.{' '}
+              <button
+                type="button"
+                onClick={() => fileInput.current?.click()}
+                className="text-saibyl-gold hover:underline"
+              >
+                Choose a file
+              </button>
             </p>
           ) : (
             <ul className="space-y-1.5">

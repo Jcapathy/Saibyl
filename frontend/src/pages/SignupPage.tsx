@@ -25,12 +25,19 @@ const CONNECTION_NODES = [
   [40, 85], [85, 40], [50, 18], [10, 62],
 ] as const;
 
-const STATS = [
-  { value: '1M', label: 'Max Agents' },
-  { value: '8', label: 'Platforms' },
-  { value: '42', label: 'Archetypes' },
-  { value: '<3pp', label: 'Precision' },
-];
+/* The stats bar was four claims and three of them were false.
+
+   "1M Max Agents" against an enforced ceiling of 1,000 - a 1,000x
+   overstatement, and the exact claim the landing page was cleaned of in the
+   same pass, still live on the page that CTA sends every visitor to. "8
+   Platforms" contradicted this file's own hero copy ("across 12 platforms")
+   and the 12 shipped adapters. "42 Archetypes" and "<3pp Precision" trace to
+   no constant anywhere.
+
+   Removed rather than corrected. A number on a signup page is an advertised
+   claim, and the honest set here is empty until someone decides which numbers
+   are worth advertising and checks them against `agent_pricing.TIER_CAPS`. */
+const STATS: { value: string; label: string }[] = [];
 
 const INPUT_CLASS =
   'w-full px-4 py-[0.6875rem] rounded-[10px] border border-white/[0.06] bg-white/[0.025] text-[#E8ECF2] text-sm placeholder:text-[#94A3B8]/40 outline-none transition-all duration-200 focus:border-[rgba(139,92,246,0.5)] focus:shadow-[0_0_0_3px_rgba(139,92,246,0.1),0_0_20px_rgba(139,92,246,0.05)] focus:bg-white/[0.04]';
@@ -81,7 +88,13 @@ export default function SignupPage() {
     setLoading(true);
     try {
       await signup(email, password, orgName);
-      navigate('/app/dashboard');
+      /* `/app/home`, not `/app/dashboard`. This one line decided whether the
+         staged rail existed for a new founder at all: a cold reader who had
+         never seen the product signed up, landed on the superseded dashboard,
+         and spent the whole session in the old UI without once reaching the
+         five steps. Everything built for them was one unnoticed sidebar link
+         away. */
+      navigate('/app/home');
     } catch (err: unknown) {
       const axiosDetail = (err as { response?: { data?: { detail?: string } } })
         ?.response?.data?.detail;

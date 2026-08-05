@@ -208,20 +208,25 @@ function BuyerCard({
             >
               This isn&rsquo;t quite right
             </button>
-            <button
-              type="button"
-              onClick={onRemove}
-              disabled={!canRemove}
-              title={
-                canRemove
-                  ? 'These people are not my buyers'
-                  : 'You need at least one buyer for a run to work'
-              }
-              className="flex items-center gap-1.5 text-[12px] text-saibyl-muted hover:text-saibyl-negative disabled:opacity-30 disabled:hover:text-saibyl-muted"
-            >
-              <Trash2 className="w-3 h-3" />
-              Not my buyer
-            </button>
+            {/* Never a grey button. This was `disabled={!canRemove}` with its
+                only explanation in a `title` attribute — which is no
+                explanation at all on a touch screen, and invisible in any
+                screenshot. The last remaining buyer now says why it cannot be
+                removed, in a sentence, in the layout. */}
+            {canRemove ? (
+              <button
+                type="button"
+                onClick={onRemove}
+                className="flex items-center gap-1.5 text-[12px] text-saibyl-muted hover:text-saibyl-negative"
+              >
+                <Trash2 className="w-3 h-3" />
+                Not my buyer
+              </button>
+            ) : (
+              <span className="text-[12px] text-saibyl-muted">
+                This is your last buyer &mdash; a run needs at least one
+              </span>
+            )}
           </div>
         </>
       ) : (
@@ -481,7 +486,7 @@ export default function AudienceReview({
             Here&rsquo;s who we think will buy this
           </h3>
           <p className="text-[12px] text-saibyl-muted mt-1 leading-relaxed max-w-xl">
-            We read the documents on this project and worked out who your buyers are and
+            We read what you uploaded and worked out who your buyers are and
             what they care about. Have a read. If something&rsquo;s wrong, change it —
             otherwise carry on, and every run uses exactly what you see here.
           </p>
@@ -589,9 +594,8 @@ export default function AudienceReview({
               your buyers when you have uploaded something that rival actually published.
               Otherwise the
               model is making up what they say — and you&rsquo;d have no way of telling.
-              To name them, add their landing page, pricing page or docs to this
-              project&rsquo;s documents and mark it as a competitor&rsquo;s material when
-              you upload it. Then come back here.
+              To name them, upload their landing page, pricing page or docs and
+              mark the file as a competitor&rsquo;s when you do. Then come back here.
             </p>
           )}
         </div>
@@ -612,26 +616,43 @@ export default function AudienceReview({
 
       {dirty && (
         <div className="flex items-center gap-3 pt-1">
-          <button
-            type="button"
-            onClick={save}
-            disabled={saving || noPlatforms}
-            className="flex items-center gap-2 px-5 py-2 rounded-xl bg-saibyl-gold text-saibyl-void font-semibold text-[13px] disabled:opacity-40 transition-colors hover:bg-saibyl-gold-hover"
-          >
-            {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            {saving ? 'Saving…' : 'Save my changes'}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setDraft(profile.profile);
-              setError('');
-            }}
-            disabled={saving}
-            className="text-[12px] text-saibyl-muted hover:text-saibyl-platinum disabled:opacity-40"
-          >
-            Undo my changes
-          </button>
+          {/* Saving is announced rather than greyed, and the one thing that
+              genuinely blocks a save — no platform picked — already says so in
+              full above. A grey rectangle repeating it silently is what this
+              replaces. */}
+          {saving ? (
+            <span
+              aria-live="polite"
+              className="flex items-center gap-2 px-5 py-2 rounded-xl bg-saibyl-gold/70 text-saibyl-void font-semibold text-[13px]"
+            >
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              Saving&hellip;
+            </span>
+          ) : noPlatforms ? (
+            <span className="text-[12px] text-saibyl-warning">
+              Pick a platform above and this saves
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={save}
+              className="flex items-center gap-2 px-5 py-2 rounded-xl bg-saibyl-gold text-saibyl-void font-semibold text-[13px] transition-colors hover:bg-saibyl-gold-hover"
+            >
+              Save my changes
+            </button>
+          )}
+          {!saving && (
+            <button
+              type="button"
+              onClick={() => {
+                setDraft(profile.profile);
+                setError('');
+              }}
+              className="text-[12px] text-saibyl-muted hover:text-saibyl-platinum"
+            >
+              Undo my changes
+            </button>
+          )}
         </div>
       )}
     </div>
