@@ -137,17 +137,23 @@ Measured output at 80% margin:
 
 | Preset | Agent-rounds | LLM calls | Cost | Price |
 |---|---:|---:|---:|---:|
-| Free trial (25 agents / 3 rounds / 2 platforms) | 75 | 102 | $1.18 | $5.90 |
-| Standard (100 / 5 / 2) | 500 | 604 | $2.74 | $13.68 |
-| Marketing 8-variant (100 / 5 / 1 platform)* | 500 | 4,107 | $10.73 | $53.64 |
-| Deep (250 / 10 / 4) | 2,500 | 2,756 | $8.04 | $40.21 |
-| Re-simulation (96 / 5 / 2, six assets)† | 480 | 484 | $3.13 | $15.63 |
+| Free trial (25 agents / 3 rounds / 2 platforms) | 75 | 102 | $1.27 | $6.36 |
+| Standard (100 / 5 / 2) | 500 | 604 | $3.01 | $15.07 |
+| Marketing 8-variant (100 / 5 / 1 platform)* | 500 | 4,107 | $12.53 | $62.64 |
+| Deep (250 / 10 / 4) | 2,500 | 2,756 | $9.19 | $45.95 |
+| Re-simulation (96 / 5 / 2, six assets)† | 480 | 484 | $3.34 | $16.68 |
 
 \* Multi-variant runs are priced but **not runnable** until Phase 3.
 
 † A re-simulation skips agent generation and is still the more expensive run,
 because its assets ride in every agent action prompt. See §7's inoculation loop
 and `PRICING_GUIDE.md` §2.2.
+
+Every cost above assumes the run carries a **subject brief** — the customer's
+uploaded material, distilled once per run and then referenced in every agent
+action. Since 2026-08-04 that is part of the reference run rather than an
+extra, because the Founder lens is sold on uploaded material. A run with
+nothing to distil costs ~10% less; a standard run without one is $2.74.
 
 Recalculated at the end of Phase 1, when report depth started scaling down as
 well as up: a free run dropped from 6 Opus-written sections to 2 and a standard
@@ -164,18 +170,21 @@ stage of every quote. Estimate against measurement on the reference run is now
 **Credits are the metered unit; runs are the sales language.** All advertised run
 counts are quoted against a defined reference:
 
-> **Standard run** = 100 agents × 5 rounds × 2 platforms × 1 variant → $2.74 COGS
+> **Standard run** = 100 agents × 5 rounds × 2 platforms × 1 variant,
+> carrying a subject brief → $3.01 COGS
 
-One credit is **$0.001 of COGS**, so a standard run is 2,736 credits. Grants are
-denominated in credits because a run varies 65× in cost across the tier caps —
-an allowance denominated in runs or agent-rounds rations nothing.
+One credit is **$0.001 of COGS**, so a standard run is 3,014 credits. Grants are
+denominated in credits because a run varies **51×** in cost across the self-serve
+tier caps — $1.27 at the Free cap against $65.11 at the Agency cap — and 331×
+once Enterprise is included. An allowance denominated in runs or agent-rounds
+rations nothing.
 
 | Tier | Price (US anchor) | COGS grant | Credits | ≈ std runs | ≈ 8-var runs | Margin |
 |---|---:|---:|---:|---:|---:|---:|
-| Free trial | $0, one run | $1.20 | 1,200 | 1 (capped) | — | — |
-| Founder | **$99/mo** | $19.80 | 19,800 | 7 | 1 | 80% |
-| Growth | **$299/mo** | $59.80 | 59,800 | 21 | 5 | 80% |
-| Agency | **$999/mo** | $199.80 | 199,800 | 73 | 18 | 80% |
+| Free trial | $0, one run | $1.50 | 1,500 | 1 (capped) | — | — |
+| Founder | **$99/mo** | $19.80 | 19,800 | 6 | 1 | 80% |
+| Growth | **$299/mo** | $59.80 | 59,800 | 19 | 4 | 80% |
+| Agency | **$999/mo** | $199.80 | 199,800 | 66 | 15 | 80% |
 | Enterprise | Custom annual | see `PRICING_GUIDE.md` | | | | 68–78% |
 
 Growth and Agency were re-derived from the cost model on 2026-08-02, replacing
@@ -204,14 +213,15 @@ above the 70% floor.
 
 | Region band | Price | Runs | COGS | Margin |
 |---|---:|---:|---:|---:|
-| Tier 1 — US / EU / UK / AU / CA / JP | $99 | 7 | $19.41 | 80.4% |
+| Tier 1 — US / EU / UK / AU / CA / JP | $99 | 6 | $19.41 | 80.4% |
 | Tier 2 — −40% | $59 | 4 | $12.94 | 78.1% |
 | Tier 3 — −60% (incl. India) | $39 | 3 | $9.70 | 75.1% |
 
 The COGS column is the region-scaled grant, not runs × cost, so the margins are
-unaffected by the 2026-08-03 recalibration or the 2026-08-04 re-derivation —
-only Tier 1's run count moved, 8 → 7, and it holds at $2.74/run. Note the grant
-does **not** scale linearly with price:
+unaffected by the 2026-08-03 recalibration, the 2026-08-04 re-derivation or the
+subject-brief change — again only Tier 1's run count moved, 7 → 6, at $3.01/run.
+Tier 2 and Tier 3 hold at 4 and 3 because their grants were already rounding
+down. Note the grant does **not** scale linearly with price:
 −40% on price is −33% on grant and −60% is −50%, tuned so every band clears the
 70% floor. That shape is a design choice and should be re-derived alongside the
 Stripe Price IDs when the bands are actually built.

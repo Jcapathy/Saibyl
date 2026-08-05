@@ -742,8 +742,10 @@ input is **document-dependent** — the prompt carries `doc_context[:2000]` and
 that project's short Markdown files did not fill the slice a PDF deck would.
 
 Net effect: standard run COGS **$2.26 → $2.71**, tier runs **8/26/88 → 7/22/73**.
-The 2026-08-04 pass took it to **$2.74** and **7/21/73**; every table is
-regenerated at that base.
+The 2026-08-04 ledger pass took it to **$2.74** and **7/21/73**. The
+subject-brief change later the same day redefined the reference run itself and
+took it to **$3.01** and **6/19/66** — that is the base every table is now
+regenerated at.
 
 **Re-derive whenever prompts change.** Every prompt edit moves these:
 
@@ -775,6 +777,23 @@ runs and the engine runs one arena — quoting it today over-charges against wha
 customer can execute. Reasoning and rejected alternatives: DECISIONS §15d. **The
 sample contract language needs counsel review before use.**
 
+> ✅ **Regenerated 2026-08-04 at $3.01/run COGS — the current base.** The
+> reference run now carries a **subject brief**: its agents react to the
+> customer's uploaded material rather than to a description of it, which costs
+> one main-model distillation pass per run plus a surcharge on every action.
+> Standard run $2.74 → **$3.01**, blended agency mix $7.46 → **$8.65**, tier run
+> counts 7/21/73 → **6/19/66**, the full inoculation loop $5.97 → **$6.44**.
+> This is a change to the *definition* of the reference, not a recalibration —
+> the same shape with nothing to distil still costs $2.74, and
+> `standard_run_credits()` is the only correct source for the reference, because
+> the `STANDARD_RUN` shape tuple does not carry the brief. DECISIONS §15e.
+>
+> **The free grant moved 1,200 → 1,500 credits**, its third rise, for the third
+> time because a grant must cover one free run. A free run at the tier cap now
+> costs **1,273**; at 1,200 a founder uploading their deck would have hit "not
+> enough credits" at signup. Headroom goes from 20 credits (1.7%) to **227
+> (15%)**. The 20-credit warning below was correct and this is it landing.
+>
 > ✅ **Regenerated 2026-08-04 at $2.74/run COGS.** Standard run $2.71 → $2.74,
 > blended agency mix $7.35 → $7.46, tier run counts 7/22/73 → **7/21/73**. Only
 > Growth moves, and only because it sat at 21.9 runs. Driven by `EVENT_MEASUREMENT`,
@@ -795,8 +814,10 @@ sample contract language needs counsel review before use.**
 > disclosed as approximate and shape-dependent.
 >
 > **The free grant moved 800 → 1,200 credits.** A 25-agent trial cost 1,176 at
-> that revision and 1,180 now, so 800 would have failed the one run the free tier
-> promises — at signup. That relationship is pinned by
+> that revision and 1,180 at the ledger pass above, so 800 would have failed the
+> one run the free tier promises — at signup. (It is 1,273 against a 1,500 grant
+> as of the subject-brief change; see the current entry at the top.) That
+> relationship is pinned by
 > `test_the_free_grant_covers_one_free_run`, and the advertised paid run counts by
 > `test_paid_tier_run_counts_are_whole_runs`, because this is the second time the
 > grant has silently gone stale. 20 credits of headroom is not enough to stop a

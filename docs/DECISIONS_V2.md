@@ -126,7 +126,7 @@ is still the **more expensive** run. Its assets are pre-positioned through
 measured at 312 input tokens per action in the parent against 1,654 in the child.
 The generation it skips is worth less than the assets it carries.
 
-The full loop — parent run, one drafting pass, one re-simulation — is **$5.97**
+The full loop — parent run, one drafting pass, one re-simulation — is **$6.44**
 of COGS at the current model against a $99/mo tier whose grant is $19.80. Three
 loops a month, not four. Still not the constraint, and no longer a figure that
 gets better the more of the loop a founder uses.
@@ -400,11 +400,11 @@ what actually rations.
 then 3.3×. The old grants (~30 runs at $499, ~100 at $1,499) came from a V1
 strategy doc written before any cost model existed and had never been validated
 against anything — so cutting the price did **not** require cutting margin, only
-sizing the grant honestly. $299 at 80% still buys 21 standard runs or 5
+sizing the grant honestly. $299 at 80% still buys 19 standard runs or 4
 eight-variant runs a month.
 
-**Why credits, not runs.** A "run" varies by roughly 20× across the tier caps —
-standard is $2.74, a 250-agent 8-variant run is $54.61. A grant denominated in
+**Why credits, not runs.** A "run" varies by roughly 22× across the tier caps —
+standard is $3.01, a 250-agent 8-variant run is $65.11. A grant denominated in
 runs is therefore unbounded compute. Runs survive as sales language against a
 defined reference run only.
 
@@ -481,20 +481,22 @@ recalibration moves prices again, in whichever direction the measurement goes.
 ## 15d. Quote what runs today; sell variants as a dated addition
 
 **Chose:** every contract beginning before Phase 3 is quoted from the
-**standard-run** band table (`PRICING_GUIDE.md` §2.3, **$2.74/run COGS** as of
+**standard-run** band table (`PRICING_GUIDE.md` §2.3, **$3.01/run COGS** as of
 2026-08-04), not the blended agency mix. The matched-variant capability is
 written into the contract as a planned addition at a defined price, explicitly
 unavailable at the effective date, with no fees accruing until the customer
 elects it.
 
 **Why.** The blended mix assumes 45% multi-variant runs and the engine runs one
-arena (`MAX_RUNNABLE_VARIANTS = 1`). Quoting $34/run for runs that cost $2.74
+arena (`MAX_RUNNABLE_VARIANTS = 1`). Quoting $39/run for runs that cost $3.01
 reads as a 78% margin and is in fact far higher. The customer discovers the gap
 at renewal — the worst moment to be holding a number you cannot defend — and the
 thing they will remember is the margin, not the product.
 
-**Note on the cost base.** The per-run figure has now moved three times — $3.23 →
-$2.26 → $2.71 → $2.74 — as the cost model was corrected against measured usage. The
+**Note on the cost base.** The per-run figure has now moved four times — $3.23 →
+$2.26 → $2.71 → $2.74 → $3.01 — as the cost model was corrected against measured
+usage, the last of those because the *reference run itself* was redefined to
+carry a subject brief (§15e). The
 decision is unaffected: it is about *which table* to quote, not what the numbers
 in it are. Always take the figure from `PRICING_GUIDE.md` §2.3 rather than from
 this page, and regenerate with `python scripts/quote.py` if in any doubt.
@@ -522,6 +524,70 @@ sample language is a starting point, not an opinion.
 
 **What would change this:** Phase 3 shipping, at which point §2.3b becomes the
 default table and the clause becomes a live price rather than a placeholder.
+
+---
+
+## 15e. The reference run carries a subject brief
+
+*Decided 2026-08-04.*
+
+**Chose:** the standard run — the reference every advertised run count is quoted
+against — now includes a subject brief. Its agents react to the customer's
+uploaded material rather than to a one-line description of it. That costs one
+main-model distillation pass per run plus a surcharge on every agent action,
+taking the reference from **$2.74 to $3.01**, and the increase was passed
+straight through to the published run counts: **7/21/73 → 6/19/66**.
+
+**Why the reference moved rather than a new shape being added.** The brief is not
+something a customer configures — it is whether their project has uploaded
+material — so it cannot live in the `STANDARD_RUN` shape tuple, and a reference
+that excludes it advertises run counts nobody with an upload can achieve. The
+Founder lens is sold on uploaded material; a run without it is now the exception,
+not the norm. Quoting the document-free figure would understate every enterprise
+contract by ~10% for customers using the product as it is sold.
+
+Both figures remain real and are stated as such throughout: $3.01 with a brief,
+$2.74 without. A customer who genuinely uploads nothing is over-quoted by ~10%,
+which is the safe direction, and `scripts/quote.py` says so in its own output.
+
+**Why the run counts fell rather than the grants rising.** This is §15c's
+precedent applied in the harder direction for the second time. §15c passed a
+*downward* correction through to price and run counts rose, which costs nothing
+to decide. Here the correction runs the other way and the honest options were the
+same three: publish lower run counts, raise the grants and absorb the margin, or
+raise prices. **Lower run counts again**, for the same reason — the grants and
+the 80% margin are the promises the pricing rests on, and the run count is the
+derived figure, always disclosed as approximate and always shape-dependent.
+Anyone already on a tier keeps their credits.
+
+**The free grant moved 1,200 → 1,500 credits**, its third rise, and for the third
+time because the grant must cover one free run. A free run at the tier cap now
+costs 1,273; at 1,200 it would have failed outright, and the failure is the worst
+one available — a founder uploads their deck, which is the free tier's entire
+promise, and hits "not enough credits" at signup. The previous headroom was 20
+credits (1.7%), which was a coincidence rather than a margin. It is now 227
+credits, 15% of the grant.
+
+**Rejected — keep the reference document-free and quote the brief as an add-on.**
+Cheaper-looking headline and arithmetically defensible. Rejected because it makes
+the advertised run count unachievable for the customers the product is sold to,
+which is the same defect as quoting the blended table in §15d: a number that
+reads well and does not survive contact with what the customer actually runs.
+
+**Rejected — absorb the increase and hold 7/21/73.** Would have put the Founder
+tier under its 80% target on the runs it advertises, and §15c's whole argument is
+that a price must be traceable to a real cost in both directions.
+
+**Carry this caveat:** the free tier is the most sensitive part of the pricing to
+any main-model stage being added or repriced, because the report, the objection
+canonicalizer and now the distillation barely shrink with run size and therefore
+dominate a 25-agent run. The grant has now been raised for this reason three
+times. **The next stage that lands will do it again** — treat a fourth rise as
+expected, not as a surprise.
+
+**What would change this:** the distillation being cached or shared across runs
+of the same project, which would take it out of the per-run cost base and make
+the document-free and brief-carrying references converge again.
 
 ---
 

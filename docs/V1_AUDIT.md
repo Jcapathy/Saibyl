@@ -100,6 +100,100 @@ never applied anything.
 
 ---
 
+## FIXED — 2026-08-04, third pass: item 36, closed with evidence
+
+**Item 36 is closed.** One commit carries the whole fix:
+
+- **`63e8ee5`** — *"Typeset the report as a document, and make the export produce
+  a file"* (18 files, +4,503/−533).
+
+It is the only commit that introduces either of the two root causes' fixes:
+`git log -S"fonts-liberation" -- backend/Dockerfile` and
+`git log -S'"upsert": "true"' -- backend/app/workers/export_tasks.py` each return
+`63e8ee5` and nothing else.
+
+**The two root causes the audit never recorded.** Both are the transferable part
+— each is an *environment* defect that presents as a code defect, which is why
+the entry above described the symptom and not the cause.
+
+1. **`python:3.12-slim` ships zero fonts.** Not "a limited set" — none.
+   `find /usr/share/fonts -type f` on the base image returns nothing, so
+   WeasyPrint had no face to set the document in and the PDF path produced
+   nothing readable. No amount of reading the exporter finds this: the code was
+   correct and the image was empty. The fix is two apt packages, and the reason
+   there are two is itself worth keeping — `backend/Dockerfile:12-18`:
+
+   ```dockerfile
+   # The font packages are not optional. `python:3.12-slim` ships **zero** fonts —
+   # `find /usr/share/fonts -type f` returns nothing — so WeasyPrint had nothing to
+   # set the exported report in. Liberation covers the document's serif/sans/mono
+   # stack with Arial- and Times-compatible metrics; DejaVu is the per-glyph
+   # fallback that carries the typographic characters the report actually uses
+   # (U+2212 minus in every figure, en/em dashes, curly quotes, the middot in the
+   # page furniture).
+   RUN apt-get update && apt-get install -y --no-install-recommends \
+       ...
+       fonts-liberation \
+       fonts-dejavu-core \
+       ...
+   ```
+
+   The install is `backend/Dockerfile:27-28` — `fonts-liberation` and
+   `fonts-dejavu-core`. **Do not drop either when slimming the image.** Dropping
+   DejaVu does not blank the report; it turns every minus sign in every figure
+   into a fallback box, which is the failure mode that survives review.
+
+2. **The storage upload had no `upsert`.** The export path is deterministic —
+   `exports/{org_id}/{report_id}/report.{ext}` — so the *second* upload of the
+   same report collided with the existing object and failed, while the first
+   succeeded. A user who re-exported after fixing a title could never get the new
+   file, and nothing in the response distinguished the two cases. Fixed at
+   `backend/app/workers/export_tasks.py:40-49`, with the reasoning kept next to
+   it:
+
+   ```python
+   # Upload to Supabase Storage. `upsert` because the path is deterministic:
+   # without it the *second* export of a report 409s on a duplicate object, so
+   # a user who re-exports after fixing a typo in the title can never get the
+   # new file.
+   storage_path = f"exports/{org_id}/{report_id}/report.{ext}"
+   admin.storage.from_("exports").upload(
+       storage_path,
+       file_bytes,
+       {"content-type": content_type, "upsert": "true"},
+   )
+   ```
+
+   The same fix is applied to the simulation export at
+   `export_tasks.py:80-84`. Note the value is the **string** `"true"`, not the
+   boolean — supabase-py passes `file_options` through as HTTP headers, and a
+   Python `True` serialises to `"True"`, which the storage API does not accept.
+
+**Item 36's own claims, each checked against the current tree:**
+
+| Claim in item 36 | Status | Evidence |
+|---|---|---|
+| `services/export/` produces nothing — `simulation_analytics` was refactored and its three consumers were not | ✅ fixed | `simulation_analytics` is no longer called from `app/services/export/` at all. Both exporters read the validated artifact instead: `pdf_exporter.py:115-119` (`get_analysis` → `artifact`, gated on `build_status == "complete"`), `pptx_exporter.py:39-44` (`load_artifact` → `SimulationAnalysis`) |
+| PDF export reports success and writes no file | ✅ fixed | `pdf_exporter.py:181-187` refuses a stub rather than returning one: under the `MIN_PDF_BYTES = 6_000` floor (`:59`) it raises, and it also rejects bytes not starting `%PDF-`. `ExportError` (`:62-68`) is raised, never returned |
+| The API reports success for a failed export | ✅ fixed | `api/exports.py:42-61` (`_run`) awaits the export and turns every failure into a stated HTTP 500: `:46` handles `ExportError` with the reason in the detail, `:49` catches everything else, and `:55-60` refuses to report success when a file exists but no URL could be signed. The `asyncio.create_task` wrapper that swallowed exceptions **and** discarded the signed URL is gone — see the module docstring at `api/exports.py:1-19` |
+| PPTX ships with zero charts | ✅ fixed | The chart block is no longer inside a blanket `try`. Each chart is drawn on an explicit measured-data guard — `pptx_exporter.py:225-274`, `if len(arc) >= 2`, `if len(platforms) >= 2`, `if len(archetypes) >= 2`, `if len(cohorts) >= 2` — so a missing chart now means "fewer than two measured points", not "an exception was logged and swallowed" |
+| `variant="a"` hardcoded in **all six exporter calls** | ✅ fixed | No `variant` argument survives anywhere in `app/services/export/`. The artifact is per-simulation and carries every arena in `scoreboard`, so reading it removed the parameter rather than fixing its value (`pdf_exporter.py:28-31`) |
+| `variant="a"` hardcoded **one layer down in `report_agent.py`** | ❌ **NOT fixed** | Still present. Filed as **item 40** below rather than closed with the rest |
+
+**Regression cover added by the same commit**, so this cannot silently rot again:
+`tests/test_pdf_export.py` (counts bytes and pages — the docstring states outright
+that "no exception" is not a sufficient assertion, because the exporter used to
+throw one while the product reported success), `tests/test_pptx_export.py`,
+`tests/test_export_api.py`, `tests/test_report_document.py`.
+
+**One thing the closure does not buy.** `/api/exports` is registered
+(`main.py:157`) and now works, but **nothing in the frontend calls it** — zero
+hits for `/exports`, `pptx` or a download handler across `frontend/src`. The
+export was repaired; it is still unreachable from the product. That is item 39's
+decision, not item 36's, and item 39 stays open.
+
+---
+
 ## OPEN — ranked. Verify before fixing.
 
 > **Status 2026-08-04:** items 1–18 and 20–38 are **fixed** (above). What remains
@@ -109,8 +203,16 @@ never applied anything.
 > **item 39** (the no-caller subsystems, which needs a wire-up-or-delete decision
 > per subsystem; `/api/uploads` and the ingestion processors are now wired).
 >
+> **Item 36 now carries its evidence** — commit, file:line and the two root
+> causes — in the third-pass section above. It had been fixed in code while still
+> reading open here, which is the same failure mode as the defects this document
+> exists to catch: a claim nobody could check. Closing it turned up **item 40**,
+> a genuinely unfixed remainder of item 36's last clause.
+>
 > The ranked list is kept below **unedited**, because several entries record the
-> reasoning that made the fix findable and a summary would lose it.
+> reasoning that made the fix findable and a summary would lose it. Where an
+> entry has since been closed or corrected, a marked line is *appended* to it
+> rather than the entry being rewritten.
 
 ### Money and correctness
 
@@ -139,6 +241,19 @@ never applied anything.
 ### Reliability
 
 19. **Nine fire-and-forget `asyncio.create_task(...)` calls hold no strong reference** and may be garbage-collected mid-run — after credits are deducted. Five duplicated `_safe_task` helpers should collapse into one. Related to the durable-jobs item in §8.
+
+    ⚠️ **Still open, but the count has moved — re-counted 2026-08-04.** Five
+    fire-and-forget call sites remain: `api/simulations.py:406`, `:566`,
+    `api/reports.py:77`, `api/ontologies.py:60`, `api/documents.py:171`; and four
+    `_safe_task` copies: `api/simulations.py:28`, `api/reports.py:24`,
+    `api/ontologies.py:17`, `api/documents.py:36`. The sixth call site and fifth
+    helper were in `api/exports.py` and are gone — `63e8ee5` replaced them with
+    an awaited call, which is the item-36 fix. `main.py:48` is **not** in this
+    count: `bridge_task` is bound and cancelled at shutdown (`:50-54`), so it
+    holds a strong reference and is not the defect class. Do not read the
+    reduction as progress on item 19 — nothing became durable; one caller stopped
+    needing to be.
+
 20. `simulation_tasks.py:362` — `_check_stop_signal` returns `False` on any Redis error, so a user's stop never takes effect while the API has already set status `stopped`.
 21. `redis_bridge.py:46` — the bridge exits permanently after one Redis blip; all WS/SSE dead for the process lifetime while `/health` stays green. `main.py:180` hardcodes `checks["llm"] = "ok"`.
 22. `simulation_tasks.py:306/713` — `gather(return_exceptions=True)` results filtered by `isinstance`, discarding exceptions with no log; a partial failure ships a smaller swarm than the customer was quoted.
@@ -244,6 +359,13 @@ never applied anything.
     and writes no file, and PPTX ships with zero charts. Also `variant="a"` is
     still hardcoded one layer down in `report_agent.py` and all six exporter
     calls — on exactly the matched-swarm runs the scoreboard exists for.
+
+    ✅ **CLOSED in `63e8ee5`** — evidence, file:line and the two root causes the
+    entry above never found (`python:3.12-slim` ships zero fonts; the storage
+    upload had no `upsert`) are in the third-pass section. **One clause did not
+    close**: the `report_agent.py` half of the `variant="a"` finding is still
+    live and is now **item 40**.
+
 37. Webhook event names never match (`simulation.completed` vs
     `simulation.complete`) and `webhooks.py` does not validate them, so a broken
     subscription is accepted and displayed as healthy. The create-webhook
@@ -260,6 +382,61 @@ never applied anything.
     table), `/api/score`, `/api/exports` (+ `services/export/`). Decide per
     subsystem: wire it up or delete it. Maintaining code nothing calls is how
     `services/export/` silently rotted.
+
+    ⚠️ **`/api/exports` re-checked 2026-08-04: still has no caller.** The
+    subsystem now *works* (item 36) and is registered at `main.py:157`, but
+    `frontend/src` has zero hits for `/exports`, `pptx`, or any download handler.
+    Repairing it did not wire it. The decision this item asks for is still owed —
+    and `services/export/` is now the strongest argument for the item, since it
+    rotted unnoticed precisely because nothing called it.
+
+### Found while closing item 36 — verified 2026-08-04
+
+40. **The report writer still reads only arena `a`.** This is the surviving half
+    of item 36's last clause: the exporters were fixed by reading the
+    per-simulation artifact, but the ReACT loop underneath them was not.
+
+    `report_agent.py:762-768` declares `_run_react_loop(..., variant: str = "a")`,
+    and its only caller — `report_agent.py:1007-1010`, inside `generate_section` —
+    **passes no `variant`**, so the default stands on every report. It is then
+    forwarded to `simulation_analytics` at `:790` (the `measured_findings` seed),
+    `:877` (every model-requested analytics call) and to `agent_interview_tool` at
+    `:885`. `agent_interview_tool` has its own `variant: str = "a"` default at
+    `react_tools.py:376`.
+
+    The filter is real, not vestigial — `react_tools.py:219-220`:
+
+    ```python
+    if variant != "all":
+        query = query.eq("variant", variant)
+    ```
+
+    **What is and is not affected, checked branch by branch** — this matters,
+    because the blast radius is smaller than it first looks and overstating it
+    would be its own defect:
+
+    - **Unaffected** — `sentiment_over_time` (`:246`), `platform_comparison`
+      (`:290`), `persona_breakdown` (`:303`) and `measured_findings` (`:316`) all
+      call `_artifact(sim_id)`, which is keyed on simulation only
+      (`react_tools.py:168-180`) and carries every arena. The numbers a report
+      cites are therefore whole-run and correct.
+    - **Affected** — `top_posts` (`:228`), `viral_moments` (`:273`) and
+      `agent_activity` (`:280`) iterate the arena-filtered `events` list, and
+      `agent_interview_tool` samples from one arena. So on a matched-swarm run
+      the report's *measured figures* cover every arena while its *quotes,
+      example posts, viral moments and interview responses* are drawn only from
+      arena `a` — and nothing in the output says so.
+
+    That combination is worse than either half alone: the reader is given
+    whole-run statistics illustrated by single-arena evidence, which reads as
+    corroboration and is not. Same shape as the rest of this document — the
+    output is not visibly broken, so nothing fires.
+
+    Fix is the same move that closed the exporter half: the artifact is
+    per-simulation, so the parameter should be removed rather than defaulted,
+    and the event-backed branches should take `variant="all"` unless a caller
+    genuinely wants one arena. ✅ Verified by reading; **not** yet observed
+    against a live multi-arena run.
 
 ---
 
