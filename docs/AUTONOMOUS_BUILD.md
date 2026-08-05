@@ -104,6 +104,11 @@ out, not "coming soon". The user has explicitly deferred it.
 an objection map without reading anything, and at every point where they could
 skip a step the screen tells them what it will cost them.
 
+⚠ **That criterion is a judgement, and you are the worst available judge of it** —
+you will have spent the night in this code and every label will look obvious to
+you because you wrote it. **§4a is how it gets proved instead of asserted, and it
+is not optional.**
+
 ### 1.2 GTM query targeting — returns competitors instead of buyers
 
 Reported from live use: searching for buyers returns vendors in the user's own
@@ -262,6 +267,88 @@ nothing is worse than a missing test — `structlog.testing.capture_logs`, never
 
 ---
 
+## 4a. Proving the staged IA works, rather than believing it does
+
+The self-assessment problem is not solved by better criteria. It is solved by
+turning most of the judgement into assertions, and having the residue judged by
+something that has not seen the build.
+
+### Five tests that must exist and pass
+
+Frontend suite. Each one is mechanical — no judgement, no screenshots.
+
+1. **Jargon.** Scan user-facing strings (JSX text, `aria-label`, `title`,
+   `placeholder`, button labels) for `ICP`, `variant`, `A/B`, `adversarial`,
+   `cohort`, `arena`, `lens`, `archetype`, `canonical`, `valence`, and
+   `simulation` used as a noun the founder must understand. Fail on a hit.
+   Comments and type names are excluded — this is about what renders.
+   **This is the test most likely to catch you**, because the jargon is what you
+   will have been reading all night.
+2. **No dead ends.** Every empty state renders at least one link or button. A
+   screen that tells a founder there is nothing here and offers no way forward is
+   where they close the tab.
+3. **Never a grey button.** No `disabled` control without an explanation node
+   adjacent to it. This is the binding rule from §1.1, asserted.
+4. **Inheritance is declared.** Every stage renders either its inherited-state
+   line ("Audience — 6 buyer types, confirmed 4 Aug") or an explicit
+   missing-input notice. Never neither.
+5. **Reachability.** Walk the route graph from `/app` and assert every built
+   feature is reachable in **≤ 3 clicks**. This is the actual defect being
+   fixed — Audiences, Companies and the whole scoreboard shipped with no route
+   to them — so it is the one test that would have caught the original problem.
+
+### Seed the states, or they will not get checked
+
+Degraded states are the hard part to verify because they are the hard part to
+*produce*. Seed a test org with four products so every state is a URL:
+
+| Product | State |
+|---|---|
+| A | created, nothing uploaded |
+| B | material uploaded, audience confirmed, no run |
+| C | one completed run, objections found, no answers drafted |
+| D | run, answers, buyers and a message test — the full rail |
+
+### Look at it
+
+Run the app and screenshot each stage against each seeded product. The most
+valuable catch of the whole day came from an agent rasterising PDF pages and
+*looking* — it found a hatch generator that clipped every bar not at the origin,
+which no passing test would ever have surfaced. Reading your own markup is not
+the same as seeing it render.
+
+There is a `/run` skill for launching the app.
+
+### The cold read
+
+Spawn one agent that has **not** seen this document, the design artifact, or the
+diff. Give it only the screenshots and one instruction:
+
+> You are a SaaS founder. You have shipped something with Claude Code. You do
+> not know what an ICP is. Get from here to a list of the objections that will
+> kill your launch. Narrate every point where you are unsure what to click, and
+> every word you do not understand.
+
+Its confusion is the finding. **Do not explain the design to it and re-ask** —
+an agent holding the design will always find the design obvious, which is
+exactly the failure mode being tested for.
+
+### The builder does not sign off
+
+Whoever writes the IA does not run the acceptance pass. A second agent takes
+§1.1's criteria, the five tests, the screenshots and the cold read, and reports
+pass or fail with evidence. Separate roles, because the author cannot un-know
+what they meant.
+
+### Make being wrong cheap
+
+Ship the new IA as **additive routes with the existing ones still working**. If
+the morning review rejects it, the fix is a navigation change rather than a
+revert of a night's work. This does not reduce the chance of being wrong; it
+reduces what wrong costs, which is the better lever when nobody is awake.
+
+---
+
 ## 5. Running agents in parallel
 
 **Assign file ownership up front and never let two agents own one file.** Two
@@ -333,10 +420,15 @@ Leave it as the final message. The user reads this first:
 
 1. **What is live** — with the verification output proving it, not asserted.
 2. **What was built** — against the acceptance criteria in §1.
-3. **What you could not do** — hard stops hit, things you could not reproduce,
+3. **The cold read, quoted verbatim.** Where the agent that had never seen the
+   build got stuck, and which words it did not understand. Quote it even where
+   it is unflattering — especially there. That transcript is the closest thing
+   to a user test the user will have before showing this to real founders, and
+   it is worth more than any summary you could write about it.
+4. **What you could not do** — hard stops hit, things you could not reproduce,
    anything you deliberately left. Be specific; "mostly done" is not a status.
-4. **What it cost** — live-run spend against the $40.
-5. **What you would do next**, in priority order.
+5. **What it cost** — live-run spend against the $40.
+6. **What you would do next**, in priority order.
 
 **Report faithfully.** If something is broken, say so with the output. If a test
 was skipped, say that. This codebase's entire defect history is things that
