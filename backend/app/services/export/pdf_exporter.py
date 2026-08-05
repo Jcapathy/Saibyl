@@ -1,181 +1,206 @@
 # PUBLIC INTERFACE
 # ─────────────────────────────────────────────────────────
-# export_report_pdf(report_id: UUID) -> bytes
+# export_report_pdf(report_id) -> bytes
+# build_document_input(report_id) -> ReportDocumentInput
+# render_pdf(html: str) -> bytes
+# ExportError
+# MIN_PDF_BYTES
 # ─────────────────────────────────────────────────────────
+"""PDF export: assemble the document's inputs, typeset them, verify the result.
+
+Three things went wrong here before, and each has a structural answer now.
+
+**It produced nothing and said it had succeeded.** `simulation_analytics` was
+refactored to return the measurement artifact's shape and none of its three
+callers here were updated: `sentiment_curve` became a list of dicts while this
+module still indexed it as a dict keyed by round, and `platform_events` and
+`persona_events` became `platforms` and `archetypes` while this module still
+read the old keys. The first raised `TypeError`, the API's fire-and-forget
+wrapper swallowed it, and the caller was told the export had started and never
+learnt otherwise. The fix is to read the artifact directly — one typed shape,
+validated on the way in — and to *check the bytes* before claiming success.
+
+**It rendered a fabricated number.** The heatmap was built with
+`"sentiment": 0.0` hardcoded for every cell. It is gone, along with the heatmap:
+there is no persona × platform sentiment field in the artifact, so under this
+document's rules there is no such chart to draw.
+
+**It hardcoded `variant="a"`.** Every analytics call asked for the first arena,
+on precisely the matched-swarm runs the scoreboard exists to compare. The
+artifact is per-simulation and carries every arena in `scoreboard`, so reading
+it removes the parameter rather than fixing its value.
+"""
 from __future__ import annotations
 
-import base64
+import asyncio
 from datetime import UTC, datetime
 from uuid import UUID
 
 import structlog
-from weasyprint import HTML
 
-from app.core.database import get_supabase_admin
-from app.services.export.chart_renderer import (
-    render_heatmap,
-    render_platform_activity,
-    render_sentiment_chart,
+from app.services.export.report_document import (
+    DocumentSection,
+    ReportDocumentInput,
+    build_report_html,
 )
-from app.services.intelligence.react_tools import simulation_analytics
-from app.services.intelligence.report_agent import clean_report_output
 
 logger = structlog.get_logger()
 
+# The database and the report agent are imported inside `build_document_input`
+# rather than at module scope. Typesetting is the expensive, fragile part of
+# this file and it depends on none of that: keeping the imports local means
+# `render_pdf` can be exercised — and its output counted — without standing up
+# Supabase or loading a model client.
 
-def _b64_img(png_bytes: bytes) -> str:
-    return f"data:image/png;base64,{base64.b64encode(png_bytes).decode()}"
+# A WeasyPrint document with a cover, a contents page and one body page does not
+# come out under 6 KB. Anything smaller means the renderer produced a stub, and
+# a stub must fail loudly rather than be uploaded and handed to a customer as
+# their report.
+MIN_PDF_BYTES = 6_000
 
 
-def _adversarial_disclosure(simulation_id: str) -> dict:
-    """The run's adversarial disclosure, read from the artifact.
+class ExportError(RuntimeError):
+    """An export that did not produce a usable file.
 
-    Read, never recomposed. The sentence is written once in
-    `analysis_builder._adversarial_disclosure` so the viewer, the print page,
-    the JSON export and this PDF cannot say four slightly different things about
-    the same cohort.
+    Raised rather than returned. The whole class of defect this replaces is a
+    success response with no file behind it, and that only happens when a
+    failure has somewhere quiet to go.
     """
+
+
+def _row(table: str, column: str, value: str, select: str = "*") -> dict:
+    from app.core.database import get_supabase_admin
+
+    admin = get_supabase_admin()
+    result = (
+        admin.table(table).select(select).eq(column, value).limit(1).execute()
+    )
+    rows = result.data or []
+    if not rows:
+        raise ExportError(f"{table}: no row with {column}={value}")
+    return rows[0]
+
+
+def build_document_input(report_id: str | UUID) -> ReportDocumentInput:
+    """Read every row the document needs and shape it for the typesetter.
+
+    Separated from rendering so the document can be built and asserted on
+    without a PDF engine, and so a missing row fails here — named — rather than
+    as a `KeyError` three layers down inside a template.
+    """
+    from app.core.database import get_supabase_admin
+    from app.services.intelligence.report_agent import clean_report_output
+
+    admin = get_supabase_admin()
+    report_id = str(report_id)
+
+    report = _row("reports", "id", report_id)
+    simulation_id = str(report["simulation_id"])
+    simulation = _row("simulations", "id", simulation_id)
+    organization = _row(
+        "organizations", "id", str(report["organization_id"]), select="name"
+    )
+
+    sections = (
+        admin.table("report_sections")
+        .select("section_index, title, content")
+        .eq("report_id", report_id)
+        .order("section_index")
+        .execute()
+    ).data or []
+
+    # The artifact, read the same way the viewer reads it: the stored
+    # `schema_version` travels with the payload so the document can refuse an
+    # unknown format instead of rendering the fields it recognises.
     from app.services.intelligence.analysis_builder import get_analysis
 
-    artifact = (get_analysis(simulation_id) or {}).get("artifact") or {}
-    return artifact.get("adversarial") or {"enabled": False}
+    stored = get_analysis(simulation_id) or {}
+    artifact = stored.get("artifact") if stored.get("build_status") == "complete" else None
+    schema_version = stored.get("schema_version") if artifact else None
 
-
-async def export_report_pdf(report_id: UUID) -> bytes:
-    """Generate PDF from a completed report."""
-    admin = get_supabase_admin()
-
-    report = admin.table("reports").select("*").eq(
-        "id", str(report_id)
-    ).single().execute().data
-
-    sim = admin.table("simulations").select("*").eq(
-        "id", report["simulation_id"]
-    ).single().execute().data
-
-    org = admin.table("organizations").select("name").eq(
-        "id", report["organization_id"]
-    ).single().execute().data
-
-    sections = admin.table("report_sections").select("*").eq(
-        "report_id", str(report_id)
-    ).order("section_index").execute().data
-
-    # Generate charts
-    sentiment_data = await simulation_analytics(
-        UUID(report["simulation_id"]), "sentiment_over_time"
-    )
-    sentiment_chart = ""
-    curve = sentiment_data.data.get("sentiment_curve", {})
-    if curve:
-        timeline = [curve[k] for k in sorted(curve, key=int)]
-        sentiment_chart = _b64_img(render_sentiment_chart(timeline))
-
-    platform_data = await simulation_analytics(
-        UUID(report["simulation_id"]), "platform_comparison"
-    )
-    platform_chart = ""
-    pdata = platform_data.data.get("platform_events", {})
-    if pdata:
-        platform_chart = _b64_img(render_platform_activity(pdata))
-
-    persona_data = await simulation_analytics(
-        UUID(report["simulation_id"]), "persona_breakdown"
-    )
-    heatmap_chart = ""
-    # Build simple heatmap from persona breakdown
-    pbreakdown = persona_data.data.get("persona_events", {})
-    if pbreakdown:
-        heatmap_items = [
-            {"persona_type": k, "platform": "all", "intensity": min(1.0, v / 50), "sentiment": 0.0}
-            for k, v in pbreakdown.items()
-        ]
-        heatmap_chart = _b64_img(render_heatmap(heatmap_items))
-
-    # Build HTML
-    sections_html = ""
-    for s in sections:
-        content = clean_report_output(s.get("content") or "").replace("\n", "<br>")
-        sections_html += f"""
-        <div class="section">
-            <h2>{s['title']}</h2>
-            <div class="section-content">{content}</div>
-        </div>
-        """
-
-    # PRD §4: adversarial agents are labelled synthetic in every report and
-    # export. A PDF is the artefact that gets forwarded to a board or an
-    # investor, so it is the one where an unlabelled hostile cohort does the
-    # most damage — the recipient never saw the run being configured.
-    adversarial_html = ""
-    disclosure = _adversarial_disclosure(report["simulation_id"])
-    if disclosure.get("enabled"):
-        roles = disclosure.get("roles") or {}
-        roles_line = (
-            "<p><strong>Roles:</strong> "
-            + ", ".join(f"{k.replace('_', ' ')} ({v})" for k, v in sorted(roles.items()))
-            + "</p>"
-            if roles
-            else ""
+    agent_count = simulation.get("agent_count")
+    if agent_count is None:
+        counted = (
+            admin.table("simulation_agents")
+            .select("id", count="exact")
+            .eq("simulation_id", simulation_id)
+            .limit(1)
+            .execute()
         )
-        adversarial_html = f"""
-    <div class="section adversarial">
-        <h2>Adversarial cohort disclosure</h2>
-        <p>{disclosure.get('disclosure', '')}</p>
-        {roles_line}
-    </div>"""
+        agent_count = counted.count or None
 
-    charts_html = ""
-    if sentiment_chart:
-        charts_html += f'<div class="chart"><img src="{sentiment_chart}"></div>'
-    if platform_chart:
-        charts_html += f'<div class="chart"><img src="{platform_chart}"></div>'
-    if heatmap_chart:
-        charts_html += f'<div class="chart"><img src="{heatmap_chart}"></div>'
+    run_started = simulation.get("created_at")
+    if run_started:
+        try:
+            run_started = datetime.fromisoformat(
+                str(run_started).replace("Z", "+00:00")
+            ).strftime("%d %B %Y")
+        except ValueError:
+            run_started = str(run_started)
 
-    html_content = f"""<!DOCTYPE html>
-<html>
-<head>
-<style>
-    @page {{ margin: 2cm; @bottom-center {{ content: "{org['name']} — Generated by Saibyl | Page " counter(page); }} }}
-    body {{ font-family: system-ui, -apple-system, sans-serif; color: #1A3A5C; line-height: 1.6; font-size: 11pt; }}
-    .cover {{ text-align: center; padding: 120px 0 60px; page-break-after: always; }}
-    .cover h1 {{ font-size: 28pt; color: #1A3A5C; margin-bottom: 10px; }}
-    .cover .subtitle {{ font-size: 14pt; color: #666; }}
-    .cover .date {{ font-size: 11pt; color: #999; margin-top: 30px; }}
-    h2 {{ color: #2E6DA4; border-bottom: 2px solid #2E6DA4; padding-bottom: 5px; page-break-after: avoid; }}
-    .section {{ page-break-inside: avoid; margin-bottom: 24px; }}
-    .section-content {{ margin-top: 8px; }}
-    .chart {{ text-align: center; margin: 20px 0; page-break-inside: avoid; }}
-    .chart img {{ max-width: 100%; height: auto; }}
-    .methodology {{ background: #F0F4FA; padding: 16px; border-radius: 6px; font-size: 10pt; }}
-    .adversarial {{ background: #FDF6E3; border-left: 4px solid #C9A227; padding: 16px; border-radius: 6px; font-size: 10pt; }}
-</style>
-</head>
-<body>
-    <div class="cover">
-        <h1>{report.get('title', 'Intelligence Report')}</h1>
-        <div class="subtitle">{sim['name']}</div>
-        <div class="subtitle">{org['name']}</div>
-        <div class="date">{datetime.now(UTC).strftime('%B %d, %Y')}</div>
-    </div>
+    return ReportDocumentInput(
+        org_name=organization.get("name") or "",
+        simulation_name=simulation.get("name") or "Simulation",
+        report_title=report.get("title") or "Predictive intelligence report",
+        prediction_goal=simulation.get("prediction_goal") or "",
+        generated_at=datetime.now(UTC),
+        report_id=report_id,
+        simulation_id=simulation_id,
+        platforms=list(simulation.get("platforms") or []),
+        max_rounds=simulation.get("max_rounds"),
+        variants=int(simulation.get("variants") or 1),
+        agent_count=agent_count,
+        run_started=run_started,
+        schema_version=schema_version,
+        artifact=artifact,
+        sections=[
+            DocumentSection(
+                title=section.get("title") or "",
+                content=clean_report_output(section.get("content") or ""),
+            )
+            for section in sections
+        ],
+    )
 
-    {sections_html}
 
-    {charts_html}
+def render_pdf(html: str) -> bytes:
+    """Typeset the document. Raises `ExportError` rather than returning a stub."""
+    try:
+        from weasyprint import HTML
+    except Exception as exc:  # pragma: no cover - deployment dependency
+        # Not just `ImportError`. When the package is installed but its native
+        # libraries are not, the import raises `OSError` from `ffi.dlopen`, and
+        # catching only `ImportError` would let a deployment fault surface as a
+        # stack trace instead of a stated export failure.
+        raise ExportError(
+            "WeasyPrint is unavailable, so no PDF can be produced. It needs "
+            "pango, cairo and gdk-pixbuf, which the backend image installs."
+        ) from exc
 
-    {adversarial_html}
+    pdf_bytes = HTML(string=html).write_pdf()
+    if not pdf_bytes or len(pdf_bytes) < MIN_PDF_BYTES:
+        raise ExportError(
+            f"PDF rendering produced {len(pdf_bytes or b'')} bytes, below the "
+            f"{MIN_PDF_BYTES}-byte floor for a real document."
+        )
+    if not pdf_bytes.startswith(b"%PDF-"):
+        raise ExportError("PDF rendering produced bytes that are not a PDF.")
+    return pdf_bytes
 
-    <div class="section methodology">
-        <h2>Methodology</h2>
-        <p><strong>Platforms:</strong> {', '.join(sim.get('platforms') or ['N/A'])}</p>
-        <p><strong>Max rounds:</strong> {sim.get('max_rounds', 'N/A')}</p>
-        <p><strong>Prediction goal:</strong> {sim.get('prediction_goal', 'N/A')}</p>
-        <p><strong>Variants tested:</strong> {sim.get('variants') or 1}</p>
-    </div>
-</body>
-</html>"""
 
-    pdf_bytes = HTML(string=html_content).write_pdf()
-    logger.info("pdf_exported", report_id=str(report_id), size=len(pdf_bytes))
+async def export_report_pdf(report_id: str | UUID) -> bytes:
+    """The print-quality report for one report row, as PDF bytes."""
+    document = build_document_input(report_id)
+    html = build_report_html(document)
+    # Typesetting is CPU-bound and takes long enough on a multi-page document to
+    # be felt by every other request on the worker. Off the event loop.
+    pdf_bytes = await asyncio.to_thread(render_pdf, html)
+    logger.info(
+        "pdf_exported",
+        report_id=str(report_id),
+        simulation_id=document.simulation_id,
+        bytes=len(pdf_bytes),
+        measured=document.artifact is not None,
+        sections=len(document.sections),
+    )
     return pdf_bytes

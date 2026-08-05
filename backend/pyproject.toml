@@ -43,6 +43,11 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "ruff>=0.5.0",
     "black>=24.0.0",
+    # Opens the exported PDF and counts its pages. Declared rather than relied
+    # on transitively: "the export produced a real, multi-page file" is the
+    # assertion that would otherwise have to be downgraded to "no exception",
+    # which is exactly what let a broken exporter report success.
+    "pypdf>=4.0.0",
 ]
 
 [build-system]

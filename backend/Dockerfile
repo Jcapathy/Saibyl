@@ -8,6 +8,14 @@ FROM python:3.12-slim
 WORKDIR /app
 
 # System deps: ffmpeg (video processing), WeasyPrint (PDF export), curl (healthcheck)
+#
+# The font packages are not optional. `python:3.12-slim` ships **zero** fonts —
+# `find /usr/share/fonts -type f` returns nothing — so WeasyPrint had nothing to
+# set the exported report in. Liberation covers the document's serif/sans/mono
+# stack with Arial- and Times-compatible metrics; DejaVu is the per-glyph
+# fallback that carries the typographic characters the report actually uses
+# (U+2212 minus in every figure, en/em dashes, curly quotes, the middot in the
+# page furniture).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libcairo2 \
@@ -16,6 +24,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgdk-pixbuf-2.0-0 \
     libffi-dev \
     shared-mime-info \
+    fonts-liberation \
+    fonts-dejavu-core \
     curl \
     && rm -rf /var/lib/apt/lists/*
 

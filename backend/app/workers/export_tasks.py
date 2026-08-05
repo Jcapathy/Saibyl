@@ -37,12 +37,15 @@ async def run_export_report(report_id: str, format: str = "pdf"):
     else:
         raise ValueError(f"Unsupported format: {format}")
 
-    # Upload to Supabase Storage
+    # Upload to Supabase Storage. `upsert` because the path is deterministic:
+    # without it the *second* export of a report 409s on a duplicate object, so
+    # a user who re-exports after fixing a typo in the title can never get the
+    # new file.
     storage_path = f"exports/{org_id}/{report_id}/report.{ext}"
     admin.storage.from_("exports").upload(
         storage_path,
         file_bytes,
-        {"content-type": content_type},
+        {"content-type": content_type, "upsert": "true"},
     )
 
     # Generate signed download URL (1 hour)
@@ -77,7 +80,7 @@ async def run_export_simulation(simulation_id: str):
     admin.storage.from_("exports").upload(
         storage_path,
         file_bytes,
-        {"content-type": "application/gzip"},
+        {"content-type": "application/gzip", "upsert": "true"},
     )
 
     signed = admin.storage.from_("exports").create_signed_url(storage_path, 3600)

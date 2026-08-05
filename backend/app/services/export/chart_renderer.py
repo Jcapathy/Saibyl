@@ -1,223 +1,174 @@
 # PUBLIC INTERFACE
 # ─────────────────────────────────────────────────────────
-# render_sentiment_chart(timeline: list[float], headline: str | None) -> bytes  (PNG)
-# render_heatmap(data: list[dict]) -> bytes  (PNG)
-# render_persona_distribution(data: dict[str, int]) -> bytes  (PNG)
-# render_platform_activity(data: dict[str, int]) -> bytes  (PNG)
+# render_sentiment_arc_png(rows, title) -> bytes  (PNG)
+# render_interval_rows_png(rows, title, domain, signed, axis_label) -> bytes  (PNG)
 # ─────────────────────────────────────────────────────────
+"""Raster charts for the PowerPoint export.
+
+The PDF draws its own vector figures (`vector_charts`) because a document is
+typeset. A `.pptx` cannot embed SVG — `python-pptx` takes raster or nothing — so
+this module exists solely to give the deck the same figures at slide resolution.
+
+It shares three rules with the vector renderer, deliberately:
+
+* **Every entry point takes an interval**, never a bare mean. There is no
+  function here that can draw a point estimate without its band.
+* **Nothing is distinguished by hue alone.** The palette is a neutral ink scale
+  plus texture, so a slide printed as a greyscale handout — which is what
+  happens to every deck eventually — loses no information.
+* **Unmeasured rows never arrive.** Callers drop `n == 0` before calling. The
+  previous version of this file had a `render_heatmap` whose caller passed
+  `"sentiment": 0.0` for every cell; both are gone.
+"""
 from __future__ import annotations
 
 import io
+from dataclasses import dataclass
 
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
 
-# ── Brand color system (matches frontend CHART_COLORS) ──
-SUBJECT_A = "#6C63FF"   # Purple — Primary entity
-SUBJECT_B = "#00D4FF"   # Cyan — Secondary entity
-NEUTRAL   = "#D4A84B"   # Gold — Moderate / Undecided
-POSITIVE  = "#34D399"   # Green — Positive movement
-NEGATIVE  = "#F87171"   # Red — Negative movement
+INK = "#14181d"
+INK_MID = "#5a6570"
+INK_SOFT = "#909aa4"
+GRID = "#e2e7eb"
+FILL_DARK = "#2b343d"
+PAPER = "#ffffff"
 
-# Legacy aliases for backward compat (used in pdf_exporter title styling)
-PRIMARY = "#1A3A5C"
-LIGHT_BG = "#F0F4FA"
-
-# Ordered palette for multi-series charts
-PALETTE = [SUBJECT_A, SUBJECT_B, NEUTRAL, POSITIVE, NEGATIVE, "#818CF8"]
-
-# Per-platform colors (matches frontend PLATFORM_COLORS)
-PLATFORM_COLORS: dict[str, str] = {
-    "twitter_x":     SUBJECT_A,
-    "reddit":        NEGATIVE,
-    "linkedin":      NEUTRAL,
-    "instagram":     SUBJECT_B,
-    "hacker_news":   "#818CF8",
-    "discord":       "#A78BFA",
-    "news_comments": POSITIVE,
-    "tiktok":        "#EE1D52",
-    "youtube":       "#FF0000",
-    "facebook":      "#1877F2",
-    "threads":       "#000000",
-    "custom":        "#94A3B8",
-}
+MINUS = "−"
 
 
-def _sentiment_bar_color(v: float) -> str:
-    """Return bar color based on sentiment value — matches frontend sentimentBarColor()."""
-    if v >= 0.2:
-        return POSITIVE
-    if v >= -0.2:
-        return NEUTRAL
-    return NEGATIVE
+@dataclass(frozen=True)
+class ChartRow:
+    """A label, a mean, its 95% band, and the agent count behind it."""
+
+    label: str
+    mean: float
+    lower: float
+    upper: float
+    n: int
 
 
-def _find_inflection(timeline: list[float]) -> int | None:
-    """Find the index of the largest single-step sentiment change."""
-    if len(timeline) < 3:
-        return None
-    max_delta = 0.0
-    max_idx = -1
-    for i in range(1, len(timeline)):
-        delta = abs(timeline[i] - timeline[i - 1])
-        if delta > max_delta:
-            max_delta = delta
-            max_idx = i
-    return max_idx if max_delta > 0.1 else None
+def _signed(value: float, digits: int = 2) -> str:
+    text = f"{abs(value):.{digits}f}"
+    return f"{MINUS}{text}" if value < 0 else f"+{text}"
 
 
-def render_sentiment_chart(timeline: list[float], headline: str | None = None) -> bytes:
-    """Render sentiment over time as a bar chart with inflection annotation."""
-    fig, ax = plt.subplots(figsize=(8, 3.5))
-    rounds = list(range(1, len(timeline) + 1))
+def _plain(value: float, digits: int = 2) -> str:
+    text = f"{abs(value):.{digits}f}"
+    return f"{MINUS}{text}" if value < 0 else text
 
-    # Per-bar coloring based on sentiment value
-    bar_colors = [_sentiment_bar_color(v) for v in timeline]
-    bars = ax.bar(rounds, timeline, color=bar_colors, edgecolor="none", width=0.7)
 
-    # Zero line
-    ax.axhline(y=0, color="#999", linestyle="--", linewidth=0.5)
-
-    # Inflection annotation
-    inflection_idx = _find_inflection(timeline)
-    if inflection_idx is not None:
-        x = rounds[inflection_idx]
-        y = timeline[inflection_idx]
-        prev = timeline[inflection_idx - 1]
-        delta = y - prev
-        sign = "+" if delta > 0 else ""
-        arrow = "↑" if delta > 0 else "↓"
-        ax.annotate(
-            f"Inflection {arrow} {sign}{delta:.2f}",
-            xy=(x, y),
-            xytext=(x, y + (0.2 if y >= 0 else -0.2)),
-            fontsize=8,
-            fontweight="bold",
-            color=NEGATIVE,
-            ha="center",
-            arrowprops=dict(arrowstyle="->", color=NEGATIVE, lw=1.2),
-        )
-        # Highlight the inflection bar with an outline
-        bars[inflection_idx].set_edgecolor(NEGATIVE)
-        bars[inflection_idx].set_linewidth(2)
-
-    ax.set_xlabel("Round", fontsize=10)
-    ax.set_ylabel("Avg Sentiment", fontsize=10)
-
-    # Use headline as title if provided, otherwise generic title
-    title = headline or "Sentiment Over Time"
-    ax.set_title(title, fontsize=11, color=PRIMARY, fontweight="bold", loc="left")
-
-    ax.set_ylim(-1.1, 1.1)
-    ax.set_facecolor(LIGHT_BG)
-    fig.tight_layout()
+def _save(fig) -> bytes:
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+    fig.savefig(buf, format="png", dpi=200, bbox_inches="tight", facecolor=PAPER)
     plt.close(fig)
     buf.seek(0)
     return buf.read()
 
 
-def render_heatmap(data: list[dict]) -> bytes:
-    """Render persona x platform heatmap as PNG.
-    data: list of {"persona_type": str, "platform": str, "intensity": float, "sentiment": float}
+def render_sentiment_arc_png(
+    rows: list[ChartRow], title: str = "Measured valence by round"
+) -> bytes:
+    """Mean valence per round as columns with 95% whiskers.
+
+    Positive columns are solid, negative columns hatched: the sign is carried by
+    texture as well as position, so it survives a greyscale handout.
     """
-    if not data:
-        return _empty_chart("No heatmap data")
+    if not rows:
+        raise ValueError("render_sentiment_arc_png needs at least one measured row")
 
-    personas = sorted({d["persona_type"] for d in data})
-    platforms = sorted({d["platform"] for d in data})
+    fig, ax = plt.subplots(figsize=(10, 4.2))
+    x = list(range(len(rows)))
+    means = [row.mean for row in rows]
+    lower_err = [max(0.0, row.mean - row.lower) for row in rows]
+    upper_err = [max(0.0, row.upper - row.mean) for row in rows]
 
-    grid = np.zeros((len(personas), len(platforms)))
-    for d in data:
-        pi = personas.index(d["persona_type"])
-        pj = platforms.index(d["platform"])
-        grid[pi][pj] = d["intensity"]
+    bars = ax.bar(x, means, width=0.62, color=FILL_DARK, edgecolor=INK, linewidth=0.8)
+    for bar, row in zip(bars, rows):
+        if row.mean < 0:
+            bar.set_facecolor(PAPER)
+            bar.set_hatch("////")
+            bar.set_edgecolor(INK)
 
-    fig, ax = plt.subplots(figsize=(max(6, len(platforms) * 1.2), max(4, len(personas) * 0.6)))
+    ax.errorbar(
+        x, means, yerr=[lower_err, upper_err],
+        fmt="none", ecolor=INK, elinewidth=1.1, capsize=4, capthick=1.1,
+    )
+    ax.axhline(0, color=INK_MID, linewidth=0.8)
+    ax.set_ylim(-1.15, 1.15)
+    ax.set_xticks(x)
+    ax.set_xticklabels([f"R{row.label}" for row in rows], fontsize=9, color=INK_MID)
+    ax.set_ylabel("Mean valence", fontsize=9, color=INK_MID)
+    ax.set_title(title, fontsize=12, color=INK, fontweight="bold", loc="left")
+    ax.yaxis.grid(True, color=GRID, linewidth=0.6, linestyle=(0, (2, 2)))
+    ax.set_axisbelow(True)
+    for spine in ("top", "right"):
+        ax.spines[spine].set_visible(False)
 
-    # Custom colormap using brand colors: Gold (low) → Purple (high)
-    from matplotlib.colors import LinearSegmentedColormap
-    brand_cmap = LinearSegmentedColormap.from_list("brand", [NEUTRAL, SUBJECT_A], N=256)
+    if len(rows) <= 14:
+        for xi, row in zip(x, rows):
+            offset = 0.06 if row.mean >= 0 else -0.06
+            ax.text(
+                xi, row.upper + offset if row.mean >= 0 else row.lower + offset,
+                _signed(row.mean), ha="center",
+                va="bottom" if row.mean >= 0 else "top",
+                fontsize=8, fontweight="bold", color=INK,
+            )
 
-    im = ax.imshow(grid, cmap=brand_cmap, aspect="auto", vmin=0, vmax=1)
-    ax.set_xticks(range(len(platforms)))
-    ax.set_xticklabels(platforms, rotation=45, ha="right", fontsize=8)
-    ax.set_yticks(range(len(personas)))
-    ax.set_yticklabels(personas, fontsize=8)
-    ax.set_title("Activity Heatmap (Persona × Platform)", fontsize=12, color=PRIMARY, fontweight="bold", loc="left")
-    fig.colorbar(im, ax=ax, shrink=0.8, label="Activity Intensity")
+    ax.text(
+        0.0, -0.18,
+        "Whiskers are the 95% confidence interval across agents. "
+        "Rounds with no measurable opinion are absent, not zero.",
+        transform=ax.transAxes, fontsize=8, color=INK_SOFT,
+    )
     fig.tight_layout()
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    return buf.read()
+    return _save(fig)
 
 
-def render_persona_distribution(data: dict[str, int]) -> bytes:
-    """Render persona type distribution as horizontal bar chart."""
-    if not data:
-        return _empty_chart("No persona data")
+def render_interval_rows_png(
+    rows: list[ChartRow],
+    title: str,
+    *,
+    domain: tuple[float, float] = (-1.0, 1.0),
+    signed: bool = True,
+    axis_label: str = "Mean valence",
+) -> bytes:
+    """A dot-and-whisker row per estimate, with the figures printed alongside."""
+    if not rows:
+        raise ValueError("render_interval_rows_png needs at least one measured row")
 
-    labels = list(data.keys())
-    values = list(data.values())
+    fmt = _signed if signed else _plain
+    height = max(2.4, 0.46 * len(rows) + 1.2)
+    fig, ax = plt.subplots(figsize=(10, height))
 
-    # Cycle through brand palette
-    bar_colors = [PALETTE[i % len(PALETTE)] for i in range(len(labels))]
+    y = list(range(len(rows)))[::-1]
+    for yi, row in zip(y, rows):
+        ax.plot([row.lower, row.upper], [yi, yi], color=INK_MID, linewidth=1.3)
+        ax.plot([row.lower, row.lower], [yi - 0.16, yi + 0.16], color=INK_MID, linewidth=1.3)
+        ax.plot([row.upper, row.upper], [yi - 0.16, yi + 0.16], color=INK_MID, linewidth=1.3)
+        ax.plot(
+            [row.mean], [yi], marker="o", markersize=7,
+            markerfacecolor=PAPER, markeredgecolor=INK, markeredgewidth=1.6,
+        )
+        ax.text(
+            domain[1], yi,
+            f"  {fmt(row.mean)} [{fmt(row.lower)}, {fmt(row.upper)}]  n={row.n}",
+            va="center", ha="left", fontsize=8, color=INK,
+        )
 
-    fig, ax = plt.subplots(figsize=(8, max(3, len(labels) * 0.4)))
-    bars = ax.barh(labels, values, color=bar_colors)
-    ax.set_xlabel("Count", fontsize=10)
-    ax.set_title("Persona Distribution", fontsize=12, color=PRIMARY, fontweight="bold", loc="left")
-    ax.set_facecolor(LIGHT_BG)
-
-    for bar, val in zip(bars, values):
-        ax.text(bar.get_width() + 0.5, bar.get_y() + bar.get_height() / 2,
-                str(val), va="center", fontsize=8)
-
+    if domain[0] < 0 < domain[1]:
+        ax.axvline(0, color=INK_MID, linewidth=0.8)
+    ax.set_yticks(y)
+    ax.set_yticklabels([row.label for row in rows], fontsize=9, color=INK)
+    ax.set_xlim(*domain)
+    ax.set_xlabel(axis_label, fontsize=9, color=INK_MID)
+    ax.set_title(title, fontsize=12, color=INK, fontweight="bold", loc="left")
+    ax.xaxis.grid(True, color=GRID, linewidth=0.6, linestyle=(0, (2, 2)))
+    ax.set_axisbelow(True)
+    for spine in ("top", "right", "left"):
+        ax.spines[spine].set_visible(False)
     fig.tight_layout()
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    return buf.read()
-
-
-def render_platform_activity(data: dict[str, int]) -> bytes:
-    """Render platform activity as bar chart."""
-    if not data:
-        return _empty_chart("No platform data")
-
-    labels = list(data.keys())
-    values = list(data.values())
-
-    # Use per-platform brand colors, falling back to palette cycling
-    bar_colors = [PLATFORM_COLORS.get(label, PALETTE[i % len(PALETTE)]) for i, label in enumerate(labels)]
-
-    fig, ax = plt.subplots(figsize=(max(5, len(labels) * 1.5), 4))
-    ax.bar(labels, values, color=bar_colors)
-    ax.set_ylabel("Events", fontsize=10)
-    ax.set_title("Platform Activity", fontsize=12, color=PRIMARY, fontweight="bold", loc="left")
-    ax.set_facecolor(LIGHT_BG)
-    fig.tight_layout()
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    return buf.read()
-
-
-def _empty_chart(message: str) -> bytes:
-    """Render a placeholder chart."""
-    fig, ax = plt.subplots(figsize=(6, 3))
-    ax.text(0.5, 0.5, message, ha="center", va="center", fontsize=14, color="#999")
-    ax.set_axis_off()
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=100)
-    plt.close(fig)
-    buf.seek(0)
-    return buf.read()
+    return _save(fig)

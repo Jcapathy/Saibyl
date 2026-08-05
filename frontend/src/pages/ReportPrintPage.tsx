@@ -213,11 +213,43 @@ export default function ReportPrintPage() {
       <style
         dangerouslySetInnerHTML={{
           __html: `
+            @page { size: letter; margin: 0.9in; }
+
             @media print {
               body { margin: 0; background: #fff !important; }
-              @page { margin: 1in 0.75in; size: letter; }
               .no-print { display: none !important; }
+
+              /* The page margin above owns the paper's edges. The screen
+                 padding has to come off, or it is added *inside* that margin
+                 and the text block drifts a further half-inch in on every
+                 side. */
+              .print-page { padding: 0 !important; max-width: none !important; box-shadow: none !important; }
+
+              /* Nothing atomic splits across a sheet. A chart cut in half at a
+                 page boundary is the defect that makes a printed report look
+                 like a screenshot, and the browser will do it by default. */
+              .print-figure,
+              .print-avoid-break,
+              figure,
+              table,
+              blockquote,
+              .recharts-wrapper { break-inside: avoid; page-break-inside: avoid; }
+
+              /* A heading is never the last thing on a sheet. */
+              h1, h2, h3, h4 { break-after: avoid; page-break-after: avoid; break-inside: avoid; }
+
+              p, li { orphans: 3; widows: 3; }
+
+              /* Long tables repeat their header on each sheet they span. */
+              thead { display: table-header-group; }
+              tr { break-inside: avoid; page-break-inside: avoid; }
+
+              /* Print in the colours as drawn rather than the browser's
+                 economy rendering — the charts are already legible in
+                 greyscale, but a half-dropped fill is legible as neither. */
+              * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             }
+
             @media screen {
               body { background: #f5f5f5; }
               .print-page { max-width: 800px; margin: 0 auto; background: white; box-shadow: 0 2px 20px rgba(0,0,0,0.1); }
@@ -432,6 +464,7 @@ export default function ReportPrintPage() {
           {analysis ? (
             <>
               <div
+                className="print-avoid-break"
                 style={{
                   display: 'grid',
                   gridTemplateColumns: 'repeat(4, 1fr)',
@@ -475,6 +508,7 @@ export default function ReportPrintPage() {
 
               {analysis.quality.caveats.length > 0 && (
                 <div
+                  className="print-avoid-break"
                   style={{
                     border: `1px solid ${RULE}`,
                     borderRadius: 8,
@@ -520,7 +554,7 @@ export default function ReportPrintPage() {
           )}
 
           {analysis && arcData.length > 0 && (
-            <div style={{ marginBottom: 32 }}>
+            <div className="print-figure" style={{ marginBottom: 32 }}>
               <ChartTitle>Sentiment by round</ChartTitle>
               <ChartNote>
                 Bars are the mean valence per round; whiskers are the 95% confidence
@@ -566,7 +600,7 @@ export default function ReportPrintPage() {
           )}
 
           {analysis && platformData.length > 0 && (
-            <div style={{ marginBottom: 32 }}>
+            <div className="print-figure" style={{ marginBottom: 32 }}>
               <ChartTitle>Sentiment by platform</ChartTitle>
               <ChartNote>
                 Ordered most negative first. Where whiskers overlap, this run does
@@ -611,7 +645,7 @@ export default function ReportPrintPage() {
           )}
 
           {analysis && stanceData.length > 0 && (
-            <div style={{ marginBottom: 32 }}>
+            <div className="print-figure" style={{ marginBottom: 32 }}>
               <ChartTitle>Stance distribution</ChartTitle>
               <ChartNote>
                 Share of measured events taking each position on the subject.
@@ -640,7 +674,7 @@ export default function ReportPrintPage() {
           )}
 
           {analysis && analysis.objections.length > 0 && (
-            <div style={{ marginBottom: 32 }}>
+            <div className="print-figure" style={{ marginBottom: 32 }}>
               <ChartTitle>Objections, ranked by load-bearing weight</ChartTitle>
               <ChartNote>
                 Weight is reach × intensity × cohort spread — not how often an
@@ -715,7 +749,7 @@ export default function ReportPrintPage() {
           )}
 
           {analysis && analysis.flashpoints.length > 0 && (
-            <div style={{ marginBottom: 32 }}>
+            <div className="print-figure" style={{ marginBottom: 32 }}>
               <ChartTitle>Flashpoints</ChartTitle>
               <ChartNote>
                 Round-to-round shifts larger than 0.15. Only shifts whose intervals
