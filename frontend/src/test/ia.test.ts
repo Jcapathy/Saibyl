@@ -99,7 +99,10 @@ function jargonHits(files: ReturnType<typeof sourceFiles>) {
   for (const file of files) {
     for (const text of renderedStrings(file)) {
       for (const word of JARGON) {
-        const pattern = new RegExp(`\\b${word.replace('/', '\\/')}\\b`, 'i');
+        // `s?` because the plural is the form that actually ships. `\bsimulation\b`
+        // does not match "Simulations", so the sidebar's usage-bar label survived
+        // a green run of this test and was found by screenshotting the page.
+        const pattern = new RegExp(`\\b${word.replace('/', '\\/')}s?\\b`, 'i');
         if (pattern.test(text)) hits.push({ path: file.path, word, text });
       }
     }

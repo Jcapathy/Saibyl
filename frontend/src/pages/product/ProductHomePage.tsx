@@ -54,13 +54,23 @@ function Attention({ line, productId }: { line: AttentionLine; productId: string
 }
 
 function ProductCard({ product }: { product: ProductState }) {
-  // The next thing to do, chosen by the same order the rail runs in: the first
-  // step that is blocked wants unblocking; failing that, the first that has
-  // produced nothing yet. Never a step chosen at random to look busy.
+  /*
+    The next thing to do: the earliest step, in rail order, that has produced
+    nothing yet.
+
+    Blocked-first was the obvious rule and it was wrong. A product with a
+    confirmed audience and no run offered "3. Answers", because Answers is
+    blocked — but it is blocked *precisely because* step 2 has not run, so
+    naming it sends the founder to the screen that tells them to go back. The
+    earliest unproduced step is the one that unblocks whatever is behind it.
+
+    When every step has produced something there is nothing outstanding, so the
+    card offers the last one — Messages, which is the step a founder returns to
+    before every campaign.
+  */
   const nextStep =
-    product.stages.find((s) => s.runnable === 'blocked') ??
     product.stages.find((s) => s.produced === null) ??
-    product.stages[0];
+    product.stages[product.stages.length - 1];
 
   return (
     <div className="glass rounded-2xl p-6">

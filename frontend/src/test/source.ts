@@ -110,8 +110,18 @@ export function renderedStrings(file: SourceFile): string[] {
     if (text) out.push(text);
   }
 
-  // The attributes that render or are announced.
-  const spoken = /\b(aria-label|title|placeholder|alt)\s*=\s*(?:"([^"]*)"|'([^']*)'|\{`([^`]*)`\}|\{'([^']*)'\})/g;
+  /*
+    The attributes that render or are announced.
+
+    `label` is in the list because it is how this codebase passes copy to a
+    component — `<Guarded label="Start a run" />`, `<UsageBar label="Runs" />`.
+    Leaving it out is how "Simulations" survived in the sidebar's usage bars
+    through a passing jargon test: it was a JSX attribute, and the scan only
+    looked at JSX text and at `label:` written as an object property. Found by
+    screenshotting the deployed page and reading the sidebar.
+  */
+  const spoken =
+    /\b(aria-label|label|busyLabel|title|placeholder|alt)\s*=\s*(?:"([^"]*)"|'([^']*)'|\{`([^`]*)`\}|\{'([^']*)'\})/g;
   for (const match of code.matchAll(spoken)) {
     const value = match[2] ?? match[3] ?? match[4] ?? match[5];
     if (value?.trim()) out.push(value.trim());

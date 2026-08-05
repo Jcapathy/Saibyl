@@ -269,14 +269,18 @@ export default function AppLayout() {
           <UsageSkeleton />
         ) : billing ? (
           <>
+            {/* "Simulations" and "Agents" are what the API calls these. They
+                are not what a founder calls them, and this bar sits on every
+                screen in the product — including the five steps, which are
+                written for someone who has never heard either word. */}
             <UsageBar
-              label="Simulations"
+              label="Runs"
               used={billing.simulations_used}
               limit={billing.simulations_limit}
             />
             {billing.agents_used != null && billing.agents_limit != null && (
               <UsageBar
-                label="Agents"
+                label="People in the room"
                 used={billing.agents_used}
                 limit={billing.agents_limit}
               />
