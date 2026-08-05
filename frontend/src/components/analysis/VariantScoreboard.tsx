@@ -78,6 +78,54 @@ export default function VariantScoreboardPanel({
         </p>
       </div>
 
+      {/*
+        How the verdict was reached. Shown because from schema version 4 the
+        winner is decided by comparing the top two arenas *agent by agent* —
+        the same people saw every variant, so an agent who converted on both
+        tells you nothing about which is better, and only the ones who
+        disagreed carry information.
+
+        `discordant_agents` is therefore the honest sample size of the
+        comparison, and it is usually much smaller than the swarm. Showing it
+        is the difference between "we tested this on 250 people" and "31 of
+        them behaved differently between these two, and that is what the call
+        rests on".
+
+        Absent on v3 artifacts, which predate the paired comparison. Nothing is
+        rendered in that case rather than a zeroed block that would read as
+        "no agents disagreed".
+      */}
+      {scoreboard.paired && (
+        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 mb-4">
+          <p className="text-[11px] font-mono uppercase tracking-widest text-saibyl-muted mb-1.5">
+            How this was decided
+          </p>
+          <p className="text-[12px] leading-relaxed text-saibyl-muted">
+            The same{' '}
+            <span className="text-saibyl-silver">
+              {scoreboard.paired.shared_agents}
+            </span>{' '}
+            agents saw both of the top two.{' '}
+            <span className="text-saibyl-silver">
+              {scoreboard.paired.discordant_agents}
+            </span>{' '}
+            of them behaved differently between the two — that difference, and
+            not the headline rates, is what the call above rests on.
+          </p>
+          {/* The unpaired rule, for one release, so a changed answer reads as a
+              documented change rather than the product changing its mind. */}
+          {scoreboard.unpaired_verdict &&
+            scoreboard.unpaired_winner_variant_key !==
+              scoreboard.winner_variant_key && (
+              <p className="text-[11px] leading-relaxed text-saibyl-muted mt-2 pt-2 border-t border-white/[0.06]">
+                Under the previous method, which compared the arenas as if
+                different people had seen each one, this run would have read:{' '}
+                <span className="italic">{scoreboard.unpaired_verdict}</span>
+              </p>
+            )}
+        </div>
+      )}
+
       <div className="space-y-3">
         {scoreboard.variants.map((variant, index) => (
           <VariantRow

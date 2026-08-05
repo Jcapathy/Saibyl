@@ -542,6 +542,99 @@ proves slow — the engine work in Phase 1 serves both.
 
 ---
 
+## 16b. Score the variant comparison as the paired design it is
+
+**Chose:** compute the winner test from **per-agent differences between arenas**,
+not from two independently-estimated arena proportions. The evidential bar does
+not move: still 95%, still a refusal when the evidence does not clear it.
+
+**Why.** Phase 3 hands *the same swarm, by agent id, to every arena* — that is
+the central design decision of the Marketing lens and the reason generation cost
+does not scale with variants. Verified on `adedb93f`: all 27 agents produced
+measured events in all 3 arenas. The comparison then threw that away.
+`_proportion_interval` estimates each arena's band as though the arenas were
+independent samples of different people, and `_resolve_winner` requires the top
+two bands not to overlap.
+
+Two costs compounded:
+
+- **Non-overlapping 95% intervals is roughly a p < 0.006 test**, not p < 0.05.
+  It demands about 2.6x the effect an ordinary two-proportion test would.
+- **Ignoring the pairing inflates the variance.** Paired variance is
+  `[s1² + s2² − 2·rho·s1·s2]/n`; the unpaired form drops the `rho` term. Pooled
+  within-agent correlation measured **+0.20** across the three clean runs.
+
+Measured consequence — the smallest difference each tier can resolve, in
+percentage points of the objective rate:
+
+| tier | cap | unpaired (shipped) | paired |
+|---|---:|---:|---:|
+| founder | 100 | 17.0 | **10.8** |
+| growth | 150 | 13.9 | **8.8** |
+| agency | 250 | 10.8 | **6.8** |
+| enterprise | 1,000 | 5.4 | **3.4** |
+
+At 17 points, most honest message tests return "no winner" and the founder tier
+is hard to defend as a message-testing product at all.
+
+**This is not a lower bar, and the distinction is the whole decision.** The
+paired estimator's false-positive rate measured **1.0–2.5% against a 2.5%
+nominal** for a one-sided 95% test — calibrated, not permissive. Had it come
+back at 8% it would have been rejected. Computing the correct statistic for the
+design that was actually run is a different act from lowering the standard, and
+only one of them is honest. `scripts/calibrate_marketing.py` reproduces every
+figure above; it is read-only and spends nothing.
+
+**Rejected — leave it alone.** The shipped rule names a winner from shuffled
+labels **0.0% of the time at every swarm size tested**, which is a genuinely
+strong property to be able to state. Rejected because it is also 0.2% likely to
+name a real winner at 100 agents: a rule that never fires is not a conservative
+test, it is not a test. The refusal was never the problem; the estimator behind
+it was.
+
+**Rejected — relax the overlap rule to a plain significance test.** This would
+buy similar power and is what most A/B tools do. Rejected because the refusal is
+the product. A marketer acts on the top row, so an ordering drawn from
+overlapping bands launders sampling noise into a spend decision, and the
+inoculation loop's `unresolved` verdict rests on the same principle. Loosening
+one would eventually be used to argue for loosening the other.
+
+**Rejected — just sell bigger swarms.** Required n scales as 1/delta², so
+resolving a 5-point difference under the unpaired rule needs roughly enterprise
+scale. Telling founders to buy 1,000 agents to answer a question their design
+already answers at 250 is charging for our own statistical inefficiency.
+
+**Conditions attached to adoption**, all three of which must hold:
+
+1. **An A/A/A control run first** — identical copy in all three arenas — so the
+   false-positive rate is *measured on the live pipeline* rather than simulated
+   by permutation. `scripts/live_run_marketing.py --null-control`. A named
+   winner there is a failure, not a finding.
+2. **A test that fails if arenas ever stop sharing a swarm.** Pairing is only
+   valid while they do. If a future change gives each arena its own agents, the
+   paired estimator becomes silently *wrong* rather than merely conservative —
+   the same shape as `test_each_arena_gets_its_own_adapter_instance` guarding
+   arena isolation.
+3. **Both estimators reported in the artifact for one release**, so the change
+   is visible rather than silent. A run analysed before and after will not be
+   comparable, and a customer citing an old "no winner" may find the same data
+   now names one. That is correct, and it will still look like the product
+   changed its mind.
+
+**What would reopen this:** a measured within-agent `rho` near zero on a larger
+sample — the benefit scales with it, and +0.20 comes from three runs and ~79
+agent-observations. Or the A/A/A control naming a winner, which would mean the
+refusal has a false-positive problem that must be fixed before anything is
+layered on top of it.
+
+**What this does not license.** The reach bands, inoculation verdicts and cohort
+splits are *not* paired designs and keep the unpaired form. Two conventions now
+exist in one artifact, which is the "two sources of truth" class — so the paired
+form applies to the variant comparison and nowhere else, and that boundary is
+stated at the call site.
+
+---
+
 ## 17. Open questions deliberately left unresolved
 
 Do not treat these as settled:

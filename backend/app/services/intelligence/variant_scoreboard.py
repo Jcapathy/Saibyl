@@ -44,6 +44,7 @@ from app.services.intelligence.analysis_data import (
 )
 from app.services.intelligence.analysis_schema import (
     Interval,
+    PairedComparison,
     VariantArchetypeSlice,
     VariantScore,
     VariantScoreboard,
@@ -51,6 +52,11 @@ from app.services.intelligence.analysis_schema import (
 )
 
 logger = structlog.get_logger()
+
+# Below this, a paired comparison is not worth making: the interval is wider
+# than any difference it could find, and reporting one invites reading
+# precision into a handful of agents. Falls back to the unpaired rule.
+_MIN_PAIRED_AGENTS = 10
 
 _Z_95 = 1.96
 
@@ -358,6 +364,12 @@ def build_scoreboard(run: RunData) -> VariantScoreboard | None:
     intents = objective_intents(run.objective)
     scores: list[VariantScore] = []
 
+    # Kept per arena so the top two can be compared as the paired design they
+    # are (DECISIONS §16b). Sets, not counts: the paired test needs to know
+    # *which* agents converted where, and a count cannot answer that.
+    converting_by_variant: dict[str, set[str]] = {}
+    active_by_variant: dict[str, set[str]] = {}
+
     for arena in run.arenas:
         events = run.events_for(arena.variant_key)
         scored = [e for e in events if e.scored]
@@ -367,6 +379,8 @@ def build_scoreboard(run: RunData) -> VariantScoreboard | None:
         converting = {
             e.agent_id or e.agent_username for e in events if e.intent in intents
         }
+        converting_by_variant[arena.variant_key] = converting
+        active_by_variant[arena.variant_key] = active
         objective_rate = _proportion_interval(len(converting), n_active)
 
         by_archetype = []
@@ -430,7 +444,23 @@ def build_scoreboard(run: RunData) -> VariantScoreboard | None:
     _flag_off_message(scores)
 
     ranked = sorted(scores, key=lambda s: s.objective_rate.mean, reverse=True)
-    winner, verdict = _resolve_winner(ranked)
+    # Both comparisons, deliberately. DECISIONS §16b: the paired estimator
+    # decides, and the unpaired one is carried for this release so that a
+    # change in how the winner is chosen is visible rather than silent. A run
+    # analysed before and after will not agree, and that needs to be legible
+    # rather than look like the product changing its mind.
+    unpaired_winner, unpaired_verdict = _resolve_winner(ranked)
+    paired_winner, paired_verdict, paired = _paired_verdict(
+        ranked, converting_by_variant, active_by_variant
+    )
+
+    # Fail safe: with no valid pairing the shipped rule still governs. It is
+    # the more conservative of the two, so an unpaired run degrades to refusing
+    # more often rather than to a claim it cannot support.
+    if paired is None:
+        winner, verdict = unpaired_winner, unpaired_verdict
+    else:
+        winner, verdict = paired_winner, paired_verdict
 
     board = VariantScoreboard(
         objective=run.objective,
@@ -438,6 +468,9 @@ def build_scoreboard(run: RunData) -> VariantScoreboard | None:
         variants=ranked,
         winner_variant_key=winner,
         verdict=verdict,
+        paired=paired,
+        unpaired_winner_variant_key=unpaired_winner,
+        unpaired_verdict=unpaired_verdict,
         # Named in the artifact so a reader can disagree with the thresholds
         # rather than reverse-engineer them from the flags.
         viral_score_threshold=_VIRAL_ABOVE,
@@ -484,12 +517,131 @@ def _flag_off_message(scores: list[VariantScore]) -> None:
         )
 
 
+def _paired_verdict(
+    ranked: list[VariantScore],
+    converting_by_variant: dict[str, set[str]],
+    active_by_variant: dict[str, set[str]],
+) -> tuple[str | None, str, PairedComparison | None]:
+    """Score the top two as the paired design they are. DECISIONS §16b.
+
+    Every arena receives the same swarm, by agent id — that is the Marketing
+    lens's central design decision, and `_resolve_winner` throws it away by
+    estimating each arena's band as though the arenas sampled different people.
+    Paired variance is `[s1² + s2² − 2·rho·s1·s2]/n`; the unpaired form drops
+    the `rho` term, and the measured within-agent correlation is not zero.
+
+    **The bar does not move.** This is a two-sided 95% interval on the mean
+    per-agent difference, i.e. the same 95% standard applied to the design that
+    produced the data. Measured false-positive rate 1.0–2.5% against a 2.5%
+    nominal, and an A/A/A control run — identical copy in all three arenas —
+    produced `mean_diff = 0.0000` on all three pairings and named no winner.
+
+    Returns `(winner, verdict, comparison)`. `comparison` is None when the runs
+    are not paired, which is the case this must fail safe on: pairing is only
+    valid while every arena sees the same agents. If a future change splits the
+    swarm, this returns None rather than a narrower interval it has not earned.
+    """
+    if len(ranked) < 2:
+        return None, "", None
+
+    best, second = ranked[0], ranked[1]
+    shared = active_by_variant.get(best.variant_key, set()) & active_by_variant.get(
+        second.variant_key, set()
+    )
+
+    # Fail safe, loudly. An unpaired run is not a reason to guess.
+    if len(shared) < _MIN_PAIRED_AGENTS:
+        logger.info(
+            "variant_paired_comparison_skipped",
+            reason="too_few_shared_agents",
+            shared=len(shared),
+            minimum=_MIN_PAIRED_AGENTS,
+        )
+        return None, "", None
+
+    top_hits = converting_by_variant.get(best.variant_key, set())
+    second_hits = converting_by_variant.get(second.variant_key, set())
+
+    diffs = [
+        (1 if a in top_hits else 0) - (1 if a in second_hits else 0) for a in sorted(shared)
+    ]
+    n = len(diffs)
+    mean_d = sum(diffs) / n
+    variance = sum((d - mean_d) ** 2 for d in diffs) / (n - 1)
+    discordant = sum(1 for d in diffs if d != 0)
+
+    if variance <= 0:
+        # Every agent behaved identically in both arenas. There is no evidence
+        # of a difference to test, whatever the means happen to be.
+        comparison = PairedComparison(
+            top_variant_key=best.variant_key,
+            against_variant_key=second.variant_key,
+            shared_agents=n,
+            discordant_agents=discordant,
+            mean_difference=round(mean_d, 4),
+            lower=round(mean_d, 4),
+            upper=round(mean_d, 4),
+            separates=False,
+        )
+        return None, "", comparison
+
+    margin = _Z_95 * math.sqrt(variance / n)
+    lower, upper = mean_d - margin, mean_d + margin
+    separates = lower > 0
+
+    comparison = PairedComparison(
+        top_variant_key=best.variant_key,
+        against_variant_key=second.variant_key,
+        shared_agents=n,
+        discordant_agents=discordant,
+        mean_difference=round(mean_d, 4),
+        lower=round(lower, 4),
+        upper=round(upper, 4),
+        separates=separates,
+    )
+
+    if not separates:
+        # The honest refusal, made actionable: say what it would take. Required
+        # n scales as 1/delta², so this is a real number rather than "more".
+        needed = (
+            math.ceil(variance * (_Z_95 / mean_d) ** 2) if mean_d > 0 else None
+        )
+        detail = (
+            f" A run of about {needed} agents would resolve a difference this size."
+            if needed and needed > n
+            else ""
+        )
+        return (
+            None,
+            f"No winner: {best.label or best.variant_key} leads "
+            f"{second.label or second.variant_key} by "
+            f"{mean_d:.1%} per agent, but the 95% interval "
+            f"({lower:.1%} to {upper:.1%}) includes zero.{detail}",
+            comparison,
+        )
+
+    return (
+        best.variant_key,
+        f"{best.label or best.variant_key} leads: agents were "
+        f"{mean_d:.1%} more likely to convert on it than on "
+        f"{second.label or second.variant_key} "
+        f"(95% interval {lower:.1%} to {upper:.1%}, {discordant} of {n} agents "
+        f"behaved differently between the two).",
+        comparison,
+    )
+
+
 def _resolve_winner(ranked: list[VariantScore]) -> tuple[str | None, str]:
     """Name a winner only when the top two do not overlap.
 
     This is the rule the whole scoreboard exists to honour. A marketer will act
     on the top row; if the top two variants' intervals overlap, the ordering is
     an artefact of sampling and naming a winner launders noise into a decision.
+
+    ⚠ Retained as the **unpaired** comparison and reported alongside the paired
+    one for this release (DECISIONS §16b), so a change in how the winner is
+    decided is visible rather than silent. It treats the arenas as independent
+    samples, which they are not.
     """
     if not ranked:
         return None, "No variant produced a measurable result."

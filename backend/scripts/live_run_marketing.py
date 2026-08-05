@@ -79,6 +79,32 @@ VARIANTS = [
     ),
 ]
 
+# ── The A/A/A negative control ──────────────────────────────────────────────
+#
+# `--null-control` replaces the three arguments with the SAME copy three times.
+# Any separation the scoreboard then reports is separation it invented, because
+# there is nothing to find: identical copy, one shared swarm, three arenas.
+#
+# This is the number that decides whether the refusal rule can be trusted. The
+# bootstrap in `calibrate_marketing.py` estimates a 0.0% false-positive rate by
+# permutation; this measures it once, for real, on the live pipeline — prompts,
+# adapters, measurement, clustering and all. A simulated rate is an argument; a
+# measured one is evidence.
+#
+# **The pass condition inverts.** On the ordinary gate run a named winner is a
+# note to go and look. Here a named winner is a FAILURE, full stop: the product
+# would have told a founder to spend money on a difference that does not exist.
+NULL_CONTROL_COPY = VARIANTS[0][1]
+NULL_CONTROL_VARIANTS = [
+    ("Control A", NULL_CONTROL_COPY),
+    ("Control B", NULL_CONTROL_COPY),
+    ("Control C", NULL_CONTROL_COPY),
+]
+
+# Set by main() before anything reads VARIANTS. Module-level so the existing
+# helpers keep working unchanged rather than growing a parameter each.
+NULL_CONTROL = False
+
 PREDICTION_GOAL = (
     "How will early-stage founders and marketers react to Saibyl, a swarm "
     "simulation tool that tests launch messaging on synthetic buyers?"
@@ -115,7 +141,9 @@ def create() -> str:
     sim = (
         admin.table("simulations")
         .insert({
-            "name": "Phase 3 — matched-swarm gate (3 variants)",
+            "name": ("Marketing lens — A/A/A null control (identical copy)"
+                     if NULL_CONTROL
+                     else "Phase 3 — matched-swarm gate (3 variants)"),
             "prediction_goal": PREDICTION_GOAL,
             "project_id": PROJECT_ID,
             "organization_id": ORG_ID,
@@ -262,8 +290,35 @@ def verify(sim_id: str) -> int:
                 f"scoreboard has {len(board.get('variants', []))} rows for "
                 f"{len(VARIANTS)} configured variants"
             )
+        if NULL_CONTROL:
+            # Identical copy in every arena. There is nothing to find, so a
+            # named winner is a false positive on the live pipeline — the
+            # product telling a founder to act on noise.
+            if board.get("winner_variant_key"):
+                failures.append(
+                    "A/A/A CONTROL NAMED A WINNER. Identical copy in all three "
+                    "arenas, so this is a false positive in the shipped refusal "
+                    "rule. Do not adopt the paired estimator on top of this — "
+                    "fix the rule first."
+                )
+            else:
+                notes.append(
+                    "A/A/A control correctly refused to name a winner. That is "
+                    "the false-positive rate measured rather than simulated."
+                )
+            rates = [
+                (v.get("objective_rate") or {}).get("mean", 0.0)
+                for v in board.get("variants", [])
+            ]
+            if rates:
+                spread = max(rates) - min(rates)
+                notes.append(
+                    f"Null-control spread between identical arenas: {spread:.1%}. "
+                    "Any real difference smaller than this is inside the noise "
+                    "floor of a run this size."
+                )
         # Disbelieve a clean result. Not a failure — a prompt to look.
-        if board.get("winner_variant_key"):
+        elif board.get("winner_variant_key"):
             notes.append(
                 "A winner WAS named on a deliberately underpowered run. Check the "
                 "intervals above actually separate before believing it."
@@ -308,7 +363,19 @@ def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--dry-run", action="store_true", help="price it, change nothing")
     p.add_argument("--verify", metavar="SIM_ID", help="re-run the checks on a finished run")
+    p.add_argument(
+        "--null-control",
+        action="store_true",
+        help="A/A/A: identical copy in all three arenas. A named winner is a failure.",
+    )
     args = p.parse_args()
+
+    global VARIANTS, NULL_CONTROL
+    if getattr(args, "null_control", False):
+        NULL_CONTROL = True
+        VARIANTS = NULL_CONTROL_VARIANTS
+        print("\n  A/A/A NULL CONTROL — identical copy in all three arenas.")
+        print("  A named winner is a FAILURE, not a finding.")
 
     if args.verify:
         sys.exit(verify(args.verify))

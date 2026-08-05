@@ -50,10 +50,18 @@ from pydantic import BaseModel, Field
 #     confident sentiment figure for a test whose entire purpose was to separate
 #     six alternatives.
 #
+# 4 — The winner is decided by a **paired** comparison of the top two arenas
+#     (DECISIONS §16b). The shape gains `paired` and keeps the previous
+#     unpaired verdict alongside it for one release. The version moves because
+#     the meaning of `winner_variant_key` changed, not because fields were
+#     added: the same run analysed under v3 and v4 can disagree, and a client
+#     that did not know which rule produced the answer would present a
+#     documented change as the product changing its mind.
+#
 # **`SUPPORTED_SCHEMA_VERSION` in `frontend/src/lib/analysis.ts` must move in the
 # same commit.** The frontend refuses to render an unknown version, so a bump
 # without the mirror blanks every report in the product.
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 Stance = Literal["support", "oppose", "undecided", "off_topic"]
 
@@ -356,6 +364,40 @@ class VariantScore(BaseModel):
     by_archetype: list[VariantArchetypeSlice] = Field(default_factory=list)
 
 
+class PairedComparison(BaseModel):
+    """The top two arenas compared agent by agent. DECISIONS §16b.
+
+    The Marketing lens hands the same swarm to every arena, so the same person
+    reacts to every variant. That makes the comparison within-subject, and the
+    right statistic is the mean per-agent difference — an agent who converts on
+    both contributes nothing to the variance, which is exactly the noise the
+    matched design was built to remove.
+
+    `discordant_agents` is the honest sample size of the comparison: agents who
+    behaved the same way in both arenas carry no information about which is
+    better. On an A/A/A control with identical copy, 22–30% of agents still
+    flipped, so this is genuinely stochastic rather than deterministic.
+    """
+
+    top_variant_key: str
+    against_variant_key: str
+
+    # Agents present in BOTH arenas. Only these can be paired.
+    shared_agents: int = 0
+    # Agents who converted in one and not the other.
+    discordant_agents: int = 0
+
+    # Mean per-agent difference, top minus runner-up, with its 95% interval.
+    mean_difference: float = 0.0
+    lower: float = 0.0
+    upper: float = 0.0
+
+    # True when the interval excludes zero. This is what names a winner, and
+    # it is the same 95% standard the unpaired rule used — applied to the
+    # design that actually produced the data, not a lower bar.
+    separates: bool = False
+
+
 class VariantScoreboard(BaseModel):
     """The N-way comparison. Absent entirely on a single-arena run.
 
@@ -377,6 +419,25 @@ class VariantScoreboard(BaseModel):
     variants: list[VariantScore] = Field(default_factory=list)
     winner_variant_key: str | None = None
     verdict: str = ""
+
+    # The paired comparison of the top two, which is what now decides
+    # `winner_variant_key`. DECISIONS §16b: every arena receives the same
+    # swarm by agent id, so the comparison is within-subject, and estimating
+    # each arena independently discards the pairing the design pays for.
+    #
+    # None when the run is not paired — a single arena, or a future change that
+    # stops sharing the swarm. In that case the unpaired rule below governs,
+    # because it is the more conservative of the two and an unpaired run should
+    # degrade to refusing more often rather than to a claim it cannot support.
+    paired: PairedComparison | None = None
+
+    # The previous rule — top two 95% intervals must not overlap, arenas
+    # treated as independent samples — carried for one release so the change in
+    # how a winner is chosen is visible rather than silent. A run analysed
+    # before and after will not agree, and that must read as a documented change
+    # rather than the product changing its mind.
+    unpaired_winner_variant_key: str | None = None
+    unpaired_verdict: str = ""
 
     # Stated so a reader can disagree with them rather than reverse-engineer
     # them from the flags.

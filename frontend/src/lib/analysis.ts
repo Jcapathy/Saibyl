@@ -33,7 +33,15 @@
  * The client refuses to render an unknown version, so a server bump without this
  * mirror blanks every report in the product.
  */
-export const SUPPORTED_SCHEMA_VERSION = 3;
+/**
+ * Moved to 4 in the same commit as the backend bump, per the rule in
+ * `analysis_schema.py`: the frontend refuses an unknown version, so a bump
+ * without this mirror blanks every report in the product.
+ *
+ * `isSupportedSchema` accepts the whole range 1..this, so v3 artifacts already
+ * stored keep rendering — they simply carry no `paired` block.
+ */
+export const SUPPORTED_SCHEMA_VERSION = 4;
 
 export type Stance = 'support' | 'oppose' | 'undecided' | 'off_topic';
 export type Confidence = 'low' | 'moderate' | 'high';
@@ -283,12 +291,49 @@ export interface VariantScore {
  * when the server declined to name one puts a number the product refused to
  * stand behind in front of a spend decision.
  */
+/**
+ * The top two arenas compared agent by agent.
+ *
+ * Every arena receives the same swarm, so the same person reacts to every
+ * variant and the comparison is within-subject. `discordant_agents` is the
+ * honest sample size: agents who behaved identically in both carry no
+ * information about which is better. On an A/A/A control with identical copy,
+ * 22–30% of agents still flipped, so this is genuinely stochastic.
+ *
+ * Null on any run that is not paired, in which case the unpaired verdict
+ * governs. Do not fabricate one client-side.
+ */
+export interface PairedComparison {
+  top_variant_key: string;
+  against_variant_key: string;
+  shared_agents: number;
+  discordant_agents: number;
+  mean_difference: number;
+  lower: number;
+  upper: number;
+  separates: boolean;
+}
+
 export interface VariantScoreboard {
   objective: Objective | null;
   objective_intents: string[];
   variants: VariantScore[];
   winner_variant_key: string | null;
   verdict: string;
+  /**
+   * The paired comparison that decides `winner_variant_key` from schema
+   * version 4 onward. Optional because a v3 artifact predates it — render the
+   * verdict in that case and show nothing here rather than a zeroed block.
+   */
+  paired?: PairedComparison | null;
+  /**
+   * The previous rule (arenas treated as independent samples), carried for one
+   * release so a change in how the winner is chosen is visible. Where this
+   * disagrees with `winner_variant_key`, that is the documented v3→v4 change,
+   * not an inconsistency to hide.
+   */
+  unpaired_winner_variant_key?: string | null;
+  unpaired_verdict?: string;
   viral_score_threshold: number;
   off_message_threshold: number;
 }
