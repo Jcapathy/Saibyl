@@ -27,6 +27,11 @@ dependencies = [
     "stripe>=8.0.0",
     "matplotlib>=3.8.0",
     "numpy>=1.26.0",
+    # Read .xlsx in the ingestion pipeline. Declared rather than relied on
+    # transitively: the import is what a customer spreadsheet reaching the ICP
+    # depends on, and a transitive dependency can be dropped by an upgrade of
+    # something unrelated.
+    "openpyxl>=3.1.0",
     "Jinja2>=3.1.0",
     "sentry-sdk[fastapi]>=2.0.0",
     "cryptography>=42.0.0",

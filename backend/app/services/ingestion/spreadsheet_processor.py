@@ -89,6 +89,19 @@ def _process_xlsx(file_bytes: bytes) -> str:
         wb.close()
         return "\n\n".join(parts) if parts else "Empty spreadsheet"
 
-    except ImportError:
-        logger.warning("openpyxl_not_available")
-        return "XLSX processing requires openpyxl"
+    except ImportError as exc:
+        # Raise, never return prose. A processor that returns a sentence on
+        # failure makes an apology indistinguishable from content: the caller
+        # stores it as the document's extracted text, `gather_material` feeds
+        # it to synthesis, and the founder's ICP is built from
+        # "XLSX processing requires openpyxl".
+        #
+        # That is exactly the defect that made every .pptx upload contribute
+        # "[Unable to extract text from this DOCX file]" to its ICP with
+        # processing_status 'complete'. Same shape, different file type.
+        # `pipeline.ingest_document` marks the row failed on an exception, so
+        # raising is what makes a missing dependency visible.
+        logger.exception("openpyxl_not_available")
+        raise RuntimeError(
+            "openpyxl is required to read .xlsx and is not installed"
+        ) from exc
