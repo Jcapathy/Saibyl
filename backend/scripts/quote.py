@@ -67,7 +67,21 @@ ANNUAL_PREPAY_DISCOUNT = 0.10  # cash up front, not a margin concession
 
 
 def shape_cost(shape: tuple[int, int, int, int]) -> float:
-    return estimate_simulation_cost(*shape).actual_cost_usd
+    """COGS for one run of this shape, **carrying a subject brief**.
+
+    The brief is not in the shape tuple — it is not something a customer
+    configures, it is whether their project has uploaded material — and since
+    2026-08-04 a run's agents react to that material rather than to the one-line
+    description of it. That costs one main-model distillation per run plus a
+    surcharge on every action, and it is the reference run's definition
+    (`agent_pricing._standard_run_credits`).
+
+    Quoting the document-free version here would understate every enterprise
+    contract by ~10% for customers who use the product as it is sold. A customer
+    who genuinely uploads nothing is over-quoted by the same amount, which is the
+    safe direction and is stated in the output.
+    """
+    return estimate_simulation_cost(*shape, subject_brief=True).actual_cost_usd
 
 
 def blended_cost(mix: dict[str, float]) -> float:
@@ -117,6 +131,11 @@ def print_shape_table() -> None:
     print(f"  Blended agency mix{'':<18} ${blended_cost(AGENCY_MIX):>8.2f}")
     print("  (55% standard / 30% marketing / 13% growth / 2% heavy)")
     print()
+    print("  Every figure above assumes the customer uploads material, so their")
+    print("  agents react to the product rather than to its description. A run")
+    print("  with nothing to distil costs ~10% less; quoting it is only right for")
+    print("  a customer who will never upload anything.")
+    print()
 
 
 def print_band_table(cost_per_run: float, label: str) -> None:
@@ -160,8 +179,8 @@ def print_single_quote(q: dict, label: str, annual: bool) -> None:
     print("=" * 64)
     # Derived, not hardcoded: this ratio moved from 2.7x to 4.4x when the cost
     # model was recalibrated, and a stale warning is worse than none.
-    _std = estimate_simulation_cost(*SHAPES["standard"]).actual_cost_usd
-    _mkt = estimate_simulation_cost(*SHAPES["marketing"]).actual_cost_usd
+    _std = shape_cost(SHAPES["standard"])
+    _mkt = shape_cost(SHAPES["marketing"])
     print("  Before sending: confirm their run shape. Quoting a standard mix to")
     print(f"  a customer who runs 8-variant tests understates COGS by ~{_mkt / _std:.1f}x.")
     print("  Multi-variant runs are NOT runnable before Phase 3 - quote the")

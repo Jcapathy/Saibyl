@@ -10,6 +10,7 @@ import LandingPage from '@/pages/LandingPage';
 import DashboardPage from '@/pages/DashboardPage';
 import GuidePage from '@/pages/GuidePage';
 import LoginPage from '@/pages/LoginPage';
+import MarketingPage from '@/pages/MarketingPage';
 import NewSimulationPage from '@/pages/NewSimulationPage';
 import PackLibraryPage from '@/pages/PackLibraryPage';
 import ProjectDetailPage from '@/pages/ProjectDetailPage';
@@ -59,6 +60,10 @@ function AnimatedRoutes() {
           <Route path="prospects/discover" element={<PageTransition><ProspectDiscoverPage /></PageTransition>} />
           <Route path="prospects/settings" element={<PageTransition><ProspectSettingsPage /></PageTransition>} />
           <Route path="prospects/:id" element={<PageTransition><ProspectDetailPage /></PageTransition>} />
+          {/* Testing more than one message had no surface at all — it was
+              reachable only by setting a variant count inside the simulation
+              wizard, which is why nobody could find it. */}
+          <Route path="marketing" element={<PageTransition><MarketingPage /></PageTransition>} />
           <Route path="simulations" element={<PageTransition><SimulationsPage /></PageTransition>} />
           <Route path="simulations/new" element={<PageTransition><NewSimulationPage /></PageTransition>} />
           <Route path="simulations/:id" element={<PageTransition><SimulationDetailPage /></PageTransition>} />

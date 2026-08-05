@@ -67,62 +67,108 @@ function formatCount(n: number | undefined | null): string {
   return n.toString();
 }
 
+// ⚠ EVERY NUMBER HERE IS AN ADVERTISED CAP AND MUST MATCH `agent_pricing.TIER_CAPS`.
+//
+// This block advertised 5,000 / 25,000 / 100,000 / 500,000+ agents per
+// simulation against enforced caps of 100 / 150 / 250 / 1,000 — a 50-500x
+// overstatement, on tier names (analyst / strategist / war_room) the product
+// does not use. `PLAN_PRICES[org.plan]` was therefore undefined for every real
+// org, which is why the Upgrade button never drew.
+//
+// TIER_CAPS at time of writing — agents, rounds, platforms, variants:
+//   founder      100,  8,  3, 3
+//   growth       150, 10,  4, 5
+//   agency       250, 12,  6, 8
+//   enterprise 1,000, 20, 12, 8
+//
+// Transcribed rather than imported because this renders before any run is
+// priced. That makes it a second source of truth, so it is written down as one
+// — §2a's "two sources of truth for one value", accepted knowingly.
+//
+// Monthly simulation counts are NOT advertised: `PLAN_LIMITS` is still keyed on
+// the V1 names, so a founder/growth/agency org falls through to the starter
+// limit. There is no enforced number to print, and printing one anyway is how
+// this block went wrong the first time.
 const PLAN_PRICE: Record<string, string> = {
-  analyst: '$149',
-  strategist: '$499',
-  war_room: '$1,499',
+  founder: '$99',
+  growth: '$299',
+  agency: '$999',
   enterprise: 'Custom',
 };
 
 const PLAN_AGENT_CAP: Record<string, string> = {
-  analyst: '5,000',
-  strategist: '25,000',
-  war_room: '100,000',
-  enterprise: '500,000+',
+  founder: '100',
+  growth: '150',
+  agency: '250',
+  enterprise: '1,000',
 };
 
-const PLAN_ORDER = ['analyst', 'strategist', 'war_room', 'enterprise'];
+const PLAN_ORDER = ['founder', 'growth', 'agency', 'enterprise'];
+
+/** V1 plan names still present in the database, mapped to what they became. */
+const LEGACY_PLAN_ALIAS: Record<string, string> = {
+  starter: 'founder',
+  analyst: 'founder',
+  pro: 'growth',
+  strategist: 'growth',
+  war_room: 'agency',
+  free: 'founder',
+  trial: 'founder',
+};
+
+/** The tier a plan string resolves to, tolerating the V1 vocabulary.
+ *
+ * Not exported: this file exports a component, and a second export breaks
+ * fast refresh. If another surface needs this, it belongs in `lib/`, not
+ * re-declared — the duplicated tier table on the landing page is what this
+ * whole block exists to stop repeating.
+ */
+function resolvePlan(plan: string | undefined | null): string {
+  const key = (plan ?? '').toLowerCase();
+  if (PLAN_ORDER.includes(key)) return key;
+  return LEGACY_PLAN_ALIAS[key] ?? 'founder';
+}
 
 function getNextPlan(current: string): string | null {
-  const idx = PLAN_ORDER.indexOf(current.toLowerCase());
+  const idx = PLAN_ORDER.indexOf(resolvePlan(current));
   if (idx === -1 || idx >= PLAN_ORDER.length - 1) return null;
   return PLAN_ORDER[idx + 1];
 }
 
 const PLAN_FEATURES: Record<string, string[]> = {
-  analyst: [
-    '10 simulations/month',
-    'Up to 5,000 agents per sim',
-    '50,000 agents/month',
+  founder: [
+    'Up to 100 agents per simulation',
+    'Up to 8 rounds',
     '3 platforms',
-    '3 persona packs',
-    'Basic reports',
+    '3 message variants per test',
+    'Audience derived from your own material',
+    'Full measured reports',
     'Email support',
   ],
-  strategist: [
-    '50 simulations/month',
-    'Up to 25,000 agents per sim',
-    '500,000 agents/month',
-    'All 8 platforms',
-    '8 persona packs',
-    'Advanced reports + PDF/CSV',
+  growth: [
+    'Up to 150 agents per simulation',
+    'Up to 10 rounds',
+    '4 platforms',
+    '5 message variants per test',
+    'All 16 persona packs',
+    'PDF/CSV export',
     'API access',
     'Priority support',
   ],
-  war_room: [
-    '200 simulations/month',
-    'Up to 100,000 agents per sim',
-    '2,000,000 agents/month',
-    'All 8 platforms',
+  agency: [
+    'Up to 250 agents per simulation',
+    'Up to 12 rounds',
+    '6 platforms',
+    '8 message variants per test',
     'All 16 persona packs',
     'Custom report templates',
     'Webhook integrations',
     'Dedicated account manager',
   ],
   enterprise: [
-    'Unlimited simulations',
-    '500,000+ agents per sim',
-    'Unlimited monthly volume',
+    'Up to 1,000 agents per simulation',
+    'Up to 20 rounds',
+    'All 12 platforms',
     'Custom persona creation',
     'White-label reports',
     'SSO/SAML',
@@ -133,32 +179,32 @@ const PLAN_FEATURES: Record<string, string[]> = {
 
 const TIERS = [
   {
-    name: 'Analyst',
-    slug: 'analyst',
-    price: '$149',
+    name: 'Founder',
+    slug: 'founder',
+    price: '$99',
     period: '/mo',
-    desc: 'For teams getting started',
-    agentCap: '5,000',
-    features: PLAN_FEATURES.analyst,
+    desc: 'Validating an idea before building it',
+    agentCap: '100',
+    features: PLAN_FEATURES.founder,
   },
   {
-    name: 'Strategist',
-    slug: 'strategist',
-    price: '$499',
+    name: 'Growth',
+    slug: 'growth',
+    price: '$299',
     period: '/mo',
-    desc: 'Comprehensive coverage',
-    agentCap: '25,000',
+    desc: 'Testing messages before you spend on them',
+    agentCap: '150',
     featured: true,
-    features: PLAN_FEATURES.strategist,
+    features: PLAN_FEATURES.growth,
   },
   {
-    name: 'War Room',
-    slug: 'war_room',
-    price: '$1,499',
+    name: 'Agency',
+    slug: 'agency',
+    price: '$999',
     period: '/mo',
-    desc: 'High-stakes simulations',
-    agentCap: '100,000',
-    features: PLAN_FEATURES.war_room,
+    desc: 'Running work across multiple clients',
+    agentCap: '250',
+    features: PLAN_FEATURES.agency,
   },
   {
     name: 'Enterprise',
@@ -166,7 +212,7 @@ const TIERS = [
     price: 'Custom',
     period: '',
     desc: 'Maximum-scale analysis',
-    agentCap: '500,000+',
+    agentCap: '1,000',
     features: PLAN_FEATURES.enterprise,
   },
 ];

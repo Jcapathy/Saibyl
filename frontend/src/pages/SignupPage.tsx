@@ -182,8 +182,8 @@ export default function SignupPage() {
 
           {/* Subtitle */}
           <p className="text-[#8B97A8] text-base leading-relaxed">
-            Simulate public reactions across 8 platforms with up to 1,000,000
-            synthetic agents, all before you go live.
+            Simulate public reactions across 12 platforms, with an audience built
+            from your own material — before you go live.
           </p>
 
           {/* Stats row */}

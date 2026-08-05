@@ -1,12 +1,37 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { Building2, FileText, MessageSquare, Users } from 'lucide-react';
 import api, { unwrapList } from '@/lib/api';
 import { formatPlatforms } from '@/lib/constants';
 import StatusBadge from '@/components/StatusBadge';
+import { describeRun } from '@/lib/gtm';
 import { getErrorMessage } from '../lib/errors';
-import type { MaterialKind, Project, ProjectDocument, Simulation } from '@/types';
+import type { DiscoveryRun, MaterialKind, Project, ProjectDocument, Simulation } from '@/types';
 
-type Tab = 'documents' | 'simulations';
+type Tab = 'documents' | 'companies' | 'simulations';
+
+/**
+ * What a discovery run asked for, delivered and actually cost.
+ *
+ * Attached to every run row by `GET /gtm/runs` (`_with_delivery`). Declared
+ * locally rather than on the shared `DiscoveryRun` type because it is computed
+ * on read and only this screen and the prospect screens consume it — and
+ * because `sentence` is written by the server, which is the only place that
+ * knows both halves of the arithmetic. A client that composed its own sentence
+ * would be a second implementation of the refund rule.
+ */
+interface RunDelivery {
+  queries_requested: number;
+  queries_delivered: number;
+  credits_charged: number;
+  credits_refunded: number;
+  credits_net: number;
+  credits_refundable: number;
+  reconciled: boolean;
+  sentence: string;
+}
+
+type DiscoveryRunWithDelivery = DiscoveryRun & { delivery?: RunDelivery };
 
 /**
  * Whose material this is, asked as a question rather than as an enum.
@@ -54,6 +79,7 @@ export default function ProjectDetailPage() {
   const [tab, setTab] = useState<Tab>('documents');
   const [documents, setDocuments] = useState<ProjectDocument[]>([]);
   const [simulations, setSimulations] = useState<Simulation[]>([]);
+  const [runs, setRuns] = useState<DiscoveryRunWithDelivery[]>([]);
   const [pending, setPending] = useState<PendingUpload[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
@@ -66,6 +92,13 @@ export default function ProjectDetailPage() {
     loadDocuments();
     api.get('/simulations', { params: { project_id: id, limit: 50 } }).then((r) => {
       setSimulations(unwrapList<Simulation>(r.data).items);
+    }).catch(() => {});
+    /* Company searches run against this project. Fetched here so the project is
+       a real route into that work rather than a dead end that only offers
+       another simulation — and so the money each search actually cost is
+       visible on the same screen that spent it. */
+    api.get('/gtm/runs', { params: { project_id: id, limit: 20 } }).then((r) => {
+      setRuns(unwrapList<DiscoveryRunWithDelivery>(r.data).items);
     }).catch(() => {});
   }, [id]);
 
@@ -150,8 +183,59 @@ export default function ProjectDetailPage() {
   }
 
   const tabs: { key: Tab; label: string; count?: number }[] = [
-    { key: 'documents', label: 'Documents', count: documents.length },
+    { key: 'documents', label: 'Your material', count: documents.length },
+    { key: 'companies', label: 'Companies', count: runs.length },
     { key: 'simulations', label: 'Simulations', count: simulations.length },
+  ];
+
+  /* ── The routes out of a project ──
+     Until this existed, opening a project offered exactly one thing to do: run
+     another simulation. Audiences, company discovery and message testing were
+     all built, deployed and reachable only by typing a URL — which is the same
+     as not having shipped them.
+
+     Named for what the founder gets, not for the discipline. Nobody arriving
+     here has heard the phrase "ICP", and nothing on this page requires them to
+     learn it. */
+  const routes: {
+    key: string;
+    label: string;
+    blurb: string;
+    to: string;
+    Icon: React.ComponentType<{ className?: string }>;
+  }[] = [
+    {
+      key: 'audiences',
+      label: 'Who buys this',
+      blurb:
+        'The groups of people Saibyl worked out for you, saved and reusable across every project.',
+      to: '/app/audiences',
+      Icon: Users,
+    },
+    {
+      key: 'companies',
+      label: 'Find real companies',
+      blurb:
+        'Search the web for companies that look like your buyers. Every company comes with the page that says so.',
+      to: `/app/prospects/discover?project_id=${id}`,
+      Icon: Building2,
+    },
+    {
+      key: 'messages',
+      label: 'Test more than one message',
+      blurb:
+        'Put two or more versions of your pitch in front of the same room and see which one lands.',
+      to: `/app/marketing?project=${id}`,
+      Icon: MessageSquare,
+    },
+    {
+      key: 'simulate',
+      label: 'Run a simulation',
+      blurb:
+        'Show your material to a room of simulated buyers and read what they say back.',
+      to: `/app/simulations/new?project=${id}`,
+      Icon: FileText,
+    },
   ];
 
   return (
@@ -159,7 +243,25 @@ export default function ProjectDetailPage() {
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <h1 className="text-h1 text-saibyl-white mb-1">{project?.name || 'Project'}</h1>
-        <p className="text-small mb-8">{project?.description}</p>
+        <p className="text-small mb-6">{project?.description}</p>
+
+        {/* What you can do with this project */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
+          {routes.map(({ key, label, blurb, to, Icon }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => navigate(to)}
+              className="text-left glass glass-hover rounded-2xl p-5 transition-all"
+            >
+              <div className="flex items-center gap-2.5 mb-1.5">
+                <Icon className="w-4 h-4 text-saibyl-gold shrink-0" />
+                <span className="text-[14px] font-medium text-saibyl-platinum">{label}</span>
+              </div>
+              <p className="text-[12px] text-saibyl-muted leading-relaxed">{blurb}</p>
+            </button>
+          ))}
+        </div>
 
         {/* Tabs */}
         <div className="flex gap-1 p-1 glass rounded-xl w-fit mb-8">
@@ -346,6 +448,89 @@ export default function ProjectDetailPage() {
                 >
                   New Simulation →
                 </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ═══ Companies Tab ═══ */}
+        {tab === 'companies' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-[14px] text-saibyl-muted">
+                {runs.length} company search{runs.length !== 1 ? 'es' : ''} for this project
+              </p>
+              <button
+                onClick={() => navigate(`/app/prospects/discover?project_id=${id}`)}
+                className="bg-saibyl-gold text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-[#4B4FDE] shrink-0"
+              >
+                + New search
+              </button>
+            </div>
+
+            {runs.length === 0 ? (
+              <div className="glass rounded-2xl p-12 text-center">
+                <p className="text-saibyl-platinum font-medium mb-2">No company searches yet</p>
+                <p className="text-saibyl-muted text-sm mb-5 max-w-md mx-auto leading-relaxed">
+                  Once Saibyl has worked out who buys this, it can go and find real
+                  companies that look like them — with the page that says so attached
+                  to every one.
+                </p>
+                <button
+                  onClick={() => navigate(`/app/prospects/discover?project_id=${id}`)}
+                  className="bg-saibyl-gold text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-[#4B4FDE]"
+                >
+                  Find companies
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {runs.map((run) => {
+                  const summary = describeRun(run);
+                  return (
+                    <div key={run.id} className="glass rounded-xl p-5">
+                      <div className="flex items-center justify-between gap-4 mb-1.5">
+                        <span className="text-[15px] font-medium text-saibyl-platinum">
+                          {summary.headline}
+                        </span>
+                        <span className="text-[11px] text-saibyl-muted shrink-0">
+                          {new Date(run.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <p className="text-[12px] text-saibyl-muted leading-relaxed">
+                        {summary.detail}
+                      </p>
+
+                      {/* What it cost, stated rather than left to be worked out
+                          from two numbers on a billing page. The sentence comes
+                          from the server, which is the only place that knows
+                          what was charged and what was given back. */}
+                      {run.delivery && (
+                        <p
+                          className={`text-[12px] mt-2.5 leading-relaxed ${
+                            run.delivery.credits_refunded > 0
+                              ? 'text-saibyl-gold'
+                              : 'text-saibyl-silver'
+                          }`}
+                        >
+                          {run.delivery.sentence}
+                        </p>
+                      )}
+
+                      {run.candidates_found > 0 && (
+                        <button
+                          onClick={() =>
+                            navigate(`/app/prospects?discovery_run_id=${run.id}`)
+                          }
+                          className="mt-3 text-[12px] text-saibyl-gold hover:underline"
+                        >
+                          See the {run.candidates_found} compan
+                          {run.candidates_found === 1 ? 'y' : 'ies'} this found →
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

@@ -94,6 +94,28 @@ function estimateMinutes(estimate: CostEstimate): [number, number] {
   return [low, Math.max(low + 1, Math.round(units / 450))];
 }
 
+/** Force `n` into `[low, high]`, rejecting NaN. */
+function clamp(n: number, low: number, high: number): number {
+  if (!Number.isFinite(n)) return low;
+  return Math.min(Math.max(Math.round(n), low), high);
+}
+
+/**
+ * One number, set two ways.
+ *
+ * **The displayed number and the submitted number are the same value.** The
+ * previous version showed the raw `value` in the label while the range input
+ * showed `Math.min(value, cap)` — a thumb sitting at one number under a label
+ * reading another, with the label's number being the one that got quoted,
+ * charged and built. Here `shown` is derived once and drives the label, the
+ * thumb and every `onChange`, so there is no expression the two can disagree
+ * through.
+ *
+ * The typed field exists because a slider is a bad instrument for "27". Across
+ * a full-width track a single pixel is roughly two agents, and a wheel notch or
+ * a stray click on the track moves it further than that — a founder who wants a
+ * specific number should be able to say the number.
+ */
 function Slider({
   label,
   value,
@@ -102,28 +124,67 @@ function Slider({
   cap,
   onChange,
   planLabel,
+  hint,
 }: {
   label: string;
   value: number;
   min: number;
   max: number;
+  /** The tier ceiling. Never exceeded by anything this emits. */
   cap: number;
   onChange: (value: number) => void;
   planLabel: string;
+  hint?: string;
 }) {
-  const atCap = value >= cap;
+  const ceiling = Math.max(min, Math.min(max, cap));
+  const shown = clamp(value, min, ceiling);
+  const atCap = shown >= ceiling;
+
+  /* The typed field keeps its own draft so the user can clear it and retype
+     without the value snapping back to `min` on the first empty keystroke. It
+     is committed on blur and on Enter, clamped; the slider is the live control
+     and stays authoritative for everything else. */
+  const [draft, setDraft] = useState<string | null>(null);
+
+  const commit = (raw: string) => {
+    setDraft(null);
+    const parsed = Number(raw);
+    if (raw.trim() === '' || !Number.isFinite(parsed)) return;
+    const next = clamp(parsed, min, ceiling);
+    if (next !== shown) onChange(next);
+  };
+
   return (
     <div>
-      <div className="flex items-baseline justify-between mb-2">
+      <div className="flex items-baseline justify-between gap-3 mb-2">
         <label className="text-[12px] font-medium text-saibyl-muted uppercase tracking-wide">
-          {label}: <span className="text-saibyl-gold font-bold">{value}</span>
+          {label}
         </label>
-        {atCap && (
-          <span className="flex items-center gap-1 text-[11px] text-saibyl-warning">
-            <Lock className="w-3 h-3" />
-            {planLabel} caps this at {cap}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {atCap && (
+            <span className="flex items-center gap-1 text-[11px] text-saibyl-warning">
+              <Lock className="w-3 h-3" />
+              {planLabel} caps this at {ceiling}
+            </span>
+          )}
+          <input
+            type="number"
+            inputMode="numeric"
+            min={min}
+            max={ceiling}
+            aria-label={label}
+            value={draft ?? String(shown)}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={(e) => commit(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                commit((e.target as HTMLInputElement).value);
+              }
+            }}
+            className="w-20 rounded-lg bg-[#0B1120] border border-white/[0.08] px-2 py-1 text-right text-[13px] font-bold text-saibyl-gold focus:outline-none focus:ring-1 focus:ring-saibyl-gold/50"
+          />
+        </div>
       </div>
       <input
         type="range"
@@ -131,15 +192,16 @@ function Slider({
         // Clamped to the tier cap rather than left open and rejected at start.
         // A slider that moves past what the plan allows quotes a run the user
         // cannot launch.
-        max={Math.min(max, cap)}
-        value={Math.min(value, cap)}
-        onChange={(e) => onChange(Number(e.target.value))}
+        max={ceiling}
+        value={shown}
+        onChange={(e) => onChange(clamp(Number(e.target.value), min, ceiling))}
         className="w-full accent-saibyl-gold"
       />
       <div className="flex justify-between text-[10px] text-saibyl-muted/60 mt-1">
         <span>{min}</span>
-        <span>{Math.min(max, cap)}</span>
+        <span>{ceiling}</span>
       </div>
+      {hint && <p className="text-[11px] text-saibyl-muted/70 mt-1.5">{hint}</p>}
     </div>
   );
 }
@@ -154,7 +216,18 @@ export default function RunConfigurator({
   shape: RunShape;
   /** Platforms are chosen in their own step; the configurator only prices them. */
   platformCount: number;
-  onChange: (shape: RunShape) => void;
+  /**
+   * Takes an updater as well as a value, and every caller here passes an
+   * updater.
+   *
+   * `onChange({ ...shape, agent_count })` closes over the `shape` of the render
+   * that created the handler. React treats `input` on a range as a continuous
+   * event, so several can be batched into one commit — and the second handler
+   * in that batch spreads a `shape` that predates the first, silently reverting
+   * whatever the first one set. Passing a function makes every write a
+   * read-modify-write against current state instead.
+   */
+  onChange: (update: RunShape | ((prev: RunShape) => RunShape)) => void;
   /** Fires whenever the priced shape changes, so the parent can clear a stale quote. */
   onQuote?: (estimate: CostEstimate | null) => void;
   /**
@@ -215,6 +288,38 @@ export default function RunConfigurator({
     max_variants: 3,
   };
   const planLabel = (data?.plan ?? 'your plan').replace(/^\w/, (c) => c.toUpperCase());
+
+  /* ── Caps arrive after the first render, and they clamp the *state* ──
+     Until this existed the cap clamped only the thumb: a shape above the tier
+     ceiling left the slider pinned at the cap while the number underneath —
+     the one sent to `/billing/quote`, stored on the run and built by the
+     engine — stayed wherever it was. The two could disagree indefinitely and
+     nothing on screen said which one was real.
+
+     Clamping down only. Raising a user's choice because their plan allows more
+     would be the same defect pointing the other way. */
+  /** Only the capped dimensions. `depth` has no cap and is not a number. */
+  type CappedShape = Pick<RunShape, 'agent_count' | 'rounds' | 'variants'>;
+  const [reduced, setReduced] = useState<Partial<CappedShape> | null>(null);
+
+  useEffect(() => {
+    // Never on the read-only readout. There is nothing to submit there, so
+    // there is nothing to correct — and its `onChange` is a fresh no-op every
+    // render, which would make this effect re-fire on its own output forever.
+    if (readOnly || !data) return;
+    const limits = data.caps;
+    const next: Partial<CappedShape> = {};
+    if (shape.agent_count > limits.max_agents) next.agent_count = limits.max_agents;
+    if (shape.rounds > limits.max_rounds) next.rounds = limits.max_rounds;
+    if (shape.variants > limits.max_variants) next.variants = limits.max_variants;
+    if (Object.keys(next).length === 0) return;
+
+    setReduced(next);
+    onChange((prev) => ({ ...prev, ...next }));
+    // `shape` is intentionally absent: this reacts to caps arriving, and the
+    // clamp is idempotent — after it runs the condition above is false.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, onChange, readOnly]);
   const estimate = data?.estimate;
   const budget = data?.budget;
   const [minLow, minHigh] = estimate ? estimateMinutes(estimate) : [0, 0];
@@ -228,14 +333,32 @@ export default function RunConfigurator({
     <div className="space-y-6">
       {!readOnly && (
         <>
+          {reduced && (
+            <div className="rounded-xl border border-saibyl-warning/25 bg-saibyl-warning/[0.06] px-4 py-3">
+              <p className="text-[12px] text-saibyl-silver leading-relaxed">
+                {planLabel} tops out at{' '}
+                {[
+                  reduced.agent_count != null && `${caps.max_agents} people`,
+                  reduced.rounds != null && `${caps.max_rounds} rounds`,
+                  reduced.variants != null && `${caps.max_variants} messages`,
+                ]
+                  .filter(Boolean)
+                  .join(', ')}
+                , so this run has been set to that. Everything below is what will
+                actually run.
+              </p>
+            </div>
+          )}
+
           <Slider
-            label="Agents"
+            label="People in the room"
             value={shape.agent_count}
             min={5}
             max={250}
             cap={caps.max_agents}
             planLabel={planLabel}
-            onChange={(agent_count) => onChange({ ...shape, agent_count })}
+            hint="More people narrows the range on every finding. This is the exact number that will be built."
+            onChange={(agent_count) => onChange((prev) => ({ ...prev, agent_count }))}
           />
           <Slider
             label="Rounds"
@@ -244,34 +367,38 @@ export default function RunConfigurator({
             max={20}
             cap={caps.max_rounds}
             planLabel={planLabel}
-            onChange={(rounds) => onChange({ ...shape, rounds })}
+            hint="How many times they get to see each other's reactions and change their mind."
+            onChange={(rounds) => onChange((prev) => ({ ...prev, rounds }))}
           />
-          {/* A slider that cannot move is worse than an explanation. The
-              engine runs one variant arena; the cap comes from the server, so
-              this reappears on its own when N-way matched swarms ship. */}
-          {caps.max_variants > 1 ? (
-            <Slider
-              label="Variants"
-              value={shape.variants}
-              min={1}
-              max={8}
-              cap={caps.max_variants}
-              planLabel={planLabel}
-              onChange={(variants) => onChange({ ...shape, variants })}
-            />
-          ) : (
-            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
-              <p className="text-[12px] text-saibyl-silver">
-                <span className="text-saibyl-muted uppercase tracking-wide text-[11px]">
-                  Variants
-                </span>
-                <br />
-                One message per run for now. Testing several messages against the
-                same audience — same agents, same seed — arrives with the
-                Marketing lens.
-              </p>
-            </div>
-          )}
+
+          {/* ── Testing more than one message ──
+              **No count control here, deliberately.** A variant count is a price
+              multiplier: the swarm reacts to each message in its own arena, and
+              the quote charges for every one. The copy for those messages is set
+              on the run's own page, after the run exists — so a number chosen
+              here produced a run priced for N arenas with zero messages written,
+              which `POST /simulations/{id}/start` refuses outright. That is
+              exactly the guard that exists because a 4-variant run with no copy
+              was once billed 4x and executed one arena, and a control that can
+              only ever produce a run the server declines to start is a control
+              that does nothing.
+
+              Setting the count from the messages actually written is what makes
+              the two unable to disagree. The previous copy here — "one message
+              per run for now… arrives with the Marketing lens" — was written
+              before that lens shipped and was still on screen a release later. */}
+          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+            <p className="text-[11px] text-saibyl-muted uppercase tracking-wide mb-1">
+              Testing more than one message
+            </p>
+            <p className="text-[12px] text-saibyl-silver leading-relaxed">
+              You can put up to {caps.max_variants} different messages in front of
+              the same room — same people, same order, so the difference is down
+              to the words and not to who happened to be listening. Write them on
+              the run&rsquo;s page once you&rsquo;ve created it; the price updates
+              when you do, because each message is a full run of its own.
+            </p>
+          </div>
 
           <div>
             <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-2">
@@ -282,7 +409,7 @@ export default function RunConfigurator({
                 <button
                   key={depth}
                   type="button"
-                  onClick={() => onChange({ ...shape, depth })}
+                  onClick={() => onChange((prev) => ({ ...prev, depth }))}
                   className={`px-3 py-2 rounded-xl text-[13px] capitalize border transition-colors ${
                     shape.depth === depth
                       ? 'border-saibyl-gold/50 bg-saibyl-gold/10 text-saibyl-platinum'
@@ -373,12 +500,12 @@ export default function RunConfigurator({
             <button
               type="button"
               onClick={() =>
-                onChange({
-                  ...shape,
+                onChange((prev) => ({
+                  ...prev,
                   agent_count: data.largest_affordable!.agent_count,
                   rounds: data.largest_affordable!.rounds,
                   variants: data.largest_affordable!.variants,
-                })
+                }))
               }
               className="mt-3 px-3 py-1.5 rounded-lg text-[12px] font-medium bg-saibyl-gold text-saibyl-void hover:bg-saibyl-gold-hover transition-colors"
             >

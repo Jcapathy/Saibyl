@@ -3,8 +3,10 @@
 # run_discovery(project_id, org_id, profile_row, *, max_queries=None,
 #               created_by=None, adapter=None) -> dict
 # preview_queries(profile_row, *, max_queries=None) -> list[DiscoveryQuery]
+# reconcile_run(run) -> dict
 # DiscoveryRefusedError, DiscoveryUnavailableError
 # DISCOVERY_DEADLINE_SECONDS, QUERY_CONCURRENCY
+# discovery_deadline_seconds(queries) -> int
 # ─────────────────────────────────────────────────────────
 """Run one go-to-market discovery: ICP in, ranked candidates out.
 
@@ -37,14 +39,20 @@ that leaves a run marked `running` forever with nobody to notice.
 
 **Credits are charged before the first search**, the same as a run. The compute
 is spent whether or not the founder keeps the result, and a balance debited on
-completion funds ten concurrent jobs from one balance. There is no refund path
-for a partial run: what a partial run consumed is what it consumed, and the
-credits charged, the searches performed and the queries completed are all on the
-run row so the difference is visible rather than argued about.
+completion funds ten concurrent jobs from one balance.
+
+**And reconciled after it.** Charging up front from the *requested* query count
+is right; keeping the difference when the run delivered fewer is not. Every run
+closes through `reconcile_run`, which prices the queries that actually ran and
+credits the rest back — once, by a compare-and-set in the database. This module
+used to say "there is no refund path for a partial run"; that was a deliberate
+choice, and in front of the customer who paid 1,254 credits for 12 queries and
+received 7 it was indefensible.
 """
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -59,6 +67,7 @@ from app.services.gtm.pricing import (
     GTM_DISCOVERY_STAGE,
     check_discovery_budget,
     estimate_discovery_cost,
+    reconcile_discovery_charge,
     search_fee_usd,
 )
 from app.services.gtm.privacy import (
@@ -81,11 +90,55 @@ log = structlog.get_logger()
 # deadline while staying well under any per-organization search rate limit.
 QUERY_CONCURRENCY = 4
 
-# Wall clock for the whole batch. Past this the run closes `partial` with what
-# it has. Chosen so an HTTP client with a conventional timeout is still
-# connected when the response arrives; raising it means raising the client's
-# timeout too, in the same commit.
-DISCOVERY_DEADLINE_SECONDS = 180
+# Wall clock ceiling for the whole batch. Past this the run closes `partial`
+# with what it has.
+#
+# **A deadline is not a failure to hide, and it must not be a promise the
+# product cannot keep.** At a flat 180s the estimate offered 12 queries and the
+# first live 12-query run delivered 7 — the deadline was sized for a shape
+# smaller than the one being sold. Two ways out: scale the deadline, or stop
+# offering 12. This scales it, because the ICP compiler produces up to 12
+# genuinely distinct angles and cutting the offer to what a fixed 180s happens
+# to fit would shrink the product to fit a constant.
+#
+# Bounded, because the run is inline: the founder is holding an HTTP connection
+# open, and a server that outlasts the client's timeout produces the worst
+# outcome available — the credits are spent and the founder never sees the
+# result. `frontend/src/lib/gtm.ts` waits `DISCOVERY_DEADLINE_SECONDS + 60`, and
+# that constant moves in the same commit as this one.
+#
+# Sized so the largest discovery the estimate offers — `MAX_QUERIES_PER_DISCOVERY`
+# at `QUERY_CONCURRENCY` — fits inside it. If either of those changes, this has
+# to be checked against them again; `test_the_deadline_can_finish_what_the_estimate_sells`
+# fails when it stops being true, rather than leaving it to the next customer to
+# discover.
+DISCOVERY_DEADLINE_SECONDS = 360
+
+# Wall clock for one wave of `QUERY_CONCURRENCY` queries, plus a fixed margin
+# for closing the run and replying.
+#
+# Measured, not assumed: run 534353e7 delivered 7 of 12 queries in 180s at
+# concurrency 4, which is ~103s for four queries in flight. 110 is that with a
+# little headroom; the margin covers `finish_run`, the reconciliation and the
+# response. Re-derive from `gtm_discovery_runs` (completed_at - created_at over
+# queries_completed) once there are enough runs to have a distribution rather
+# than a point.
+_SECONDS_PER_WAVE = 110
+_DEADLINE_MARGIN_SECONDS = 20
+
+
+def discovery_deadline_seconds(queries: int) -> int:
+    """How long a batch of `queries` queries gets, bounded by the ceiling.
+
+    A run of three queries has no business waiting six minutes before it is
+    allowed to give up, and a run of twelve had no business being cut off at the
+    time three would take. One wave is `QUERY_CONCURRENCY` queries in flight.
+    """
+    waves = max(1, -(-max(0, queries) // QUERY_CONCURRENCY))  # ceil division
+    return min(
+        DISCOVERY_DEADLINE_SECONDS,
+        _DEADLINE_MARGIN_SECONDS + _SECONDS_PER_WAVE * waves,
+    )
 
 
 class DiscoveryRefusedError(RuntimeError):
@@ -256,6 +309,7 @@ async def run_discovery(
 
     status = "completed"
     error: str | None = None
+    deadline = discovery_deadline_seconds(len(queries))
 
     with usage_context(GTM_DISCOVERY_STAGE, organization_id=org_id):
         try:
@@ -268,14 +322,15 @@ async def run_discovery(
                     for query in queries
                     if query.archetype_id in by_id
                 )),
-                timeout=DISCOVERY_DEADLINE_SECONDS,
+                timeout=deadline,
             )
         except TimeoutError:
             status = "partial"
-            error = f"deadline of {DISCOVERY_DEADLINE_SECONDS}s reached"
+            error = f"deadline of {deadline}s reached"
             log.warning(
                 "gtm_discovery_deadline",
                 run_id=run["id"],
+                deadline_seconds=deadline,
                 completed=len(outcome["completed"]),
                 total=len(queries),
             )
@@ -323,6 +378,12 @@ async def run_discovery(
         error=error,
     )
 
+    # Written before the log line so `gtm_discovery_finished` states the net
+    # charge rather than the gross one. A log that reports what was taken and
+    # never what was given back is how the original defect stayed invisible for
+    # as long as it did.
+    closed = reconcile_run(closed or {**run, "status": status, "error": error})
+
     log.info(
         "gtm_discovery_finished",
         run_id=run["id"],
@@ -337,5 +398,60 @@ async def run_discovery(
         contacts_enabled=include_contacts,
         searches=searches,
         credits_charged=budget.credits_required,
+        credits_refunded=int(closed.get("credits_refunded") or 0),
+        credits_net=int(closed.get("credits_charged") or 0)
+        - int(closed.get("credits_refunded") or 0),
     )
-    return closed or {**run, "status": status, "error": error}
+    return closed
+
+
+def reconcile_run(run: dict[str, Any]) -> dict[str, Any]:
+    """Charge a closed run for what it delivered. Returns the run row.
+
+    Safe to call any number of times on the same run — the refund is claimed by
+    a compare-and-set in `refund_discovery_credits`, so the second call credits
+    nothing. That is what makes this callable from the end of `run_discovery`
+    *and* from `POST /gtm/runs/{id}/reconcile` without the two racing.
+
+    A failure here never fails the run. The founder's candidates are stored and
+    the run row is closed; a refund that could not be attempted is an
+    `gtm_refund_unavailable` at error level with everything needed to replay it
+    by hand, which is strictly better than losing the discovery to a billing
+    problem. The most likely cause is migration 028 not yet being applied.
+    """
+    delivery = reconcile_discovery_charge(run)
+    refunded = int(run.get("credits_refunded") or 0)
+
+    if run.get("refunded_at"):
+        # Already settled. Reported rather than silently skipped, because the
+        # difference between "owed nothing" and "already paid" is the difference
+        # a double-callback investigation turns on.
+        log.info(
+            "gtm_discovery_already_reconciled",
+            run_id=run.get("id"),
+            credits_refunded=refunded,
+        )
+        return run
+
+    try:
+        refunded = store.refund_run(run["id"], delivery.credits_refundable)
+    except store.RefundUnavailableError as exc:
+        log.error(
+            "gtm_refund_unavailable",
+            run_id=run.get("id"),
+            organization_id=run.get("organization_id"),
+            credits_owed=delivery.credits_refundable,
+            queries_requested=delivery.queries_requested,
+            queries_delivered=delivery.queries_delivered,
+            detail=str(exc),
+        )
+        return run
+
+    # Reflected onto the row the caller already holds rather than re-read: the
+    # RPC is authoritative about what it credited, and a second round trip could
+    # only disagree with it.
+    return {
+        **run,
+        "credits_refunded": refunded,
+        "refunded_at": datetime.now(UTC).isoformat(),
+    }

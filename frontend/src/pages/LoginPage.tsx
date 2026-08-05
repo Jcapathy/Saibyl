@@ -141,8 +141,8 @@ export default function LoginPage() {
 
           {/* Subtitle */}
           <p className="text-[#8B97A8] text-base leading-relaxed max-w-md mb-12">
-            Simulate public reactions across 8 platforms with up to 1,000,000
-            synthetic agents powered by swarm intelligence.
+            Simulate public reactions across 12 platforms, with an audience built
+            from your own material. Every number traces to what an agent said.
           </p>
 
           {/* Stats row */}

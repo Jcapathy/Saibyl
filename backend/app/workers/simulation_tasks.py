@@ -782,6 +782,45 @@ async def run_simulation(simulation_id: str):
             detail="events will be mis-attributed and agent counts under-reported",
         )
 
+    # The subject itself: the project's uploaded material, distilled once into a
+    # bounded brief that every arena and every round of this run then reads.
+    #
+    # Once, here, before any adapter exists. Distilling per adapter would give
+    # the arenas of one run different subjects, and the comparison between them
+    # is the entire artifact. It is also the point at which a stopped-and-
+    # restarted run re-reads its stored brief instead of paying for a second
+    # main-model pass — see `ensure_subject_brief`.
+    from app.services.intelligence.subject_brief import ensure_subject_brief
+    subject_brief = ""
+    try:
+        brief = await ensure_subject_brief(sim)
+        subject_brief = brief.text
+        if not brief.present:
+            # Not swallowed and not silent. `ensure_subject_brief` has already
+            # logged the specific reason and written it to the run's row; this
+            # line is what makes the *consequence* visible next to the run it
+            # applies to, because a founder reading a report about their
+            # one-line description needs the reason to be findable.
+            logger.warning(
+                "simulation_running_without_subject_brief",
+                simulation_id=simulation_id,
+                status=brief.status,
+                reason=brief.reason,
+                detail="agents see `prediction_goal` as their subject, not the "
+                       "project's uploaded material",
+            )
+    except Exception:
+        # The run is paid for and every other stage of it is intact, so it
+        # continues on the pre-brief behaviour rather than being thrown away —
+        # loudly, with the trace, because a run whose agents saw less than the
+        # project uploaded must be reconstructible from the logs.
+        logger.exception(
+            "subject_brief_unresolved",
+            simulation_id=simulation_id,
+            detail="running on `prediction_goal` alone; this run was quoted for a "
+                   "subject brief it does not carry",
+        )
+
     # Material the team pre-positioned, in an inoculation re-simulation. Empty
     # on every ordinary run, and read once here rather than per adapter.
     from app.services.intelligence.inoculation import (
@@ -839,9 +878,14 @@ async def run_simulation(simulation_id: str):
                 adapter = get_adapter(platform_id)
                 await adapter.initialize(
                     config={
-                        # The arena's copy is the subject its agents react to.
-                        # This is the only difference between arenas.
+                        # The arena's copy — the question that opens the
+                        # conversation. This is the only difference between
+                        # arenas, which is what makes them comparable.
                         "prediction_goal": arena.content,
+                        # The subject the agents react to, identical in every
+                        # arena and every round. A brief that varied by arena
+                        # would make the variant comparison measure two changes.
+                        "subject_brief": subject_brief,
                         "simulation_id": simulation_id,
                         "pre_positioned": pre_positioned,
                     },
@@ -882,6 +926,10 @@ async def run_simulation(simulation_id: str):
         platforms=platforms_list,
         arenas=[a.variant_key for a in arenas],
         adapter_instances=len(adapters),
+        # 0 means the agents are reacting to `prediction_goal` alone. Carried on
+        # the start line so "what was this run's subject" is answerable from the
+        # run's own logs without joining another table.
+        subject_brief_chars=len(subject_brief),
     )
 
     try:

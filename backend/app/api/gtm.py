@@ -26,9 +26,14 @@ from app.services.gtm.discovery import (
     DiscoveryRefusedError,
     DiscoveryUnavailableError,
     preview_queries,
+    reconcile_run,
     run_discovery,
 )
-from app.services.gtm.pricing import check_discovery_budget, estimate_discovery_cost
+from app.services.gtm.pricing import (
+    check_discovery_budget,
+    estimate_discovery_cost,
+    reconcile_discovery_charge,
+)
 from app.services.gtm.privacy import (
     ContactGateUnavailableError,
     contact_discovery_gate,
@@ -71,6 +76,74 @@ class PurgeBody(BaseModel):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _with_delivery(run: dict | None) -> dict | None:
+    """Attach what this run asked for, delivered, and actually cost.
+
+    Every run row leaves this module through here, so no screen can render a
+    charge without the delivery beside it. Computed on read rather than stored:
+    `queries_completed`, `queries_empty` and `credits_charged` are already on the
+    row, and a stored summary is a second copy of the same facts that can drift
+    from them.
+
+    `sentence` is written here rather than in the client because it is the one
+    place that knows both halves of the arithmetic. A founder should not have to
+    subtract two numbers to find out whether they were charged for work that
+    never happened.
+    """
+    if run is None:
+        return None
+
+    delivery = reconcile_discovery_charge(run)
+    refunded = int(run.get("credits_refunded") or 0)
+    settled = run.get("refunded_at") is not None
+    net = delivery.credits_charged - refunded
+
+    if delivery.queries_delivered >= delivery.queries_requested:
+        sentence = (
+            f"All {delivery.queries_requested} searches ran. "
+            f"You were charged {net:,} credits."
+        )
+    elif refunded > 0:
+        sentence = (
+            f"{delivery.queries_delivered} of {delivery.queries_requested} searches "
+            f"ran. You were charged for the {delivery.queries_delivered} that ran — "
+            f"{refunded:,} credits for the rest have been put back on your balance, "
+            f"so this search cost you {net:,} credits."
+        )
+    elif settled:
+        sentence = (
+            f"{delivery.queries_delivered} of {delivery.queries_requested} searches "
+            f"ran, and this run was charged {net:,} credits."
+        )
+    else:
+        # Not yet reconciled — a run still in flight, or one whose refund could
+        # not be attempted. Says what is owed rather than implying it has been
+        # paid, because claiming a refund that has not happened is worse than
+        # the missing refund.
+        sentence = (
+            f"{delivery.queries_delivered} of {delivery.queries_requested} searches "
+            f"have finished. {delivery.credits_refundable:,} credits for the rest "
+            f"are still to be put back."
+            if delivery.credits_refundable > 0
+            else f"{delivery.queries_delivered} of {delivery.queries_requested} "
+                 f"searches have finished."
+        )
+
+    return {
+        **run,
+        "delivery": {
+            "queries_requested": delivery.queries_requested,
+            "queries_delivered": delivery.queries_delivered,
+            "credits_charged": delivery.credits_charged,
+            "credits_refunded": refunded,
+            "credits_net": net,
+            "credits_refundable": 0 if settled else delivery.credits_refundable,
+            "reconciled": settled,
+            "sentence": sentence,
+        },
+    }
+
 
 def _fetch_profile(profile_id: str, org_id: str) -> dict:
     admin = get_supabase_admin()
@@ -194,7 +267,7 @@ async def discover(body: DiscoverBody, auth: dict = Depends(get_current_org)):
         raise HTTPException(status_code=402, detail=exc.budget.message) from exc
     except DiscoveryUnavailableError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return run
+    return _with_delivery(run)
 
 
 @router.post("/purge")
@@ -225,7 +298,7 @@ async def list_runs(
     items, total = store.list_runs(
         auth["org_id"], project_id=project_id, limit=limit, offset=offset
     )
-    return {"items": items, "total": total}
+    return {"items": [_with_delivery(run) for run in items], "total": total}
 
 
 @router.get("/candidates")
@@ -267,7 +340,33 @@ async def get_run(id: str, auth: dict = Depends(get_current_org)):
     run = store.get_run(id, auth["org_id"])
     if run is None:
         raise HTTPException(status_code=404, detail="Discovery run not found")
-    return run
+    return _with_delivery(run)
+
+
+@router.post("/runs/{id}/reconcile")
+async def reconcile(id: str, auth: dict = Depends(get_current_org)):
+    """Settle this run's charge against what it delivered.
+
+    `run_discovery` already does this as it closes, so this exists for the runs
+    that closed before it did, and for the case where the refund could not be
+    attempted at the time (`gtm_refund_unavailable` in the logs — usually a
+    migration not yet applied).
+
+    **Safe to call repeatedly.** The refund is claimed by a compare-and-set in
+    `refund_discovery_credits`, so a retry, a double callback, or two clients
+    pressing this at once credit the balance exactly once between them. That is
+    also why this is not a 409 on an already-settled run: the caller asked for
+    the run to be settled, and it is.
+    """
+    run = store.get_run(id, auth["org_id"])
+    if run is None:
+        raise HTTPException(status_code=404, detail="Discovery run not found")
+    if run.get("status") == "running":
+        raise HTTPException(
+            status_code=409,
+            detail="This search is still running. It settles itself when it finishes.",
+        )
+    return _with_delivery(reconcile_run(run))
 
 
 @router.get("/candidates/{id}")

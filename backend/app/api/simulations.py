@@ -148,14 +148,55 @@ async def create_simulation(body: CreateSimulationBody, auth: dict = Depends(get
     # Guarded here as well as in the quote: `POST /simulations/{id}/start`
     # without a quote prices from this stored shape, so a simulation created
     # with variants > 1 would be charged for arenas the engine never runs.
-    from app.services.billing.agent_pricing import MAX_RUNNABLE_VARIANTS
+    from app.services.billing.agent_pricing import MAX_RUNNABLE_VARIANTS, tier_caps
     if body.variants > MAX_RUNNABLE_VARIANTS:
         raise HTTPException(
             status_code=400,
             detail=(
-                f"Multi-variant runs are not available yet — the engine runs "
-                f"{MAX_RUNNABLE_VARIANTS} arena. Matched-swarm variant testing "
-                f"arrives with the Marketing lens."
+                f"At most {MAX_RUNNABLE_VARIANTS} messages can be tested in one "
+                f"run — each one is a full arena the swarm reacts to."
+            ),
+        )
+
+    # The tier ceiling, enforced where the run is actually created.
+    #
+    # `POST /billing/estimate-cost` returns `caps` for the configurator to
+    # respect, and nothing checked that it had. A client that sent a shape above
+    # its plan got a quote for it, a simulation row holding it, and a swarm built
+    # to it — the caps were advisory, which is to say they were decoration. The
+    # first live run configured through the UI stored 50 agents; the cap is not
+    # what produced that number, but nothing here would have stopped a client
+    # that sent 250 on a plan capped at 100 either.
+    #
+    # Refused rather than silently clamped: a run quietly built smaller than the
+    # price the customer was shown is the same defect as one built larger, and
+    # the message names the ceiling so the client can correct itself.
+    caps = tier_caps((auth.get("org") or {}).get("plan"))
+    requested_agents = body.agent_count or 0
+    if requested_agents > caps.max_agents:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Your plan allows up to {caps.max_agents} people in the room; "
+                f"this run asks for {requested_agents}."
+            ),
+        )
+    if body.max_rounds > caps.max_rounds:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Your plan allows up to {caps.max_rounds} rounds; this run asks "
+                f"for {body.max_rounds}."
+            ),
+        )
+    if body.variants > caps.max_variants:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Your plan allows {caps.max_variants} messages per run; this run "
+                f"asks for {body.variants}. Every message is a full arena — the "
+                f"same room reacts to each one — so the run costs proportionally "
+                f"more."
             ),
         )
 
@@ -378,7 +419,13 @@ async def start_simulation(
     sim = (
         admin.table("simulations")
         .select(
-            "id, status, agent_count, max_rounds, platforms, "
+            # `project_id` is here for `run_will_carry_subject_brief`, which
+            # answers "does this run carry a brief?" from the project's material
+            # for a first run. Without it every non-re-simulation quoted through
+            # this path would resolve to "no brief" and be under-charged by the
+            # surcharge — silently, because the shortfall stays above the margin
+            # floor and `reconcile_run_cost` never fires.
+            "id, status, agent_count, max_rounds, platforms, project_id, "
             "variants, parent_simulation_id, inoculation_asset_ids"
         )
         .eq("id", id)
@@ -459,6 +506,15 @@ async def start_simulation(
     # generation and the surcharge on actions are separate facts, and quoting
     # only the first one under-charged the re-simulation by roughly a fifth.
     inoculation_assets = len(sim.data.get("inoculation_asset_ids") or [])
+    # Uploaded material is distilled into a bounded brief that rides in every
+    # agent action prompt, which is the highest-volume stage by an order of
+    # magnitude — so a run whose project has material costs ~10% more to serve.
+    # Derived from the row already loaded, like `reuse_agents` and
+    # `inoculation_assets`; a re-simulation is answered from its parent's stored
+    # brief rather than from the project's material, because the material may
+    # have changed and the child is charged for what it will actually send.
+    from app.services.intelligence.subject_brief import run_will_carry_subject_brief
+    subject_brief = run_will_carry_subject_brief(sim.data)
 
     # Credits are charged at start, not at completion. Deducting on completion
     # would let a user with one run's worth of credits start ten runs at once
@@ -496,6 +552,7 @@ async def start_simulation(
         budget = check_credit_budget(
             auth["org_id"], agent_count, max_rounds, platforms, variants,
             reuse_agents=reuse_agents, inoculation_assets=inoculation_assets,
+            subject_brief=subject_brief,
         )
         if not budget.allowed:
             raise HTTPException(status_code=402, detail=budget.message)

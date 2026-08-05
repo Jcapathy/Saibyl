@@ -5,6 +5,8 @@
 # estimate_discovery_cost(queries) -> DiscoveryCostEstimate
 # check_discovery_budget(org_id, queries) -> BudgetCheck
 # search_fee_usd(searches) -> Decimal
+# delivered_queries(run) -> int
+# reconcile_discovery_charge(run) -> DeliveryReconciliation
 # ─────────────────────────────────────────────────────────
 """What a go-to-market discovery costs, and the one part of it the ledger
 cannot see.
@@ -65,8 +67,10 @@ derivation would over-state this stage.
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 import structlog
@@ -77,14 +81,13 @@ from app.services.billing.agent_pricing import (
     GTM_EXTRACTION,
     GTM_SEARCH,
     MIN_MARGIN_PCT,
-    STANDARD_RUN,
     TARGET_MARGIN_PCT,
     WEB_SEARCH_USD_PER_REQUEST,
     BudgetCheck,
     credits_for,
-    estimate_simulation_cost,
     get_credit_balance,
     search_fee_usd,
+    standard_run_credits,
 )
 from app.services.billing.model_pricing import cost_usd
 from app.services.gtm.query_compiler import MAX_QUERIES_PER_DISCOVERY
@@ -138,8 +141,11 @@ __all__ = [
     "GTM_SEARCH_TOKENS",
     "SEARCHES_PER_QUERY",
     "WEB_SEARCH_USD_PER_REQUEST",
+    "DeliveryReconciliation",
     "DiscoveryCostEstimate",
+    "delivered_queries",
     "estimate_discovery_cost",
+    "reconcile_discovery_charge",
     "search_fee_usd",
 ]
 
@@ -190,14 +196,21 @@ def _token_cost(queries: int) -> Decimal:
 
 
 def _standard_run_credits() -> int:
-    """Credits for the reference run, via the public estimator.
+    """Credits for the reference run, from `agent_pricing`'s own definition.
 
     Derived rather than hardcoded so the "worth N standard runs" line moves when
     the token profiles are recalibrated, instead of quietly describing a run
     shape that no longer costs that.
+
+    **Not rebuilt from `STANDARD_RUN` here.** That tuple carries agents, rounds,
+    platforms and variants — it does not carry `subject_brief`, and the
+    reference run does carry one. Reconstructing the reference from the tuple
+    alone computed a figure ~10% below the one every quote in the product is
+    compared against, which made this module's "≈ N standard runs" line quietly
+    overstate how much of a founder's balance a discovery is worth.
+    `standard_run_credits()` is public for exactly this reason.
     """
-    agents, rounds, platforms, variants = STANDARD_RUN
-    return estimate_simulation_cost(agents, rounds, platforms, variants).credits
+    return standard_run_credits()
 
 
 def estimate_discovery_cost(queries: int) -> DiscoveryCostEstimate:
@@ -264,4 +277,91 @@ def check_discovery_budget(org_id: UUID | str, queries: int) -> BudgetCheck:
         estimated_cost_usd=estimate.actual_cost_usd,
         retail_price_usd=estimate.retail_cost_usd,
         message=message,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Reconciliation — charged for requested, kept for delivered
+# ---------------------------------------------------------------------------
+#
+# Credits are taken before the first search, from the *requested* query count.
+# That part is right and stays: the compute is spent whether or not the founder
+# keeps the result, and a balance debited on completion funds ten concurrent
+# jobs from one balance.
+#
+# What was wrong is that nothing gave the difference back. Run 534353e7 asked
+# for 12 queries, ran 7, closed `partial` on the deadline, and kept the full
+# 12-query price — the same shape as the apportionment defect where a customer
+# paid for 48 agents and received 45. "No refund on partial" was a deliberate
+# choice and it is indefensible in front of the person who paid.
+
+
+class DeliveryReconciliation(BaseModel):
+    """What a closed run asked for, what it delivered, and what it should keep.
+
+    Pure arithmetic over a run row. It moves no money and touches no database —
+    `store.refund_run` does that, so this can be asserted against directly and so
+    the number quoted to the customer and the number credited are the same
+    expression evaluated once.
+    """
+
+    queries_requested: int
+    queries_delivered: int
+    credits_charged: int
+    #: What the delivered work is worth at the same per-query rate.
+    credits_kept: int
+    #: `credits_charged - credits_kept`, never negative.
+    credits_refundable: int
+
+    @property
+    def owes_refund(self) -> bool:
+        return self.credits_refundable > 0
+
+
+def delivered_queries(run: Mapping[str, Any]) -> int:
+    """Queries this run actually put a result in front of the founder for.
+
+    `completed + empty`. Those two are the queries that reached the search
+    provider and produced an answer — an empty result is a real finding about a
+    market, priced the same as a full one because it costs the same to obtain.
+
+    **`failed` is not delivered.** A query that raised in search or extraction
+    consumed some spend and gave the customer nothing, and Saibyl eats the cost
+    of its own failures rather than billing for them. That is the whole point of
+    charging for delivered work: the direction of the doubt has to favour the
+    person who paid, or the guarantee is decorative.
+
+    Clamped to `query_count` so a row with impossible counters — the counters and
+    the total are written by different code paths — can never produce a negative
+    refund or a `credits_kept` above what was charged.
+    """
+    requested = max(0, int(run.get("query_count") or 0))
+    completed = max(0, int(run.get("queries_completed") or 0))
+    empty = max(0, int(run.get("queries_empty") or 0))
+    return min(requested, completed + empty)
+
+
+def reconcile_discovery_charge(run: Mapping[str, Any]) -> DeliveryReconciliation:
+    """Price a closed run against what it actually delivered.
+
+    The refund is `charged - estimate_discovery_cost(delivered).credits` rather
+    than a pro-rata share of `charged`, so the customer keeps the benefit of the
+    same rounding rule the original quote used (`credits_for` rounds up, once,
+    at the point of sale). Pro-rating the charge instead would re-round a figure
+    that was already rounded up and quietly keep the remainder.
+
+    `credits_kept` is floored at zero and capped at `credits_charged`: a run can
+    never be refunded more than it took, whatever the counters say.
+    """
+    requested = max(0, int(run.get("query_count") or 0))
+    charged = max(0, int(run.get("credits_charged") or 0))
+    delivered = delivered_queries(run)
+
+    kept = min(charged, estimate_discovery_cost(delivered).credits)
+    return DeliveryReconciliation(
+        queries_requested=requested,
+        queries_delivered=delivered,
+        credits_charged=charged,
+        credits_kept=kept,
+        credits_refundable=max(0, charged - kept),
     )

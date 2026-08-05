@@ -1,6 +1,7 @@
 # PUBLIC INTERFACE
 # ─────────────────────────────────────────────────────────
 # create_run(...) -> dict            finish_run(run_id, status, **fields) -> dict
+# refund_run(run_id, credits) -> int
 # get_run(run_id, org_id) -> dict    list_runs(org_id, ...) -> (items, total)
 # insert_candidates(run, candidates) -> int
 # list_candidates(org_id, ...) -> (items, total)
@@ -95,6 +96,63 @@ def finish_run(run_id: str, status: str, **fields: Any) -> dict[str, Any]:
         log.error("gtm_run_finish_no_row", run_id=run_id, status=status)
         return {}
     return updated.data[0]
+
+
+class RefundUnavailableError(RuntimeError):
+    """The refund could not be attempted. Nothing was credited.
+
+    Raised rather than swallowed so a caller can distinguish "this run owed
+    nothing" from "we could not find out". The most likely cause by far is that
+    migration 028 has not been applied, in which case
+    `refund_discovery_credits` does not exist and PostgREST answers 404.
+    """
+
+
+def refund_run(run_id: str, credits: int) -> int:
+    """Give `credits` back for a run, exactly once. Returns what was credited.
+
+    **Idempotency lives in the database, not here.**
+    `refund_discovery_credits` claims the run row with
+    `WHERE id = … AND refunded_at IS NULL` and credits the balance in the same
+    transaction. A retry, a double callback, or two API processes reconciling
+    the same run concurrently all update zero rows on the second attempt and get
+    0 back — Postgres serialises them on the row lock, so "both saw NULL" is not
+    a reachable state. Doing the check here instead would be a read followed by a
+    write with a window between them, which is how a run gets refunded twice.
+
+    Returns 0 when the run was already reconciled. That is a normal outcome, not
+    an error: it is what a retry is supposed to do.
+
+    Deliberately **not** `grant_credits`. That RPC's real body in production sets
+    `credits_granted = amount` and `credit_cycle_start = NOW()` — it starts a new
+    billing cycle at the refund amount. Verified against `pg_proc` rather than
+    read off migration 018, because this codebase has been bitten three times by
+    RPC name/arity drift; the deployed body and the migration agree, and both say
+    it is the wrong function for this.
+    """
+    admin = get_supabase_admin()
+    try:
+        result = admin.rpc("refund_discovery_credits", {
+            "run_uuid": run_id,
+            "amount": max(0, int(credits)),
+        }).execute()
+    except Exception as exc:
+        raise RefundUnavailableError(
+            f"refund_discovery_credits failed for run {run_id}: {exc}"
+        ) from exc
+
+    rows = result.data or []
+    # `RETURNS TABLE` comes back as a list of rows; a scalar shape would mean the
+    # deployed function is not the one this code was written against.
+    if isinstance(rows, dict):
+        rows = [rows]
+    refunded = int((rows[0] or {}).get("refunded") or 0) if rows else 0
+
+    if refunded > 0:
+        log.info("gtm_discovery_refunded", run_id=run_id, credits=refunded)
+    else:
+        log.info("gtm_discovery_refund_noop", run_id=run_id, requested=credits)
+    return refunded
 
 
 def get_run(run_id: str, org_id: str) -> dict[str, Any] | None:

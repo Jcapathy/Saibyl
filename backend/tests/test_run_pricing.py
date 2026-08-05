@@ -100,8 +100,25 @@ def test_credits_track_measured_cost_not_retail_price():
 
 
 def test_standard_run_equivalents_are_one_for_the_standard_run():
-    est = estimate_simulation_cost(*STANDARD_RUN)
+    """The reference run carries a subject brief.
+
+    That is a property of the reference and not of the shape tuple, because
+    `STANDARD_RUN` describes what a customer configures — agents, rounds,
+    platforms, variants — and whether the project has uploaded material is not
+    one of those. Since 2026-08-04 the Founder lens is sold on that material, so
+    the run *with* it is the reference and the document-free one is the
+    exception. See `_standard_run_credits`.
+    """
+    est = estimate_simulation_cost(*STANDARD_RUN, subject_brief=True)
     assert est.standard_run_equivalents == pytest.approx(1.0, abs=0.02)
+
+
+def test_a_document_free_run_is_worth_less_than_a_standard_run():
+    """And is quoted for less, rather than being charged for a brief it will
+    never send. A run with nothing to distil pays for no distillation."""
+    est = estimate_simulation_cost(*STANDARD_RUN)
+    assert est.standard_run_equivalents < 1.0
+    assert est.breakdown["subject_distillation"] == 0.0
 
 
 def test_a_bigger_run_is_worth_more_standard_runs():

@@ -515,9 +515,11 @@ export default function NewSimulationPage() {
           {step === 4 && (
             <div className="space-y-6">
               <Hint>
-                More agents narrow the confidence bands on every finding; more rounds
-                let objections propagate between cohorts. Both cost credits, and the
-                exact cost is shown below before you commit to anything.
+                More people narrow the range on every finding; more rounds let
+                objections spread between them. Both cost credits, and the exact
+                cost is shown below before you commit to anything. The numbers you
+                set here are the numbers that get built — type an exact figure into
+                the box if the slider will not land on it.
               </Hint>
 
               <RunConfigurator
@@ -563,9 +565,12 @@ export default function NewSimulationPage() {
                       ? `${(founder.adversarialShare * 100).toFixed(0)}% of the swarm`
                       : '—',
                   ],
-                  ['Agents', String(shape.agent_count)],
+                  ['People in the room', String(shape.agent_count)],
                   ['Rounds', String(shape.rounds)],
-                  ['Variants', String(shape.variants)],
+                  [
+                    'Messages tested',
+                    'One — add more on the run’s page before you start it',
+                  ],
                   ['Report depth', shape.depth],
                   ['Timezone', timezone],
                 ].map(([label, value]) => (

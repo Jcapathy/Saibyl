@@ -115,8 +115,17 @@ class BasePlatformAdapter(ABC):
     # Agent memory: tracks each agent's actions across rounds
     _agent_history: dict[str, list[str]]
 
-    # What the simulation is about. Empty until set_topic() is called.
+    # The question that opened the conversation — `simulations.prediction_goal`,
+    # or the arena's variant copy. Empty until set_topic() is called.
+    #
+    # **This is the framing, not the subject.** It was both until 2026-08-04,
+    # which is the defect `_subject_brief` below exists to close.
     _topic: str = ""
+
+    # The subject itself: the team's uploaded material, distilled once per run
+    # into a bounded brief. Empty on a run whose project uploaded nothing usable,
+    # and on every run created before the distillation existed.
+    _subject_brief: str = ""
 
     # Material the team published alongside the subject, in the inoculation
     # loop's re-simulation. Empty on every ordinary run.
@@ -126,20 +135,22 @@ class BasePlatformAdapter(ABC):
         self._agent_history = {}
 
     def set_topic(self, config: dict) -> None:
-        """Capture the simulation's subject and any pre-positioned material.
+        """Capture the simulation's subject, its framing, and pre-positioned material.
 
-        Both arrive through the run config, and both are read by
+        All three arrive through the run config, and all three are read by
         `topic_block()`, which every adapter already calls. That is deliberate:
         the inoculation loop needed the assets in front of all twelve adapters,
         and adding a hook to twelve `initialize` implementations is twelve
-        chances to miss one.
+        chances to miss one. The subject brief arrives the same way for the same
+        reason — there is no per-adapter path and there must not be one.
         """
         config = config or {}
         self._topic = config.get("prediction_goal", "") or ""
+        self._subject_brief = config.get("subject_brief", "") or ""
         self._pre_positioned = config.get("pre_positioned", "") or ""
 
     def topic_block(self, feed_is_empty: bool = False) -> str:
-        """The subject line every action prompt must carry.
+        """What every action prompt must carry: the subject, and its framing.
 
         Until this existed, no adapter told its agents what the simulation was
         about: `prediction_goal` was stored in `self._config` by all twelve and
@@ -147,14 +158,49 @@ class BasePlatformAdapter(ABC):
         which is generated from it — so the simulation depended on the bio
         generator succeeding, and produced silent agents when it did not.
 
-        The empty-feed nudge is the other half. On round one nobody has posted,
-        and "observe before engaging" is what a careful person actually does —
-        so every agent picks NOTHING, the feed stays empty, and the run
-        deadlocks at zero events for however many rounds it was given.
+        **The second half of that defect survived the fix.** The block carried
+        `prediction_goal` and nothing else, so a founder who uploaded a
+        14,028-character deck had their agents react to the one-line description
+        of it. The deck reached the *agent-generation* prompt at
+        `doc_context[:2000]`, where it shaped who the agents were, and never
+        reached the conversation those agents then had.
+
+        So the two are now distinct and both present:
+
+        - **The subject** is `_subject_brief` — the uploaded material distilled
+          once per run into a bounded brief (`services/intelligence/
+          subject_brief.py`). This is the thing agents react to.
+        - **The framing** is `_topic` — the founder's description, which is the
+          question that opens the conversation rather than the thing being
+          discussed.
+
+        The distinction is legible in the prompt because an agent that cannot
+        tell them apart argues with the question instead of the product. With no
+        brief — a project with no uploads, or a run that predates this — the
+        framing becomes the subject again, which is exactly the old behaviour and
+        is why a document-free run still works.
+
+        The empty-feed nudge is the other half of this block. On round one
+        nobody has posted, and "observe before engaging" is what a careful person
+        actually does — so every agent picks NOTHING, the feed stays empty, and
+        the run deadlocks at zero events for however many rounds it was given.
         """
-        if not self._topic:
+        if not self._topic and not self._subject_brief:
             return ""
-        block = f"The conversation is about: {self._topic.strip()}\n\n"
+
+        if self._subject_brief:
+            block = (
+                "THE SUBJECT — this is what you are reacting to:\n"
+                f"{self._subject_brief.strip()}\n\n"
+            )
+            if self._topic:
+                block += (
+                    "WHAT STARTED THE CONVERSATION — the question being asked "
+                    f"about it:\n{self._topic.strip()}\n\n"
+                )
+        else:
+            block = f"The conversation is about: {self._topic.strip()}\n\n"
+
         # Pre-positioned, not posted. The material is published alongside the
         # subject and available to every agent from round one, which is what
         # "pre-position this before launch" actually means. Injecting it as a

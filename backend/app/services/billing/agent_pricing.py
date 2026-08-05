@@ -2,8 +2,8 @@
 # ─────────────────────────────────────────────────────────
 # estimate_simulation_cost(agent_count, rounds, platforms=1, variants=1,
 #                          depth="standard", action_model=None,
-#                          reuse_agents=False, inoculation_assets=0)
-#                                              -> SimulationCostEstimate
+#                          reuse_agents=False, inoculation_assets=0,
+#                          subject_brief=False)  -> SimulationCostEstimate
 # report_section_count(measured_events, depth="standard") -> int
 # credits_for(cost_usd) -> int
 # tier_caps(plan) -> RunCaps
@@ -11,6 +11,7 @@
 # estimate_icp_synthesis_cost() -> SynthesisCostEstimate
 # check_synthesis_budget(org_id) -> BudgetCheck
 # deduct_credits(org_id, credits) -> None
+# standard_run_credits() -> int
 # CREDITS_PER_USD, TIER_CREDIT_GRANTS, STANDARD_RUN
 # ─────────────────────────────────────────────────────────
 """Run cost estimation, credit accounting, and budget enforcement.
@@ -83,20 +84,28 @@ STANDARD_RUN = (100, 5, 2, 1)  # agents, rounds, platforms, variants
 # cover one makes the tier unusable — the user hits "not enough credits" on the
 # only run they were promised.
 #
-# It has moved twice for that reason. The PRD projected $0.35; with depth
+# It has moved three times for that reason. The PRD projected $0.35; with depth
 # scaling and objection canonicalization priced it came out at $0.75, so the
 # grant went to 800. The 2026-08-03 recalibration — the report writes six
 # sections and was quoted for four — took a 25-agent run to **$1.18**, which
-# 800 credits does not cover. Now 1,200, which leaves headroom rather than
-# tracking the cost exactly, because this number failing is a broken signup and
-# the saving from cutting it fine is $0.02 a trial.
+# 800 credits does not cover, so it went to 1,200.
 #
-# The report and the canonicalizer are both main-model stages that barely shrink
-# with run size, so they dominate a very small run. That is why the free tier is
-# the most sensitive of all of them to a report-stage repricing.
+# **1,200 → 1,500 on 2026-08-04, for the subject distillation.** A free run that
+# uploads material now costs $1.27: $0.06 for the one main-model distillation
+# pass plus $0.03 of brief surcharge across its 75 actions. 1,200 covers the
+# document-free version and fails the one the product is demonstrated with — a
+# founder uploads their deck, the free tier's whole promise, and hits "not
+# enough credits" at signup. That is the exact failure this grant has now had to
+# be raised for three times, and the previous 20 credits of headroom (1.7%) was
+# never going to survive another stage landing. 1,500 leaves 227, which is 18%.
+#
+# The report, the canonicalizer and now the distillation are all main-model
+# stages that barely shrink with run size, so they dominate a very small run.
+# That is why the free tier is the most sensitive of all of them to any
+# main-model stage being added or repriced.
 TIER_CREDIT_GRANTS = {
-    "free": 1_200,
-    "trial": 1_200,
+    "free": 1_500,
+    "trial": 1_500,
     "founder": 19_800,
     "starter": 19_800,
     "growth": 59_800,
@@ -261,6 +270,42 @@ AGENT_ACTION = _StageProfile(input_tokens=750, output_tokens=170)
 # flat, which is the direction that fails safe as the asset count grows.
 INOCULATION_ASSET_ACTION = _StageProfile(input_tokens=225, output_tokens=7)
 
+# What the run's subject brief adds to *every* agent action. Charged on top of
+# AGENT_ACTION whenever the run carries one.
+#
+# **This is a change to the stage's unit of work, not a recalibration.** HANDOFF
+# §7 names that as one of the three things that legitimately reopens the closed
+# cost model. Before 2026-08-04 an action prompt carried the founder's one-line
+# `prediction_goal` as its subject; it now carries the project's uploaded
+# material distilled into a bounded brief, and `topic_block()` is rebuilt per
+# call with no caching between agents. No other profile was touched.
+#
+# THE ARITHMETIC, from the characters the code actually enforces:
+#
+#   `SUBJECT_BRIEF_CHARS` = 1,200      the renderer's hard slice
+#   ÷ 3.4 characters per token         = 353 tokens
+#   + two header lines in topic_block  ≈  20 tokens
+#                                      = 373 → priced at 375
+#
+# The 3.4 is measured rather than assumed, from the same controlled pair that
+# calibrated `INOCULATION_ASSET_ACTION` above: `ASSET_BODY_IN_PROMPT` caps an
+# asset body at 700 characters, its title adds ~60 more, and the parent/child
+# delta measured 224 input tokens per asset — 760 / 224 = 3.4 characters per
+# token *including* the wrapper lines. That is the same prompt, the same block
+# and the same tokenizer, which is why it transfers.
+#
+# Output is derived from the same pair rather than guessed. Six assets added
+# 1,342 input tokens and 41 output tokens, so an agent given more material to
+# react to writes 0.031 output tokens per added input token. 353 × 0.031 = 11.0,
+# rounded up to 12. One observation of a plausible mechanism, carried in the
+# direction that fails safe.
+#
+# **Re-derive after the first live run that carries a brief**, with the query in
+# HANDOFF §7 scoped to `stage = 'agent_action'`: the difference between a run
+# with a brief and one without is directly measurable, exactly as the parent and
+# child of the inoculation loop were.
+SUBJECT_BRIEF_ACTION = _StageProfile(input_tokens=375, output_tokens=12)
+
 # One agent generated during the prepare phase. Measured at 1,901/548 and
 # 1,900/537 on the two Phase 1 runs — constant, as expected: the prompt is one
 # archetype plus a fixed slice of document context.
@@ -398,6 +443,41 @@ ICP_SYNTHESIS = _StageProfile(input_tokens=14_000, output_tokens=4_500)
 #
 # One pass is not a calibration. Re-derive after the next live loop.
 INOCULATION_DRAFT = _StageProfile(input_tokens=4_500, output_tokens=5_700)
+
+# Subject distillation: one main-model pass over the project's own uploaded
+# material, producing the bounded subject brief every agent then reacts to.
+# **Once per run**, and metered under its own stage name, `subject_distillation`.
+#
+# Its own stage rather than folded into `agent_generation`, for the reason
+# `icp_synthesis` and `inoculation_draft` are their own stages: a figure buried
+# inside another stage's profile stops being re-derivable from the ledger, and
+# Phase 1's bug #6 was a stage that was 24% of measured spend and 0% of the
+# quote. It is charged per *run* rather than per pass because the brief is a
+# property of the run — a re-simulation inherits its parent's rather than
+# distilling again, and pays nothing here.
+#
+# Main model, not the fast one. DECISIONS §14 puts Haiku on volume and the main
+# model on judgment, and this is the judgment call with the widest blast radius
+# in the pipeline: it runs once and decides what all 500 agent actions react to.
+# An embellished brief does not degrade one answer, it invalidates the run's
+# measurement. $0.06 against a $3.01 run buys that.
+#
+# ⚠ **ESTIMATED from enforced ceilings, not measured.** This stage has never run
+# live, so both figures are bounds the code guarantees rather than samples:
+#
+#   input   `gather_material` caps the `own` bucket at `_OWN_MATERIAL_CHARS`
+#           = 24,000 characters. At the 3.4 characters per token measured on the
+#           inoculation asset pair (see SUBJECT_BRIEF_ACTION) that is 7,059
+#           tokens, plus ~470 for the prompt and schema = 7,529 → 7,600.
+#   output  `_DISTIL_MAX_TOKENS` = 900 in subject_brief.py. The response is five
+#           short strings and will land far under it; a ceiling cannot
+#           under-quote, and the response is not truncatable into something
+#           plausible-but-wrong the way canonicalization's was.
+#
+# **Re-derive after the first live run**, with the HANDOFF §7 query scoped to
+# `stage = 'subject_distillation'`. Keep the output figure in step with
+# `_DISTIL_MAX_TOKENS` until then.
+SUBJECT_DISTILLATION = _StageProfile(input_tokens=7_600, output_tokens=900)
 
 # GTM candidate discovery, per **compiled query**. Two profiles because a query
 # runs two turns on two models (DECISIONS §14): a search turn on the fast model
@@ -553,6 +633,7 @@ def estimate_simulation_cost(
     action_model: str | None = None,
     reuse_agents: bool = False,
     inoculation_assets: int = 0,
+    subject_brief: bool = False,
 ) -> SimulationCostEstimate:
     """Estimate what a run will cost to serve, and what to charge for it.
 
@@ -569,6 +650,14 @@ def estimate_simulation_cost(
     `inoculation_assets` is how many assets this run pre-positions. Each one
     rides in every action prompt, so it is charged per asset per action — the
     two flags together are what make a re-simulation's quote resemble its bill.
+
+    `subject_brief` is whether the run's agents react to the project's uploaded
+    material rather than to its one-line description. It buys one main-model
+    distillation pass and a surcharge on every action, for the same reason an
+    asset does: the brief rides in `topic_block()` and is re-sent with every
+    prompt. Derive it with
+    `services.intelligence.subject_brief.run_will_carry_subject_brief(sim)` —
+    a document-free run carries none and must not be charged for one.
     """
     if agent_count > MAX_AGENTS:
         raise ValueError(f"Agent count cannot exceed {MAX_AGENTS:,}")
@@ -583,13 +672,14 @@ def estimate_simulation_cost(
 
     breakdown, action_units, generation_units, section_units = _stage_costs(
         agent_count, rounds, variants, depth, action_model, reuse_agents,
-        inoculation_assets,
+        inoculation_assets, subject_brief,
     )
     action_cost = breakdown["agent_actions"]
     generation_cost = breakdown["agent_generation"]
     measurement_cost = breakdown["event_measurement"]
     canonicalization_cost = breakdown["objection_canonicalization"]
     report_cost = breakdown["report"]
+    distillation_cost = breakdown["subject_distillation"]
     actual = sum(breakdown.values(), Decimal("0"))
 
     # Price to the target margin, then enforce the floor.
@@ -623,6 +713,7 @@ def estimate_simulation_cost(
             "event_measurement": float(measurement_cost),
             "objection_canonicalization": float(canonicalization_cost),
             "report": float(report_cost),
+            "subject_distillation": float(distillation_cost),
         },
         standard_run_equivalents=round(credits / standard_credits, 2)
         if standard_credits
@@ -638,6 +729,7 @@ def _stage_costs(
     action_model: str | None = None,
     reuse_agents: bool = False,
     inoculation_assets: int = 0,
+    subject_brief: bool = False,
 ) -> tuple[dict[str, Decimal], int, int, int]:
     """Cost of each pipeline stage for a run shape.
 
@@ -684,18 +776,22 @@ def _stage_costs(
     # under-counted the report by two Opus-written sections on every run.
     written_sections = section_units + REPORT_FIXED_SECTIONS
 
-    # Pre-positioned assets are re-sent with every action prompt, so they scale
-    # with the whole action stage rather than being a one-off. This is the shape
-    # of the cost, not a surcharge bolted on: `topic_block()` is rebuilt per
-    # call, and there is no caching between agents.
-    action_profile = AGENT_ACTION
+    # The subject brief and any pre-positioned assets are re-sent with every
+    # action prompt, so both scale with the whole action stage rather than being
+    # one-offs. This is the shape of the cost, not a surcharge bolted on:
+    # `topic_block()` is rebuilt per call, and there is no caching between
+    # agents.
+    action_input = AGENT_ACTION.input_tokens
+    action_output = AGENT_ACTION.output_tokens
+    if subject_brief:
+        action_input += SUBJECT_BRIEF_ACTION.input_tokens
+        action_output += SUBJECT_BRIEF_ACTION.output_tokens
     if inoculation_assets:
-        action_profile = _StageProfile(
-            input_tokens=AGENT_ACTION.input_tokens
-            + INOCULATION_ASSET_ACTION.input_tokens * inoculation_assets,
-            output_tokens=AGENT_ACTION.output_tokens
-            + INOCULATION_ASSET_ACTION.output_tokens * inoculation_assets,
-        )
+        action_input += INOCULATION_ASSET_ACTION.input_tokens * inoculation_assets
+        action_output += INOCULATION_ASSET_ACTION.output_tokens * inoculation_assets
+    action_profile = _StageProfile(
+        input_tokens=action_input, output_tokens=action_output
+    )
 
     # A run with a parent is a run whose clustering call carries the parent's
     # objections as priors, which is a materially bigger call — see the profile.
@@ -710,6 +806,15 @@ def _stage_costs(
         # Once per run, on the main model, regardless of run size.
         "objection_canonicalization": _stage_cost(canonicalization, 1, main_model),
         "report": _stage_cost(REPORT_SECTION, written_sections, main_model),
+        # Once per run, and only when the run has material to distil. A
+        # re-simulation inherits its parent's brief rather than building one, so
+        # it pays the per-action surcharge above and nothing here — the same
+        # split as `agent_generation`, and for the same reason: it provably
+        # makes no call.
+        "subject_distillation": _stage_cost(
+            SUBJECT_DISTILLATION, 0 if (reuse_agents or not subject_brief) else 1,
+            main_model,
+        ),
     }
     return breakdown, action_units, generation_units, section_units
 
@@ -829,10 +934,34 @@ def _standard_run_credits() -> int:
     Derived rather than hardcoded: when the token profiles are recalibrated from
     measured usage, the "worth N standard runs" line moves with them instead of
     quietly describing a run shape that no longer costs that.
+
+    **The reference run carries a subject brief.** That is a definition change,
+    made 2026-08-04 with the distillation, and it moved the standard run from
+    $2.74 to $3.01. The alternative — keeping the reference document-free —
+    would advertise run counts nobody with an upload can achieve, and the Founder
+    lens is sold on uploaded material: a run without it is now the exception.
+    `STANDARD_RUN` stays a shape because that is what a customer configures;
+    this is the one property of the reference that is not in the tuple, which is
+    why it is stated here rather than left to be inferred.
     """
     agents, rounds, _platforms, variants = STANDARD_RUN
-    breakdown, *_ = _stage_costs(agents, rounds, variants, "standard")
+    breakdown, *_ = _stage_costs(
+        agents, rounds, variants, "standard", subject_brief=True
+    )
     return credits_for(sum(breakdown.values(), Decimal("0")))
+
+
+def standard_run_credits() -> int:
+    """The reference run's credit cost. **Use this, not a local re-derivation.**
+
+    Public because the reference is no longer expressible as a call to
+    `estimate_simulation_cost(*STANDARD_RUN)`: the shape tuple does not carry
+    `subject_brief`, and any caller that rebuilds the reference from the tuple
+    alone now computes a figure ~10% below the one every quote is compared
+    against. That is the two-sources-of-truth class (HANDOFF §2a) with a
+    customer-visible number on the end of it.
+    """
+    return _standard_run_credits()
 
 
 def get_credit_balance(org_id: UUID) -> tuple[int, int, str]:
@@ -860,6 +989,7 @@ def check_credit_budget(
     depth: str = "standard",
     reuse_agents: bool = False,
     inoculation_assets: int = 0,
+    subject_brief: bool = False,
 ) -> BudgetCheck:
     """Check whether an org can afford a run, in credits.
 
@@ -875,6 +1005,7 @@ def check_credit_budget(
     estimate = estimate_simulation_cost(
         agent_count, rounds, platforms, variants, depth,
         reuse_agents=reuse_agents, inoculation_assets=inoculation_assets,
+        subject_brief=subject_brief,
     )
 
     required = estimate.credits

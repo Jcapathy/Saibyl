@@ -5,6 +5,7 @@ import {
   FolderOpen,
   Building2,
   Clock,
+  MessageSquare,
   Search,
   Users,
   Settings,
@@ -36,6 +37,14 @@ const coreNav: NavItem[] = [
   // Named for the thing the founder gets, not for the discipline — "GTM" and
   // "ICP" are terms most of these readers have never had to learn.
   { path: '/app/prospects', label: 'Companies', Icon: Building2 },
+  // The Marketing lens, under the name of the thing it does. N-way arenas, the
+  // scoreboard and the paired winner test all shipped with no surface at all —
+  // reachable only by setting a variant count inside the simulation wizard,
+  // which is why the founder asked where the Marketing section was.
+  //
+  // There is no Crisis entry, and there must not be one until the lens exists.
+  // A nav item leading nowhere is worse than its absence.
+  { path: '/app/marketing', label: 'Messages', Icon: MessageSquare },
   { path: '/app/simulations', label: 'Simulations', Icon: Clock },
 ];
 

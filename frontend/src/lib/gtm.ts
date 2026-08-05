@@ -44,10 +44,19 @@ import type {
 export const MAX_QUERIES_PER_DISCOVERY = 12;
 
 /**
- * `discovery.DISCOVERY_DEADLINE_SECONDS`. Discovery runs inline in the request
- * that starts it, so this is also roughly how long the founder waits.
+ * `discovery.DISCOVERY_DEADLINE_SECONDS` — the server's *ceiling*, for the
+ * largest discovery the estimate offers. Discovery runs inline in the request
+ * that starts it, so this is also the longest the founder waits.
+ *
+ * The server's actual deadline scales with the query count
+ * (`discovery_deadline_seconds`); a three-query run gives up far sooner. Only
+ * the ceiling is mirrored, because this is used to size a timeout and to decide
+ * when a run has stopped responding — both of which need the upper bound.
+ *
+ * `test_the_client_waits_longer_than_the_server_deadline` fails if this drifts
+ * from the backend constant.
  */
-export const DISCOVERY_DEADLINE_SECONDS = 180;
+export const DISCOVERY_DEADLINE_SECONDS = 360;
 
 /**
  * How long to let `POST /gtm/discover` hang before giving up on the response.

@@ -147,11 +147,19 @@ def test_the_free_grant_covers_one_free_run():
     """A grant that does not cover one free run makes the tier unusable.
 
     The user hits "not enough credits" on the only run they were promised, at
-    signup, which is the worst possible moment. This has gone stale twice — once
-    when depth scaling and canonicalization pricing landed, and again when the
-    2026-08-03 recalibration found the report writes six sections and was quoted
-    for four. Both times the *free* tier moved first, because the report and the
-    canonicalizer barely shrink with run size and so dominate a 25-agent run.
+    signup, which is the worst possible moment. This has gone stale three times —
+    when depth scaling and canonicalization pricing landed, when the 2026-08-03
+    recalibration found the report writes six sections and was quoted for four,
+    and when the subject distillation added a main-model stage. Every time the
+    *free* tier moved first, because the report, the canonicalizer and the
+    distillation barely shrink with run size and so dominate a 25-agent run.
+
+    **The free run is priced with a subject brief**, because the free run is the
+    one the product is demonstrated with: a founder uploads their deck and gets
+    one simulation. Pricing the document-free version here would prove the grant
+    covers a run nobody takes the free tier to perform, and the failure would
+    land on the customer at signup — which is exactly what this test exists to
+    catch and has now failed to catch twice.
 
     Asserted against the tier caps rather than a hardcoded shape, so tightening
     a cap cannot quietly invalidate it.
@@ -164,14 +172,15 @@ def test_the_free_grant_covers_one_free_run():
 
     caps = tier_caps("free")
     free_run = estimate_simulation_cost(
-        caps.max_agents, caps.max_rounds, caps.max_platforms, caps.max_variants
+        caps.max_agents, caps.max_rounds, caps.max_platforms, caps.max_variants,
+        subject_brief=True,
     )
 
     # The bound is >= 0 rather than a headroom percentage because the grant is a
     # commercial number and not this test's to set. It is worth knowing that the
-    # margin is 20 credits — 1.7%, and under 30 ever since the grant moved to
-    # 1,200 — so the message reports it on the way past. Any stage repricing at
-    # all consumes it, and the failure lands at signup.
+    # margin is 227 credits — 15%, since the grant moved to 1,500 alongside the
+    # distillation — so the message reports it on the way past. It was 20 credits
+    # at the 1,200 grant, and one new stage consumed it.
     headroom = TIER_CREDIT_GRANTS["free"] - free_run.credits
     assert headroom >= 0, (
         f"free grant is {TIER_CREDIT_GRANTS['free']} credits but a free run at "
@@ -182,15 +191,27 @@ def test_the_free_grant_covers_one_free_run():
 
 
 def test_paid_tier_run_counts_are_whole_runs():
-    """A tier advertising N runs must actually afford N."""
+    """A tier advertising N runs must actually afford N.
+
+    Through `standard_run_credits()`, not a local re-derivation from
+    `STANDARD_RUN`. The shape tuple does not carry `subject_brief`, and the
+    reference run does — so rebuilding the reference from the tuple alone
+    computes a figure ~10% below the one every quote is compared against, and
+    this test would then certify run counts nobody can achieve. That is the
+    two-sources-of-truth class with an advertised number on the end of it.
+
+    6 / 19 / 66 as of 2026-08-04, down from 7 / 21 / 73: the subject
+    distillation took the standard run from $2.74 to $3.01. DECISIONS §15c's
+    precedent is to pass a corrected cost base straight through to the published
+    run count rather than bank it, and this is that precedent applied again.
+    """
     from app.services.billing.agent_pricing import (
-        STANDARD_RUN,
         TIER_CREDIT_GRANTS,
-        estimate_simulation_cost,
+        standard_run_credits,
     )
 
-    standard = estimate_simulation_cost(*STANDARD_RUN).credits
-    for tier, advertised in (("founder", 7), ("growth", 21), ("agency", 73)):
+    standard = standard_run_credits()
+    for tier, advertised in (("founder", 6), ("growth", 19), ("agency", 66)):
         affordable = TIER_CREDIT_GRANTS[tier] // standard
         assert affordable == advertised, (
             f"{tier} affords {affordable} standard runs; PRICING_GUIDE §1.6 and "

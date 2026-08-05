@@ -22,8 +22,12 @@ const howItWorksSteps = [
 ];
 
 const featureCards = [
-  { title: 'Agent Swarms', desc: 'Deploy up to 1M synthetic agents with unique personalities, backstories, and behavioral fingerprints.', Icon: Zap, color: '#8B5CF6' },
-  { title: '8 Platforms', desc: 'X, Reddit, Instagram, TikTok, YouTube, LinkedIn, News, Hacker News.', Icon: Globe, color: '#2563EB' },
+  // No agent-count claim here. The enforced ceiling is 1,000 (enterprise);
+  // "1M" was a 1,000x overstatement sitting in a features card long after the
+  // pricing block beneath it had been corrected — which is what a claim
+  // duplicated across pages does. Grep every surface, not the one you fixed.
+  { title: 'Agent Swarms', desc: 'A synthetic audience built from your own deck and docs, not picked from a list of stock personas.', Icon: Zap, color: '#8B5CF6' },
+  { title: '12 Platforms', desc: 'X, Reddit, Instagram, TikTok, YouTube, LinkedIn, Facebook, Threads, Discord, News, Hacker News, and custom.', Icon: Globe, color: '#2563EB' },
   { title: 'Real-Time Sentiment', desc: 'Live sentiment tracking and consensus formation during simulation.', Icon: Activity, color: '#10B981' },
   { title: 'Actionable Reports', desc: 'Downloadable PDF/CSV with AI analysis, probability estimates, evidence chains.', Icon: FileText, color: '#C9A227' },
   { title: 'Enterprise Security', desc: 'SOC 2 compliant, 256-bit encryption, private infrastructure.', Icon: Shield, color: '#8B5CF6' },
