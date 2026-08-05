@@ -24,6 +24,7 @@ from app.api import (
     packs,
     personas,
     platforms,
+    products,
     projects,
     reports,
     score,
@@ -130,6 +131,12 @@ def create_app() -> FastAPI:
     app.include_router(auth.router, prefix="/api/auth")
     app.include_router(organizations.router, prefix="/api/organizations")
     app.include_router(projects.router, prefix="/api/projects")
+    # The staged rail. Its own prefix rather than paths under /api/projects:
+    # it is a read model over five subsystems, and mounting it alongside the
+    # CRUD routes would put a static path in front of `/projects/{id}`.
+    # Additive — every /api/projects route still works and still returns the
+    # same rows.
+    app.include_router(products.router, prefix="/api/products")
     app.include_router(documents.router, prefix="/api/documents")
     app.include_router(ontologies.router, prefix="/api/ontologies")
     app.include_router(simulations.router, prefix="/api/simulations")

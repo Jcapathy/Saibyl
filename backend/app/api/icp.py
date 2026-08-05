@@ -242,6 +242,11 @@ async def update_profile(
             "pack_data": pack.model_dump(mode="json"),
             "competitors": [c.model_dump(mode="json") for c in profile.competitors],
             "edited_by_user": True,
+            # Saving an edit is a stronger confirmation than pressing confirm:
+            # the founder read it, disagreed with part of it, and said what it
+            # should be instead. See the confirm endpoint for why agreement and
+            # silence had to stop sharing one column.
+            "confirmed_at": datetime.now(UTC).isoformat(),
             "updated_at": datetime.now(UTC).isoformat(),
         })
         .eq("id", id)
@@ -252,6 +257,40 @@ async def update_profile(
         # `_fetch_profile` above found it, so zero updated rows means it was
         # deleted between the two statements. `updated.data[0]` would have been
         # an IndexError and a 500 on what is a plain 404.
+        raise HTTPException(status_code=404, detail="ICP profile not found")
+    return _with_promotions(updated.data[0], auth["org_id"])
+
+
+@router.post("/{id}/confirm")
+async def confirm_profile(id: str, auth: dict = Depends(get_current_org)):
+    """Record that the founder read this audience and agreed with it.
+
+    Why this is not `edited_by_user`. DECISIONS §3 settled that synthesis
+    proposes and the founder corrects *only what looks wrong*, so the intended
+    and most common path is a founder who reads the audience, agrees with all of
+    it, and changes nothing. Under `edited_by_user` that founder reads as
+    unconfirmed forever — and stage 4 would tell them their buyer list is built
+    from a guess when they had in fact confirmed it. Agreement and silence are
+    different answers and one column cannot carry both.
+
+    Idempotent by intention rather than by accident: confirming twice moves the
+    timestamp forward, which is the truthful reading of "when did they last say
+    this was right".
+    """
+    log.info("confirm_icp_profile", profile_id=id, org_id=auth["org_id"])
+    _fetch_profile(id, auth["org_id"])
+
+    admin = get_supabase_admin()
+    updated = (
+        admin.table("icp_profiles")
+        .update({"confirmed_at": datetime.now(UTC).isoformat()})
+        .eq("id", id)
+        .eq("organization_id", auth["org_id"])
+        .execute()
+    )
+    if not updated.data:
+        # `_fetch_profile` found it a statement ago, so zero rows means it was
+        # deleted in between — a 404, not a 500 on an IndexError.
         raise HTTPException(status_code=404, detail="ICP profile not found")
     return _with_promotions(updated.data[0], auth["org_id"])
 

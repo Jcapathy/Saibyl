@@ -215,7 +215,7 @@ function BuyerCard({
               title={
                 canRemove
                   ? 'These people are not my buyers'
-                  : 'You need at least one buyer for the simulation to run'
+                  : 'You need at least one buyer for a run to work'
               }
               className="flex items-center gap-1.5 text-[12px] text-saibyl-muted hover:text-saibyl-negative disabled:opacity-30 disabled:hover:text-saibyl-muted"
             >
@@ -483,7 +483,7 @@ export default function AudienceReview({
           <p className="text-[12px] text-saibyl-muted mt-1 leading-relaxed max-w-xl">
             We read the documents on this project and worked out who your buyers are and
             what they care about. Have a read. If something&rsquo;s wrong, change it —
-            otherwise carry on, and the simulation will use exactly what you see here.
+            otherwise carry on, and every run uses exactly what you see here.
           </p>
         </div>
         <button
@@ -500,7 +500,7 @@ export default function AudienceReview({
         <Check className="w-3.5 h-3.5 text-saibyl-positive mt-0.5 shrink-0" />
         <p className="text-[12px] text-saibyl-silver leading-relaxed">
           {dirty
-            ? 'You’ve changed something. Save it below, and the simulation will use your version.'
+            ? 'You’ve changed something. Save it below, and your version is what gets used.'
             : 'Looks right? Then there’s nothing to do — carry on to the next step and we’ll use this.'}
         </p>
       </div>
@@ -519,7 +519,7 @@ export default function AudienceReview({
           </ul>
           <p className="text-[10px] text-saibyl-muted/70 mt-2 leading-relaxed">
             We left these blank instead of guessing. Filling them in below makes the
-            simulation sharper, but it will run without them.
+            answers sharper, but it works without them.
           </p>
         </div>
       )}
@@ -585,8 +585,9 @@ export default function AudienceReview({
           </p>
           {isGroundingRejection(error) && (
             <p className="text-[11px] text-saibyl-muted leading-relaxed">
-              In plain English: Saibyl will only put a rival&rsquo;s name in a simulation
-              when you have uploaded something that rival actually published. Otherwise the
+              In plain English: Saibyl will only put a rival&rsquo;s name in front of
+              your buyers when you have uploaded something that rival actually published.
+              Otherwise the
               model is making up what they say — and you&rsquo;d have no way of telling.
               To name them, add their landing page, pricing page or docs to this
               project&rsquo;s documents and mark it as a competitor&rsquo;s material when

@@ -4,7 +4,15 @@ import { AnimatePresence } from 'framer-motion';
 
 import AppLayout from '@/components/AppLayout';
 import PageTransition from '@/components/PageTransition';
+import ProductLayout from '@/components/stages/ProductLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import AnswersStagePage from '@/pages/product/AnswersStagePage';
+import AudienceStagePage from '@/pages/product/AudienceStagePage';
+import BuyersStagePage from '@/pages/product/BuyersStagePage';
+import MessagesStagePage from '@/pages/product/MessagesStagePage';
+import NewProductPage from '@/pages/product/NewProductPage';
+import ProductHomePage from '@/pages/product/ProductHomePage';
+import ReactionsStagePage from '@/pages/product/ReactionsStagePage';
 import ComparisonPage from '@/pages/ComparisonPage';
 import LandingPage from '@/pages/LandingPage';
 import DashboardPage from '@/pages/DashboardPage';
@@ -47,7 +55,27 @@ function AnimatedRoutes() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<Navigate to="dashboard" replace />} />
+          {/* Home leads with products. `dashboard` still resolves — the staged
+              rail ships as additive routes with every existing one working, so
+              a decision to back it out is a navigation change rather than a
+              revert. */}
+          <Route index element={<Navigate to="home" replace />} />
+          <Route path="home" element={<PageTransition><ProductHomePage /></PageTransition>} />
+          <Route path="products/new" element={<PageTransition><NewProductPage /></PageTransition>} />
+          {/* The five steps, inside one product. `ProductLayout` fetches the
+              whole rail once and hands it down, so no stage page invents its
+              own idea of what "the audience is confirmed" means — that
+              reasoning lives in `services/stages/` and is read in one place.
+              Declared before `products/:id` cannot shadow anything here
+              because `new` is a sibling static path registered above. */}
+          <Route path="products/:id" element={<ProductLayout />}>
+            <Route index element={<Navigate to="audience" replace />} />
+            <Route path="audience" element={<AudienceStagePage />} />
+            <Route path="reactions" element={<ReactionsStagePage />} />
+            <Route path="answers" element={<AnswersStagePage />} />
+            <Route path="buyers" element={<BuyersStagePage />} />
+            <Route path="messages" element={<MessagesStagePage />} />
+          </Route>
           <Route path="dashboard" element={<PageTransition><DashboardPage /></PageTransition>} />
           <Route path="guide" element={<PageTransition><GuidePage /></PageTransition>} />
           <Route path="projects" element={<PageTransition><ProjectsPage /></PageTransition>} />

@@ -180,6 +180,16 @@ export interface ICPProfile {
   prior_pack_ids: string[];
   competitors: ICPCompetitor[];
   edited_by_user: boolean;
+  /**
+   * When the founder said this was right — by pressing confirm, or by saving an
+   * edit. **Null is not the same as `edited_by_user === false`.** Synthesis
+   * proposes and the founder corrects only what looks wrong (DECISIONS §3), so
+   * the common path is a founder who agrees with everything and changes
+   * nothing; under `edited_by_user` alone that founder reads as unconfirmed
+   * forever, and stage 4 would tell them their buyer list is built from a guess.
+   * Added by migration 030.
+   */
+  confirmed_at: string | null;
   created_at: string;
 }
 

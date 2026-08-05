@@ -28,32 +28,43 @@ interface NavItem {
   Icon: React.ComponentType<{ className?: string }>;
 }
 
+/**
+ * The global navigation is two items.
+ *
+ * Everything else lives inside a product, on the numbered rail, because that is
+ * the shape of a founder's week — one product, five steps, in the order each one
+ * consumes the last. The sidebar used to list eight nouns, which was a map of
+ * the codebase rather than of anything the reader was trying to do.
+ *
+ * There is no Crisis entry, and there must not be one until the lens exists. A
+ * nav item leading nowhere is worse than its absence.
+ */
 const coreNav: NavItem[] = [
-  { path: '/app/dashboard', label: 'Dashboard', Icon: LayoutDashboard },
-  { path: '/app/projects', label: 'Projects', Icon: FolderOpen },
-  { path: '/app/audiences', label: 'Audiences', Icon: Users },
-  // Sits directly after Audiences because that is the order of the work:
-  // describe who buys, then go and find real companies who look like them.
-  // Named for the thing the founder gets, not for the discipline — "GTM" and
-  // "ICP" are terms most of these readers have never had to learn.
-  { path: '/app/prospects', label: 'Companies', Icon: Building2 },
-  // The Marketing lens, under the name of the thing it does. N-way arenas, the
-  // scoreboard and the paired winner test all shipped with no surface at all —
-  // reachable only by setting a variant count inside the simulation wizard,
-  // which is why the founder asked where the Marketing section was.
-  //
-  // There is no Crisis entry, and there must not be one until the lens exists.
-  // A nav item leading nowhere is worse than its absence.
-  { path: '/app/marketing', label: 'Messages', Icon: MessageSquare },
-  { path: '/app/simulations', label: 'Simulations', Icon: Clock },
-];
-
-const intelligenceNav: NavItem[] = [
-  { path: '/app/guide', label: 'Guide', Icon: Search },
-];
-
-const workspaceNav: NavItem[] = [
+  { path: '/app/home', label: 'Home', Icon: LayoutDashboard },
   { path: '/app/settings', label: 'Settings', Icon: Settings },
+];
+
+/**
+ * The surfaces the rail does not lead to yet.
+ *
+ * Kept, and kept **reachable**, for two reasons. The first is that the rail
+ * ships additively: if it turns out to be the wrong shape the fix is a
+ * navigation change, not a revert of a night's work. The second is that
+ * Audiences, Companies and the whole scoreboard once shipped with no route to
+ * them at all — deployed, working, and reachable only by typing a URL, which is
+ * the same as not having shipped them. Removing these links to make the sidebar
+ * tidy would reproduce exactly that.
+ *
+ * Under a heading that says what they are, rather than pretending they are part
+ * of the main path.
+ */
+const alsoNav: NavItem[] = [
+  { path: '/app/projects', label: 'All your files', Icon: FolderOpen },
+  { path: '/app/audiences', label: 'Saved audiences', Icon: Users },
+  { path: '/app/prospects', label: 'Companies', Icon: Building2 },
+  { path: '/app/marketing', label: 'Message tests', Icon: MessageSquare },
+  { path: '/app/simulations', label: 'Every run', Icon: Clock },
+  { path: '/app/guide', label: 'How this works', Icon: Search },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -242,18 +253,12 @@ export default function AppLayout() {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 overflow-y-auto">
-        <SectionLabel>Core</SectionLabel>
         {coreNav.map((item) => (
           <NavLink key={item.path} item={item} pathname={location.pathname} onClick={closeMobile} />
         ))}
 
-        <SectionLabel>Intelligence</SectionLabel>
-        {intelligenceNav.map((item) => (
-          <NavLink key={item.path} item={item} pathname={location.pathname} onClick={closeMobile} />
-        ))}
-
-        <SectionLabel>Workspace</SectionLabel>
-        {workspaceNav.map((item) => (
+        <SectionLabel>Also here</SectionLabel>
+        {alsoNav.map((item) => (
           <NavLink key={item.path} item={item} pathname={location.pathname} onClick={closeMobile} />
         ))}
       </nav>

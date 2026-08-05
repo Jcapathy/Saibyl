@@ -28,5 +28,10 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src"],
+  /* The acceptance tests read the source tree with node builtins, which
+     this project has no types for. They are checked by tsconfig.test.json,
+     which `tsc -b` builds alongside this one - so they are still gated by
+     `npm run build`, not merely excluded from it. */
+  "exclude": ["src/test"]
 }
