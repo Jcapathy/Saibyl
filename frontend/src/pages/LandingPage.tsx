@@ -1,509 +1,795 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { FileText, Users, Activity, BarChart3, Zap, Globe, Shield, Code, Check, Plus } from 'lucide-react';
+import { MotionConfig, motion } from 'framer-motion';
+import {
+  ArrowRight,
+  Check,
+  MessageSquare,
+  PenLine,
+  Quote,
+  Search,
+  SlidersHorizontal,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
+
 import HeroAnimation from '@/components/HeroAnimation';
+import Faq, { type FaqItem } from '@/components/landing/Faq';
+import { Section, SectionHead } from '@/components/landing/Section';
+import { fadeUp, stagger } from '@/components/landing/motion';
+import {
+  CONTACT_EMAIL,
+  ENTERPRISE_SHAPE,
+  PLACES,
+  TIERS,
+  shapeLines,
+} from '@/components/landing/tiers';
 
-/* ── Animation helpers ─────────────────────────────────────── */
-const fadeUp = {
-  initial: { opacity: 0, y: 32 },
-  whileInView: { opacity: 1, y: 0 },
-  viewport: { once: true, amount: 0.2 },
-  transition: { duration: 0.6 },
-};
-const stagger = (i: number) => ({ ...fadeUp, transition: { duration: 0.5, delay: i * 0.1 } });
+/**
+ * The landing page.
+ *
+ * ── WHO IS READING THIS ────────────────────────────────────────────────────
+ * A SaaS founder who has built something — probably with Claude Code, probably
+ * fast — and does not yet know whether anyone wants it. Some of them have never
+ * heard the phrase "ideal customer profile" and will not learn it here. The
+ * register is the one in `components/founder/AudienceReview.tsx`: short
+ * sentences, no vocabulary the reader has to acquire before the page makes
+ * sense. If a word on this page needs a glossary, it is the wrong word.
+ *
+ * ── WHAT THE PAGE ARGUES ───────────────────────────────────────────────────
+ * Two sentences, and everything else is in service of them:
+ *
+ *   Your audience is built from your own material.
+ *   Every number traces back to something an agent said.
+ *
+ * The previous version of this page never said either one. It sold scale — a
+ * "1M agents" figure against an enforced ceiling of 1,000, a stats bar of
+ * invented metrics, verticals like Sports & Betting and Policy & Government —
+ * to a buyer who is not shopping for scale and is not in any of those verticals.
+ *
+ * ── WHAT WAS REMOVED, AND WHY ──────────────────────────────────────────────
+ * Everything below was on this page and is deliberately gone. None of it should
+ * come back without a constant behind it:
+ *
+ *   "1M+ Max Agents"            1,000x over the enforced cap
+ *   "8 Platforms"               there are twelve adapters
+ *   "42 Archetypes"             no such constant exists anywhere
+ *   "<3 Min Results"            no measured figure behind it
+ *   "<3pp deviation in
+ *    controlled studies"        there are no controlled studies
+ *   "SOC 2 compliant,
+ *    256-bit encryption"        no compliance artifact exists; the only SOC 2
+ *                               in this repo is a *simulated buyer asking about
+ *                               it* in a persona pack
+ *   "14-day free trial"         there is no trial clock; there is a credit grant
+ *   "Need more than 100K
+ *    agents?"                   400x over the enterprise cap of 1,000
+ *   "87% probability of
+ *    negative sentiment spike"  and its three siblings — invented report output
+ *                               presented as sample results
+ *   "All 16 persona packs"      the packs are real, but selling a catalogue to
+ *                               pick from contradicts the entire argument: the
+ *                               founder is the wrong person to ask which pack
+ *                               matches their buyer (DECISIONS_V2 §3)
+ *   API access, webhooks,
+ *   white-label, SSO/SAML,
+ *   SLA, dedicated AM           unbuilt; a tier feature list is not a roadmap
+ *   six footer links to `#`     a link that goes nowhere is a dead end
+ *
+ * ── NUMBERS ────────────────────────────────────────────────────────────────
+ * Every figure that renders comes from `components/landing/tiers.ts`, which is
+ * the one file that transcribes the backend constants and carries the line
+ * numbers they came from. Nothing in this file writes a number of its own.
+ */
 
-/* ── Data ──────────────────────────────────────────────────── */
-const howItWorksSteps = [
-  { num: '01', title: 'Define Your Scenario', desc: 'Describe the event, announcement, or content you want to test before it goes live.', Icon: FileText },
-  { num: '02', title: 'Choose Platforms & Personas', desc: 'Select from 8 simulated social platforms and configure persona packs to match your target audience.', Icon: Users },
-  { num: '03', title: 'Watch Agents React', desc: 'Observe real-time simulation with live sentiment tracking as synthetic agents interact with your content.', Icon: Activity },
-  { num: '04', title: 'Get Your Report', desc: 'Download a structured intelligence report with probability estimates, sentiment analysis, and evidence chains.', Icon: BarChart3 },
-];
+/* ── The five things the product does ──────────────────────────────────────
+ * The settled vocabulary, in the order the work happens. There is no Crisis
+ * entry and there must not be one until it exists — an advertised feature that
+ * leads nowhere is the same defect as a nav item that leads nowhere, one step
+ * earlier in the funnel.
+ */
+interface Capability {
+  name: string;
+  question: string;
+  body: string;
+  Icon: LucideIcon;
+  colour: string;
+  /** Whether the free grant reaches it. It covers one run, and no more. */
+  free: boolean;
+}
 
-const featureCards = [
-  // No agent-count claim here. The enforced ceiling is 1,000 (enterprise);
-  // "1M" was a 1,000x overstatement sitting in a features card long after the
-  // pricing block beneath it had been corrected — which is what a claim
-  // duplicated across pages does. Grep every surface, not the one you fixed.
-  { title: 'Agent Swarms', desc: 'A synthetic audience built from your own deck and docs, not picked from a list of stock personas.', Icon: Zap, color: '#8B5CF6' },
-  { title: '12 Platforms', desc: 'X, Reddit, Instagram, TikTok, YouTube, LinkedIn, Facebook, Threads, Discord, News, Hacker News, and custom.', Icon: Globe, color: '#2563EB' },
-  { title: 'Real-Time Sentiment', desc: 'Live sentiment tracking and consensus formation during simulation.', Icon: Activity, color: '#10B981' },
-  { title: 'Actionable Reports', desc: 'Downloadable PDF/CSV with AI analysis, probability estimates, evidence chains.', Icon: FileText, color: '#C9A227' },
-  { title: 'Enterprise Security', desc: 'SOC 2 compliant, 256-bit encryption, private infrastructure.', Icon: Shield, color: '#8B5CF6' },
-  { title: 'API Access', desc: 'RESTful API to integrate predictions into your workflow.', Icon: Code, color: '#2563EB' },
-];
-
-const useCases = [
-  { title: 'PR & Crisis', tag: 'PR & Comms', tagColor: '#8B5CF6', question: 'Will this announcement cause backlash?', desc: 'Test press releases, executive statements, and crisis responses before they go live.', result: '87% probability of negative sentiment spike' },
-  { title: 'Policy & Government', tag: 'Political Strategy', tagColor: '#2563EB', question: 'How will voters react to this bill?', desc: 'Simulate constituent reactions across demographics and political leanings.', result: '62% support among swing demographics' },
-  { title: 'Sports & Betting', tag: 'Sports Analytics', tagColor: '#C9A227', question: "What's the fan reaction to this trade?", desc: 'Predict fan engagement and sentiment around trades, signings, and announcements.', result: '3.2x engagement spike predicted' },
-  { title: 'Marketing', tag: 'Enterprise', tagColor: '#10B981', question: 'Will this campaign go viral or flop?', desc: 'Test campaign creative and messaging across target demographics before launch.', result: '91% positive reception probability' },
-];
-
-// ⚠ EVERY NUMBER HERE IS AN ADVERTISED CLAIM AND MUST MATCH WHAT IS ENFORCED.
-//
-// This block previously advertised 5,000 / 25,000 / 100,000 agents per
-// simulation against enforced caps of 100 / 150 / 250 — a 50-400x
-// overstatement that shipped. It also promised "All 8 platforms" when there
-// are twelve adapters and no paid tier can select more than six.
-//
-// The source of truth is `agent_pricing.TIER_CAPS` in the backend. It is not
-// imported here because this page renders before auth and has no org, so the
-// values are transcribed — which means **this comment is the only thing
-// keeping them honest.** If you change TIER_CAPS, change these in the same
-// commit. §2a of HANDOFF lists "two sources of truth for one value" as a
-// failure class this codebase has already shipped.
-//
-// TIER_CAPS at time of writing:
-//   founder     100 agents,  8 rounds,  3 platforms,  3 variants
-//   growth      150 agents, 10 rounds,  4 platforms,  5 variants
-//   agency      250 agents, 12 rounds,  6 platforms,  8 variants
-//   enterprise  1,000 agents, 20 rounds, 12 platforms, 8 variants
-//
-// Monthly simulation counts are deliberately NOT advertised: `PLAN_LIMITS` is
-// still keyed on the V1 names (starter/pro/enterprise), so a founder/growth/
-// agency org falls through to the starter limit. Advertising a number that no
-// enforced limit corresponds to is how this block went wrong the first time.
-// Restore the line once PLAN_LIMITS carries the shipping tier names.
-const pricingPlans = [
+const CAPABILITIES: readonly Capability[] = [
   {
-    name: 'Founder', price: '$99', period: '/mo', featured: false,
-    desc: 'For a founder validating an idea before building it',
-    items: ['Up to 100 agents per simulation', 'Up to 8 rounds', '3 platforms', '3 message variants per test', 'Audience derived from your own material', 'Full measured reports', 'Email support'],
-    cta: 'Get Started', ctaLink: '/signup',
+    name: 'Audience',
+    question: 'Who reacts to this?',
+    body: "Built out of what you uploaded — your deck, your site, your docs — not picked off a list. You get told who we think buys this and why we think so, and you correct anything that’s wrong before a single thing runs.",
+    Icon: Users,
+    colour: '#8B5CF6',
+    free: true,
   },
   {
-    name: 'Growth', price: '$299', period: '/mo', featured: true,
-    desc: 'For teams testing messages before they spend on them',
-    items: ['Up to 150 agents per simulation', 'Up to 10 rounds', '4 platforms', '5 message variants per test', 'All 16 persona packs', 'PDF/CSV export', 'API access', 'Priority support'],
-    cta: 'Get Started', ctaLink: '/signup',
+    name: 'Reactions',
+    question: 'What did they say, and what did they object to?',
+    body: 'They read your pitch, argue with it and with each other, and what they push back on gets grouped so you can see which objection is the big one rather than reading five hundred comments.',
+    Icon: MessageSquare,
+    colour: '#2563EB',
+    free: true,
   },
   {
-    name: 'Agency', price: '$999', period: '/mo', featured: false,
-    desc: 'For agencies running work across multiple clients',
-    items: ['Up to 250 agents per simulation', 'Up to 12 rounds', '6 platforms', '8 message variants per test', 'All 16 persona packs', 'Custom report templates', 'Webhook integrations', 'Dedicated account manager'],
-    cta: 'Get Started', ctaLink: '/signup',
+    name: 'Answers',
+    question: 'What do I say back, and did it work?',
+    body: "Saibyl drafts a reply to each objection worth answering. Then it runs the same people again with those replies already in front of them, so you find out whether the objection actually moved — not whether the reply sounded good.",
+    Icon: PenLine,
+    colour: '#10B981',
+    free: false,
   },
   {
-    name: 'Enterprise', price: 'Custom', period: '', featured: false,
-    desc: 'For maximum-scale analysis with dedicated infrastructure',
-    items: ['Up to 1,000 agents per simulation', 'Up to 20 rounds', 'All 12 platforms', 'Custom persona creation', 'White-label reports', 'SSO/SAML', 'SLA guarantee', 'Dedicated infrastructure'],
-    cta: 'Contact Sales', ctaLink: 'mailto:info@saidolabs.com',
+    name: 'Buyers',
+    question: 'Which real companies match?',
+    body: 'Once you agree who buys this, Saibyl goes and finds actual companies that look like them, and shows you where it found each one so you can check.',
+    Icon: Search,
+    colour: '#C9A227',
+    free: false,
+  },
+  {
+    name: 'Messages',
+    question: 'Which version wins?',
+    body: 'Put several versions of the same message in front of the same people, in the same run. Same room, same moment — so what differs is the wording and not the crowd.',
+    Icon: SlidersHorizontal,
+    colour: '#8B5CF6',
+    free: false,
   },
 ];
 
-const faqItems = [
-  { q: 'What is Saibyl?', a: 'Saibyl is a synthetic agent platform that simulates public reactions across social media platforms. Deploy AI personas to predict how the internet will react to your content, announcements, or policies — before you publish.' },
-  { q: 'How do the synthetic agents work?', a: 'Each agent has a unique personality, backstory, political leaning, and behavioral fingerprint based on real demographic data. They interact with your content and each other across simulated platform environments, producing emergent consensus patterns.' },
-  { q: 'Which platforms are supported?', a: 'We simulate X (Twitter), Reddit, Instagram, TikTok, YouTube, LinkedIn, News comment sections, and Hacker News. Each platform has its own algorithmic model for content ranking and engagement.' },
-  { q: 'Is my data private?', a: "Absolutely. All simulations run in isolated environments. We're SOC 2 compliant, use 256-bit encryption, and never share your data with third parties. Enterprise customers get dedicated infrastructure." },
-  { q: 'Can I try before subscribing?', a: 'Yes. All plans include a 14-day free trial with no credit card required. You can run simulations and see the full report output before committing.' },
-  { q: 'How accurate are the predictions?', a: 'Our predictions achieve less than 3 percentage points of deviation from actual outcomes in controlled studies. Accuracy improves with higher agent counts and more specific scenario definitions.' },
+/* ── The free teaser, exactly as it happens ────────────────────────────────
+ * This is a real journey, end to end, and it is the page's primary promise. Do
+ * not add a step the product does not have and do not quietly drop one it does:
+ * a founder who is told six steps and meets seven has been misled about the
+ * only thing this page asked them to do.
+ */
+const FREE_RUN_STEPS: readonly { title: string; body: string }[] = [
+  {
+    title: 'Sign up',
+    body: `${TIERS[0].credits} credits land on your account. We never ask for a card, so nothing can start charging you later.`,
+  },
+  {
+    title: 'Start a product',
+    body: 'One product means one thing you are selling. Everything else hangs off it.',
+  },
+  {
+    title: 'Upload your deck',
+    body: 'Plus your landing page, your docs, a rival’s pricing page — whatever you have. This is the material your audience gets built out of, so more of it makes the run sharper.',
+  },
+  {
+    title: 'Read your audience',
+    body: 'Who we think buys this, what they already use, what would make them doubt you, and the reason we think so. Change what looks wrong. Or change nothing and carry on.',
+  },
+  {
+    title: 'Run it',
+    body: `${TIERS[0].shape.people} people, ${TIERS[0].shape.rounds} rounds of back-and-forth, across ${TIERS[0].shape.places} places. You watch it happen rather than waiting on an email.`,
+  },
+  {
+    title: 'Read the objections',
+    body: 'What they pushed back on, grouped and ranked, each one opening into the exact sentences it was built from and who said them.',
+  },
 ];
 
-/* ══════════════════════════════════════════════════════════════ */
-/* PAGE                                                          */
-/* ══════════════════════════════════════════════════════════════ */
+const FAQ_ITEMS: readonly FaqItem[] = [
+  {
+    q: 'I don’t really know who my buyers are yet. Is that a problem?',
+    a: 'No — it is the normal case, and it is most of what you are here for. You upload what you have and Saibyl proposes who buys this and what they would care about, with a reason attached to each one. You read it and correct it. You are never asked to pick your buyer off a menu, because choosing correctly from that menu would require already knowing the answer.',
+  },
+  {
+    q: 'Are these real people?',
+    a: 'No, and we are not going to pretend otherwise. They are language models each given a specific job, a thing they already use, what they would judge you on and what would make them doubt you — all of it drawn from your own material. What you get back is what people in that position tend to say and object to. It is a rehearsal, not a survey, and it is a great deal cheaper than finding out by running the campaign.',
+  },
+  {
+    q: 'What stops it from making things up?',
+    a: "Two things you can check. Where your documents never said something, it is left blank and listed as a gap rather than filled in with something plausible. And a competitor is never named in a run unless you uploaded something that competitor actually published — otherwise the model would be inventing what your rival says and you would have no way of telling.",
+  },
+  {
+    q: 'Where does every number in the report come from?',
+    a: 'Something one of them actually said. There is no scoring model quietly assigning points behind the scenes. Open any finding and you get the sentences it was built from, and who said them. When there was nothing to say, nothing is shown — no zero, no placeholder that reads like a measurement.',
+  },
+  {
+    q: 'What do I actually need to upload?',
+    a: 'A deck is enough to get started. Landing page copy, product docs, and a competitor’s pricing page each make the audience sharper, because they are what your buyers are really comparing you against.',
+  },
+  {
+    q: 'What happens when my free credits run out?',
+    a: 'Nothing, unless you decide otherwise. The grant is sized to cover one full run, and there is no card on file to charge — signing up never takes one. If the run was worth it, pick a plan; if it was not, you have lost an afternoon rather than a campaign budget.',
+  },
+];
+
+/* ── Page ──────────────────────────────────────────────────────────────── */
+
+const NAV_LINKS = [
+  { href: '#free-run', label: 'How it works' },
+  { href: '#product', label: 'What you get' },
+  { href: '#pricing', label: 'Pricing' },
+  { href: '#faq', label: 'Questions' },
+];
+
+const goldButton =
+  'inline-flex items-center justify-center gap-2 rounded-xl bg-saibyl-gold text-saibyl-void font-semibold transition-colors hover:bg-saibyl-gold-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-saibyl-gold/60 focus-visible:ring-offset-2 focus-visible:ring-offset-saibyl-void';
+const quietButton =
+  'inline-flex items-center justify-center gap-2 rounded-xl border border-saibyl-border text-saibyl-platinum font-semibold transition-colors hover:border-saibyl-insight-violet/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-saibyl-gold/60';
 
 export default function LandingPage() {
-  const [openFaq, setOpenFaq] = useState<number[]>([]);
-
-  const toggleFaq = (index: number) => {
-    setOpenFaq((prev) =>
-      prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index]
-    );
-  };
+  const free = TIERS[0];
 
   return (
-    <div className="scroll-smooth min-h-screen bg-[#0A0F1C] text-[#E8ECF2] overflow-x-hidden">
+    // `reducedMotion="user"` rather than a hook in every component: it drops the
+    // travel out of every transition on the page at once for a visitor who has
+    // asked for that, and cannot be forgotten on the next section someone adds.
+    <MotionConfig reducedMotion="user">
+      <div className="scroll-smooth min-h-screen bg-saibyl-void text-saibyl-platinum overflow-x-hidden">
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[60] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-saibyl-gold focus:text-saibyl-void focus:font-semibold"
+        >
+          Skip to content
+        </a>
 
-      {/* ═══ 1. STICKY NAVIGATION ═══ */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0A0F1C]/80 backdrop-blur-xl border-b border-[#1E293B]">
-        <div className="max-w-7xl mx-auto flex items-center justify-between px-6 h-16">
-          {/* Left: Logo + brand */}
-          <Link to="/" className="flex items-center gap-2.5">
-            <img src="/logo-mark.svg" alt="Saibyl" className="h-7 w-7" />
-            <span className="text-gradient-brand font-extrabold text-lg tracking-tight">SAIBYL</span>
-          </Link>
-
-          {/* Center: Nav links */}
-          <div className="hidden md:flex items-center gap-8">
-            <a href="#how-it-works" className="text-sm text-[#8B97A8] hover:text-[#E8ECF2] transition-colors">How It Works</a>
-            <a href="#features" className="text-sm text-[#8B97A8] hover:text-[#E8ECF2] transition-colors">Features</a>
-            <a href="#use-cases" className="text-sm text-[#8B97A8] hover:text-[#E8ECF2] transition-colors">Use Cases</a>
-            <a href="#pricing" className="text-sm text-[#8B97A8] hover:text-[#E8ECF2] transition-colors">Pricing</a>
-          </div>
-
-          {/* Right: Auth */}
-          <div className="flex items-center gap-4">
-            <Link to="/login" className="text-sm text-[#8B97A8] hover:text-[#E8ECF2] transition-colors">Sign In</Link>
-            <Link to="/signup" className="text-sm font-semibold px-5 py-2 rounded-lg bg-[#C9A227] text-[#0A0F1C] hover:bg-[#D4AF37] transition-colors">
-              Get Started
+        {/* ═══ Navigation ═══ */}
+        <nav className="fixed top-0 left-0 right-0 z-50 bg-saibyl-void/80 backdrop-blur-xl border-b border-saibyl-border">
+          <div className="max-w-6xl mx-auto flex items-center justify-between px-6 h-16">
+            <Link to="/" className="flex items-center gap-2.5 shrink-0">
+              <img src="/logo-mark.svg" alt="" className="h-7 w-7" />
+              <span className="text-gradient-brand font-extrabold text-lg tracking-tight">
+                SAIBYL
+              </span>
             </Link>
+
+            <div className="hidden md:flex items-center gap-8">
+              {NAV_LINKS.map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  className="text-sm text-saibyl-silver hover:text-saibyl-platinum transition-colors"
+                >
+                  {link.label}
+                </a>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-4 shrink-0">
+              <Link
+                to="/login"
+                className="text-sm text-saibyl-silver hover:text-saibyl-platinum transition-colors"
+              >
+                Sign in
+              </Link>
+              <Link to="/signup" className={`${goldButton} text-sm px-4 sm:px-5 py-2`}>
+                Start a free run
+              </Link>
+            </div>
           </div>
-        </div>
-      </nav>
+        </nav>
 
-      {/* ═══ 2. HERO SECTION ═══ */}
-      <section className="relative min-h-screen flex flex-col items-center justify-center text-center px-6 pt-16 overflow-hidden">
-        {/* Background: HeroAnimation */}
-        <div className="absolute inset-0 opacity-40 pointer-events-none">
-          <HeroAnimation />
-        </div>
-        {/* Radial gradient overlay */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(139,92,246,0.08)_0%,transparent_60%)] pointer-events-none" />
+        <main id="main">
+          {/* ═══ Hero ═══ */}
+          <section className="relative flex flex-col items-center justify-center text-center px-6 pt-32 pb-24 sm:pt-40 sm:pb-28 overflow-hidden">
+            <div className="absolute inset-0 opacity-40 pointer-events-none" aria-hidden="true">
+              <HeroAnimation />
+            </div>
+            <div
+              className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(139,92,246,0.08)_0%,transparent_60%)] pointer-events-none"
+              aria-hidden="true"
+            />
 
-        <div className="relative z-10 max-w-3xl">
-          {/* Beta badge */}
-          <motion.div {...stagger(0)} className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full border border-[#8B5CF6]/20 bg-[#8B5CF6]/10 mb-8">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute h-full w-full rounded-full bg-green-400 opacity-75" />
-              <span className="relative rounded-full h-2 w-2 bg-green-400" />
-            </span>
-            <span className="font-mono text-xs tracking-widest uppercase text-[#8B97A8]">Now in Private Beta</span>
-          </motion.div>
+            <div className="relative z-10 max-w-3xl">
+              <motion.div
+                {...stagger(0)}
+                className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full border border-saibyl-insight-violet/20 bg-saibyl-insight-violet/10 mb-8"
+              >
+                <span className="relative flex h-2 w-2" aria-hidden="true">
+                  <span className="animate-ping absolute h-full w-full rounded-full bg-saibyl-positive opacity-75" />
+                  <span className="relative rounded-full h-2 w-2 bg-saibyl-positive" />
+                </span>
+                <span className="font-mono text-xs tracking-widest uppercase text-saibyl-silver">
+                  Now in private beta
+                </span>
+              </motion.div>
 
-          {/* Logo mark */}
-          <motion.div {...stagger(1)} className="flex justify-center mb-8">
-            <img src="/logo-mark.svg" alt="" className="w-[72px] h-[72px]" />
-          </motion.div>
+              <motion.h1
+                {...stagger(1)}
+                className="font-display font-extrabold leading-[1.05] tracking-tight mb-6 text-balance"
+                style={{ fontSize: 'clamp(2.5rem, 6vw, 4.25rem)' }}
+              >
+                <span className="text-gradient-brand">Find out what your buyers say</span>
+                <br className="hidden sm:block" />{' '}
+                <span className="text-saibyl-platinum">before you pay to find out</span>
+              </motion.h1>
 
-          {/* Headline */}
-          <motion.h1 {...stagger(2)} className="font-display font-extrabold leading-[1.05] tracking-tight mb-6" style={{ fontSize: 'clamp(3rem, 6vw, 4.5rem)' }}>
-            <span className="text-gradient-brand">Know the conversation</span>
-            <br />
-            <span className="text-gradient-brand">before it happens</span>
-          </motion.h1>
+              <motion.p
+                {...stagger(2)}
+                className="text-lg text-saibyl-silver max-w-2xl mx-auto leading-relaxed mb-4"
+              >
+                Upload your deck. Saibyl works out who would buy this{' '}
+                <strong className="text-saibyl-platinum font-semibold">
+                  from your own material
+                </strong>{' '}
+                — not from a list of stock personas you pick off — puts your pitch in front of
+                them, and shows you what they said and what they objected to.
+              </motion.p>
 
-          {/* Subtitle */}
-          <motion.p {...stagger(3)} className="text-lg text-[#8B97A8] max-w-2xl mx-auto leading-relaxed mb-10">
-            {/* "8 platforms with up to 1M synthetic agents" was here. There are
-                twelve adapters, and the largest enforced cap is 1,000 agents —
-                a 1,000x overstatement in the first sentence a visitor reads.
-                The claim worth making is what the product actually does that
-                nothing else does: every number traces to something an agent
-                said. Do not restore a scale number that TIER_CAPS cannot back. */}
-            Simulate public reactions across 12 platforms, with an audience derived from your own material rather than picked from a list. Every number in the report traces back to what an agent actually said.
-          </motion.p>
+              <motion.p
+                {...stagger(3)}
+                className="text-lg text-saibyl-silver max-w-2xl mx-auto leading-relaxed mb-10"
+              >
+                <strong className="text-saibyl-platinum font-semibold">
+                  Every number opens into the words it came from.
+                </strong>{' '}
+                Nothing on the report is a score you have to take on faith.
+              </motion.p>
 
-          {/* CTAs */}
-          <motion.div {...stagger(4)} className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
-            <Link to="/signup" className="px-8 py-3.5 rounded-xl font-semibold text-[#0A0F1C] bg-[#C9A227] hover:bg-[#D4AF37] transition-colors text-base">
-              Start Free Trial &rarr;
-            </Link>
-            <a href="#how-it-works" className="px-8 py-3.5 rounded-xl font-semibold text-[#E8ECF2] border border-[#1E293B] hover:border-[#8B5CF6]/30 transition-colors text-base">
-              See how it works
-            </a>
-          </motion.div>
+              <motion.div
+                {...stagger(4)}
+                className="flex flex-col sm:flex-row items-center justify-center gap-4"
+              >
+                <Link to="/signup" className={`${goldButton} px-8 py-3.5 text-base`}>
+                  Start a free run <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                </Link>
+                <a href="#free-run" className={`${quietButton} px-8 py-3.5 text-base`}>
+                  See what a free run gives you
+                </a>
+              </motion.div>
 
-          {/* Stats bar */}
-          <motion.div {...stagger(5)} className="border-t border-[#1E293B] pt-8 grid grid-cols-2 md:grid-cols-4 gap-6 max-w-2xl mx-auto">
-            {[
-              { value: '1M+', label: 'Max Agents' },
-              { value: '8', label: 'Platforms' },
-              { value: '42', label: 'Archetypes' },
-              { value: '<3 Min', label: 'Results' },
-            ].map((stat, i) => (
-              <div key={i} className="text-center">
-                <div className="text-gradient-brand font-mono text-2xl font-bold">{stat.value}</div>
-                <div className="text-[#5A6578] text-xs mt-1">{stat.label}</div>
+              <motion.p {...stagger(5)} className="text-sm text-saibyl-muted mt-5">
+                {free.credits} credits at signup — enough for one full run. No card, ever.
+              </motion.p>
+            </div>
+          </section>
+
+          {/* ═══ The argument ═══ */}
+          <Section id="argument" tone="raised">
+            <div className="max-w-6xl mx-auto">
+              <SectionHead
+                eyebrow="Why this is different"
+                title={
+                  <>
+                    Two claims, and you can check{' '}
+                    <span className="text-gradient-brand">both of them</span>
+                  </>
+                }
+                lede="Most of this category asks you to trust a model. Both of the things Saibyl does differently are things you can go and verify yourself."
+              />
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <motion.div
+                  {...stagger(0)}
+                  className="bg-saibyl-surface border border-saibyl-border rounded-2xl p-8"
+                >
+                  <div
+                    className="w-12 h-12 rounded-xl flex items-center justify-center mb-5 bg-saibyl-insight-violet/10"
+                    aria-hidden="true"
+                  >
+                    <Users className="w-6 h-6 text-saibyl-insight-violet" />
+                  </div>
+                  <h3 className="font-display font-bold text-2xl text-saibyl-platinum mb-3">
+                    Your audience is built from your own material
+                  </h3>
+                  <p className="text-sm text-saibyl-silver leading-relaxed mb-4">
+                    Other tools hand you a catalogue of personas and ask you to choose. You are
+                    the wrong person to ask — which buyer you are actually selling to is the
+                    thing you came here to work out.
+                  </p>
+                  <p className="text-sm text-saibyl-silver leading-relaxed">
+                    So Saibyl reads what you uploaded and proposes who buys this, what they use
+                    today, and what would make them doubt you — with the reason attached to each
+                    one. You confirm it or you fix it. And where your documents never said
+                    something, it stays blank and gets listed as a gap, because a guess dressed
+                    up as a finding is worse than an empty field.
+                  </p>
+                </motion.div>
+
+                <motion.div
+                  {...stagger(1)}
+                  className="bg-saibyl-surface border border-saibyl-border rounded-2xl p-8"
+                >
+                  <div
+                    className="w-12 h-12 rounded-xl flex items-center justify-center mb-5 bg-saibyl-signal-blue/10"
+                    aria-hidden="true"
+                  >
+                    <Quote className="w-6 h-6 text-saibyl-signal-blue" />
+                  </div>
+                  <h3 className="font-display font-bold text-2xl text-saibyl-platinum mb-3">
+                    Every number traces to something someone said
+                  </h3>
+                  <p className="text-sm text-saibyl-silver leading-relaxed mb-4">
+                    There is no scoring model quietly assigning points. When the report tells you
+                    price was the objection, you open it and read the sentences that objected to
+                    the price, and see who said them.
+                  </p>
+
+                  <ol className="space-y-2 mb-4">
+                    {[
+                      'A finding in the report',
+                      'The sentences it was built from',
+                      'The buyer who said each one',
+                    ].map((step, i) => (
+                      <li
+                        key={step}
+                        className="flex items-center gap-3 text-sm text-saibyl-platinum"
+                      >
+                        <span className="font-mono text-xs text-saibyl-signal-blue w-4 shrink-0">
+                          {i + 1}
+                        </span>
+                        <span className="rounded-lg border border-saibyl-border bg-saibyl-void px-3 py-2 flex-1">
+                          {step}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+
+                  <p className="text-sm text-saibyl-silver leading-relaxed">
+                    And when nothing was said, nothing is shown. Not a zero, not a dash that
+                    reads like a measurement of nobody.
+                  </p>
+                </motion.div>
               </div>
-            ))}
-          </motion.div>
-        </div>
-      </section>
+            </div>
+          </Section>
 
-      {/* ═══ 3. TRUST BAR ═══ */}
-      <section className="border-t border-b border-[#1E293B] py-6">
-        <motion.div {...fadeUp} className="max-w-5xl mx-auto flex flex-wrap items-center justify-center gap-x-8 gap-y-3 px-6">
-          {['PR & Comms', 'Political Strategy', 'FinTech', 'Sports Analytics', 'Enterprise'].map((label, i) => (
-            <span key={label} className="flex items-center gap-8">
-              <span className="font-mono text-xs uppercase tracking-[0.15em] text-[#5A6578]">{label}</span>
-              {i < 4 && <span className="hidden sm:block w-px h-4 bg-[#1E293B]" />}
-            </span>
-          ))}
-        </motion.div>
-      </section>
+          {/* ═══ The free run ═══ */}
+          <Section id="free-run">
+            <div className="max-w-6xl mx-auto">
+              <SectionHead
+                eyebrow="The free run"
+                title={
+                  <>
+                    Six steps, and you are reading{' '}
+                    <span className="text-gradient-brand">your objections</span>
+                  </>
+                }
+                lede="This is the whole thing, start to finish. No demo call, no sales conversation, no card."
+              />
 
-      {/* ═══ 4. HOW IT WORKS ═══ */}
-      <section id="how-it-works" className="py-28 px-6">
-        <div className="max-w-6xl mx-auto">
-          <motion.div {...fadeUp} className="text-center mb-16">
-            <span className="font-mono text-xs tracking-[0.2em] uppercase text-[#2563EB]">HOW IT WORKS</span>
-            <h2 className="font-display font-extrabold text-4xl sm:text-5xl text-[#E8ECF2] mt-4 leading-tight tracking-tight">
-              From scenario to strategy in four steps
-            </h2>
-          </motion.div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {howItWorksSteps.map((step, i) => (
-              <motion.div
-                key={step.num}
-                {...stagger(i)}
-                className="bg-[#111827] border border-[#1E293B] rounded-2xl p-8 hover:border-[#8B5CF6]/20 hover:-translate-y-1 transition-all duration-300"
-              >
-                <span className="font-mono text-sm text-[#8B5CF6] font-semibold">{step.num}</span>
-                <div className="mt-4 mb-4 w-12 h-12 rounded-xl bg-[#8B5CF6]/10 flex items-center justify-center">
-                  <step.Icon className="w-6 h-6 text-[#8B5CF6]" />
-                </div>
-                <h3 className="font-sans font-semibold text-lg text-[#E8ECF2] mb-2">{step.title}</h3>
-                <p className="text-sm text-[#8B97A8] leading-relaxed">{step.desc}</p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ═══ 5. FEATURES ═══ */}
-      <section id="features" className="py-28 px-6 bg-[#0D1424] border-t border-b border-[#1E293B]">
-        <div className="max-w-6xl mx-auto">
-          <motion.div {...fadeUp} className="text-center mb-16">
-            <span className="font-mono text-xs tracking-[0.2em] uppercase text-[#2563EB]">CAPABILITIES</span>
-            <h2 className="font-display font-extrabold text-4xl sm:text-5xl text-[#E8ECF2] mt-4 leading-tight tracking-tight">
-              Everything you need to predict{' '}<span className="text-gradient-brand">the future</span>
-            </h2>
-          </motion.div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {featureCards.map((f, i) => (
-              <motion.div
-                key={f.title}
-                {...stagger(i)}
-                className="bg-[#111827] border border-[#1E293B] rounded-2xl p-8 hover:border-[#8B5CF6]/20 hover:-translate-y-1 transition-all duration-300"
-              >
-                <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-5" style={{ background: f.color + '15' }}>
-                  <f.Icon className="w-6 h-6" style={{ color: f.color }} />
-                </div>
-                <h3 className="font-sans font-semibold text-lg text-[#E8ECF2] mb-2">{f.title}</h3>
-                <p className="text-sm text-[#8B97A8] leading-relaxed">{f.desc}</p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ═══ 6. USE CASES ═══ */}
-      <section id="use-cases" className="py-28 px-6">
-        <div className="max-w-6xl mx-auto">
-          <motion.div {...fadeUp} className="text-center mb-16">
-            <span className="font-mono text-xs tracking-[0.2em] uppercase text-[#2563EB]">USE CASES</span>
-            <h2 className="font-display font-extrabold text-4xl sm:text-5xl text-[#E8ECF2] mt-4 leading-tight tracking-tight">
-              Intelligence for every industry
-            </h2>
-          </motion.div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {useCases.map((uc, i) => (
-              <motion.div
-                key={uc.title}
-                {...stagger(i)}
-                className="bg-[#111827] border border-[#1E293B] rounded-2xl overflow-hidden hover:border-[#8B5CF6]/20 transition-all duration-300"
-              >
-                {/* Gradient top border */}
-                <div className="h-0.5" style={{ background: `linear-gradient(90deg, ${uc.tagColor}, transparent)` }} />
-                <div className="p-8">
-                  {/* Tag pill */}
-                  <span className="inline-block px-3 py-1 rounded-full text-xs font-mono font-medium mb-4" style={{ background: uc.tagColor + '15', color: uc.tagColor }}>
-                    {uc.tag}
-                  </span>
-                  <h3 className="font-sans font-semibold text-xl text-[#E8ECF2] mb-2">{uc.question}</h3>
-                  <p className="text-sm text-[#8B97A8] leading-relaxed mb-6">{uc.desc}</p>
-                  {/* Result metric */}
-                  <div className="flex items-center gap-2 text-sm">
-                    <Check className="w-4 h-4 text-green-400 shrink-0" />
-                    <span className="text-[#E8ECF2] font-medium">{uc.result}</span>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ═══ 7. PRICING ═══ */}
-      <section id="pricing" className="py-28 px-6 bg-[#0D1424] border-t border-b border-[#1E293B]">
-        <div className="max-w-7xl mx-auto">
-          <motion.div {...fadeUp} className="text-center mb-16">
-            <span className="font-mono text-xs tracking-[0.2em] uppercase text-[#2563EB]">PRICING</span>
-            <h2 className="font-display font-extrabold text-4xl sm:text-5xl text-[#E8ECF2] mt-4 leading-tight tracking-tight">
-              Transparent pricing that scales
-            </h2>
-            <p className="text-lg text-[#8B97A8] mt-4 max-w-xl mx-auto">
-              Choose the plan that matches your intelligence needs
-            </p>
-          </motion.div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {pricingPlans.map((plan, i) => (
-              <motion.div
-                key={plan.name}
-                {...stagger(i)}
-                className={`relative rounded-2xl p-8 flex flex-col ${
-                  plan.featured
-                    ? 'bg-[#111827] border-2 border-[#8B5CF6] shadow-[0_0_40px_rgba(139,92,246,0.1)]'
-                    : 'bg-[#111827] border border-[#1E293B]'
-                }`}
-              >
-                {plan.featured && (
-                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                    <span className="font-mono text-[10px] tracking-[0.15em] uppercase px-3 py-1.5 rounded-full bg-[#8B5CF6] text-white font-semibold">
-                      MOST POPULAR
+              <ol className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {FREE_RUN_STEPS.map((step, i) => (
+                  <motion.li
+                    key={step.title}
+                    {...stagger(i)}
+                    className="bg-saibyl-surface border border-saibyl-border rounded-2xl p-7 hover:border-saibyl-insight-violet/20 transition-colors"
+                  >
+                    <span className="font-mono text-sm text-saibyl-insight-violet font-semibold">
+                      {String(i + 1).padStart(2, '0')}
                     </span>
-                  </div>
-                )}
+                    <h3 className="font-sans font-semibold text-lg text-saibyl-platinum mt-3 mb-2">
+                      {step.title}
+                    </h3>
+                    <p className="text-sm text-saibyl-silver leading-relaxed">{step.body}</p>
+                  </motion.li>
+                ))}
+              </ol>
 
-                <h3 className="font-sans font-semibold text-xl text-[#E8ECF2]">{plan.name}</h3>
-                <p className="text-sm text-[#8B97A8] mt-2 mb-6">{plan.desc}</p>
+              <motion.div {...fadeUp} className="mt-12 text-center">
+                <Link to="/signup" className={`${goldButton} px-8 py-3.5 text-base`}>
+                  Start a free run <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                </Link>
+                <p className="text-sm text-saibyl-muted mt-4">
+                  {free.credits} credits, once. Enough for one run of {free.shape.people} people
+                  over {free.shape.rounds} rounds.
+                </p>
+              </motion.div>
+            </div>
+          </Section>
 
-                <div className="mb-6">
-                  <span className="font-display font-extrabold text-4xl text-[#E8ECF2]">{plan.price}</span>
-                  {plan.period && <span className="text-[#8B97A8] text-sm ml-1">{plan.period}</span>}
+          {/* ═══ The five things ═══ */}
+          <Section id="product" tone="raised">
+            <div className="max-w-6xl mx-auto">
+              <SectionHead
+                eyebrow="What you get"
+                title={
+                  <>
+                    Five questions, in the order{' '}
+                    <span className="text-gradient-brand">you hit them</span>
+                  </>
+                }
+                lede="You do not have to use all of it on day one. The free run covers the first two, which is where you find out whether the rest is worth anything to you."
+              />
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {CAPABILITIES.map((cap, i) => (
+                  <motion.div
+                    key={cap.name}
+                    {...stagger(i)}
+                    className="bg-saibyl-surface border border-saibyl-border rounded-2xl p-7 flex flex-col hover:border-saibyl-insight-violet/20 transition-colors"
+                  >
+                    <div className="flex items-center justify-between gap-3 mb-5">
+                      <div
+                        className="w-12 h-12 rounded-xl flex items-center justify-center"
+                        style={{ background: `${cap.colour}15` }}
+                        aria-hidden="true"
+                      >
+                        <cap.Icon className="w-6 h-6" style={{ color: cap.colour }} />
+                      </div>
+                      <span
+                        className={`font-mono text-[10px] uppercase tracking-[0.12em] px-2.5 py-1 rounded-full border ${
+                          cap.free
+                            ? 'border-saibyl-positive/30 bg-saibyl-positive/10 text-saibyl-positive'
+                            : 'border-saibyl-border bg-saibyl-void text-saibyl-muted'
+                        }`}
+                      >
+                        {cap.free ? 'In the free run' : 'On a plan'}
+                      </span>
+                    </div>
+
+                    <h3 className="font-sans font-semibold text-lg text-saibyl-platinum">
+                      {cap.name}
+                    </h3>
+                    <p className="text-sm text-saibyl-silver/80 italic mt-1 mb-3">
+                      {cap.question}
+                    </p>
+                    <p className="text-sm text-saibyl-silver leading-relaxed flex-1">{cap.body}</p>
+
+                    {cap.free ? (
+                      <Link
+                        to="/signup"
+                        className="text-sm font-semibold text-saibyl-gold hover:underline mt-5 inline-flex items-center gap-1.5"
+                      >
+                        Start a free run <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                      </Link>
+                    ) : (
+                      <a
+                        href="#pricing"
+                        className="text-sm font-semibold text-saibyl-signal-blue hover:underline mt-5 inline-flex items-center gap-1.5"
+                      >
+                        What a plan costs{' '}
+                        <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                      </a>
+                    )}
+                  </motion.div>
+                ))}
+
+                {/* Sixth cell rather than an empty gap in the grid. It is also
+                    the honest answer to "so what does the free grant not do",
+                    which is the question the five cards above raise. */}
+                <motion.div
+                  {...stagger(5)}
+                  className="rounded-2xl border border-dashed border-saibyl-border p-7 flex flex-col justify-center"
+                >
+                  <h3 className="font-sans font-semibold text-lg text-saibyl-platinum mb-2">
+                    Where the free grant stops
+                  </h3>
+                  <p className="text-sm text-saibyl-silver leading-relaxed">
+                    It is sized to cover one run all the way through, and that is all. Writing
+                    answers, running them back at the same people, and going out to find real
+                    companies are each real work on top of that — so they come with a plan rather
+                    than pretending to be free.
+                  </p>
+                </motion.div>
+              </div>
+            </div>
+          </Section>
+
+          {/* ═══ Pricing ═══ */}
+          <Section id="pricing">
+            <div className="max-w-6xl mx-auto">
+              <SectionHead
+                eyebrow="Pricing"
+                title={
+                  <>
+                    Start free. Pay when it has{' '}
+                    <span className="text-gradient-brand">earned it</span>
+                  </>
+                }
+                lede="A plan buys you a bigger room, more rounds, more places at once, and more versions of a message to compare. Every run is priced before it starts and you see that price before you commit to it."
+              />
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
+                {TIERS.map((tier, i) => (
+                  <motion.div
+                    key={tier.id}
+                    {...stagger(i)}
+                    className={`relative rounded-2xl p-7 flex flex-col h-full bg-saibyl-surface ${
+                      tier.featured
+                        ? 'border-2 border-saibyl-gold shadow-[0_0_40px_rgba(201,162,39,0.08)]'
+                        : 'border border-saibyl-border'
+                    }`}
+                  >
+                    {tier.featured && (
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                        <span className="font-mono text-[10px] tracking-[0.15em] uppercase px-3 py-1.5 rounded-full bg-saibyl-gold text-saibyl-void font-semibold whitespace-nowrap">
+                          Start here
+                        </span>
+                      </div>
+                    )}
+
+                    <h3 className="font-sans font-semibold text-xl text-saibyl-platinum mt-2">
+                      {tier.name}
+                    </h3>
+                    <p className="text-sm text-saibyl-silver mt-2 mb-6 min-h-[3.5rem]">
+                      {tier.blurb}
+                    </p>
+
+                    <div className="mb-1">
+                      <span className="font-display font-extrabold text-4xl text-saibyl-platinum">
+                        {tier.price}
+                      </span>
+                      {tier.period && (
+                        <span className="text-saibyl-silver text-sm ml-1">{tier.period}</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-saibyl-muted mb-6">
+                      <span className="font-mono text-saibyl-gold">{tier.credits}</span>{' '}
+                      {tier.creditsNote}
+                    </p>
+
+                    <ul className="space-y-3 mb-8 flex-1">
+                      {shapeLines(tier.shape).map((line) => (
+                        <li
+                          key={line}
+                          className="flex items-start gap-2.5 text-sm text-saibyl-silver"
+                        >
+                          <Check
+                            className="w-4 h-4 text-saibyl-positive shrink-0 mt-0.5"
+                            aria-hidden="true"
+                          />
+                          {line}
+                        </li>
+                      ))}
+                    </ul>
+
+                    <Link
+                      to={tier.ctaTo}
+                      className={
+                        tier.featured
+                          ? `${goldButton} w-full py-3 text-sm`
+                          : `${quietButton} w-full py-3 text-sm`
+                      }
+                    >
+                      {tier.cta}
+                    </Link>
+                  </motion.div>
+                ))}
+              </div>
+
+              <motion.div
+                {...fadeUp}
+                className="mt-10 max-w-3xl mx-auto space-y-4 text-center text-sm text-saibyl-muted"
+              >
+                <p>
+                  <span className="text-saibyl-silver">Places</span> means {PLACES.join(', ')}.
+                </p>
+                <p>
+                  Bigger than Agency? Enterprise runs up to{' '}
+                  {ENTERPRISE_SHAPE.people.toLocaleString()} people over {ENTERPRISE_SHAPE.rounds}{' '}
+                  rounds across all {ENTERPRISE_SHAPE.places} places. Email{' '}
+                  <a
+                    href={`mailto:${CONTACT_EMAIL}`}
+                    className="text-saibyl-signal-blue hover:underline"
+                  >
+                    {CONTACT_EMAIL}
+                  </a>
+                  .
+                </p>
+              </motion.div>
+            </div>
+          </Section>
+
+          {/* ═══ Questions ═══ */}
+          <Section id="faq" tone="raised">
+            <div className="max-w-3xl mx-auto">
+              <SectionHead eyebrow="Questions" title="The ones people actually ask" />
+              <Faq items={FAQ_ITEMS} />
+              <motion.p {...fadeUp} className="text-center text-sm text-saibyl-muted mt-8">
+                Something else on your mind? Email{' '}
+                <a
+                  href={`mailto:${CONTACT_EMAIL}`}
+                  className="text-saibyl-signal-blue hover:underline"
+                >
+                  {CONTACT_EMAIL}
+                </a>{' '}
+                — or just{' '}
+                <Link to="/signup" className="text-saibyl-gold hover:underline">
+                  start a free run
+                </Link>{' '}
+                and find out.
+              </motion.p>
+            </div>
+          </Section>
+
+          {/* ═══ Closing ═══ */}
+          <Section className="relative overflow-hidden">
+            <div
+              className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(139,92,246,0.1)_0%,transparent_60%)] pointer-events-none"
+              aria-hidden="true"
+            />
+            <motion.div {...fadeUp} className="relative z-10 max-w-2xl mx-auto text-center">
+              <h2 className="font-display font-extrabold text-3xl sm:text-4xl lg:text-[2.75rem] text-saibyl-platinum leading-[1.1] tracking-tight mb-5 text-balance">
+                You already built the thing. Find out who wants it.
+              </h2>
+              <p className="text-lg text-saibyl-silver mb-9">
+                One run, {free.credits} credits, no card. If it tells you nothing, you have lost
+                an afternoon instead of a campaign budget.
+              </p>
+              <Link to="/signup" className={`${goldButton} px-10 py-4 text-base`}>
+                Start a free run <ArrowRight className="w-4 h-4" aria-hidden="true" />
+              </Link>
+            </motion.div>
+          </Section>
+        </main>
+
+        {/* ═══ Footer ═══ */}
+        <footer className="border-t border-saibyl-border py-14 px-6 bg-saibyl-void">
+          <div className="max-w-6xl mx-auto">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-10">
+              <div className="sm:col-span-2">
+                <div className="flex items-center gap-2.5 mb-4">
+                  <img src="/logo-mark.svg" alt="" className="h-7 w-7" />
+                  <span className="text-gradient-brand font-extrabold text-lg tracking-tight">
+                    SAIBYL
+                  </span>
                 </div>
+                <p className="text-sm text-saibyl-silver leading-relaxed max-w-sm">
+                  An audience built out of your own material, reacting to your pitch. Every
+                  number traces back to something one of them said.
+                </p>
+              </div>
 
-                <ul className="space-y-3 mb-8 flex-1">
-                  {plan.items.map((item) => (
-                    <li key={item} className="flex items-start gap-2.5 text-sm text-[#8B97A8]">
-                      <Check className="w-4 h-4 text-green-400 shrink-0 mt-0.5" />
-                      {item}
+              {/* Only links that go somewhere. The previous footer carried six
+                  `href="#"` placeholders for pages that do not exist — every one
+                  of them a dead end at the very bottom of the funnel. */}
+              <div>
+                <h2 className="font-sans font-semibold text-sm text-saibyl-platinum mb-4">
+                  On this page
+                </h2>
+                <ul className="space-y-3">
+                  {NAV_LINKS.map((link) => (
+                    <li key={link.href}>
+                      <a
+                        href={link.href}
+                        className="text-sm text-saibyl-silver hover:text-saibyl-platinum transition-colors"
+                      >
+                        {link.label}
+                      </a>
                     </li>
                   ))}
                 </ul>
-
-                {plan.ctaLink.startsWith('mailto:') ? (
-                  <a
-                    href={plan.ctaLink}
-                    className="block text-center py-3 rounded-xl font-semibold text-sm border border-[#1E293B] text-[#E8ECF2] hover:border-[#8B5CF6]/30 transition-colors"
-                  >
-                    {plan.cta}
-                  </a>
-                ) : (
-                  <Link
-                    to={plan.ctaLink}
-                    className={`block text-center py-3 rounded-xl font-semibold text-sm transition-colors ${
-                      plan.featured
-                        ? 'bg-[#C9A227] text-[#0A0F1C] hover:bg-[#D4AF37]'
-                        : 'bg-[#C9A227] text-[#0A0F1C] hover:bg-[#D4AF37]'
-                    }`}
-                  >
-                    {plan.cta}
-                  </Link>
-                )}
-              </motion.div>
-            ))}
-          </div>
-
-          {/* Enterprise note */}
-          <motion.p {...fadeUp} className="text-center text-sm text-[#5A6578] mt-10 max-w-2xl mx-auto">
-            Need more than 100K agents per simulation? Our Enterprise plan gives you dedicated infrastructure. Contact{' '}
-            <a href="mailto:info@saidolabs.com" className="text-[#2563EB] hover:underline">info@saidolabs.com</a>
-          </motion.p>
-        </div>
-      </section>
-
-      {/* ═══ 8. FAQ ═══ */}
-      <section id="faq" className="py-28 px-6">
-        <div className="max-w-3xl mx-auto">
-          <motion.div {...fadeUp} className="text-center mb-16">
-            <h2 className="font-display font-extrabold text-4xl sm:text-5xl text-[#E8ECF2] leading-tight tracking-tight">
-              Frequently asked questions
-            </h2>
-          </motion.div>
-
-          <div className="space-y-[1px]">
-            {faqItems.map((item, i) => {
-              const isOpen = openFaq.includes(i);
-              return (
-                <motion.div
-                  key={i}
-                  {...stagger(i)}
-                  className="bg-[#111827] border border-[#1E293B] rounded-2xl overflow-hidden"
-                >
-                  <button
-                    onClick={() => toggleFaq(i)}
-                    className="w-full flex items-center justify-between px-6 py-5 text-left cursor-pointer"
-                  >
-                    <span className="font-sans font-semibold text-base text-[#E8ECF2] pr-4">{item.q}</span>
-                    <Plus className={`w-5 h-5 text-[#8B97A8] shrink-0 transition-transform duration-300 ${isOpen ? 'rotate-45' : ''}`} />
-                  </button>
-                  <div className={`overflow-hidden transition-all duration-300 ${isOpen ? 'max-h-96 pb-5' : 'max-h-0'}`}>
-                    <p className="px-6 text-sm text-[#8B97A8] leading-relaxed">{item.a}</p>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* ═══ 9. CTA BANNER ═══ */}
-      <section className="py-28 px-6 bg-[#0D1424] relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(139,92,246,0.1)_0%,transparent_60%)] pointer-events-none" />
-        <motion.div {...fadeUp} className="relative z-10 max-w-2xl mx-auto text-center">
-          <h2 className="font-display font-extrabold text-4xl sm:text-5xl text-[#E8ECF2] leading-tight tracking-tight mb-6">
-            Ready to see what they'll say before they say it?
-          </h2>
-          <p className="text-lg text-[#8B97A8] mb-10">
-            Start your free trial today. No credit card required.
-          </p>
-          <Link to="/signup" className="inline-block px-10 py-4 rounded-xl font-semibold text-[#0A0F1C] bg-[#C9A227] hover:bg-[#D4AF37] transition-colors text-base">
-            Start Free Trial &rarr;
-          </Link>
-        </motion.div>
-      </section>
-
-      {/* ═══ 10. FOOTER ═══ */}
-      <footer className="border-t border-[#1E293B] py-16 px-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-12">
-            {/* Brand */}
-            <div className="md:col-span-2">
-              <div className="flex items-center gap-2.5 mb-4">
-                <img src="/logo-mark.svg" alt="Saibyl" className="h-7 w-7" />
-                <span className="text-gradient-brand font-extrabold text-lg tracking-tight">SAIBYL</span>
               </div>
-              <p className="text-sm text-[#8B97A8] leading-relaxed max-w-xs">
-                Predictive intelligence powered by synthetic agent swarms. Know the conversation before it happens.
+
+              <div>
+                <h2 className="font-sans font-semibold text-sm text-saibyl-platinum mb-4">
+                  Get started
+                </h2>
+                <ul className="space-y-3">
+                  <li>
+                    <Link
+                      to="/signup"
+                      className="text-sm text-saibyl-gold hover:underline transition-colors"
+                    >
+                      Start a free run
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      to="/login"
+                      className="text-sm text-saibyl-silver hover:text-saibyl-platinum transition-colors"
+                    >
+                      Sign in
+                    </Link>
+                  </li>
+                  <li>
+                    <a
+                      href={`mailto:${CONTACT_EMAIL}`}
+                      className="text-sm text-saibyl-silver hover:text-saibyl-platinum transition-colors"
+                    >
+                      Contact us
+                    </a>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="border-t border-saibyl-border mt-12 pt-8 text-center">
+              <p className="text-sm text-saibyl-muted">
+                &copy; 2026 Saido Labs LLC. All rights reserved.
               </p>
             </div>
-
-            {/* Product links */}
-            <div>
-              <h4 className="font-sans font-semibold text-sm text-[#E8ECF2] mb-4">Product</h4>
-              <ul className="space-y-3">
-                <li><a href="#features" className="text-sm text-[#8B97A8] hover:text-[#E8ECF2] transition-colors">Features</a></li>
-                <li><a href="#pricing" className="text-sm text-[#8B97A8] hover:text-[#E8ECF2] transition-colors">Pricing</a></li>
-                <li><a href="#" className="text-sm text-[#8B97A8] hover:text-[#E8ECF2] transition-colors">{/* TODO: API docs */}API</a></li>
-              </ul>
-            </div>
-
-            {/* Company links */}
-            <div>
-              <h4 className="font-sans font-semibold text-sm text-[#E8ECF2] mb-4">Company</h4>
-              <ul className="space-y-3">
-                <li><a href="#" className="text-sm text-[#8B97A8] hover:text-[#E8ECF2] transition-colors">{/* TODO: About page */}About</a></li>
-                <li><a href="#" className="text-sm text-[#8B97A8] hover:text-[#E8ECF2] transition-colors">{/* TODO: Blog page */}Blog</a></li>
-                <li><a href="#" className="text-sm text-[#8B97A8] hover:text-[#E8ECF2] transition-colors">{/* TODO: Careers page */}Careers</a></li>
-              </ul>
-            </div>
-
-            {/* Legal links */}
-            <div>
-              <h4 className="font-sans font-semibold text-sm text-[#E8ECF2] mb-4">Legal</h4>
-              <ul className="space-y-3">
-                <li><a href="#" className="text-sm text-[#8B97A8] hover:text-[#E8ECF2] transition-colors">{/* TODO: Privacy policy */}Privacy</a></li>
-                <li><a href="#" className="text-sm text-[#8B97A8] hover:text-[#E8ECF2] transition-colors">{/* TODO: Terms of service */}Terms</a></li>
-                <li><a href="#" className="text-sm text-[#8B97A8] hover:text-[#E8ECF2] transition-colors">{/* TODO: Security page */}Security</a></li>
-              </ul>
-            </div>
           </div>
-
-          {/* Bottom row */}
-          <div className="border-t border-[#1E293B] mt-12 pt-8 text-center">
-            <p className="text-sm text-[#5A6578]">&copy; 2026 Saido Labs LLC. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
-    </div>
+        </footer>
+      </div>
+    </MotionConfig>
   );
 }

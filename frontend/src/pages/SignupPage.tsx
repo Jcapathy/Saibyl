@@ -1,7 +1,7 @@
 import { useState, useMemo, type FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Eye, EyeOff, Lock, AlertCircle, Building2 } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, Building2 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import { supabase } from '@/lib/supabase';
 
@@ -449,11 +449,16 @@ export default function SignupPage() {
             </a>
           </p>
 
-          {/* Security badge */}
-          <div className="mt-6 flex items-center justify-center gap-2 text-[11px] text-[#8B97A8]/40">
-            <Lock className="w-3 h-3" />
-            <span>256-bit TLS encryption &middot; SOC 2 compliant</span>
-          </div>
+          {/* Was "256-bit TLS encryption · SOC 2 compliant". The TLS half is
+              true and unremarkable; the SOC 2 half was an unearned compliance
+              claim — there is no audit, no report and no auditor, and the only
+              "SOC 2" anywhere in this codebase is a simulated enterprise buyer
+              asking whether we have one. It was removed from the landing page in
+              the same pass and survived here, which is the duplicated-claim
+              pattern that kept "1M agents" alive for months. Nothing replaces it:
+              a security badge that says nothing is better than one that is not
+              true, and the right time to put it back is when there is a report to
+              link to. */}
         </motion.div>
       </div>
     </div>
