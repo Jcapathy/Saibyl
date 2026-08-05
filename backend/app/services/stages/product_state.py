@@ -486,7 +486,7 @@ def _build_answers(
         source = with_objections[0]
         count = objection_counts[source["id"]]
         when = _short_date(source.get("completed_at") or source.get("created_at"))
-        label = f"Objections — {_plural(count, 'to answer')}"
+        label = f"Objections — {count} to answer"
         if when:
             label = f"{label}, from the run on {when}"
         inherited.append(
@@ -592,8 +592,7 @@ def _build_buyers(
     if completed:
         found = sum(r.get("candidates_found") or 0 for r in completed)
         when = _short_date(completed[0].get("created_at"))
-        produced = _plural(found, "company") if found != 1 else "1 company"
-        produced = f"{produced} found"
+        produced = f"{_plural(found, 'company', 'companies')} found"
         if when:
             produced = f"{produced} · last searched {when}"
 
@@ -838,7 +837,18 @@ def _state_for_project(project: dict, data: _OrgData, now: datetime) -> ProductS
         key=lambda s: str(s.get("completed_at") or s.get("created_at") or ""),
         reverse=True,
     )
-    finished = [s for s in sims if s.get("status") == "completed"]
+    # A re-simulation is not a run whose reactions you read. It exists to answer
+    # the parent's objections, and its own output is the before-and-after that
+    # stage 3 reports. Including it here read as the newest run on a product
+    # that had answered its objections, so stage 2 announced "objections not
+    # worked out yet" about a run that was never going to have any of its own,
+    # and stage 5 lost the scoreboard because that lives on the parent. Found by
+    # looking at the deployed rail against a seeded product, not by a test.
+    finished = [
+        s
+        for s in sims
+        if s.get("status") == "completed" and not s.get("parent_simulation_id")
+    ]
 
     objection_counts: dict[str, int] = defaultdict(int)
     for row in data.objections:

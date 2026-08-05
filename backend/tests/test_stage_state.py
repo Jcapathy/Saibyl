@@ -408,6 +408,88 @@ def test_a_stage_that_declares_nothing_is_logged_at_error():
     assert any(entry.get("event") == "stage_declares_nothing" for entry in logs)
 
 
+# ---------------------------------------------------------------------------
+# Found on the deployed rail, against a seeded product
+# ---------------------------------------------------------------------------
+
+def test_a_resimulation_is_not_read_as_the_latest_run(patched):
+    """A re-simulation answers the parent's objections; it is not stage 2's run.
+
+    On the seeded full-rail product the child was the newest completed run, so
+    stage 2 announced "objections not worked out yet" about a run that never had
+    objections of its own, and stage 5 lost the scoreboard because that lives on
+    the parent. Everything else about the product was correct, which is why no
+    existing test caught it — the rail was right, it was reading the wrong row.
+    """
+    parent = simulation(sim_id=SIM, variants=4)
+    child = {
+        **simulation(sim_id="44444444-4444-4444-4444-444444444444", variants=4),
+        "parent_simulation_id": SIM,
+        "completed_at": "2026-08-04T23:00:00+00:00",
+    }
+    state = patched(
+        documents=[doc()],
+        profiles=[profile(confirmed=True)],
+        simulations=[child, parent],
+        objections=objections(12),
+        analyses=[{"simulation_id": SIM, "scoreboard": {"winner_variant_key": None}}],
+    )
+
+    reactions = next(s for s in state.stages if s.id == "reactions")
+    assert reactions.produced is not None
+    assert "12 objections found" in reactions.produced
+
+    messages = next(s for s in state.stages if s.id == "messages")
+    assert messages.produced is not None
+    assert "too close to call" in messages.produced
+
+
+def test_counted_nouns_are_spelled_the_way_a_person_writes_them(patched):
+    """`12 companys` shipped to production. Absent is absent; so is grammar."""
+    state = patched(
+        documents=[doc()],
+        profiles=[profile(confirmed=True)],
+        simulations=[simulation()],
+        objections=objections(4),
+        discovery_runs=[
+            {
+                "id": "g1",
+                "project_id": PRODUCT,
+                "status": "completed",
+                "candidates_found": 12,
+                "created_at": "2026-08-04T10:00:00+00:00",
+            }
+        ],
+    )
+    buyers = next(s for s in state.stages if s.id == "buyers")
+    assert buyers.produced is not None
+    assert "companys" not in buyers.produced
+    assert "12 companies found" in buyers.produced
+
+    answers = next(s for s in state.stages if s.id == "answers")
+    assert any("4 to answer" in line.label for line in answers.inherited)
+    assert not any("to answers" in line.label for line in answers.inherited)
+
+
+def test_one_company_is_singular(patched):
+    state = patched(
+        documents=[doc()],
+        profiles=[profile(confirmed=True)],
+        discovery_runs=[
+            {
+                "id": "g1",
+                "project_id": PRODUCT,
+                "status": "completed",
+                "candidates_found": 1,
+                "created_at": "2026-08-04T10:00:00+00:00",
+            }
+        ],
+    )
+    buyers = next(s for s in state.stages if s.id == "buyers")
+    assert buyers.produced is not None
+    assert buyers.produced.startswith("1 company found")
+
+
 def test_org_data_makes_no_query_for_an_org_with_no_products():
     """An empty org must not reach the database at all."""
     data = _OrgData(ORG, [])
