@@ -8,6 +8,14 @@ since the V1-audit sweep — see the banner in §0 before deploying anything.**
 Read this first in a new session. It is written to be read cold, with no memory
 of previous sessions.
 
+> ### ▶ If you are the overnight build session, read `docs/AUTONOMOUS_BUILD.md` instead.
+>
+> It carries standing authority to build, commit, deploy and verify without
+> asking, the staged-IA design the user approved, the short list of hard stops,
+> and the verification gate. Come back to this file for §1a (agent identity),
+> §2 (standing rules) and §2a (the failure classes this codebase produces) —
+> those still apply and are not repeated there.
+
 ## Cold start in five minutes
 
 You do **not** need to read the backend to be useful. Read this file's §0 and §1,
