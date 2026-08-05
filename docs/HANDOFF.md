@@ -19,7 +19,7 @@ below is reference you read *when a task points you at it*, not upfront.
 | Where the code is | `master` and `v2` are the **same commit** and both deployed. Work on either; keep them aligned. |
 | What works | Phases 0–3: measurement layer, Founder lens + inoculation loop, Marketing lens + N-way matched swarms — all verified by live runs. Added 2026-08-04 and **static-green only**: one upload surface feeding ICP synthesis, multi-pack + org library, `services/gtm/` candidate discovery. |
 | What to do next | **A live end-to-end run**, then the tier migration (§0 item 2 — payment is impossible from the UI until it lands) and the Marketing-lens calibration (§0 item 4). `docs/V1_AUDIT.md` is now mostly closed: 1–18 and 20–38 fixed, 19/25/39 open. |
-| How to verify | `cd backend && python -m pytest -q && ruff check app tests scripts` · `cd frontend && npx tsc --noEmit && npx eslint . --quiet && npx vite build`. **848 tests** should pass (270 before the 2026-08-04 sweep). |
+| How to verify | `cd backend && python -m pytest -q && ruff check app tests scripts` · `cd frontend && npm run build && npx eslint . --quiet`. **848 tests** should pass (270 before the 2026-08-04 sweep). |
 | What a live run costs | ~$1.70 for a 3-variant gate run. `python scripts/live_run_marketing.py --dry-run` prices it without spending. |
 
 **Three things that will save you a day each:**
@@ -466,8 +466,19 @@ From the user directly. These persist across sessions.
   not stop every five files. At each boundary: run the full gate, push, report,
   wait.
 - **Verification gate, every phase, before any push:** `pytest`, `ruff check app
-  tests`, `tsc --noEmit`, `eslint . --quiet`, `vite build`, app boots, **and a
-  live end-to-end run**. Plus (a) no value rendered in the UI or a report lacks a
+  tests`, **`npm run build`** (frontend), `eslint . --quiet`, app boots, **and a
+  live end-to-end run**.
+
+  > ⚠️ **Gate the frontend with `npm run build`, never `tsc --noEmit`.** They are
+  > not the same check. Render runs `tsc -b && vite build`, and `tsc -b` is
+  > project-references build mode which rejects things `--noEmit` accepts.
+  >
+  > On 2026-08-04 the deploy exposed **five pre-existing `tsc -b` errors** the
+  > documented gate had been stepping over. The frontend service had been
+  > failing to build and Render was serving a **stale bundle**, while every
+  > session reported a clean frontend and believed it had shipped. A gate that
+  > does not run what production runs reports success for the wrong reason —
+  > the same shape as the margin gate passing on an empty ledger, one layer out. Plus (a) no value rendered in the UI or a report lacks a
   corresponding field in `simulation_analysis`; (b) quoted price ≥ measured
   `llm_usage` cost × margin floor — `reconcile_run_cost` logs
   `margin_floor_breached` when it does not.

@@ -538,10 +538,18 @@ export default function ReportPrintPage() {
                 <YAxis domain={[-1, 1]} tick={{ fill: MUTED, fontSize: 11 }} />
                 <ReferenceLine y={0} stroke="#999" />
                 <Tooltip
-                  formatter={(value: number) => formatSigned(value)}
-                  labelFormatter={(label: string) => {
-                    const point = arcData.find((d) => d.round === label);
-                    return `${label} — ${point?.agents ?? 0} agents`;
+                  // Recharts hands these back as ValueType/ReactNode, which
+                  // includes undefined — narrowing the parameter to `number`
+                  // or `string` is what `tsc -b` rejects. Coerce at the
+                  // boundary instead, and render nothing rather than "NaN"
+                  // when a point genuinely has no value.
+                  formatter={(value) =>
+                    typeof value === 'number' ? formatSigned(value) : '—'
+                  }
+                  labelFormatter={(label) => {
+                    const round = String(label ?? '');
+                    const point = arcData.find((d) => String(d.round) === round);
+                    return `${round} — ${point?.agents ?? 0} agents`;
                   }}
                 />
                 <Bar dataKey="mean" radius={[3, 3, 0, 0]}>
@@ -581,10 +589,15 @@ export default function ReportPrintPage() {
                 />
                 <ReferenceLine x={0} stroke="#999" />
                 <Tooltip
-                  formatter={(value: number) => formatSigned(value)}
-                  labelFormatter={(label: string) => {
-                    const row = platformData.find((d) => d.name === label);
-                    return `${label} — ${row?.agents ?? 0} agents`;
+                  // See the arc chart above: Recharts' callback types are
+                  // wider than the data, so coerce here rather than annotate.
+                  formatter={(value) =>
+                    typeof value === 'number' ? formatSigned(value) : '—'
+                  }
+                  labelFormatter={(label) => {
+                    const name = String(label ?? '');
+                    const row = platformData.find((d) => String(d.name) === name);
+                    return `${name} — ${row?.agents ?? 0} agents`;
                   }}
                 />
                 <Bar dataKey="mean" radius={[0, 3, 3, 0]}>

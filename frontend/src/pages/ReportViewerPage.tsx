@@ -564,7 +564,11 @@ export default function ReportViewerPage() {
                 <>
                   <VariantScoreboardPanel
                     scoreboard={analysis.scoreboard}
-                    onDrillDown={drillDown}
+                    // The panel's callback carries only event ids; the evidence
+                    // drawer also wants a heading. Supplied here rather than
+                    // making `label` optional, because an untitled drawer is
+                    // how a reader loses track of which variant they opened.
+                    onDrillDown={(ids) => drillDown(ids, 'Variant evidence')}
                   />
                   <p className="text-[11px] text-saibyl-muted mb-3">
                     The figures below pool every variant. On a matched-swarm test

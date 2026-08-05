@@ -29,7 +29,14 @@ import type { DiscoveryQuery, DiscoveryRun } from '@/types';
  * own deadline the card says so outright.
  */
 
-const TONE_ICON: Record<RunTone, React.ComponentType<{ className?: string }>> = {
+// `style` is passed at the call site to tint the icon by tone, so the declared
+// prop type has to admit it. Typed as the icon components' real shape rather
+// than the two props we happen to use — narrowing here is what made `tsc -b`
+// reject a call that `tsc --noEmit` let through.
+const TONE_ICON: Record<
+  RunTone,
+  React.ComponentType<React.SVGProps<SVGSVGElement>>
+> = {
   positive: Check,
   negative: Ban,
   warning: AlertTriangle,
