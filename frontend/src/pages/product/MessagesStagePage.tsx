@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
 
 import api, { unwrapList } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
+import { isFinished } from '@/lib/status';
 import type { Simulation } from '@/types';
 import StageHeader from '@/components/stages/StageHeader';
 import { EmptyState, Guarded, StageError } from '@/components/stages/StagePrimitives';
@@ -45,7 +46,7 @@ export default function MessagesStagePage() {
         const items = unwrapList<Simulation>(r.data).items;
         setRuns(items);
         const compared = items.find(
-          (s) => s.status === 'completed' && (s.variants ?? 1) > 1,
+          (s) => isFinished(s.status) && (s.variants ?? 1) > 1,
         );
         if (!compared) {
           setBoard(null);
@@ -76,7 +77,7 @@ export default function MessagesStagePage() {
   }, [load]);
 
   const compared = runs.find(
-    (s) => s.status === 'completed' && (s.variants ?? 1) > 1,
+    (s) => isFinished(s.status) && (s.variants ?? 1) > 1,
   );
   const setupHref = `/app/marketing?project=${product.id}`;
 

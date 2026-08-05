@@ -74,6 +74,30 @@ STAGE_BLURBS: dict[StageId, str] = {
 # discovered in a conditional.
 CANDIDATE_LIST_STALE_AFTER = timedelta(days=7)
 
+# What "finished" is spelled as in the database.
+#
+# **It is `complete`, not `completed`.** The ingestion pipeline writes
+# `"complete"` and `run_simulation` writes `"complete"`; on 2026-08-05
+# production held 27 documents and 52 simulations spelled that way. Every row
+# spelled `completed` was seeded by hand for testing.
+#
+# This module first shipped comparing against `"completed"` and was wrong on
+# every real row: a founder who had uploaded and processed a deck was told
+# "Nothing to read yet", and a product with a finished run was told nothing had
+# run. It passed its own tests and its own screenshots, because the seed data
+# was written from the same wrong assumption as the code — which is the reason
+# a live run is part of the gate and a green suite is not.
+#
+# Both spellings are accepted rather than one corrected, because the database
+# genuinely contains both and a reader that insists on either is wrong about
+# some rows. `tests/test_stage_state.py` pins the real values.
+DOCUMENT_READ = frozenset({"complete", "completed"})
+DOCUMENT_IN_FLIGHT = frozenset({"pending", "processing"})
+DOCUMENT_FAILED = frozenset({"failed"})
+RUN_FINISHED = frozenset({"complete", "completed"})
+RUN_IN_FLIGHT = frozenset({"pending", "running", "ready"})
+DISCOVERY_FINISHED = frozenset({"completed"})  # gtm_discovery_runs really is this
+
 
 # ---------------------------------------------------------------------------
 # The shapes the client renders
@@ -324,7 +348,7 @@ def _build_audience(
     profile: dict | None,
 ) -> StageState:
     href = f"/app/products/{product_id}/audience"
-    processed = [d for d in docs if d.get("processing_status") == "completed"]
+    processed = [d for d in docs if d.get("processing_status") in DOCUMENT_READ]
 
     inherited: list[InheritedLine] = []
     missing: list[MissingInput] = []
@@ -341,8 +365,7 @@ def _build_audience(
         # Not a judgement call: `synthesize_icp` raises on empty material. A
         # "run anyway" button here would be a button that always fails.
         pending = [
-            d for d in docs
-            if d.get("processing_status") in ("pending", "processing")
+            d for d in docs if d.get("processing_status") in DOCUMENT_IN_FLIGHT
         ]
         runnable = "blocked"
         missing.append(
@@ -389,7 +412,7 @@ def _build_reactions(
     objection_counts: dict[str, int],
 ) -> StageState:
     href = f"/app/products/{product_id}/reactions"
-    processed = [d for d in docs if d.get("processing_status") == "completed"]
+    processed = [d for d in docs if d.get("processing_status") in DOCUMENT_READ]
 
     inherited: list[InheritedLine] = []
     missing: list[MissingInput] = []
@@ -588,7 +611,7 @@ def _build_buyers(
         )
 
     produced: str | None = None
-    completed = [r for r in discovery_runs if r.get("status") == "completed"]
+    completed = [r for r in discovery_runs if r.get("status") in DISCOVERY_FINISHED]
     if completed:
         found = sum(r.get("candidates_found") or 0 for r in completed)
         when = _short_date(completed[0].get("created_at"))
@@ -727,7 +750,9 @@ def _attention_lines(
             )
             break
 
-    completed_searches = [r for r in discovery_runs if r.get("status") == "completed"]
+    completed_searches = [
+        r for r in discovery_runs if r.get("status") in DISCOVERY_FINISHED
+    ]
     if completed_searches:
         newest = _iso_to_dt(completed_searches[0].get("created_at"))
         if newest is not None and now - newest > CANDIDATE_LIST_STALE_AFTER:
@@ -741,7 +766,7 @@ def _attention_lines(
             )
 
     still_reading = [
-        d for d in docs if d.get("processing_status") in ("pending", "processing")
+        d for d in docs if d.get("processing_status") in DOCUMENT_IN_FLIGHT
     ]
     if still_reading:
         lines.append(
@@ -754,7 +779,7 @@ def _attention_lines(
             )
         )
 
-    failed = [d for d in docs if d.get("processing_status") == "failed"]
+    failed = [d for d in docs if d.get("processing_status") in DOCUMENT_FAILED]
     if failed:
         lines.append(
             AttentionLine(
@@ -847,7 +872,7 @@ def _state_for_project(project: dict, data: _OrgData, now: datetime) -> ProductS
     finished = [
         s
         for s in sims
-        if s.get("status") == "completed" and not s.get("parent_simulation_id")
+        if s.get("status") in RUN_FINISHED and not s.get("parent_simulation_id")
     ]
 
     objection_counts: dict[str, int] = defaultdict(int)

@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
 
 import api, { unwrapList } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
+import { isFinished, isUnderway } from '@/lib/status';
 import type { Simulation } from '@/types';
 import MomentPicker from '@/components/stages/MomentPicker';
 import StageHeader from '@/components/stages/StageHeader';
@@ -47,7 +48,7 @@ export default function ReactionsStagePage() {
       .then((r) => {
         const items = unwrapList<Simulation>(r.data).items;
         setRuns(items);
-        const finished = items.find((s) => s.status === 'completed');
+        const finished = items.find((s) => isFinished(s.status));
         if (!finished) {
           setObjections([]);
           return null;
@@ -73,8 +74,8 @@ export default function ReactionsStagePage() {
     load();
   }, [load]);
 
-  const finished = runs.find((s) => s.status === 'completed');
-  const inFlight = runs.find((s) => s.status === 'running' || s.status === 'pending');
+  const finished = runs.find((s) => isFinished(s.status));
+  const inFlight = runs.find((s) => isUnderway(s.status));
 
   // Axis B rides along as a query parameter so the run configurator opens on the
   // moment the founder just picked rather than making them pick it twice.

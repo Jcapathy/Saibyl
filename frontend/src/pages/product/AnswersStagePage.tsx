@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
 
 import api, { unwrapList } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
+import { isFinished } from '@/lib/status';
 import {
   ASSET_TYPE_LABELS,
   isEffective,
@@ -51,7 +52,7 @@ export default function AnswersStagePage() {
       .get('/simulations', { params: { project_id: product.id, limit: 20 } })
       .then((r) => {
         const finished = unwrapList<Simulation>(r.data).items.find(
-          (s) => s.status === 'completed' && !s.parent_simulation_id,
+          (s) => isFinished(s.status) && !s.parent_simulation_id,
         );
         setSource(finished ?? null);
         if (!finished) return null;

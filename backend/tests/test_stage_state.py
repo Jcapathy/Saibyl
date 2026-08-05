@@ -73,7 +73,7 @@ def patched(monkeypatch):
 # Row builders — the four seeded states from the acceptance plan
 # ---------------------------------------------------------------------------
 
-def doc(status="completed"):
+def doc(status="complete"):
     return {
         "id": "d1",
         "project_id": PRODUCT,
@@ -94,7 +94,7 @@ def profile(*, confirmed=False, archetypes=6):
     }
 
 
-def simulation(*, status="completed", variants=1, stage="launch_gtm", sim_id=SIM):
+def simulation(*, status="complete", variants=1, stage="launch_gtm", sim_id=SIM):
     return {
         "id": sim_id,
         "project_id": PRODUCT,
@@ -123,13 +123,13 @@ def test_no_stage_ever_declares_nothing_in_any_reachable_state(patched):
     than on one happy path, because the state this is guarding against is a
     stage that happens to have neither in some corner nobody clicked through.
     """
-    doc_states = ([], [doc("completed")], [doc("processing")], [doc("failed")])
+    doc_states = ([], [doc("complete")], [doc("processing")], [doc("failed")])
     profile_states = ([], [profile(confirmed=False)], [profile(confirmed=True)])
     sim_states = (
         [],
         [simulation(status="running")],
-        [simulation(status="completed")],
-        [simulation(status="completed", variants=4)],
+        [simulation(status="complete")],
+        [simulation(status="complete", variants=4)],
     )
     objection_states = ([], objections(12))
 
@@ -496,3 +496,60 @@ def test_org_data_makes_no_query_for_an_org_with_no_products():
     assert data.documents == []
     assert data.simulations == []
     assert data.analyses == []
+
+
+# ---------------------------------------------------------------------------
+# The spelling the database actually uses
+# ---------------------------------------------------------------------------
+
+def test_a_read_document_is_spelled_complete_not_completed(patched):
+    """The rail shipped comparing against a value nothing writes.
+
+    `complete`, not `completed`. The ingestion pipeline and the simulation
+    runner both write the short form; production held 27 documents and 52
+    simulations spelled that way and not one row of real data spelled the other.
+    The rail told a founder who had uploaded and processed a deck "Nothing to
+    read yet" — and passed its own tests, because the fixtures in this file were
+    written from the same wrong assumption as the code.
+
+    Both spellings are asserted because the table contains both.
+    """
+    for spelling in ("complete", "completed"):
+        state = patched(documents=[doc(spelling)])
+        audience = next(s for s in state.stages if s.id == "audience")
+        assert audience.runnable != "blocked", (
+            f"a document spelled {spelling!r} did not count as read"
+        )
+        assert any("file read" in line.label for line in audience.inherited)
+
+
+def test_a_finished_run_is_spelled_complete_not_completed(patched):
+    for spelling in ("complete", "completed"):
+        state = patched(
+            documents=[doc()],
+            profiles=[profile(confirmed=True)],
+            simulations=[simulation(status=spelling)],
+            objections=objections(7),
+        )
+        reactions = next(s for s in state.stages if s.id == "reactions")
+        assert reactions.produced is not None, (
+            f"a run spelled {spelling!r} did not count as finished"
+        )
+        assert "7 objections found" in reactions.produced
+
+
+def test_the_status_vocabularies_do_not_overlap_in_a_way_that_hides_failure():
+    """A failed run must never satisfy the finished test, or the rail lies."""
+    from app.services.stages.product_state import (
+        DOCUMENT_FAILED,
+        DOCUMENT_IN_FLIGHT,
+        DOCUMENT_READ,
+        RUN_FINISHED,
+        RUN_IN_FLIGHT,
+    )
+
+    assert not (DOCUMENT_READ & DOCUMENT_IN_FLIGHT)
+    assert not (DOCUMENT_READ & DOCUMENT_FAILED)
+    assert not (RUN_FINISHED & RUN_IN_FLIGHT)
+    assert "failed" not in RUN_FINISHED
+    assert "stopped" not in RUN_FINISHED

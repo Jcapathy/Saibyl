@@ -3,6 +3,7 @@ import { Check, FileText, Loader2 } from 'lucide-react';
 
 import api, { unwrapList } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
+import { documentStateWord, isBeingRead, isRead } from '@/lib/status';
 import type { ICPProfile } from '@/lib/founder';
 import type { ProjectDocument, MaterialKind } from '@/types';
 import AudienceReview from '@/components/founder/AudienceReview';
@@ -47,13 +48,6 @@ const MATERIAL_KINDS: { value: MaterialKind; label: string; help: string }[] = [
     help: 'Industry reports, analyst notes, survey results — nobody in particular.',
   },
 ];
-
-const STATUS_WORDS: Record<string, string> = {
-  completed: 'Read',
-  processing: 'Being read',
-  pending: 'Queued',
-  failed: 'Could not be read',
-};
 
 export default function AudienceStagePage() {
   const { product, refresh } = useProduct();
@@ -102,9 +96,7 @@ export default function AudienceStagePage() {
   // Poll while anything is still being read, so "Being read" does not sit there
   // forever after the worker has finished.
   useEffect(() => {
-    const busy = documents.some(
-      (d) => d.processing_status === 'pending' || d.processing_status === 'processing',
-    );
+    const busy = documents.some((d) => isBeingRead(d.processing_status));
     if (!busy) return;
     const timer = setInterval(load, 3000);
     return () => clearInterval(timer);
@@ -168,7 +160,7 @@ export default function AudienceStagePage() {
     }
   }
 
-  const readable = documents.filter((d) => d.processing_status === 'completed');
+  const readable = documents.filter((d) => isRead(d.processing_status));
   const confirmed = Boolean(profile?.confirmed_at);
 
   return (
@@ -305,7 +297,7 @@ export default function AudienceStagePage() {
                         : 'text-saibyl-muted'
                     }
                   >
-                    {STATUS_WORDS[doc.processing_status] ?? doc.processing_status}
+                    {documentStateWord(doc.processing_status)}
                   </span>
                 </li>
               ))}
