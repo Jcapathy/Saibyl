@@ -1,9 +1,9 @@
 # Saibyl V2 — Session Handoff
 
-**Saido Labs LLC** · Updated 2026-08-04 (late) — **Phases 0–3 complete and
-deployed. Migrations 017–024 applied; 025, 026 and 027 written and NOT applied.
-Four commits on `master` are local and unpushed, and no live run has been done
-since the V1-audit sweep — see the banner in §0 before deploying anything.**
+**Saido Labs LLC** · Updated 2026-08-05 (early) — **Phases 0–3 complete and
+deployed, plus the staged rail. Migrations 017–030 all applied. `master` and
+`v2` are the same commit and both services are live and verified by content.
+Still no live end-to-end run since the 2026-08-04 sweep — see §1.**
 
 Read this first in a new session. It is written to be read cold, with no memory
 of previous sessions.
@@ -25,10 +25,10 @@ below is reference you read *when a task points you at it*, not upfront.
 | | |
 |---|---|
 | Where the code is | `master` and `v2` are the **same commit** and both deployed. Work on either; keep them aligned. |
-| What works | Phases 0–3: measurement layer, Founder lens + inoculation loop, Marketing lens + N-way matched swarms — all verified by live runs. Added 2026-08-04 and **static-green only**: one upload surface feeding ICP synthesis, multi-pack + org library, `services/gtm/` candidate discovery. |
-| What to do next | **A live end-to-end run**, then the tier migration (§0 item 2 — payment is impossible from the UI until it lands) and the Marketing-lens calibration (§0 item 4). `docs/V1_AUDIT.md` is now mostly closed: 1–18 and 20–38 fixed, 19/25/39 open. |
-| How to verify | `cd backend && python -m pytest -q && ruff check app tests scripts` · `cd frontend && npm run build && npx eslint . --quiet`. **848 tests** should pass (270 before the 2026-08-04 sweep). |
-| What a live run costs | ~$1.70 for a 3-variant gate run. `python scripts/live_run_marketing.py --dry-run` prices it without spending. |
+| What works | Phases 0–3: measurement layer, Founder lens + inoculation loop, Marketing lens + N-way matched swarms — all verified by live runs. **Static-green only, never run live**: one upload surface feeding ICP synthesis, multi-pack + org library, `services/gtm/` candidate discovery, and the staged rail (`/app/home`, `/app/products/:id/*`). |
+| What to do next | **A live end-to-end run through the new rail** — nothing has been run live since 2026-08-04 and the rail has never had a real run pass through it. Then the tier migration (§0 item 2 — payment is impossible from the UI until it lands) and the Marketing-lens calibration (§0 item 4). `docs/V1_AUDIT.md`: 1–18 and 20–38 fixed, **19/25/39/40 open**. |
+| How to verify | `cd backend && python -m pytest -q && ruff check app tests scripts` · `cd frontend && npm run build && npx eslint . --quiet && npx vitest run`. **1,012 backend tests** and **15 frontend tests** should pass. ⚠️ `npm run build`, never `tsc --noEmit` — they are different checks. |
+| What a live run costs | ~$1.70 for a 3-variant gate run. `python scripts/live_run_marketing.py --dry-run` prices it without spending. A standard run costs **$3.01** to serve. |
 
 **Three things that will save you a day each:**
 
@@ -40,6 +40,12 @@ below is reference you read *when a task points you at it*, not upfront.
 3. **Grep before you claim, query before you assert.** §2. Two confident claims
    about V1 were wrong within twenty minutes of each other on 2026-08-04, and
    both were one command away from being checked.
+4. **Look at the running product.** The 2026-08-05 pass took the suite from 973
+   to 1,012 tests and *none* of them caught any of the five defects that pass
+   found. Three came from screenshotting the deployed page, one from reading an
+   API response against seeded data, one from rasterising a chart. The best of
+   them: the jargon test was green because `\bsimulation\b` does not match
+   **"Simulations"**, and the plural is the form that ships.
 
 **Read on demand, not upfront:**
 
@@ -97,62 +103,72 @@ Six files in `docs/`, nothing else to hunt for.
 > prompt edit large enough to move a stage by more than half. A future session
 > that finds itself re-deriving a profile for accuracy's sake has misread this.
 
-> ### ⚠️ Read this before you touch anything — state as of 2026-08-04, late
+> ### ⚠️ State as of 2026-08-05, early — read before you touch anything
 >
-> **The queue below is largely done, and there are four unapplied migrations
-> whose order can break production.** Four commits sit on `master`, **local and
-> unpushed**, and **no live end-to-end run has happened** — so under §2's own
-> gate this is not push-ready.
+> **Everything is pushed, deployed and verified.** `master` and `v2` are the
+> same commit. Migrations **017–030 are all applied**; there are no unapplied
+> migrations and no local commits. The gate is green on both sides:
+> ruff clean, **1,012 backend tests**, `npm run build` clean, eslint clean,
+> **15 frontend tests**.
 >
-> ```
-> 31910e8  Turn the ICP into a candidate list, and put its search fee on the ledger
-> d9e8a05  Allocate the swarm the customer paid for; stop the suite asserting nothing
-> bff67c3  Derive the audience from every upload, and emit packs the org can reuse
-> 4726fc3  Work down the V1 audit; remove the prediction-market subsystem
-> ```
+> **What is not verified: anything live.** No end-to-end run has happened since
+> the 2026-08-04 sweep, and the staged rail has never had a real run pass
+> through it. Under §2's own gate this is not "done" — it is "static-green and
+> deployed". The $40 the user funded for verification is **entirely unspent**.
 >
-> **Deployment order, and it is not the same for every migration:**
+> **The staged rail is the headline change.** `/app/home` leads with products;
+> `/app/products/:id/{audience,reactions,answers,buyers,messages}` are the five
+> steps. It ships **additively** — every route that existed before still works
+> and still returns the same rows, so backing it out is a navigation change
+> rather than a revert. `/app/dashboard`, `/app/projects`, `/app/audiences`,
+> `/app/prospects`, `/app/marketing`, `/app/simulations` and `/app/guide` are
+> all still there, under "Also here" in the sidebar.
 >
-> | | | Order |
+> **Two migrations applied 2026-08-05:**
+>
+> | | | |
 > |---|---|---|
-> | `025` | asset-count RPCs | Any time. It is a no-op on production and reproduces prod on a fresh DB |
-> | `026` | pack library + upload columns | ⚠️ **APPLY BEFORE DEPLOY** — adds columns the code writes |
-> | `027` | GTM discovery | ⚠️ **APPLY BEFORE DEPLOY** — same reason |
+> | `025` | asset-count RPCs | A no-op on production, as its comment predicted. Verified before and after against `pg_proc`: the two single-argument functions were already there, and the dead two-argument overload is gone. |
+> | `030` | `icp_profiles.confirmed_at` | Additive, nullable, nothing backfilled. Applied **before** the deploy, because the code writes it. |
 >
-> This is the **reverse of 019**, and the difference is the whole rule: 019 added
-> a *constraint the code had to satisfy*, so it went merge → deploy → constrain.
-> 026 and 027 add *columns the code writes*, so a deploy that lands first fails
-> every upload and every discovery. **The rule is not "migrations last" — it is
-> that a writer and the schema it needs must never be apart in the direction that
-> breaks.**
+> **A throwaway org holds seeded acceptance data.** Org
+> `2cf27261-22d9-45b7-ab6d-316d255849b4` ("IA Acceptance 2026-08-05") carries
+> four products covering every rail state — nothing uploaded, audience
+> confirmed, one run with objections, and the full rail. It exists so the
+> degraded states are URLs rather than something you have to produce by hand.
+> **Delete it whenever you like**; nothing outside it refers to it.
 >
-> **Also true now, and it changes what you should read:**
+> **Also true now:**
 >
 > - **Prediction markets (Kalshi/Polymarket) are gone**, by decision. The tables
 >   remain in production; dropping them is a separate, unwritten migration.
-> - **Uploads are one surface.** `/api/documents` and `/api/uploads` both write
->   `documents` through `services/ingestion/pipeline`. `project_assets` has no
->   reader. Two silent extraction defects were fixed here — see `V1_AUDIT.md`.
-> - **The ICP compiles to *several* packs**, promotable to an org-level library.
->   `get_pack` now takes an org and is **fail-closed** without one.
-> - **`services/gtm/` is new and has never run live.** Its cost profiles are
->   estimated, not measured, and `measured=False` is pinned by a test.
-> - The suite is **848 tests**, up from 270. Some of that growth is guards against
->   defects that a green suite had already been hiding.
+> - **The buyer search no longer returns your own competitors.** `services/gtm/`
+>   derives an exclusion set from the profile and `GET /gtm/estimate` shows what
+>   was filtered and why. Still never run live.
+> - **The landing page advertises only numbers `TIER_CAPS` can back.** SOC 2 is
+>   gone from all three public pages — there is no audit and no report.
+> - **Stripe still carries V1 prices** ($499/$1,499) while the page advertises
+>   $99/$299/$999. Hard stop, untouched, and the highest-value thing to unblock.
 
 Phases 0–3 are complete and verified live. Nothing is half-finished. **Start at
 item 1 and work down.**
 
-> **Queue status, 2026-08-04:** item 1 is **done** except audit items 19, 25 and
-> 39. Item 2 (tiers) is **still blocked on Stripe Price IDs** and is now the
-> highest-value thing a session can unblock, because payment remains impossible
-> from the UI. Items 4, 5 and 6 are **untouched and still correct** — item 4, the
-> Marketing lens calibration, is the one that gates selling that lens at all.
+> **Queue status, 2026-08-05:** item 1 is **done** except audit items 19, 25,
+> 39 and the newly-filed **40**. Item 2 (tiers) is **still blocked on Stripe
+> Price IDs** and is now the highest-value thing a session can unblock, because
+> payment remains impossible from the UI *and* the landing page now advertises
+> prices Stripe cannot charge. Items 4, 5 and 6 are **untouched and still
+> correct** — item 4, the Marketing lens calibration, is the one that gates
+> selling that lens at all.
 >
-> **Three things were added that are not on this list**, because the user
-> directed them mid-session: the ingestion unification, the multi-pack + org
-> library, and `services/gtm/` candidate discovery. All three are committed and
-> static-green; **none has run live.**
+> **Audit item 40, filed 2026-08-05 and verified by reading, not observed
+> live:** `report_agent.py:768` declares `_run_react_loop(..., variant="a")` and
+> its only caller passes nothing, so the default stands on every report. The
+> four artifact-backed branches are keyed on simulation and are correct; the
+> three event-backed branches and the agent interviews are arena-filtered. On a
+> matched-swarm run the report therefore presents whole-run statistics
+> illustrated by quotes and examples drawn from one arena, **which reads as
+> corroboration and is not**.
 
 | # | Item | Type | Blocking |
 |---|---|---|---|
@@ -180,15 +196,15 @@ argument for closing the cost model and building.
 | | |
 |---|---|
 | Branch | **Merged.** `master` and `v2` are the same commit and both pushed. New work can go on either; keep them aligned or delete `v2`. |
-| `master` | **Carries all of Phases 0–3 and is deployed.** Merged 2026-08-04 as a clean fast-forward — `master` had zero commits `v2` did not. |
+| `master` | **Carries Phases 0–3 plus the staged rail, and is deployed.** Six commits landed 2026-08-05; both Render services confirmed serving the new code by content, not by asset hash. |
 | Phase 0 | Complete — dead-code purge, route-collision fix, schema drift, cost model, usage ledger |
 | Phase 1 | **Complete and verified end to end** |
 | Phase 2 | Built and **verified end to end live**. Four defects found and fixed — see §1b. |
 | Phase 3 | **Complete and verified live.** Two multi-variant runs: `398bf601` (found the graph defect) and `37530696` (confirmed the fix — 208/208 replies linked, 6/6 virality components). |
-| Verification | ruff clean · **pytest 848 passed** · `tsc --noEmit` clean · `eslint --quiet` clean · `vite build` OK · app boots, **119 routes**, no duplicate registrations. ⚠️ **No live end-to-end run since the 2026-08-04 sweep** — static-green only |
+| Verification | ruff clean · **pytest 1,012 passed, 4 skipped** · **`npm run build` clean** · `eslint --quiet` clean · **vitest 15 passed** · both services live and verified by serving new content. ⚠️ **No live end-to-end run since the 2026-08-04 sweep** — static-green only, and the rail has never had a real run through it |
 | Live runs | **Six.** Phase 1: `05f1d879`, `03de92ef`. Phase 2: `f980fe0d` (Founder lens, 30% adversarial) + `fa28d899` (its re-simulation). Phase 3: `398bf601` (3 variants — found the graph defect) + `37530696` (confirmed the fix, 208/208 replies linked). |
-| Migrations | 017–**024, all applied.** 019 went in at the merge in the only order that works: deploy first, index second — 377 rows renamed, 0 duplicate groups left, 2,730 agents intact. 024 dropped the V1 A/B columns. |
-| Cost model | Re-derived 2026-08-04 from `llm_usage`. **Standard run COGS $2.71 → $2.74**; tier runs 7/22/73 → **7/21/73**; a re-simulation **$2.38 → $3.13** and the full loop $5.97. Free grant unchanged at 1,200. All tables regenerated from `scripts/quote.py`. §1c. |
+| Migrations | 017–**030, all applied.** 025 (asset-count RPCs) and 030 (`icp_profiles.confirmed_at`) went in 2026-08-05, both verified against `information_schema`/`pg_proc` afterwards. 030 preceded the deploy because the code writes the column. 019 went in at the 2026-08-04 merge in the only order that works: deploy first, index second. |
+| Cost model | Re-derived 2026-08-05 after the subject-brief change. **Standard run COGS $3.01**; tier runs **6/19/66**; blended agency mix **$8.65**; a re-simulation **$3.34** and the full loop **$6.44**. **Free grant 1,500**, against a free run costing 1,273 — the 20-credit headroom problem is resolved. All tables regenerated from `scripts/quote.py`. §7. |
 | Working tree | `.~lock.*` and `test_flow.py` are pre-existing untracked. Ignore them. |
 
 Commit list: `git log --oneline master..v2` — deliberately not enumerated here,
@@ -959,13 +975,13 @@ where noted.
     client issues a quote for a child today — but it is a **silent
     under-charge** if one ever does, which is the failure class this model
     exists to prevent.
-18. **The free grant has 20 credits of headroom, deferred 2026-08-04.** A free
-    run costs 1,180 of the 1,200 granted. Pre-existing — the previous revision
-    left 24 — but any stage repricing consumes it and the symptom is a signup
-    that cannot complete its one promised run. 1,400 costs $0.22 a trial.
-    `test_the_free_grant_covers_one_free_run` fails before a customer does, and
-    reports the headroom in its message. **That test is the guard; act when it
-    goes red, not before.**
+18. ~~**The free grant has 20 credits of headroom.**~~ **Closed 2026-08-05.**
+    The grant moved 1,200 → 1,500 in the same pass that repriced the standard
+    run, against a free run that now costs 1,273 — 227 credits of headroom
+    rather than 20. The symptom it was going to produce, a signup that cannot
+    complete its one promised run, no longer has a path.
+    `test_the_free_grant_covers_one_free_run` remains the guard and remains the
+    right way to find out: act when it goes red, not before.
 
 **Open product questions** (DECISIONS §17): which countries fall in which
 regional tier; the blended agency run mix (55/30/13/2) is still an assumption;

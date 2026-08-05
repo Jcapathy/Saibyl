@@ -1705,6 +1705,172 @@ accurate — the defect existed only *between* them, which is the same
 
 ---
 
+## [2026-08-05, overnight] The staged rail, and five things found by looking
+
+### The navigation was a map of the codebase
+
+Eight nouns in the sidebar - Dashboard, Projects, Audiences, Companies,
+Messages, Simulations, Guide, Settings. Audiences, Companies and the whole
+scoreboard had shipped deployed, working, and reachable only by typing a URL,
+which is the same as not having shipped them.
+
+Two axes were being conflated. **Axis A is the step** - Audience, Reactions,
+Answers, Buyers, Messages - inside one product, in the order each one consumes
+the last. **Axis B is the moment** the company is at, which already existed as
+data in `services/engine/founder_stages.py` with a different adversarial default
+per stage, and was a dropdown buried in the run wizard. It is now asked per run,
+defaulting to whatever the last run used, which is what makes the same product a
+reason to come back next quarter rather than a tool used once.
+
+`services/stages/` is a read model over five subsystems. It answers, per
+product: what each step inherited, what it is missing, what a missing input will
+cost the answer, and what the product has to report. **It is on the server
+because both halves of the binding rule are statements about stored data**, and
+a client assembling them from six endpoints would be a second implementation of
+the rule that could disagree with the first.
+
+`GET /api/products` is additive. Every `/api/projects` route still works and
+still returns the same rows; nothing was renamed in the database, because a
+vocabulary decision ("Product", not "Project") is not a schema decision and
+conflating them turns a copy change into a migration.
+
+### Never a grey button, made structural rather than remembered
+
+> A step either runs and states what the answer will be missing, or it is
+> blocked with the button that unblocks it.
+
+`runnable` has three values and there is deliberately no fourth. `ready` and
+`degraded` both run and differ only in whether a wanted input is present;
+collapsing them loses the product's argument, which is that skipping a step is
+allowed and *priced*, on screen, before any credits move. `blocked` is reserved
+for the one case where running is meaningless rather than merely weaker - you
+cannot draft an answer to an objection nobody raised - and it always carries the
+action that unblocks it.
+
+On the client, `Guarded` has **no `disabled` prop at all**. The only spelling
+available to a caller is `blockedBy`, which takes the reason in the founder's
+words and the way out, so the explanation cannot be forgotten. `EmptyState`
+requires an `action`, so a screen that says there is nothing here and offers
+nothing forward does not typecheck.
+
+`_check_invariants` logs at ERROR if any step ends up declaring neither what it
+inherited nor what is missing. A silent step is indistinguishable on screen from
+a step that had nothing to say, and that is the confusion the rail exists to
+remove.
+
+### Migration 030 - agreement and silence stop sharing a column
+
+`icp_profiles.confirmed_at`, nullable, nothing backfilled.
+
+`edited_by_user` answers a different question. DECISIONS §3 settled that
+synthesis proposes and the founder corrects *only what looks wrong*, so the
+intended and most common path is a founder who reads the audience, agrees with
+all of it, and changes nothing. Under `edited_by_user` that founder reads as
+unconfirmed forever - and step 4 would tell them their buyer list was built from
+a guess when they had in fact confirmed it. NULL means nobody was ever asked,
+which is the truth for every profile created before the column existed, and the
+rail states that rather than assuming either answer.
+
+### Five defects, and where each came from
+
+Worth separating by *how they were found*, because none of the five came from
+the test suite.
+
+1. **A re-simulation was read as the latest run** - found by pointing the
+   deployed rail at a seeded product and reading the JSON. A re-simulation
+   exists to answer the parent's objections; its output is step 3's
+   before-and-after, not step 2's reactions. So on a product that had answered
+   its objections, step 2 announced "objections not worked out yet" about a run
+   that was never going to have any of its own, and step 5 lost the message-test
+   result because the scoreboard lives on the parent. **Everything else on the
+   rail was correct, which is why nothing failed** - the reasoning was right and
+   it was reading the wrong row.
+2. **"12 companys found"** and **"Objections - 4 to answers"**, same source: a
+   pluraliser applied to a phrase whose noun is in the middle.
+3. **The sidebar read "Simulations" and "Agents"** on every screen in the
+   product, including the five steps, which are written for someone who has
+   never heard either word. The jargon test was green, and this is the part
+   worth carrying: `\bsimulation\b` does not match **"Simulations"**. The
+   plural is the form that ships. The scan also read only JSX text and `label:`
+   object properties, while this codebase passes copy as a `label=` JSX
+   attribute. Two independent holes, one invisible label, found by
+   screenshotting the page and reading the sidebar.
+4. **The home card offered the wrong next step.** It picked the first *blocked*
+   step, so a product with a confirmed audience and no run was sent to
+   "3. Answers" - which is blocked precisely because step 2 has not run. The
+   card was pointing at the screen that tells you to go back. The next step is
+   the earliest one that has produced nothing, because that is the one that
+   unblocks whatever is behind it.
+5. **The in-app sentiment arc encoded magnitude in nothing at all.** Reported by
+   the founder as "only shows a difference in colour"; that was understated. The
+   fill came from a three-bucket threshold at +/-0.2, so -0.50 and -0.21 were
+   the same red. Rounds were positioned by list index while the backend *drops*
+   rounds with no scored events, so a missing R3 silently closed into a smooth
+   five-round arc - and the file's own docstring claimed the opposite. Rebuilt
+   on `vector_charts.py`'s approach and verified by stripping every colour out.
+
+   Four further rendering bugs came out of rasterising that chart, none of which
+   a passing test would have surfaced: only two of four charts rendered at all,
+   because `ResizeObserver` defers its overflow and later charts sat at width 0;
+   absent rounds lost their axis labels to index parity; value labels vanished
+   at phone width; labels collided with the whisker caps at the extremes.
+
+**The transferable part.** Three of these five were found by *looking at the
+running product*, one by reading an API response against seeded data, and one by
+rasterising a chart. The suite went from 973 to 1012 tests overnight and caught
+none of them. That is not an argument against the tests - it is the reason §4a
+requires seeded states and screenshots as well as assertions.
+
+### The acceptance pass does not belong to whoever built it
+
+Five mechanical tests in `frontend/src/test/`: no jargon in what renders, no
+dead-end empty state, no disabled control, every step declares what it inherited
+or what is missing, and every built route reachable from `/app` in three clicks.
+The last is the one that would have caught the original defect.
+
+Two things about them are load-bearing. **The legacy surfaces that still carry
+the old vocabulary are listed by name with a reason**, and the list is asserted
+against the tree, so the debt is countable and cannot grow - a test scoped to
+only the files that already pass it is a test of the scope. And the route walk
+reads `App.tsx` rather than restating it; the first version was line-based,
+mis-parsed the multi-line `<Route path="/app">` and reported every product route
+as unreachable. It failed in the safe direction, which is the direction a scan
+that gates a build should fail in.
+
+### Buyer search returned the companies you compete with
+
+`services/gtm/query_compiler.py` built three query angles and excluded nothing.
+The incumbent angle was the worst of them: `companies using Datadog OR "New
+Relic" "observability tooling"` describes Datadog's homepage more precisely than
+it describes any Datadog customer.
+
+The exclusion set is derived from the profile rather than kept as a vendor
+blocklist - named rivals, plus each buyer type's `incumbent_tooling`. That
+second one is the principled part: `icp_schema` defines that field as what a
+buyer would have to rip out, so whoever makes it sells into the founder's
+category by the field's own definition.
+
+**Two mechanisms, because one of them is not enforceable.** The negative terms
+in the query text reach a model that then calls web search, so they are a strong
+instruction and not a control; the post-filter on returned candidates is what
+actually holds. The incumbent angle deliberately keeps its own subject -
+`companies using Datadog -Datadog` returns nothing - and relies entirely on the
+filter. An ungrounded competitor is never excluded and never named, because a
+name the model produced from memory would otherwise be shown to the founder as
+their rival.
+
+### Correction to two figures recorded above
+
+- The 2026-08-04 entry records "a run varies **65x** in cost at the tier caps".
+  Re-derived from `scripts/quote.py` under the current cost model it is **51x**
+  (free cap $1.27 -> agency cap $65.11), or 331x including enterprise. The
+  argument the number was supporting - that an agent-round allowance cannot
+  ration this product - is unaffected.
+- The free grant's headroom, known-issue 11 below, is **resolved**: the grant is
+  1,500 credits against a free run that now costs 1,273.
+
+---
+
 ## Known issues carried into Phase 2
 
 Recorded here so they are not rediscovered. Items 1, 2 and 7 from the Phase 1
@@ -1762,8 +1928,9 @@ list are resolved above.
     now by refusing a quote on any run with a parent (409); the real fix is
     carrying both fields on `run_quotes` and into the signature, which is a
     migration. Not urgent: no client issues a quote for a child today.
-11. **The free grant has 20 credits of headroom.** A free run costs 1,180 of the
-    1,200 granted. Not caused by the 2026-08-04 pass — the previous revision left
-    24 — but any stage repricing at all consumes it, and the failure lands at
-    signup. 1,400 costs $0.22 a trial and ends it. Needs a decision, because the
-    grant is a published commercial number.
+11. ~~**The free grant has 20 credits of headroom.**~~ **Resolved 2026-08-05.**
+    The grant moved 1,200 → 1,500 in the same pass that repriced the standard
+    run, against a free run that now costs 1,273. That is 227 credits of
+    headroom rather than 20, and the failure it was going to produce — a free
+    signup that cannot afford its own free run — no longer has a path. Reopen if
+    a stage repricing takes the free run above about 1,450.
