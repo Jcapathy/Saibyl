@@ -1,38 +1,79 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '@/lib/api';
+import { getErrorMessage } from '@/lib/errors';
 import type { Project } from '@/types';
+
+/**
+ * Every product in the account.
+ *
+ * ── THREE SWALLOWED FAILURES, AND WHAT EACH ONE TOLD THE FOUNDER ───────────
+ * All three were `catch {}` with a comment in it. None of them logged, none
+ * rendered, and the page carried on as though the request had succeeded.
+ *
+ * **The list.** A failed `GET /projects` left `projects` at `[]` and `loading`
+ * at false, so the page rendered "No products yet" over an account full of
+ * them. That is not a missing error message — it is the page stating, as a
+ * fact, that the founder's work is gone.
+ *
+ * **Create.** The modal closed, the fields cleared and the list refetched
+ * without the product in it. Indistinguishable from a product that was created
+ * and then failed to appear.
+ *
+ * **Delete.** The card stayed. A founder who pressed delete and watched nothing
+ * happen presses it again.
+ *
+ * The rule this file now follows is the one `ProjectDetailPage` already uses:
+ * a count or an empty state is a claim about the account, and a request that
+ * failed supports neither. `loaded` is set only on success.
+ */
 
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  // Set only on success. "No products yet" is rendered from this and not from
+  // `projects.length`, which is also 0 when the request failed.
+  const [loaded, setLoaded] = useState(false);
+  const [listError, setListError] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState('');
 
-  const fetchProjects = () => {
+  const fetchProjects = useCallback(() => {
     api.get('/projects')
-      .then((res) => setProjects(res.data.items || res.data))
-      .catch(() => {})
+      .then((res) => {
+        setProjects(res.data.items || res.data);
+        setLoaded(true);
+        setListError('');
+      })
+      .catch((err) =>
+        setListError(getErrorMessage(err, 'We could not load your products.')),
+      )
       .finally(() => setLoading(false));
-  };
+  }, []);
 
-  useEffect(() => { fetchProjects(); }, []);
+  useEffect(() => { fetchProjects(); }, [fetchProjects]);
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
     setCreating(true);
+    setCreateError('');
     try {
       await api.post('/projects', { name, description });
       setShowModal(false);
       setName('');
       setDescription('');
       fetchProjects();
-    } catch {
-      // handle error
+    } catch (err) {
+      // The modal stays open with what they typed still in it. Closing it and
+      // clearing the fields — which is what the success path does — was how a
+      // failed create read as a successful one.
+      setCreateError(getErrorMessage(err, 'We could not create that product.'));
     } finally {
       setCreating(false);
     }
@@ -40,11 +81,12 @@ export default function ProjectsPage() {
 
   const handleDelete = async (id: string) => {
     setDeletingId(id);
+    setDeleteError('');
     try {
       await api.delete(`/projects/${id}`);
       setProjects((prev) => prev.filter((p) => p.id !== id));
-    } catch {
-      // handle error
+    } catch (err) {
+      setDeleteError(getErrorMessage(err, 'We could not delete that product.'));
     } finally {
       setDeletingId(null);
     }
@@ -62,11 +104,42 @@ export default function ProjectsPage() {
         </button>
       </div>
 
+      {deleteError && (
+        <div
+          role="alert"
+          className="mb-4 rounded-xl border border-red-500/25 bg-red-500/[0.07] px-4 py-3 text-sm text-red-300"
+        >
+          {deleteError}
+        </div>
+      )}
+
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[...Array(3)].map((_, i) => (
             <div key={i} className="h-36 rounded-2xl bg-saibyl-deep animate-pulse" />
           ))}
+        </div>
+      ) : !loaded ? (
+        /* The list did not come back. Anything else here — an empty state, a
+           count, a "create your first product" — is a claim about the account
+           that this page cannot support. */
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <p className="text-saibyl-platinum font-medium mb-1">
+            We could not load your products
+          </p>
+          <p className="text-saibyl-muted text-sm mb-6 max-w-sm">
+            {listError} Nothing has been changed or lost — this is a failure to
+            read, not to keep.
+          </p>
+          <button
+            onClick={() => {
+              setLoading(true);
+              fetchProjects();
+            }}
+            className="bg-saibyl-gold text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-[#B08D1F] transition"
+          >
+            Try again
+          </button>
         </div>
       ) : projects.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -108,29 +181,30 @@ export default function ProjectsPage() {
                   <p className="text-sm text-saibyl-muted line-clamp-2">{p.description}</p>
                 )}
                 {/*
-                  There was an "N documents" line here, rendered from
-                  `asset_count`, and it read "0 documents" on products that
-                  demonstrably had files in them.
+                  `document_count`, counted from `documents` by the server on
+                  every request. **Not `asset_count`**, which is what this line
+                  used to render and which read "0 documents" on products that
+                  demonstrably had files in them: migration 010 added that
+                  column with `DEFAULT 0` and never backfilled it, migration 025
+                  records that the RPC the upload route calls existed in
+                  production only because someone added it by hand, the media
+                  ingestion path built the same request without `.execute()`, and
+                  the upload route logs and carries on when the RPC fails. A zero
+                  there meant "this counter never incremented", which is a
+                  different claim from "this product has no files".
 
-                  `projects.asset_count` is not a count of documents. It is a
-                  denormalised counter incremented by an RPC from the upload
-                  route, and every path into it leaks: migration 010 added the
-                  column with `DEFAULT 0` and never backfilled it from
-                  `documents`, migration 025 records that the single-argument
-                  RPC the API calls existed only because someone added it to
-                  production by hand, the media ingestion path built the same
-                  request without `.execute()` so those uploads never counted at
-                  all, and `api/documents.py` logs and carries on when the RPC
-                  fails rather than failing the upload. A zero here means "this
-                  counter was never incremented", which is not the same claim as
-                  "this product has no files".
-
-                  The real number is one request away — `GET /documents?project_id=`
-                  — but that is a request per card on a grid, so nothing is
-                  rendered instead. Open the product and the file list is the
-                  answer. Do not put this line back without a figure that was
-                  actually counted.
+                  Rendered only when the field is present, so a client talking to
+                  an older server shows nothing rather than a zero it inferred
+                  from an absence. That is the same distinction the counter got
+                  wrong, one layer out.
                 */}
+                {typeof p.document_count === 'number' && (
+                  <p className="text-xs text-saibyl-muted/70 mt-2">
+                    {p.document_count === 0
+                      ? 'No files yet'
+                      : `${p.document_count} file${p.document_count === 1 ? '' : 's'}`}
+                  </p>
+                )}
               </Link>
               <button
                 onClick={(e) => {
@@ -202,6 +276,14 @@ export default function ProjectsPage() {
                     className="w-full bg-white/[0.04] border border-white/[0.07] rounded-xl px-4 py-2.5 text-saibyl-platinum placeholder-saibyl-muted/40 focus:outline-none focus:ring-2 focus:ring-saibyl-gold/50 transition text-sm resize-none"
                   />
                 </div>
+                {createError && (
+                  <p
+                    role="alert"
+                    className="rounded-xl border border-red-500/25 bg-red-500/[0.07] px-4 py-3 text-sm text-red-300"
+                  >
+                    {createError}
+                  </p>
+                )}
                 <div className="flex justify-end gap-3 pt-1">
                   <button
                     type="button"

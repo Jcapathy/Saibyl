@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { ArrowRight, Building2, FileText, MessageSquare, Users } from 'lucide-react';
+import { AxiosError } from 'axios';
+
 import api, { unwrapList } from '@/lib/api';
 import { formatPlatforms } from '@/lib/constants';
 import StatusBadge from '@/components/StatusBadge';
@@ -86,6 +88,13 @@ export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(null);
+  /* Why the product is not on screen, when it is not.
+     
+     `catch(() => {})` left this page rendering the heading "Product" with an
+     empty description, forever, on a 404 — which is what a founder sees after
+     following a link to something they deleted, or after mistyping a URL. It
+     looked like a product that was still loading, and it never stopped. */
+  const [projectError, setProjectError] = useState('');
   const [tab, setTab] = useState<Tab>('documents');
   const [documents, setDocuments] = useState<ProjectDocument[]>([]);
   const [simulations, setSimulations] = useState<Simulation[]>([]);
@@ -111,7 +120,19 @@ export default function ProjectDetailPage() {
   // Load project + documents + runs
   useEffect(() => {
     if (!id) return;
-    api.get(`/projects/${id}`).then((r) => setProject(r.data)).catch(() => {});
+    api
+      .get(`/projects/${id}`)
+      .then((r) => {
+        setProject(r.data);
+        setProjectError('');
+      })
+      .catch((err) =>
+        setProjectError(
+          err instanceof AxiosError && err.response?.status === 404
+            ? 'This product does not exist, or it is not in your account.'
+            : getErrorMessage(err, 'We could not load this product.'),
+        ),
+      );
     loadDocuments();
     api.get('/simulations', { params: { project_id: id, limit: 50 } }).then((r) => {
       setSimulations(unwrapList<Simulation>(r.data).items);
@@ -289,8 +310,28 @@ export default function ProjectDetailPage() {
     <div className="p-8 bg-saibyl-void min-h-full">
       <div className="max-w-5xl mx-auto">
         {/* Header */}
-        <h1 className="text-h1 text-saibyl-white mb-1">{project?.name || 'Product'}</h1>
+        <h1 className="text-h1 text-saibyl-white mb-1">
+          {/* Not "Product" as a stand-in. A placeholder name is a claim that
+              there is a product here whose name has not arrived yet, and on a
+              404 there is no product at all. */}
+          {project?.name || (projectError ? 'Product not found' : 'Loading…')}
+        </h1>
         <p className="text-small mb-6">{project?.description}</p>
+
+        {projectError && (
+          <div
+            role="alert"
+            className="mb-6 rounded-xl border border-red-500/25 bg-red-500/[0.07] p-4"
+          >
+            <p className="text-sm text-red-300">{projectError}</p>
+            <Link
+              to="/app/projects"
+              className="inline-flex items-center gap-1.5 mt-3 px-3.5 py-1.5 rounded-lg bg-saibyl-gold text-saibyl-void text-[12px] font-semibold hover:bg-saibyl-gold-hover transition-colors"
+            >
+              Back to your products
+            </Link>
+          </div>
+        )}
 
         {/*
           What you can do with this product.

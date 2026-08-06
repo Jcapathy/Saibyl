@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import UTC, datetime
 
 import structlog
@@ -7,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.core.auth import get_current_org
-from app.core.database import get_supabase_admin
+from app.core.database import fetch_all, get_supabase_admin
 
 log = structlog.get_logger()
 
@@ -34,7 +35,23 @@ class UpdateProjectBody(BaseModel):
 
 @router.get("")
 async def list_projects(auth: dict = Depends(get_current_org)):
-    """List all projects for the current organization."""
+    """List all projects for the current organization, each with a real file count.
+
+    `document_count` is counted from `documents` on every request. It replaces
+    `projects.asset_count`, which the card used to render and which was never a
+    count of anything: migration 010 added the column with `DEFAULT 0` and never
+    backfilled it, migration 025 records that the single-argument RPC the upload
+    route calls existed in production only because somebody added it by hand,
+    the media ingestion path built the same request without `.execute()` so
+    those uploads never counted at all, and the upload route logs and carries on
+    when the RPC fails. A founder with files in a product read "0 documents".
+
+    Counted rather than backfilled because a backfill fixes the rows that exist
+    today and leaves every leak above in place. `asset_count` is still returned
+    by `select("*")` — dropping the column is a migration that must land after
+    this is deployed and serving, per §2a's ordering rule — but nothing reads it
+    from here on.
+    """
     log.info("list_projects", org_id=auth["org_id"])
     admin = get_supabase_admin()
     result = (
@@ -45,7 +62,27 @@ async def list_projects(auth: dict = Depends(get_current_org)):
         .order("created_at", desc=True)
         .execute()
     )
-    return result.data
+    projects = result.data or []
+    if not projects:
+        return projects
+
+    # One query for the whole page rather than one per card. `fetch_all` because
+    # PostgREST caps a response at 1,000 rows by default and an org past that
+    # would silently start under-counting the products at the end of the list —
+    # which is the same defect as the counter, arrived at a different way.
+    documents = fetch_all(
+        admin.table("documents")
+        .select("id, project_id")
+        .eq("organization_id", auth["org_id"])
+        .in_("project_id", [p["id"] for p in projects])
+    )
+    counts: dict[str, int] = defaultdict(int)
+    for row in documents:
+        counts[str(row["project_id"])] += 1
+
+    for project in projects:
+        project["document_count"] = counts[str(project["id"])]
+    return projects
 
 
 @router.post("")

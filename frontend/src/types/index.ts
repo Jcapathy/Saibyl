@@ -28,7 +28,14 @@ export interface Project {
   name: string;
   description: string | null;
   status: string;
+  /**
+   * ⚠ Never a count of documents. Kept only because `GET /projects` returns
+   * `select("*")`; nothing should read it and the column is scheduled to be
+   * dropped once this release is serving. Use `document_count`.
+   */
   asset_count: number;
+  /** Files in this product, counted from `documents` on every request. */
+  document_count?: number;
   created_at: string;
 }
 

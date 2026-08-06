@@ -2225,6 +2225,79 @@ the second copy of a rule the server already had.
 
 ---
 
+## [2026-08-06] Four silent failures on the products screens, and a counter that was never a count
+
+Handoff §5 items 6 and 7. All five were reported by readers and none had been
+fixed.
+
+### Three `catch {}` blocks, each with a comment where the handling should be
+
+| Where | What the founder saw |
+|---|---|
+| `ProjectsPage` list | A failed `GET /projects` left `projects` at `[]` and `loading` at false, so the page rendered **"No products yet"** over an account full of them |
+| `ProjectsPage` create | The modal closed, the fields cleared and the list refetched without the new product — identical to a create that worked and failed to appear |
+| `ProjectsPage` delete | The card stayed. A founder who presses delete and sees nothing presses it again |
+
+The first is the worst of the three and is not a missing error message: it is
+the page stating, as a fact, that the founder's work is gone. `loaded` is now
+set only on success and the empty state renders from it rather than from
+`projects.length`, which is also zero when the request failed — the same
+distinction `ProjectDetailPage` already draws for its counts.
+
+### A 404 that never stopped loading
+
+`ProjectDetailPage` did `api.get('/projects/{id}').catch(() => {})`, so a
+deleted product or a mistyped URL rendered the heading **"Product"** with an
+empty description, indefinitely. It read as a page that was still loading. It
+now separates the two cases — "does not exist, or is not in your account" for a
+404, the server's message otherwise — and offers the way back.
+
+The placeholder heading was its own small lie: "Product" claims there is a
+product here whose name has not arrived yet.
+
+### `projects.asset_count` was wrong on a third of production
+
+Measured rather than assumed:
+
+```
+35 products, 12 with a wrong asset_count
+counter total 19  ·  actual documents 33      under-counting by 42%
+```
+
+Every one of the twelve reads **0** against a product that has files. Nothing
+over-counts, which fits the leaks exactly: migration 010 added the column with
+`DEFAULT 0` and never backfilled, migration 025 records that the
+single-argument RPC the upload route calls existed in production only because
+somebody added it by hand, the media ingestion path built the same request
+**without `.execute()`**, and the upload route logs and carries on when the RPC
+fails.
+
+Fixed by counting rather than by backfilling. A backfill corrects the rows that
+exist today and leaves all four leaks in place, so the next upload starts the
+drift again. `GET /projects` now returns `document_count`, counted from
+`documents` in one query for the whole page — `fetch_all`, because PostgREST
+caps a response at 1,000 rows and an org past that would silently under-count
+the products at the end of the list, which is the same defect arrived at a
+different way.
+
+The card renders the number again, and only when the field is present: a client
+talking to an older server shows nothing rather than inferring a zero from an
+absence. That is precisely the distinction the counter got wrong.
+
+`asset_count` still ships in the response because `list_projects` selects `*`,
+and the column is flagged in `types/index.ts` as never a count. **Dropping it is
+a migration that must land after this release is serving**, per §2a's ordering
+rule — the two RPCs still write to it and would fail against a dropped column.
+
+### What is not verified here
+
+`document_count` is checked by reading the deployed `/api/projects` before the
+change (`asset_count=1`, no `document_count`) and by the SQL above. It has not
+been read back from a deploy carrying the change, because there has not been
+one yet.
+
+---
+
 ## Known issues carried into Phase 2
 
 Recorded here so they are not rediscovered. Items 1, 2 and 7 from the Phase 1
