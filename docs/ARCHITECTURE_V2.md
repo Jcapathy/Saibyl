@@ -2298,6 +2298,84 @@ one yet.
 
 ---
 
+## [2026-08-06] Deployed, and what the live checks found
+
+`e241aa5` is serving on both Render services. Each check below was chosen so it
+could only pass on the new build.
+
+### The drafter, live — the one thing a test could not speak for
+
+`draft_assets` against the Tallyhook run. **$0.165 of measured COGS**, 165
+credits — an order of magnitude under the "roughly a dollar" this was budgeted
+at. Twelve assets across six objections.
+
+Against the three failure modes it was written for:
+
+**Every asset leads with a claim.** All twelve open on what the product does —
+"Tallyhook sends nothing until you approve it", "Tallyhook costs $12/month,
+flat", "Tallyhook sends from your email address, in your words". Not one opens
+on a limitation. The previous draft's "Here is what we do not yet have" shape is
+absent.
+
+**Concessions capped and never alone.** 2 of 12 are `disclosure`, against 3 of
+12 before — and every objection got exactly two assets with at most one
+concession, so the case where a founder's entire answer was a page agreeing with
+the objection cannot occur. `_cap_concessions` never had to fire; the prompt did
+the work, which is the right division of labour between the two.
+
+**The disclosures now argue first.** "What Tallyhook can and cannot control
+about your client's reaction" opens *"Tallyhook gives you control over every
+word that reaches your client"* and only then states the limit. That is the
+rewritten rule — claim first, limit qualifying it — landing verbatim.
+
+**The migration guide runs the right way.** "How to start using Tallyhook when
+you have never followed up before", whose body says "not people migrating from
+one". `_leads_away` never fired because the prompt no longer invites the mistake.
+
+**Titles are publishable.** No "Disclosure:" prefix, no "FAQ:", no "(Draft)".
+"You are not being rude — you are being unpaid" is copy a founder could ship.
+
+One number appears — "$12 a month, flat" — and it was checked rather than
+assumed: the subject brief reads *"What it costs: $12 a month, flat. Not a
+percentage of what you invoice, and not per client."* The founder's own price,
+from their own material, restated faithfully.
+
+### The rest
+
+| Check | Result |
+|---|---|
+| `document_count` on `GET /projects` | Three products that read `asset_count=0` now report 2, 1 and 1. The two genuinely empty ones still report 0 |
+| Stale notice, should fire | `C - one run, objections` and `D - the full rail` — both have no brief row. "These objections did not come from your material … because it ran before we started reading uploads", with "Start a run" |
+| Stale notice, should **not** fire | Tallyhook and Parry, both `status=ready`. Neither flagged |
+| `produced` suffix | "4 objections found · 2 Aug · **from your description only**" |
+| Landing page | 9,896px, no horizontal overflow, all three screenshots decoded, `#demo` and `#stakes` present, **zero console errors**, literal `&nearr;` gone from the bundle |
+| `data-stage-declares` | All three markers survive minification |
+
+### A detector that would have lied
+
+The first frontend poll waited for `/demo/rail.png` to return 200 — and it
+returned 200 in twenty seconds, because `public/demo/` shipped in `9127328` and
+was **already live**. It would have reported a deploy that had not happened. The
+replacement waits for a string that exists only in `46a4ff4`
+("We invented a product") and confirms the literal `&nearr;` is *gone*, which no
+earlier build satisfies. Same class as the rest of this pass: a check that
+passes for the wrong reason is worse than no check.
+
+### The gap this leaves
+
+**Existing artifacts keep the old sentences.** `adversarial.disclosure`, the
+verdict and the caveats are composed at analysis time and frozen into
+`simulation_analysis.artifact`. Both existing runs still read
+"incumbent-aligned", "this swarm size" and "the cohort breakdown", so exporting
+either one today produces a PDF whose own copy is fixed and whose composed
+sentences are not — including the Tallyhook run the landing page is built on.
+
+`build_simulation_analysis` makes no LLM calls, so a rebuild is free — but
+nothing exposes it. `run_analysis` is reachable only from the simulation worker.
+Every **new** run is correct. Written up in HANDOFF_POLISH §5.
+
+---
+
 ## Known issues carried into Phase 2
 
 Recorded here so they are not rediscovered. Items 1, 2 and 7 from the Phase 1

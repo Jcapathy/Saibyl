@@ -1,8 +1,8 @@
 # Handoff — the polish pass, 2026-08-05/06
 
-> **Updated 2026-08-06 after five more commits.** Items 1, 2, 3a, 3b, 3c, 5 and
-> backlog 6–7 are now code-complete. Nothing since `9127328` is deployed, and
-> the answer drafter has not met a live run. Read §0 and §5.
+> **Updated 2026-08-06. Deployed and verified live.** Items 1, 2, 3a, 3b, 3c, 5
+> and backlog 6–7 are done and serving. The answer drafter has met a live run
+> and passed. One gap remains and it is named in §5. Read §0 and §5.
 
 **Saido Labs LLC** · Written mid-task for a cold context window.
 
@@ -14,19 +14,19 @@ that there was "an insane amount of polish" still needed.
 
 ## 0. State right now
 
-Everything is **committed**. `master` carries five more commits than the version
-described below; **nothing since `9127328` has been deployed or run live.**
+**Deployed.** `master` and `v2` are both at `e241aa5`, and both Render services
+are serving it.
 
 ```
+e241aa5  Bring the polish handoff up to what is actually done
 2fb8823  Stop telling a founder their products are gone when a request fails
 fe1f463  Say when the objections on screen predate the upload above them
 46a4ff4  Show the product on the page that sells it
 bb79c7d  Make the drafted answers argue for the founder, not against them
 0a7b5e0  Say it in the same words on the page a founder forwards
-9127328  Write the polish pass down before the context goes
 ```
 
-Gate, green at `2fb8823`:
+Gate, green at `e241aa5`:
 
 ```
 backend   ruff clean · pytest 1066 passed, 4 skipped
@@ -34,19 +34,20 @@ frontend  npm run build clean · eslint clean · vitest 16 passed
           jargon scan: ZERO hits, frontend AND backend
 ```
 
-Migrations **017–031 all applied**. No new migration was written; one is
-**owed** — see §5.
+Verified **against the running services**, each check chosen so it could only
+pass on the new build:
 
-**Spend today: ~$2.10** unchanged. Nothing in these five commits spent an LLM
-call: everything was verified by reading production with SQL, by rendering the
-frontend with Playwright, and by the two suites.
+| | |
+|---|---|
+| Answer drafter | 12 assets, **12/12 open on a claim**, 2 concessions and never alone, migration guide runs onto the product, titles publishable |
+| `document_count` | Three products that read `0` now report 2, 1, 1; the two empty ones still 0 |
+| Stale notice | Fires on both runs with no brief, silent on both with `status=ready` |
+| Landing page | 9,896px, no overflow, three screenshots decoded, **zero console errors** |
 
-> ### ⚠ Nothing here has met a live run.
->
-> The standing gate requires one before a push and it has not happened. Four of
-> the five commits are deterministic and are checked as such. **The answer
-> drafter is not** — it is one main-model call and the change is mostly prompt,
-> so a passing test is evidence about the code and not about the writing.
+Migrations **017–031 all applied**. One is **owed** — §5 item 1.
+
+**Spend: ~$2.27** of the $40 funded. The drafter run cost **$0.165**; everything
+else was SQL, Playwright and the two suites.
 
 ---
 
@@ -57,9 +58,9 @@ frontend with Playwright, and by the two suites.
 | 1 | Delete the scaffolding | **Done** — `2c917d2`, −1,292 lines |
 | 2 | Finish the vocabulary migration | **Done** on screens `44b6f18`; **done on the exported report** `0a7b5e0` |
 | 3a | Buyers: stop returning competitors | **Done** — category matcher at the filter |
-| 3b | Answers: the drafted assets are terrible | **Code done, unverified live** — `bb79c7d`, §2 |
+| 3b | Answers: the drafted assets are terrible | **Done and verified live** — `bb79c7d`, §2 |
 | 3c | Step 2 shows stale objections | **Done** — `fe1f463`. Not the cause anyone guessed; §2 |
-| 4 | Re-run the cold read | **NOT STARTED** — do last, and after a deploy |
+| 4 | Re-run the cold read | **NOT STARTED** — the deploy it was waiting for has happened |
 | 5 | A real landing page | **Done** — `46a4ff4`, §3 |
 
 Plus, from §5's backlog: items **6** (swallowed exceptions) and **7**
@@ -102,9 +103,20 @@ a model reaches for, and three checks back the prompt up: `_leads_away`
 `_cap_concessions` (at most one per objection, never the only one, ERROR when
 every asset concedes), and `_unpublishable_title`.
 
-> **Still owed: a live draft.** The only thing that shows whether the rewrite
-> moved the writing is running it. Cheapest honest check is `draft_assets` on
-> the existing ParryAI run — one main-model call, no re-simulation.
+> **Ran live, and it holds.** `draft_assets` on the Tallyhook run, **$0.165**,
+> 12 assets over 6 objections. All twelve open on a claim about the product
+> ("Tallyhook sends nothing until you approve it"; "Tallyhook costs $12/month,
+> flat"). Two are disclosures — down from three — and every objection has two
+> assets with at most one concession, so the case where the whole answer was a
+> page agreeing with the objection cannot occur. The disclosures argue first and
+> concede second, which is the rewritten rule verbatim. The migration guide runs
+> **onto** the product and says so. No "(Draft)", no "Disclosure:" prefix.
+>
+> The one number — "$12 a month, flat" — was checked against the subject brief
+> rather than assumed: it is the founder's own price from their own material.
+>
+> `_leads_away` and `_cap_concessions` never fired. The prompt did the work,
+> which is the right division: the checks are the floor, not the mechanism.
 
 ### 3c — Step 2's stale objections (`fe1f463`)
 
@@ -186,29 +198,32 @@ eslint and vitest were green the whole time:
 
 ## 5. Open, and roughly in value order
 
-**1–4 and 6–7 from the previous list are done.** What is left:
+Everything from the previous list is done, deployed and verified. What is left:
 
-1. **Deploy, then verify what only a deploy can verify.** Five commits are
-   sitting on `master` unpushed to a running service. In order:
-   - `document_count` on `GET /projects` — free, one `curl`.
-   - Step 2's stale notice on the ParryAI product — free, it should now say the
-     run argued about the description.
-   - **A live `draft_assets` on the ParryAI run.** One main-model call, roughly
-     a dollar. This is the only thing that shows whether 3b's prompt rewrite
-     moved the writing, and this session's own history says a passing test is
-     not evidence of that.
-   - A full run + report export, to read the PDF's new vocabulary end to end.
-
-2. **A migration is owed.** `projects.asset_count` is now written by nobody's
-   reader and read by nothing, but `api/documents.py` still calls
+1. **A migration is owed, and its ordering matters.** `projects.asset_count` is
+   read by nothing now, but `api/documents.py` still calls
    `increment_asset_count` / `decrement_asset_count` on every upload and delete.
-   Dropping the column **must** land after this release is serving, or those two
-   RPCs start failing against a column that is gone — §2a's ordering rule, the
-   same shape as migration 019. Drop the column and both RPCs together.
+   The release that stopped reading it **is now serving**, so the drop is safe to
+   land: drop the column and both RPCs together. Leaving the column costs
+   nothing today; leaving it *and* forgetting why is how the next reader trusts
+   a number that has been wrong on a third of production since March.
 
-3. **Re-run the cold read.** The first one never reached the build — it landed
-   on the old dashboard and gave up. Fresh agent, no design docs, real browser.
-   Worth much more now that there is a landing page and a rail to walk.
+2. **Existing artifacts still carry the old report vocabulary.** This is the one
+   gap the vocabulary fix does not reach. `adversarial.disclosure`, the
+   scoreboard verdict and the quality caveats are composed at analysis time and
+   frozen into `simulation_analysis.artifact`, so both existing runs still read
+   "incumbent-aligned", "this swarm size" and "the cohort breakdown". Exporting
+   either today gives a PDF whose own copy is fixed and whose composed sentences
+   are not — **including the Tallyhook run the landing page is built on.**
+
+   Every *new* run is correct. `build_simulation_analysis` makes no LLM calls, so
+   a rebuild is free, but nothing exposes it: `run_analysis` is reachable only
+   from the simulation worker. Either add a rebuild route, or re-run Tallyhook
+   before anyone exports it.
+
+3. **Re-run the cold read.** Fresh agent, no design docs, real browser, against
+   the deployed site. Worth much more now that there is a landing page with
+   product imagery and a rail that explains itself.
 
 4. **Two behaviour bugs for the founder to decide**, both in run setup:
    - picking a stage silently discards an adversarial share they set by hand;
@@ -221,9 +236,13 @@ eslint and vitest were green the whole time:
 
 6. **`REPORT_SYSTEM_PROMPT` still says "McKinsey or Bloomberg Intelligence
    analyst".** The political-consultancy framing and its Spencer Pratt examples
-   are gone, and the vocabulary is a founder's, but the register above it was
-   left alone as out of scope. Worth a decision: the report's reader is a
-   founder and the people they forward it to.
+   are gone and the vocabulary is a founder's, but the register above it was left
+   alone as out of scope. Worth a decision: the reader is a founder and the
+   people they forward it to.
+
+7. **A test account is carrying granted credits.** `grant_credits` put 200 on the
+   Tallyhook demo org to pay for the drafter verification; 35 are left. Harmless,
+   but it is not a real balance and nothing else in the ledger says so.
 
 ### Hard stop, unchanged
 
@@ -274,5 +293,14 @@ wrote", the best sentence in the draft. `produced_by` exists because the stale
 notice would otherwise have named one run above another run's objections — a
 two-sources-of-truth bug introduced while fixing a two-sources-of-truth bug.
 
+One more this pass, and it is the sharpest. The first check that the frontend
+had deployed waited for `/demo/rail.png` to return 200. It returned 200 in
+twenty seconds — because those images shipped in the *previous* commit and were
+already live. The check would have reported a deploy that had not happened, and
+every verification after it would have been run against the old build and
+believed. **A check that can pass for the wrong reason is worse than no check**,
+because it is the one nobody re-runs.
+
 **Look at the running product. Then look at what it exports. Then query the
-database before you explain either.**
+database before you explain either — and make sure your check could only have
+passed for the reason you think it did.**
