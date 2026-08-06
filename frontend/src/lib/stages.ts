@@ -119,6 +119,21 @@ export interface MissingInput {
   action: StageAction | null;
 }
 
+/**
+ * A stage's stored answer, and why it does not describe the inputs shown above it.
+ *
+ * The same three fields as `MissingInput` and a separate type on purpose,
+ * because it makes the opposite statement. `MissingInput` says *the next run
+ * will be worse without this*; this says *what you are already looking at was
+ * produced without it*. Mirrors `StaleResult` in
+ * `backend/app/services/stages/product_state.py`.
+ */
+export interface StaleResult {
+  headline: string;
+  consequence: string;
+  action: StageAction | null;
+}
+
 export interface AttentionLine {
   kind: string;
   text: string;
@@ -141,8 +156,23 @@ export interface StageState {
   runnable: 'ready' | 'degraded' | 'blocked';
   /** What it has produced, in words. Null means nothing yet — not "nothing". */
   produced: string | null;
+  /**
+   * The run `produced` and `stale` describe.
+   *
+   * Sent so a page does not choose one for itself. `GET /simulations` orders on
+   * `created_at` and the rail sorts on `completed_at or created_at`, so a run
+   * that started earlier and finished later is the latest to one of them and
+   * not the other. Null when nothing has finished.
+   */
+  produced_by: string | null;
   inherited: InheritedLine[];
   missing: MissingInput[];
+  /**
+   * Set when `produced` describes a run that did not receive what `inherited`
+   * says this stage has. Null on every stage that cannot go stale, and on every
+   * run that read what it was supposed to.
+   */
+  stale: StaleResult | null;
 }
 
 export interface ProductState {

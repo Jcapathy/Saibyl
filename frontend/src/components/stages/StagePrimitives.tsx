@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { ArrowRight, CircleAlert, CircleCheck, Info } from 'lucide-react';
 
-import type { InheritedLine, MissingInput, StageAction } from '@/lib/stages';
+import type { InheritedLine, MissingInput, StageAction, StaleResult } from '@/lib/stages';
 
 /**
  * The pieces every stage is built from.
@@ -102,6 +102,46 @@ export function Missing({
           className="inline-flex items-center gap-1.5 mt-3 px-3.5 py-1.5 rounded-lg bg-saibyl-gold text-saibyl-void text-[12px] font-semibold hover:bg-saibyl-gold-hover transition-colors"
         >
           {input.action.label}
+          <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The answer already on this page was produced without something it is shown
+ * as having.
+ *
+ * Deliberately not a `Missing`, though the fields are the same shape. `Missing`
+ * warns about the *next* run; this describes the one whose output is on screen
+ * now. Rendering them alike would let a founder read a finished, wrong answer
+ * as a caution about a future one — which is the reading that produced this
+ * component. Step 2 showed "Your material — 1 file" directly above objections
+ * from a run that never saw the file, and both lines were true.
+ *
+ * Red rather than gold: gold on this rail means "you can still fix this before
+ * it costs you", and this one already cost.
+ */
+export function Stale({ result }: { result: StaleResult }) {
+  return (
+    <div
+      data-stage-declares="stale"
+      className="rounded-xl border border-saibyl-negative/30 bg-saibyl-negative/[0.07] p-4"
+    >
+      <p className="flex items-start gap-2 text-[13px] font-medium text-saibyl-negative">
+        <CircleAlert className="w-4 h-4 shrink-0 mt-px" />
+        {result.headline}
+      </p>
+      <p className="text-[12px] text-saibyl-muted mt-1.5 leading-relaxed">
+        {result.consequence}
+      </p>
+      {result.action && (
+        <Link
+          to={result.action.href}
+          className="inline-flex items-center gap-1.5 mt-3 px-3.5 py-1.5 rounded-lg bg-saibyl-gold text-saibyl-void text-[12px] font-semibold hover:bg-saibyl-gold-hover transition-colors"
+        >
+          {result.action.label}
           <ArrowRight className="w-3.5 h-3.5" />
         </Link>
       )}

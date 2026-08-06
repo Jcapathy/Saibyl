@@ -231,12 +231,31 @@ describe('4. Inheritance is declared', () => {
     );
   });
 
-  it('both declaration kinds are marked in the DOM so this is checkable', () => {
+  it('all three declaration kinds are marked in the DOM so this is checkable', () => {
     const primitives = sourceFiles().find(
       (f) => f.path === 'src/components/stages/StagePrimitives.tsx',
     );
     expect(primitives!.code).toMatch(/data-stage-declares="inherited"/);
     expect(primitives!.code).toMatch(/data-stage-declares="missing"/);
+    // `stale` is the third: the stage inherited the input, and the answer
+    // already on the page was produced without it. Marked because it is the
+    // one a founder is most likely to mistake for one of the other two.
+    expect(primitives!.code).toMatch(/data-stage-declares="stale"/);
+  });
+
+  it('a stale result is not spelled as a missing input', () => {
+    // They carry the same three fields and make opposite statements. If `Stale`
+    // ever renders through `Missing`, a finished wrong answer starts reading as
+    // a caution about a future run — which is the confusion it exists to end.
+    const primitives = sourceFiles().find(
+      (f) => f.path === 'src/components/stages/StagePrimitives.tsx',
+    );
+    expect(primitives!.code).toMatch(/export function Stale\(/);
+
+    const header = sourceFiles().find(
+      (f) => f.path === 'src/components/stages/StageHeader.tsx',
+    );
+    expect(header!.code).toContain('<Stale result=');
   });
 });
 

@@ -42,34 +42,43 @@ export default function ReactionsStagePage() {
   const [error, setError] = useState('');
   const [moment, setMoment] = useState(product.moment.id);
 
+  /* Which run this page is about is the **server's** decision, arriving as
+     `stage.produced_by`.
+
+     This page used to make it again, and by a different key. The rule it
+     implemented was right as far as it went — a re-simulation exists to answer
+     the parent's objections and carries none of its own, so picking one made
+     this page say "nothing has been grouped out of it yet" beside a rail that
+     correctly said "4 objections found" (62bf0fd, found by an acceptance
+     reader). What it could not fix is that `GET /simulations` orders on
+     `created_at` while the rail sorts on `completed_at or created_at`, so a run
+     that started earlier and finished later is the latest to one of them and
+     not the other. One decision, made once, is the only version of this that
+     cannot drift. */
+  const producedBy = stage.produced_by;
+
   const load = useCallback(() => {
-    api
-      .get('/simulations', { params: { project_id: product.id, limit: 20 } })
-      .then((r) => {
-        const items = unwrapList<Simulation>(r.data).items;
-        setRuns(items);
-        /* Not simply the newest finished run. A re-simulation exists to
-           answer the parent's objections and carries none of its own, so
-           picking it made this page say "nothing has been grouped out of it
-           yet" on a product whose rail, two inches to the left, correctly
-           said "4 objections found". The server learned this in 62bf0fd; the
-           page did not, and an acceptance reader found the two disagreeing on
-           one screen. */
-        const finished = items.find(
-          (s) => isFinished(s.status) && !s.parent_simulation_id,
-        );
-        if (!finished) {
-          setObjections([]);
-          return null;
-        }
-        return api
-          .get(`/simulations/${finished.id}/objections`)
-          .then((o) => setObjections(unwrapList<ObjectionRow>(o.data).items));
-      })
+    /* `Promise.resolve().then(...)`, not `Promise.resolve(setObjections([]))`.
+       The second spelling runs the setter while `load` is still executing, and
+       `load` is called straight out of the effect below — a synchronous setState
+       on mount, which is the cascading render this file's own retry comment
+       warns about. Both branches settle on a microtask. */
+    const objectionsFor = producedBy
+      ? api
+          .get(`/simulations/${producedBy}/objections`)
+          .then((o) => setObjections(unwrapList<ObjectionRow>(o.data).items))
+      : Promise.resolve().then(() => setObjections([]));
+
+    Promise.all([
+      api
+        .get('/simulations', { params: { project_id: product.id, limit: 20 } })
+        .then((r) => setRuns(unwrapList<Simulation>(r.data).items)),
+      objectionsFor,
+    ])
       .then(() => setError(''))
       .catch((err) => setError(getErrorMessage(err, 'We could not read this step.')))
       .finally(() => setLoading(false));
-  }, [product.id]);
+  }, [product.id, producedBy]);
 
   useEffect(() => {
     load();

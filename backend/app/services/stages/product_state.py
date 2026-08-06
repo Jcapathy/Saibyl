@@ -134,6 +134,21 @@ class MissingInput(BaseModel):
     action: Action | None = None
 
 
+class StaleResult(BaseModel):
+    """A stage's stored answer, and why it does not describe the inputs shown.
+
+    The same three fields as `MissingInput` and deliberately a separate type,
+    because it makes the opposite statement. `MissingInput` says *the next run
+    will be worse for want of this*; this says *what you are looking at was
+    already produced without it*. Rendering them the same way would let a
+    founder read a completed, wrong answer as a warning about a future one.
+    """
+
+    headline: str
+    consequence: str
+    action: Action | None = None
+
+
 class AttentionLine(BaseModel):
     """Something the system genuinely knows about this product.
 
@@ -163,8 +178,24 @@ class StageState(BaseModel):
     # the two must not render the same.
     produced: str | None = None
 
+    # The run `produced` and `stale` describe.
+    #
+    # Sent so the page does not have to choose one for itself. It did, and by a
+    # different key: this module sorts on `completed_at or created_at` while
+    # `GET /simulations` orders on `created_at` alone, so a run that started
+    # earlier and finished later is "the latest" to one of them and not to the
+    # other. Two answers to "which run is step 2 about" is the two-sources-of-
+    # truth class, and the symptom would be a notice naming one run above
+    # objections belonging to another.
+    produced_by: str | None = None
+
     inherited: list[InheritedLine] = Field(default_factory=list)
     missing: list[MissingInput] = Field(default_factory=list)
+
+    # Set when `produced` describes a run that did not receive what `inherited`
+    # says this stage has. None on every stage that cannot go stale, and on
+    # every run that read what it was supposed to.
+    stale: StaleResult | None = None
 
 
 class Moment(BaseModel):
@@ -285,6 +316,15 @@ class _OrgData:
             return result.data or []
 
         self.objections = by_sim("canonical_objections", "id, simulation_id")
+        # What each run actually put in front of its agents.
+        #
+        # `subject_briefs.status` has recorded this since 2026-08-05 and nothing
+        # read it. A run with no brief showed agents the one-line description and
+        # nothing else, so its objections are reactions to a sentence — and step
+        # 2 rendered them beside "Your material — 1 file", which describes what
+        # the *next* run would inherit. The founder read the two as one claim and
+        # reasonably concluded the product had ignored their upload.
+        self.subject_briefs = by_sim("subject_briefs", "simulation_id, status")
         self.assets = by_sim("inoculation_assets", "id, simulation_id, status")
         self.inoculation_results = by_sim(
             "inoculation_results",
@@ -404,12 +444,35 @@ def _build_audience(
     )
 
 
+#: `subject_briefs.status` values where the run genuinely read the material.
+#: Anything else — including a missing row, which is every run made before
+#: 2026-08-05 — means the agents saw the one-line description and nothing else.
+BRIEF_READ_MATERIAL = ("ready", "inherited")
+
+#: Why a run did not read the material, in the founder's words.
+#:
+#: One sentence each, because this renders next to the objections it explains
+#: and a founder deciding whether to trust them needs the reason, not a status.
+#: The three failures are genuinely different: nothing was uploaded, something
+#: was uploaded and could not be read, and the distillation itself broke — and
+#: only the last one is a fault to report rather than a thing to fix.
+BRIEF_ABSENCE_REASON: dict[str, str] = {
+    "no_material": "there was nothing uploaded when it ran",
+    "material_unusable": "nothing uploaded could be read as text",
+    "distillation_failed": "we could not distil your material, which is a fault on our side",
+    # No row at all. Every run made before 2026-08-05 is this, and so is any
+    # run whose worker died before the distillation step.
+    "": "it ran before we started reading uploads",
+}
+
+
 def _build_reactions(
     product_id: str,
     docs: list[dict],
     profile: dict | None,
     finished_runs: list[dict],
     objection_counts: dict[str, int],
+    brief_status: dict[str, str],
 ) -> StageState:
     href = f"/app/products/{product_id}/reactions"
     processed = [d for d in docs if d.get("processing_status") in DOCUMENT_READ]
@@ -463,8 +526,11 @@ def _build_reactions(
         )
 
     produced: str | None = None
+    produced_by: str | None = None
+    stale: StaleResult | None = None
     if finished_runs:
         latest = finished_runs[0]
+        produced_by = str(latest["id"])
         found = objection_counts.get(latest["id"])
         when = _short_date(latest.get("completed_at") or latest.get("created_at"))
         if found is not None:
@@ -476,6 +542,51 @@ def _build_reactions(
         if when:
             produced = f"{produced} · {when}"
 
+        # The two halves of this card describe different runs, and until now
+        # nothing said so. `inherited` above is what the *next* run will get;
+        # `produced` is what the *last* one returned. On a product where a file
+        # was uploaded after the last run, the card read "Your material — 1 file"
+        # directly above objections that were reactions to a one-line
+        # description, and the only reasonable reading of that is that the
+        # product ignored the upload.
+        #
+        # Reproduced before it was theorised about: the run whose objections the
+        # founder pasted has no `subject_briefs` row at all, and it started
+        # 1h42m before the code that writes one first deployed. Every objection
+        # in it is a reaction to the sentence "Trustless agentic run-time
+        # security that's patent-pending", which is exactly what it reads like.
+        status = brief_status.get(str(latest["id"]), "")
+        if status not in BRIEF_READ_MATERIAL:
+            reason = BRIEF_ABSENCE_REASON.get(
+                status,
+                # An unrecognised status is a new one somebody added without
+                # coming here. Say the honest thing rather than nothing, and do
+                # not pretend to know which of the three it was.
+                "we have no record of it reading your material",
+            )
+            produced = f"{produced} · from your description only"
+            stale = StaleResult(
+                headline="These objections did not come from your material",
+                # Named runs, so a founder with several can tell which.
+                consequence=(
+                    f"“{latest.get('name') or 'That run'}” argued about your "
+                    f"one-line description, because {reason}. "
+                    + (
+                        "Your material is uploaded now — run it again and they "
+                        "argue about the product instead."
+                        if processed
+                        else "Upload your deck and run it again, and they argue "
+                        "about the product instead."
+                    )
+                ),
+                action=Action(
+                    label="Start a run" if processed else "Upload your material",
+                    href=f"/app/simulations/new?project={product_id}"
+                    if processed
+                    else f"/app/products/{product_id}/audience#upload",
+                ),
+            )
+
     return StageState(
         id="reactions",
         number=2,
@@ -484,8 +595,10 @@ def _build_reactions(
         href=href,
         runnable="ready" if not missing else "degraded",
         produced=produced,
+        produced_by=produced_by,
         inherited=inherited,
         missing=missing,
+        stale=stale,
     )
 
 
@@ -879,6 +992,11 @@ def _state_for_project(project: dict, data: _OrgData, now: datetime) -> ProductS
     for row in data.objections:
         objection_counts[str(row["simulation_id"])] += 1
 
+    brief_status: dict[str, str] = {
+        str(row["simulation_id"]): str(row.get("status") or "")
+        for row in data.subject_briefs
+    }
+
     asset_counts: dict[str, int] = defaultdict(int)
     for row in data.assets:
         asset_counts[str(row["simulation_id"])] += 1
@@ -900,7 +1018,9 @@ def _state_for_project(project: dict, data: _OrgData, now: datetime) -> ProductS
 
     stages = [
         _build_audience(product_id, docs, profile),
-        _build_reactions(product_id, docs, profile, finished, objection_counts),
+        _build_reactions(
+            product_id, docs, profile, finished, objection_counts, brief_status
+        ),
         _build_answers(
             product_id, finished, objection_counts, asset_counts, results_by_parent
         ),

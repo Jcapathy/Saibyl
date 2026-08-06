@@ -2140,6 +2140,91 @@ present.
 
 ---
 
+## [2026-08-06] Step 2 was showing objections from a run that never read the upload
+
+Founder-reported and marked unverified in the handoff: step 2's objections
+looked derived from the one-line description rather than from the uploaded
+material. Two candidate causes were written down — the page picking the wrong
+run, or the run genuinely reading the description over the documents.
+
+### Reproduced first, in production
+
+```
+Market test of ParryAI   created 2026-08-05 03:29 UTC   subject_briefs: NO ROW
+Parry pre-launch         created 2026-08-05 14:01 UTC   status ready, 985 chars
+Tallyhook pre-launch     created 2026-08-06 03:46 UTC   status ready, 914 chars
+```
+
+`subject_brief.py` first deployed at `fb090d2`, **2026-08-05 05:11 UTC** — one
+hour and forty-two minutes *after* the founder's run started. It has no brief
+row because the code that writes one did not exist yet, so its agents saw
+`prediction_goal` and nothing else. Two of its objections are
+"Trust-less agentic security claim is vague marketing" and "Patent-pending
+status hinders adoption and creates lock-in", against a description reading
+"Trustless agentic run-time security that's patent-pending". They are objections
+to the sentence, almost word for word.
+
+So the engine defect was already fixed, and the page was picking the only
+finished run there was. **Neither hypothesis was the live defect.**
+
+### The live defect is that nothing said so
+
+`subject_briefs.status` has recorded exactly this since 2026-08-05, in five
+values, and **nothing read it**. `run_will_carry_subject_brief` exists and is
+used only for pricing at quote time.
+
+That matters beyond old runs. `no_material`, `material_unusable` and
+`distillation_failed` are all reachable today, and in every one of them a run
+that never read the founder's deck is indistinguishable on screen from one that
+did. Worse, step 2 renders both halves at once and they describe different runs:
+`inherited` says "Your material — 1 file", which is what the **next** run will
+get, directly above `produced`, which is what the **last** one returned. On a
+product where the file was uploaded after the last run, both lines are true and
+the only reasonable reading of them together is that the product ignored the
+upload.
+
+`subject_brief.py`'s own docstring claims this case "fails loudly. Not silently:
+… the row records exactly why in a form a human can read afterwards." True only
+for a human with database access. That is §2a class 4 — a comment asserting
+something nobody checked — in the module whose whole job was to stop this.
+
+### `StaleResult`, and why it is not a `MissingInput`
+
+Same three fields, opposite statement. `MissingInput` says *the next run will be
+worse for want of this*; `StaleResult` says *what you are already looking at was
+produced without it*. Rendering them alike lets a founder read a finished, wrong
+answer as a caution about a future one. It renders red where `Missing` renders
+gold, because gold on this rail means "you can still fix this before it costs
+you" and this one already cost. Marked `data-stage-declares="stale"` so the
+acceptance suite can see it, which is now three declaration kinds rather than
+two.
+
+Four reasons, four sentences. "We did not read your deck" with no reason invites
+the founder to assume the upload failed, which is one of the four and the only
+one they can act on. The way forward differs too: with material already uploaded
+the fix is one run, and with nothing uploaded a re-run would reproduce the same
+result — so sending them to the configurator would be sending them to pay for it
+twice.
+
+An unrecognised status flags rather than passes. Defaulting the unknown case to
+"fine" is how the next failure mode ships invisibly.
+
+### One decision about which run step 2 is about
+
+Found while wiring this up: the page and the rail each chose "the latest run",
+by different keys. `GET /simulations` orders on `created_at`; `product_state`
+sorts on `completed_at or created_at`. A run that started earlier and finished
+later is the latest to one of them and not the other, and the symptom would have
+been the new notice naming one run above objections belonging to another —
+introducing a two-sources-of-truth bug while fixing a two-sources-of-truth bug.
+
+`StageState.produced_by` carries the server's choice, and `ReactionsStagePage`
+fetches objections for that id instead of running its own selection. That also
+retires the re-simulation rule the page was carrying, which was correct and was
+the second copy of a rule the server already had.
+
+---
+
 ## Known issues carried into Phase 2
 
 Recorded here so they are not rediscovered. Items 1, 2 and 7 from the Phase 1

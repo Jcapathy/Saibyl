@@ -1,5 +1,5 @@
 import { stageDef, type StageState } from '@/lib/stages';
-import { Inherited, Missing } from '@/components/stages/StagePrimitives';
+import { Inherited, Missing, Stale } from '@/components/stages/StagePrimitives';
 
 /**
  * The top of every stage: what it is asking, what it inherited, what is missing.
@@ -34,6 +34,13 @@ export default function StageHeader({ stage }: { stage: StageState }) {
       {stage.missing.map((input) => (
         <Missing key={input.headline} input={input} tone={tone} />
       ))}
+
+      {/*
+        Last, and after the missing-input notices, because it is about a result
+        that already exists rather than about a run that has not happened. It
+        sits directly above the answer it is describing.
+      */}
+      {stage.stale && <Stale result={stage.stale} />}
 
       {/*
         The case the two blocks above cannot cover between them: a stage with

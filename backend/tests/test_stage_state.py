@@ -49,6 +49,11 @@ class FakeOrgData:
         self.assets = rows.get("assets", [])
         self.inoculation_results = rows.get("inoculation_results", [])
         self.analyses = rows.get("analyses", [])
+        # Absent by default, and that is the honest default rather than a
+        # convenience: no row means the run showed its agents the one-line
+        # description and nothing else. Tests that mean "a healthy run" pass
+        # `subject_briefs=[healthy_brief(sim_id)]`.
+        self.subject_briefs = rows.get("subject_briefs", [])
 
 
 @pytest.fixture
@@ -110,6 +115,11 @@ def simulation(*, status="complete", variants=1, stage="launch_gtm", sim_id=SIM)
 
 def objections(n, sim_id=SIM):
     return [{"id": f"o{i}", "simulation_id": sim_id} for i in range(n)]
+
+
+def brief(status="ready", sim_id=SIM):
+    """A `subject_briefs` row. `ready` means the run read the material."""
+    return {"simulation_id": sim_id, "status": status}
 
 
 # ---------------------------------------------------------------------------
@@ -553,3 +563,149 @@ def test_the_status_vocabularies_do_not_overlap_in_a_way_that_hides_failure():
     assert not (RUN_FINISHED & RUN_IN_FLIGHT)
     assert "failed" not in RUN_FINISHED
     assert "stopped" not in RUN_FINISHED
+
+
+# ---------------------------------------------------------------------------
+# The run that never read the upload
+#
+# The founder pasted step 2's objections and said they were derived from the
+# one-line description rather than from the deck. Reproduced against production
+# before anything was written: the run they pasted has **no `subject_briefs`
+# row at all**, and it started 1h42m before the code that writes one first
+# deployed. Its objections include "Trust-less agentic security claim is vague
+# marketing" and "Patent-pending status hinders adoption and creates lock-in" —
+# both of which are objections to the sentence "Trustless agentic run-time
+# security that's patent-pending", almost word for word.
+#
+# The engine defect was therefore already fixed. What was not fixed, and is the
+# reason this recurs on every failed distillation rather than only on old runs,
+# is that a run which never read the material is indistinguishable on screen
+# from one that did — and step 2 renders "Your material — 1 file" (what the NEXT
+# run inherits) directly above those objections (what the LAST one returned).
+# ---------------------------------------------------------------------------
+
+def _reactions(state):
+    return next(s for s in state.stages if s.id == "reactions")
+
+
+def test_a_run_that_read_the_material_is_not_flagged(patched):
+    state = patched(
+        documents=[doc("complete")],
+        profiles=[profile(confirmed=True)],
+        simulations=[simulation()],
+        objections=objections(20),
+        subject_briefs=[brief("ready")],
+    )
+    stage = _reactions(state)
+
+    assert stage.stale is None
+    assert "description only" not in (stage.produced or "")
+
+
+def test_a_resimulation_inheriting_its_parents_brief_is_not_flagged(patched):
+    """`inherited` is the status a child carries, and it is a real read."""
+    state = patched(
+        documents=[doc("complete")],
+        simulations=[simulation()],
+        objections=objections(4),
+        subject_briefs=[brief("inherited")],
+    )
+    assert _reactions(state).stale is None
+
+
+@pytest.mark.parametrize(
+    "status,fragment",
+    [
+        ("", "before we started reading uploads"),
+        ("no_material", "nothing uploaded when it ran"),
+        ("material_unusable", "could be read as text"),
+        ("distillation_failed", "a fault on our side"),
+    ],
+)
+def test_every_way_of_not_reading_the_material_says_which_one(
+    patched, status, fragment
+):
+    """Four different reasons, four different sentences.
+
+    "We did not read your deck" with no reason invites the founder to assume
+    the upload failed, which is only one of the four and is the one they can
+    do something about. The empty status is the case with no row at all.
+    """
+    state = patched(
+        documents=[doc("complete")],
+        simulations=[simulation()],
+        objections=objections(20),
+        subject_briefs=[brief(status)] if status else [],
+    )
+    stage = _reactions(state)
+
+    assert stage.stale is not None
+    assert fragment in stage.stale.consequence
+    assert "from your description only" in (stage.produced or "")
+
+
+def test_an_unrecognised_brief_status_is_flagged_rather_than_trusted(patched):
+    """A status nobody came here to map is not evidence the run read anything.
+
+    Defaulting the unknown case to "fine" is how a new failure mode ships
+    invisibly. It says the honest thing instead, and does not guess which of
+    the known reasons applied.
+    """
+    state = patched(
+        documents=[doc("complete")],
+        simulations=[simulation()],
+        objections=objections(3),
+        subject_briefs=[brief("some_future_status")],
+    )
+    stage = _reactions(state)
+
+    assert stage.stale is not None
+    assert "no record" in stage.stale.consequence
+
+
+def test_the_way_forward_matches_what_the_founder_still_has_to_do(patched):
+    """Two different situations, two different buttons.
+
+    Material already uploaded means the fix is one run. Nothing uploaded means
+    a re-run would reproduce the same result, so sending them to the run
+    configurator would be sending them to spend credits on it twice.
+    """
+    with_material = _reactions(
+        patched(
+            documents=[doc("complete")],
+            simulations=[simulation()],
+            objections=objections(5),
+        )
+    )
+    assert with_material.stale.action.label == "Start a run"
+    assert "/simulations/new" in with_material.stale.action.href
+
+    without = _reactions(
+        patched(simulations=[simulation()], objections=objections(5))
+    )
+    assert without.stale.action.label == "Upload your material"
+    assert "#upload" in without.stale.action.href
+
+
+def test_nothing_is_flagged_before_a_run_has_finished(patched):
+    """No result cannot be a stale result."""
+    assert _reactions(patched(documents=[doc("complete")])).stale is None
+    assert (
+        _reactions(
+            patched(
+                documents=[doc("complete")],
+                simulations=[simulation(status="running")],
+            )
+        ).stale
+        is None
+    )
+
+
+def test_the_notice_names_the_run_it_is_about(patched):
+    """A product with several runs needs to say which one this is."""
+    state = patched(
+        documents=[doc("complete")],
+        simulations=[{**simulation(), "name": "Market test of ParryAI"}],
+        objections=objections(48),
+    )
+    assert "Market test of ParryAI" in _reactions(state).stale.consequence
