@@ -152,6 +152,6 @@ def test_deck_states_the_verdict_and_the_disclosure(_deck_rows):
 
     assert "no winner" in text.lower()
     assert "not a ranking" in text
-    assert "incumbent-aligned" in text, "PRD §4 disclosure must be on its own slide"
+    assert "built to argue against you" in text, "PRD §4 disclosure must be on its own slide"
     assert "95% CI" in text, "a mean without its band does not leave this product"
     assert "unmeasured values are absent, not zero" in text

@@ -108,9 +108,9 @@ def _headline_bullets(analysis: SimulationAnalysis) -> list[str]:
     bullets: list[str] = []
     if headline.valence.n > 0:
         bullets.append(
-            f"Overall valence {headline.valence.mean:+.2f} "
+            f"Overall sentiment {headline.valence.mean:+.2f} "
             f"(95% CI {headline.valence.lower:+.2f} to "
-            f"{headline.valence.upper:+.2f}, {headline.valence.n} agents)"
+            f"{headline.valence.upper:+.2f}, {headline.valence.n} people)"
         )
     bullets.append(
         f"Stance of measured events: {headline.stance.support_pct:.0f}% support, "
@@ -203,8 +203,8 @@ async def export_report_pptx(report_id: str | UUID) -> bytes:
                     prs, "Verdict: no winner",
                     [
                         scoreboard.verdict
-                        or "No variant separated from the others at 95% confidence.",
-                        "The arenas below are in display order. That order is "
+                        or "No version separated from the others at 95% confidence.",
+                        "The versions below are in display order. That order is "
                         "not a ranking — where the intervals overlap this run "
                         "does not establish that one message outperformed another.",
                     ],
@@ -222,11 +222,11 @@ async def export_report_pptx(report_id: str | UUID) -> bytes:
             ]
             if rows:
                 _chart_slide(
-                    prs, "Objective rate by message arena",
+                    prs, "Objective rate by message version",
                     render_interval_rows_png(
-                        rows, "Objective rate by message arena",
+                        rows, "Objective rate by message version",
                         domain=(0.0, 1.0), signed=False,
-                        axis_label="Share of active agents taking the objective action",
+                        axis_label="Share of people who took the objective action",
                     ),
                 )
 
@@ -243,7 +243,7 @@ async def export_report_pptx(report_id: str | UUID) -> bytes:
         ]
         if len(arc) >= 2:
             _chart_slide(
-                prs, "Measured valence by round", render_sentiment_arc_png(arc)
+                prs, "Measured sentiment by round", render_sentiment_arc_png(arc)
             )
 
         platforms = _interval_rows(
@@ -251,15 +251,15 @@ async def export_report_pptx(report_id: str | UUID) -> bytes:
         )
         if len(platforms) >= 2:
             _chart_slide(
-                prs, "Measured valence by platform",
-                render_interval_rows_png(platforms, "Measured valence by platform"),
+                prs, "Measured sentiment by platform",
+                render_interval_rows_png(platforms, "Measured sentiment by platform"),
             )
 
         archetypes = _interval_rows(analysis.by_archetype, lambda s: s.archetype)
         if len(archetypes) >= 2:
             _chart_slide(
-                prs, "Measured valence by archetype",
-                render_interval_rows_png(archetypes, "Measured valence by archetype"),
+                prs, "Measured sentiment by kind of person",
+                render_interval_rows_png(archetypes, "Measured sentiment by kind of person"),
             )
 
         cohorts = _interval_rows(
@@ -267,9 +267,9 @@ async def export_report_pptx(report_id: str | UUID) -> bytes:
         )
         if len(cohorts) >= 2:
             _chart_slide(
-                prs, "Buyers against the incumbent-aligned cohort",
+                prs, "Buyers against the people arguing with them",
                 render_interval_rows_png(
-                    cohorts, "Buyers against the incumbent-aligned cohort"
+                    cohorts, "Buyers against the people arguing with them"
                 ),
             )
 
@@ -286,8 +286,8 @@ async def export_report_pptx(report_id: str | UUID) -> bytes:
                     )
                     for objection in analysis.objections[:6]
                 ],
-                note="Ranked by reach × intensity × cohort spread, not by how "
-                "often an objection was repeated.",
+                note="Ranked by reach × intensity × how many kinds of person "
+                "carried it, not by how often an objection was repeated.",
             )
 
         # PRD §4 — its own slide, before methodology. A deck is presented one
@@ -303,7 +303,7 @@ async def export_report_pptx(report_id: str | UUID) -> bytes:
                         for key, value in sorted(analysis.adversarial.roles.items())
                     )
                 )
-            _bullet_slide(prs, "Adversarial cohort disclosure", bullets)
+            _bullet_slide(prs, "Who was arguing against you", bullets)
 
     for section in sections:
         content = clean_report_output(section.get("content") or "")
@@ -317,9 +317,9 @@ async def export_report_pptx(report_id: str | UUID) -> bytes:
             "Platforms: "
             + (", ".join(platform_label(p) for p in (simulation.get("platforms") or [])) or "—"),
             f"Rounds: {simulation.get('max_rounds') or '—'}",
-            f"Message arenas: {simulation.get('variants') or 1}",
-            "Every agent in this run is synthetic. Confidence intervals are "
-            "computed across agents; unmeasured values are absent, not zero.",
+            f"Message versions: {simulation.get('variants') or 1}",
+            "Everybody in this run is synthetic. Confidence intervals are "
+            "computed across people; unmeasured values are absent, not zero.",
         ],
     )
 

@@ -158,13 +158,14 @@ def test_disclosure_states_the_count_the_share_and_the_construction():
     assert disclosure.agents_total == 4
     assert disclosure.share_realised == pytest.approx(0.4)
     assert "synthetic" in disclosure.disclosure
-    assert "argue against adopting" in disclosure.disclosure
+    assert "built to argue against you" in disclosure.disclosure
+    assert "push back on switching by construction" in disclosure.disclosure
 
 
 def test_disclosure_says_so_when_no_competitor_was_named():
     """The normal case. Saying nothing would read as an omission."""
     disclosure = _adversarial_disclosure(_run())
-    assert "No competitor was named" in disclosure.disclosure
+    assert "No rival was named" in disclosure.disclosure
     assert disclosure.named_competitors == []
 
 
@@ -191,14 +192,14 @@ def test_quality_caveat_warns_that_the_headline_includes_the_cohort():
     run = _run()
     quality = _quality(run, _timeline(run), 4)
 
-    assert any("incumbent-aligned" in c for c in quality.caveats)
+    assert any("built to argue against you" in c for c in quality.caveats)
 
 
 def test_no_cohort_caveat_on_a_pure_buyer_run():
     run = _pure_buyer_run()
     quality = _quality(run, _timeline(run), 2)
 
-    assert not any("incumbent-aligned" in c for c in quality.caveats)
+    assert not any("built to argue against you" in c for c in quality.caveats)
 
 
 # ---------------------------------------------------------------------------
@@ -295,7 +296,7 @@ def test_lens_context_forbids_naming_a_competitor_when_none_was_grounded():
     }
     context = build_lens_context({}, artifact)
 
-    assert "No competitor was named in this run. Do not name one." in context
+    assert "No rival was named in this run. Do not name one." in context
 
 
 def test_lens_context_permits_a_grounded_name_but_not_claims_about_it():
@@ -316,7 +317,8 @@ def test_lens_context_requires_separating_the_cohorts():
     artifact = {"adversarial": {"enabled": True, "disclosure": "x", "named_competitors": []}}
     context = build_lens_context({}, artifact)
 
-    assert "Never present an incumbent-aligned agent's argument as independent" in context
+    assert "Never present an argument from someone built to oppose switching" in context
+    assert "independent market reaction" in context
 
 
 def test_lens_context_ignores_a_disabled_cohort():

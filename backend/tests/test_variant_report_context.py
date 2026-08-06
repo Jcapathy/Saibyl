@@ -67,7 +67,7 @@ def test_unmeasured_components_must_not_be_narrated_as_zero():
 
 def test_pooled_sentiment_must_not_be_attributed_to_a_variant():
     context = build_lens_context({}, {"scoreboard": _board()})
-    assert "pool every arena" in context
+    assert "pool every version" in context
 
 
 def test_the_flags_reach_the_writer():

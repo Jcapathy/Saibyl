@@ -209,7 +209,7 @@ def test_named_winner_is_stated_and_marked():
 
     assert "Winner: Cost-first framing" in html
     assert "Cost-first framing — winner" in html
-    assert "paired comparison" in html
+    assert "person by person" in html
     assert "No winner" not in html
 
 
@@ -399,18 +399,18 @@ def test_markdown_escapes_html_in_agent_text():
 def test_adversarial_cohort_is_disclosed_on_the_cover_and_in_the_method():
     html = build_report_html(_doc(analysis=make_analysis()))
     cover = html.split('<section class="doc-section" id="contents"', 1)[0]
-    assert "incumbent-aligned" in cover
-    assert html.count("Adversarial cohort disclosure") >= 1
-    assert "Synthetic adversarial cohort" in html
+    assert "built to argue against you" in cover
+    assert html.count("Who was arguing against you") >= 1
+    assert "Some of this room was built to argue against you" in html
 
 
 def test_document_states_that_every_agent_is_synthetic():
     html = build_report_html(_doc(analysis=make_analysis()))
-    assert "Every agent in this run is synthetic" in html
+    assert "Everybody in this run is synthetic" in html
 
 
 def test_methodology_states_where_the_numbers_come_from():
     html = build_report_html(_doc(analysis=make_analysis()))
     assert "read from one artifact" in html
-    assert "computed across <em>agents</em>" in html
+    assert "computed across <em>people</em>" in html
     assert "absent, not zero" in html or "unmeasured values" in html

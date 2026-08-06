@@ -329,18 +329,18 @@ def sentiment_arc_svg(rows: list[IntervalRow]) -> str:
         _text(pad_l, pad_t + plot_h + 22, "Round", size=6.6, fill=INK_MID)
     )
     parts.append(
-        _text(pad_l, 10, "Mean valence, −1 to +1, with 95% interval",
+        _text(pad_l, 10, "Mean sentiment, −1 to +1, with 95% interval",
               size=6.6, fill=INK_MID)
     )
 
-    return _svg(FIGURE_WIDTH_PT, height, "".join(parts), "Mean valence by round")
+    return _svg(FIGURE_WIDTH_PT, height, "".join(parts), "Mean sentiment by round")
 
 
 def interval_rows_svg(
     rows: list[IntervalRow],
     *,
     domain: tuple[float, float] = (-1.0, 1.0),
-    axis_label: str = "Mean valence, −1 to +1",
+    axis_label: str = "Mean sentiment, −1 to +1",
     signed: bool = True,
     digits: int = 2,
 ) -> str:

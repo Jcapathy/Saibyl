@@ -125,6 +125,7 @@ def test_unmeasured_polarization_is_omitted_from_the_stat_card():
         CONCLUSION_PROMPT,
         EXECUTIVE_SUMMARY_PROMPT,
         _polarization_prompt_fields,
+        _prompt,
         compute_polarization,
     )
 
@@ -136,8 +137,8 @@ def test_unmeasured_polarization_is_omitted_from_the_stat_card():
         prediction_goal="g", platforms="twitter_x", agent_count=10,
         rounds=3, event_count=100, sections_text="S",
     )
-    exec_prompt = EXECUTIVE_SUMMARY_PROMPT.format(**common, **fields)
-    conclusion = CONCLUSION_PROMPT.format(**common, **fields)
+    exec_prompt = _prompt(EXECUTIVE_SUMMARY_PROMPT, **common, **fields)
+    conclusion = _prompt(CONCLUSION_PROMPT, **common, **fields)
 
     assert "| Polarization Ratio |" not in exec_prompt
     assert "N/A" not in exec_prompt
@@ -148,12 +149,14 @@ def test_measured_polarization_keeps_the_stat_card_row():
     from app.services.intelligence.report_agent import (
         EXECUTIVE_SUMMARY_PROMPT,
         _polarization_prompt_fields,
+        _prompt,
         compute_polarization,
     )
 
     metrics = compute_polarization([_event("a", 1, 0.9), _event("b", 1, 0.1)])
     fields = _polarization_prompt_fields(metrics)
-    exec_prompt = EXECUTIVE_SUMMARY_PROMPT.format(
+    exec_prompt = _prompt(
+        EXECUTIVE_SUMMARY_PROMPT,
         prediction_goal="g", platforms="twitter_x", agent_count=10,
         rounds=3, event_count=100, sections_text="S", **fields,
     )

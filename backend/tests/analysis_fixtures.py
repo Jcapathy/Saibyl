@@ -242,7 +242,7 @@ def make_analysis(*, scoreboard: VariantScoreboard | None = None) -> SimulationA
                 significant=True,
                 trigger_event_ids=["e-1"],
                 objection_keys=["switching-cost"],
-                description="Migration cost crossed from the incumbent cohort into buyers.",
+                description="Sentiment fell 0.31 between round 2 and 3.",
             ),
             Flashpoint(
                 round_number=5,
@@ -262,12 +262,18 @@ def make_analysis(*, scoreboard: VariantScoreboard | None = None) -> SimulationA
             archetypes=["Incumbent power user"],
             roles={"incumbent_power_user": 6, "switching_cost_hawk": 3},
             named_competitors=[],
+            # Verbatim from `analysis_builder._adversarial_disclosure` for these
+            # counts. It is copied rather than composed because this fixture has
+            # no `RunData`, so it is the one string here that can drift silently
+            # — `test_report_vocabulary` runs the real composer for that reason.
             disclosure=(
-                "9 of 25 agents (36%) were configured as incumbent-aligned: they "
-                "argue against adopting the subject by construction. They are "
-                "synthetic, like every agent in this run, and their reactions are "
-                "reported separately from buyers' so the headline can be read "
-                "either way. No competitor was named."
+                "9 of 25 people in this run (36%) were built to argue against "
+                "you: they are happy with what they already use, and they push "
+                "back on switching by construction. They are synthetic, like "
+                "everyone else in this run, and what they said is reported "
+                "separately from the buyers' so the headline can be read either "
+                "way. No rival was named: they argue about the category and the "
+                "cost of switching, with no real company involved."
             ),
         ),
         scoreboard=scoreboard,
@@ -282,8 +288,11 @@ def make_analysis(*, scoreboard: VariantScoreboard | None = None) -> SimulationA
             mean_ci_width=0.37,
             confidence="moderate",
             caveats=[
-                "24 agents produced measurable opinions; intervals are wide at this size.",
-                "One archetype is represented by a single agent and cannot be resolved.",
+                "24 people produced measurable opinions. Intervals are wide at "
+                "this size — treat differences smaller than the bands as unresolved.",
+                "36% of the room was built to argue against you and pushes back on "
+                "switching by construction. The headline includes them; the "
+                "breakdown further down separates them out.",
             ],
         ),
     )
@@ -320,8 +329,9 @@ def make_scoreboard(*, with_winner: bool) -> VariantScoreboard:
             variants=variants,
             winner_variant_key="v1",
             verdict=(
-                "Cost-first framing converted more agents than speed-first, and "
-                "the paired comparison separates them."
+                "Cost-first framing leads: people were 17.0% more likely to "
+                "convert on it than on Speed-first framing (95% interval 4.0% to "
+                "30.0%, 9 of 24 people behaved differently between the two)."
             ),
             paired=PairedComparison(
                 top_variant_key="v1",
@@ -342,8 +352,8 @@ def make_scoreboard(*, with_winner: bool) -> VariantScoreboard:
         variants=variants,
         winner_variant_key=None,
         verdict=(
-            "No variant separated from the others at 95% confidence. This test "
-            "is underpowered for the difference it was asked to detect."
+            "No winner: Cost-first framing leads Speed-first framing by 17.0% "
+            "per person, but the 95% interval (-6.0% to 40.0%) includes zero."
         ),
         paired=PairedComparison(
             top_variant_key="v1",
@@ -361,14 +371,14 @@ def make_scoreboard(*, with_winner: bool) -> VariantScoreboard:
 
 
 SECTION_MARKDOWN = """\
-## What the swarm actually did
+## What the room actually did
 
 The migration-cost objection is **load-bearing**: it appeared in round 1 and had
 crossed into buyers by round 3.
 
 **Reddit carried the decline; Hacker News did not follow.**
 
-| Platform | Mean valence | 95% CI | Agents |
+| Platform | Mean sentiment | 95% CI | People |
 | --- | --- | --- | --- |
 | Reddit | -0.58 | -0.73 to -0.43 | 19 |
 | Hacker News | -0.19 | -0.43 to 0.05 | 14 |
@@ -376,7 +386,7 @@ crossed into buyers by round 3.
 Three things follow:
 
 - Cost framing has to land before round 2.
-- The CFO archetype is unresolved at this swarm size.
+- The finance buyer is unresolved at this size.
 - Support depth never became load-bearing.
 
 > The pricing page stops exactly where my question starts.

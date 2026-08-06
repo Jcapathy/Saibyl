@@ -199,29 +199,28 @@ THIS RUN CANNOT CONCLUDE — do not state or imply any of these, in any section:
     if disclosure.get("enabled"):
         named = disclosure.get("named_competitors") or []
         naming_rule = (
-            f"""  - {', '.join(named)} appear in this run only because the user uploaded
-    material naming them. You may report what agents said about them. You MUST
+            f"""  - {', '.join(named)} appear in this run only because the founder uploaded
+    material naming them. You may report what people said about them. You MUST
     NOT state any fact about their product, pricing, roadmap, or customers —
     the uploaded material grounded the name, not the claims."""
             if named
-            else """  - No competitor was named in this run. Do not name one. If a section
-    needs a comparison, describe the category or the status quo."""
+            else """  - No rival was named in this run. Do not name one. If a section
+    needs a comparison, describe the category or what buyers use today."""
         )
         blocks.append(
             f"""
-ADVERSARIAL COHORT — this run included incumbent-aligned agents
+PART OF THIS ROOM WAS BUILT TO ARGUE AGAINST THE FOUNDER
 {disclosure.get('disclosure', '')}
 
 RULES — these are disclosure obligations, not style preferences:
-  - Wherever you report a figure that mixes both cohorts, say so. The cohort
+  - Wherever you report a figure that mixes both sides of the room, say so. The
     breakdown in the measured analysis separates them; use it.
-  - Never present an incumbent-aligned agent's argument as independent market
-    reaction. It is a constructed position, and saying so is what makes the
-    finding usable.
-  - An objection that originated with the adversarial cohort AND spread to
-    buyers is the most important thing in this report. An objection that stayed
-    inside the adversarial cohort is a competitor talking to themselves — say
-    which is which.
+  - Never present an argument from someone built to oppose switching as
+    independent market reaction. It is a constructed position, and saying so is
+    what makes the finding usable.
+  - An objection that started with the people arguing against the founder AND
+    spread to buyers is the most important thing in this report. One that never
+    left that group is a rival talking to themselves — say which is which.
 {naming_rule}
 """
         )
@@ -273,21 +272,29 @@ def _scoreboard_block(scoreboard: dict | None) -> str:
 
     winner = scoreboard.get("winner_variant_key")
     if winner:
+        winner_label = next(
+            (
+                v.get("label")
+                for v in variants
+                if v.get("variant_key") == winner and v.get("label")
+            ),
+            winner,
+        )
         ruling = (
-            f"A winner IS supported: variant `{winner}`. Its interval clears the "
-            f"runner-up's. You may state it as the leading variant."
+            f"A winner IS supported: {winner_label}. Its interval clears the "
+            f"runner-up's. You may state it as the leading version."
         )
     else:
         ruling = (
-            "NO WINNER IS SUPPORTED. The leading variants' confidence intervals "
-            "overlap. You MUST NOT name a winner, describe one variant as "
+            "NO WINNER IS SUPPORTED. The leading versions' confidence intervals "
+            "overlap. You MUST NOT name a winner, describe one version as "
             "'best' or 'the strongest performer', or recommend spending behind "
             "one on the basis of this ordering. Report that the test did not "
-            "separate them and say what would — more agents, or more rounds."
+            "separate them and say what would — more people, or more rounds."
         )
 
     return f"""
-VARIANT SCOREBOARD — this run tested {len(variants)} messages against one shared audience
+MESSAGE SCOREBOARD — this run tested {len(variants)} messages against one shared audience
 Objective: {scoreboard.get('objective') or 'none set; committing intent used'}
 {chr(10).join(lines)}
 
@@ -297,12 +304,12 @@ RULES — these are measurement obligations, not style preferences:
   - {ruling}
   - The ordering above is display order. It is not itself a claim.
   - Virality is a SEPARATE axis from the objective metric. Never blend them into
-    one judgement. A variant that spreads and does not convert, or converts and
+    one judgement. A version that spreads and does not convert, or converts and
     does not spread, is the finding — not a contradiction to reconcile.
   - Where a virality component reads 'not measured', do not describe it as zero
-    or as a weakness of the variant. It was not measured.
-  - The run's overall sentiment figures pool every arena. They describe the
-    audience, not any one message. Do not attribute them to a variant.
+    or as a weakness of the version. It was not measured.
+  - The run's overall sentiment figures pool every version. They describe the
+    audience, not any one message. Do not attribute them to a version.
 """
 
 
@@ -325,10 +332,44 @@ class ReportProgress(BaseModel):
 
 # ── Prompts ──────────────────────────────────────────────
 
-REPORT_SYSTEM_PROMPT = """\
+#: The vocabulary rule, stated once and injected into every prompt.
+#:
+#: The document's own copy is checked mechanically by
+#: `tests/test_report_vocabulary.py`; the narrative sections are written by a
+#: model and cannot be. This block is the only lever on them, so it is written
+#: as a substitution table rather than as advice — a model told to "avoid
+#: jargon" keeps its own, and a model handed the replacement word uses it.
+#:
+#: Held in one constant because four prompts each carrying their own copy of
+#: the rule is the two-sources-of-truth class, and the symptom would be three
+#: sections in the founder's words and one in the discipline's.
+HOUSE_STYLE = """\
+VOCABULARY — the reader is a founder, not a market researcher. These are \
+substitutions, not preferences. Every screen of this product uses the right-hand \
+column and a report that uses the left-hand one reads as a different product.
+
+  simulation, the swarm        -> the run, the room
+  agent, respondent            -> person, buyer, someone
+  ICP, segment                 -> audience, the people you sell to
+  archetype, persona           -> kind of person, kind of buyer
+  cohort                       -> group, or name the group: buyers / the people
+                                  arguing against you
+  adversarial agents           -> people built to argue against you
+  variant, arena, A/B, cell    -> version
+  valence                      -> sentiment
+  canonical objection          -> the objection
+
+Never write: ICP, variant, A/B, adversarial, cohort, arena, lens, archetype, \
+canonical, valence, simulation, persona, project. Write about a product, a run, \
+a room of people, and the versions of a message they were shown."""
+
+REPORT_SYSTEM_PROMPT = f"""\
 REPORT QUALITY STANDARD:
-This report will be read by C-suite executives, board members, and senior political strategists. \
-Write with the authority and precision of a McKinsey or Bloomberg Intelligence analyst.
+This report is read by the founder who commissioned the run, and by the investors and \
+operators they forward it to. Write with the authority and precision of a McKinsey or \
+Bloomberg Intelligence analyst — and in the vocabulary below, which is not negotiable.
+
+{HOUSE_STYLE}
 
 Rules:
 1. Lead with insights, not methodology. Every section answers "so what?" before presenting \
@@ -343,30 +384,35 @@ reveals.
 6. The executive summary must open with a plain-English situation brief, not data tables.
 7. The conclusion must include specific, actionable recommendations with timelines and \
 supporting data.
-8. PLATFORM FIDELITY: Only reference platforms that were actually simulated (listed in the \
-simulation context). NEVER mention, analyze, or recommend actions on platforms that were not \
-part of the simulation. If a platform was not simulated, it does not exist for this report."""
+8. PLATFORM FIDELITY: Only reference the platforms this run actually used (listed in the run \
+context). NEVER mention, analyze, or recommend actions on a platform that was not part of the \
+run. If a platform was not in the run, it does not exist for this report."""
 
 OUTLINE_PROMPT = """You are a predictive intelligence analyst producing a comprehensive, evidence-rich report.
 
 Prediction goal: {prediction_goal}
-Platforms simulated (ONLY these — no others exist for this report): {platforms}
-Agent count: {agent_count}
+Platforms in this run (ONLY these — no others exist for this report): {platforms}
+People in the room: {agent_count}
 Rounds completed: {rounds}
 Total events: {event_count}
+
+{house_style}
+
+SECTION TITLES follow the same vocabulary rule as the prose. A title is the first \
+thing the founder reads and the most likely place for a discipline word to survive.
 
 {lens_context}
 Generate a report outline with {section_count} sections. Each section must have a title and 3-5 research angles (specific questions to investigate with data).
 
-CRITICAL: Every research angle MUST reference ONLY the simulated platforms listed above. \
+CRITICAL: Every research angle MUST reference ONLY the platforms listed above. \
 Do NOT mention, hypothesize about, or reference any platform not in that list.
 
 REQUIRED: Every report must include sections covering:
-- Sentiment trajectories over time (round-by-round arc, inflection points, polarization)
-- Platform-specific dynamics (how each simulated platform shaped discourse differently)
-- Agent/persona archetype analysis (cluster agents by behavior patterns, emotional signatures)
-- Key trigger events and viral moments (what caused sentiment spikes/shifts)
-- Predictive implications and forecast (what the trajectories suggest going forward)
+- Sentiment over time (round-by-round arc, turning points, how split the room became)
+- Platform-specific dynamics (how each platform in the run shaped the conversation differently)
+- Who reacted how (group the people by behaviour and by what they came in believing)
+- Key trigger events and moments that spread (what caused sentiment to move)
+- What this predicts (what the trajectories suggest going forward)
 
 Each research angle should be specific enough to require multiple tool calls. Prefer quantitative angles (sentiment scores, engagement metrics, platform comparisons) over vague qualitative ones.
 
@@ -375,14 +421,18 @@ Return JSON: {{"sections": [{{"title": str, "research_angles": [str]}}]}}"""
 REACT_PROMPT = """You are a ReACT (Reasoning-Action-Observation) intelligence analyst writing section "{section_title}" of a comprehensive predictive intelligence report.
 
 Prediction goal: {prediction_goal}
-Simulated platforms (ONLY these): {platforms}
+Platforms in this run (ONLY these): {platforms}
 Research angles for this section: {research_angles}
+
+{house_style}
+
 {lens_context}
-You have access to these tools (call by name):
+You have access to these tools (call by name). The tool names are internal — call \
+them by these names, and never name one in the text you write:
 1. insight_forge(query) — Deep semantic search of knowledge graph for entities, relationships, facts
 2. quick_search(query) — Fast keyword search for specific facts and data points
-3. simulation_analytics(type) — Analyze simulation data. Types: measured_findings, sentiment_over_time, platform_comparison, persona_breakdown, top_posts, viral_moments, agent_activity
-4. agent_interview(prompt) — Interview simulation agents in-character about their experiences and reactions
+3. simulation_analytics(type) — Analyze the run's data. Types: measured_findings, sentiment_over_time, platform_comparison, persona_breakdown, top_posts, viral_moments, agent_activity
+4. agent_interview(prompt) — Interview people from the run in-character about what they made of it
 
 Evidence gathered so far:
 {evidence}
@@ -392,16 +442,16 @@ Instructions:
 - If you have enough evidence, respond with: ANSWER: <section content in markdown>
 - Use MULTIPLE different tools before writing your answer — do not answer after just 1-2 tool calls
 - Call simulation_analytics with DIFFERENT types to get varied data dimensions
-- Use agent_interview to get qualitative quotes and persona-specific reactions
-- Use insight_forge or quick_search for contextual knowledge beyond the simulation data
+- Use agent_interview to get quotes in people's own words
+- Use insight_forge or quick_search for contextual knowledge beyond this run's data
 
 MEASUREMENT RULES — these are not style guidance:
 - Every sentiment, stance, intensity, or objection figure you state MUST come
   from simulation_analytics. Do not estimate one from reading post text, and do
   not carry a number over from a previous section from memory.
 - Sentiment figures arrive with a confidence interval. Quote it. "-0.42
-  (95% CI -0.61 to -0.23, 47 agents)" is the format. A bare mean overstates what
-  a synthetic swarm can support.
+  (95% CI -0.61 to -0.23, 47 people)" is the format. A bare mean overstates what
+  a constructed room can support.
 - If two groups' intervals overlap, say the difference is not resolved. Do not
   rank them.
 - If a tool reports that no analysis artifact exists, write that the run has no
@@ -410,20 +460,21 @@ MEASUREMENT RULES — these are not style guidance:
 QUALITY REQUIREMENTS for your ANSWER:
 - Lead with the key insight — answer "so what?" in the first sentence before presenting data
 - Include specific numbers: sentiment scores, engagement counts, round-by-round metrics
-- Build markdown tables for platform comparisons, agent archetype breakdowns, or timeline data
+- Build markdown tables for platform comparisons, breakdowns by kind of person, or timeline data
 - Precede EVERY markdown table with a **bold one-sentence insight headline** explaining what the \
-table reveals (e.g., "**Twitter/X drove the sharpest negative shift, hitting -0.62 by Round 4.**")
-- Bold key findings and inflection points throughout
-- Identify 3-4 distinct clusters/archetypes when analyzing agent behavior
-- Describe trajectory arcs with specific inflection points (e.g., "Round 3 saw a -0.25 drop")
-- Include cross-cutting dynamics: contagion effects, narrative fatigue, archetype migration
-- End with predictive implications: what do the patterns forecast if trends continue?
+table reveals (e.g., "**Reddit drove the sharpest negative shift, hitting -0.62 by Round 4.**")
+- Bold key findings and turning points throughout
+- Identify 3-4 distinct kinds of person when describing how the room behaved, and name each one \
+in words a founder would recognise ("the finance buyer", "the engineer who has to migrate")
+- Describe trajectory arcs with specific turning points (e.g., "Round 3 saw a -0.25 drop")
+- Include cross-cutting dynamics: what spread, what wore out, who changed their mind
+- End with what this predicts: what do the patterns forecast if trends continue?
 - Write 800-1500 words per section — comprehensive analysis, not summaries
-- Use direct quotes from agent interviews as supporting evidence
+- Use direct quotes from the people in the run as supporting evidence
 
 Be analytical and data-driven. Synthesize across multiple data sources. Do NOT produce thin, surface-level summaries.
 
-IMPORTANT: Only discuss the simulated platforms listed above. Do NOT reference any other platforms."""
+IMPORTANT: Only discuss the platforms listed above. Do NOT reference any other platforms."""
 
 EXECUTIVE_SUMMARY_PROMPT = """\
 ╔══════════════════════════════════════════════════════════════════╗
@@ -444,10 +495,12 @@ Write the Executive Summary for this predictive intelligence report.
 The FIRST paragraph the reader sees must be the Situation Brief — plain English, no numbers.
 Then Key Findings. Then Bottom Line. Then Stat Cards. Then evidence tables LAST.
 
-=== SIMULATION CONTEXT ===
+{house_style}
+
+=== RUN CONTEXT ===
 Prediction goal: {prediction_goal}
 Platforms: {platforms}
-Agent count: {agent_count}
+People in the room: {agent_count}
 Rounds completed: {rounds}
 Total events: {event_count}
 {polarization_context}
@@ -461,32 +514,32 @@ Total events: {event_count}
 
 ### Part A: Situation Brief
 THE FIRST THING YOU WRITE. 2-3 sentences MAX in plain English.
-Summarise what was simulated, for whom, and why it matters.
-No jargon. No metrics. No numbers. A CEO who has never seen Saibyl should understand \
+Summarise what was put in front of whom, and why it matters.
+No jargon. No metrics. No numbers. Someone who has never seen Saibyl should understand \
 the scenario in 10 seconds.
-Example: "Saibyl simulated public reaction to a hypothetical LA Times investigative piece \
-attacking Spencer Pratt's mayoral candidacy. 40 synthetic agents across 4 platforms debated \
-the narrative over 5 rounds, modeling how voters, media, and political operatives would \
-respond if this story broke."
+Example: "Saibyl put Tallyhook's launch page in front of 120 freelancers and agency owners \
+who chase late invoices, and let them argue about it across Reddit and Hacker News over five \
+rounds. The question was whether they would pay for it, and what they would say against it."
 
 ### Part B: Key Findings
 Write 3-5 numbered bullet points. Each is ONE sentence with ONE supporting number.
 These are the "so what" takeaways — the headline insights a decision-maker needs.
 Format each as: **Bold headline claim.** Supporting sentence with a specific metric.
 Example:
-1. **The attack backfires on Bass.** Public sentiment toward Bass declined from -0.05 to \
--0.64 across five rounds with no recovery.
-2. **The moderate middle is collapsing.** Conflicted Moderates shrank from 35% to 21%, \
-with the majority migrating toward anti-Bass positions.
-3. **Twitter/X is the narrative battleground.** Sentiment hit -0.62 on Twitter/X vs. -0.11 \
-on LinkedIn — a 0.51 cross-platform divergence gap.
+1. **The objection is the client relationship, not the price.** Sentiment fell from -0.05 to \
+-0.64 across five rounds, and the drop tracked the "this will damage my client relationships" \
+thread rather than any pricing thread.
+2. **Buyers split on who sends the message.** The people who would let software chase a client \
+shrank from 35% to 21% once the tone of the automated reminder was shown.
+3. **Reddit is where the argument happens.** Sentiment hit -0.62 on Reddit against -0.11 on \
+Hacker News — a 0.51 gap between the two.
 
 ### Part C: Bottom Line
 Write 1-2 sentences in **bold markdown**. State the single most important strategic implication.
 What should the reader DO with this information? This is a recommendation, not a summary.
-Example: **"Spencer Pratt should amplify the attack narrative rather than defend against it. \
-The simulation shows every attack on Pratt drives sympathy toward him and permanently erodes \
-Bass's position."**
+Example: **"Lead with the founder sending the reminder, not the software. Every version where \
+the tool spoke for the freelancer lost the room on tone, and the two where the freelancer \
+stayed the sender did not."**
 
 ### Part D: Stat Cards
 Output exactly this markdown table with values filled from your analysis:
@@ -500,14 +553,14 @@ Output exactly this markdown table with values filled from your analysis:
 
 {polarization_guidance}
 
-IMPORTANT for Sentiment Trajectory: Show the directional arrow and net change for the primary \
-subjects/topics in the simulation. Use ↑ for positive movement, ↓ for negative, → for flat.
+IMPORTANT for Sentiment Trajectory: Show the directional arrow and net change for the main \
+subjects in the run. Use ↑ for positive movement, ↓ for negative, → for flat.
 
 ### Part E: Round-by-Round Evidence
 NOW and ONLY now, provide the supporting data tables:
 1. A round-by-round sentiment progression table (columns: Round, Overall Sentiment, Key Shift, \
 Notable Event)
-2. Brief narrative of the polarization dynamics — which archetypes moved, when, and why
+2. Brief narrative of how split the room became — which kinds of person moved, when, and why
 3. Any platform-specific divergences worth highlighting
 
 This section is SUPPORTING EVIDENCE for the Key Findings above, not the opening content.
@@ -520,15 +573,17 @@ Keep it concise — 1-2 pages maximum. The reader has already gotten the headlin
 # was built to make impossible.
 
 
-CONCLUSION_PROMPT = """You are a senior political/crisis strategist writing the concluding section \
-of a predictive intelligence report for a C-suite audience. Be direct. Be specific. Every \
-recommendation must cite simulation data. Do not hedge excessively. The client is paying for \
-decisive intelligence, not academic caution.
+CONCLUSION_PROMPT = """You are a senior go-to-market strategist writing the concluding section \
+of a predictive intelligence report for the founder who commissioned it. Be direct. Be specific. \
+Every recommendation must cite what this run measured. Do not hedge excessively. The client is \
+paying for decisive intelligence, not academic caution.
 
-=== SIMULATION CONTEXT ===
+{house_style}
+
+=== RUN CONTEXT ===
 Prediction goal: {prediction_goal}
-Platforms (ONLY these were simulated): {platforms}
-Agent count: {agent_count}
+Platforms (ONLY these were in the run): {platforms}
+People in the room: {agent_count}
 Rounds completed: {rounds}
 Total events: {event_count}
 {polarization_context}
@@ -542,8 +597,8 @@ Write the section titled "Strategic Implications & Recommended Actions" using EX
 sub-sections below. Do NOT add preamble, methodology notes, or throat-clearing. Start writing \
 the first sub-section immediately.
 
-CRITICAL: All recommendations MUST target ONLY the simulated platforms: {platforms}. \
-Do NOT recommend actions on platforms that were not part of the simulation.
+CRITICAL: All recommendations MUST target ONLY these platforms: {platforms}. \
+Do NOT recommend actions on a platform that was not part of the run.
 
 FORMATTING RULES:
 - Bold key findings and inflection points throughout.
@@ -561,16 +616,16 @@ Frame the situation as an opportunity or threat that demands specific action.
 
 Write 3-5 numbered recommendations. Each MUST follow this exact format:
 
-**[Action Verb]: [Specific recommendation naming a SIMULATED platform, audience segment, and timeframe]**
-- **Evidence:** [Cite the specific simulation finding — cluster migration, platform sentiment delta, archetype behavior shift]
+**[Action Verb]: [Specific recommendation naming a platform from this run, who it is aimed at, and a timeframe]**
+- **Evidence:** [Cite the specific finding — who changed their mind, the sentiment gap between two platforms, what one kind of buyer did that the others did not]
 - **Timeline:** [When to execute — must be within 7-14 days]
-- **Expected Impact:** [What the simulation data predicts will happen if this action is taken]
+- **Expected Impact:** [What this run predicts will happen if this action is taken]
 
 Requirements for each recommendation:
-- Be SPECIFIC: name the simulated platform, the audience segment \
-(e.g., "Conflicted Moderates", "Media Watchdogs"), and the timeframe
+- Be SPECIFIC: name the platform, name who it is aimed at in words a founder would use \
+(e.g., "the freelancers who bill under $5k a month", "the finance buyer"), and the timeframe
 - Be GROUNDED: cite the exact metric that supports it (sentiment score, percentage shift, \
-archetype migration rate)
+how many people carried an objection)
 - Be ACTIONABLE within 7-14 days — no vague "build a long-term strategy" recommendations
 - Prioritise recommendations by expected impact (highest-impact first)
 
@@ -578,8 +633,8 @@ archetype migration rate)
 
 Write 2-3 items identifying what could change the trajectory. For each:
 - Name the specific risk or scenario
-- Cite the simulation evidence that suggests this risk is plausible (e.g., an archetype that \
-showed instability, a platform where sentiment oscillated rather than converged)
+- Cite the evidence from this run that suggests the risk is plausible (e.g., a kind of buyer \
+who kept changing their mind, a platform where sentiment swung rather than settled)
 - State what the reader should monitor and what trigger would indicate the risk is materialising
 
 ### 5.4 — Confidence Assessment
@@ -587,14 +642,46 @@ showed instability, a platform where sentiment oscillated rather than converged)
 State the overall confidence level: **High**, **Medium**, or **Low**.
 
 Then justify it based on these three factors (one sentence each):
-1. **Agent count:** {agent_count} agents — state whether this provides adequate statistical \
-representation (>30 = adequate, >50 = strong, <20 = limited)
-2. **Sentiment convergence:** Did archetypes converge toward similar positions (high confidence) \
-or remain split/oscillating (lower confidence)? Cite the evidence.
+1. **How many people:** {agent_count} — state whether this is enough to stand behind \
+(>30 = adequate, >50 = strong, <20 = limited)
+2. **Did the room agree:** Did the different kinds of buyer end up in similar positions \
+(high confidence) or stay split and keep swinging (lower confidence)? Cite the evidence.
 3. **Pattern consistency:** Did trajectories sustain directionally (high confidence) or oscillate \
 unpredictably (lower confidence)? Cite the evidence.
 
 End with ONE sentence on the single biggest uncertainty in the findings."""
+
+
+#: Every prompt that reaches the writer, so the block below can prove each one
+#: carries the vocabulary rule. A new prompt added outside this tuple is a
+#: prompt `test_report_vocabulary` cannot see.
+WRITER_PROMPTS = (
+    ("OUTLINE_PROMPT", OUTLINE_PROMPT),
+    ("REACT_PROMPT", REACT_PROMPT),
+    ("EXECUTIVE_SUMMARY_PROMPT", EXECUTIVE_SUMMARY_PROMPT),
+    ("CONCLUSION_PROMPT", CONCLUSION_PROMPT),
+)
+
+
+def _prompt(template: str, **fields: object) -> str:
+    """Fill a prompt, always with the house style in it.
+
+    Every user message in this file goes through here rather than calling
+    `.format()` directly, so the vocabulary block cannot be forgotten at one of
+    five call sites.
+
+    The placeholder is checked rather than merely supplied. `str.format` accepts
+    keyword arguments a template never uses, so passing `house_style=` to a
+    prompt with no slot for it succeeds silently and produces a prompt with no
+    rule in it — which is the same shape as the defect this whole change exists
+    to fix: a guarantee that looks enforced and is not.
+    """
+    if "{house_style}" not in template:
+        raise KeyError(
+            "house_style: this prompt reaches the report writer and must carry "
+            "the vocabulary rule. Add {house_style} to the template."
+        )
+    return template.format(house_style=HOUSE_STYLE, **fields)
 
 
 # ── Polarization ─────────────────────────────────────────
@@ -794,7 +881,8 @@ async def _run_react_loop(
     ]
 
     for tool_call_num in range(resolved.max_tool_calls_per_section):
-        prompt = REACT_PROMPT.format(
+        prompt = _prompt(
+            REACT_PROMPT,
             section_title=section.title,
             prediction_goal=prediction_goal,
             platforms=platforms,
@@ -825,14 +913,15 @@ async def _run_react_loop(
             return strip_react_artifacts(response.strip())
 
     # Max tool calls reached — force answer
-    final_prompt = REACT_PROMPT.format(
+    final_prompt = _prompt(
+        REACT_PROMPT,
         section_title=section.title,
         prediction_goal=prediction_goal,
         platforms=platforms,
         research_angles=", ".join(section.research_angles),
         lens_context=lens_context,
         evidence="\n".join(evidence),
-    ) + "\n\nYou have used all available tool calls. You MUST now provide your ANSWER. Synthesize ALL evidence gathered into a comprehensive, data-rich section (800-1500 words) with specific metrics, tables, archetype analysis, and predictive implications:"
+    ) + "\n\nYou have used all available tool calls. You MUST now provide your ANSWER. Synthesize ALL evidence gathered into a comprehensive, data-rich section (800-1500 words) with specific metrics, tables, a breakdown of who reacted how, and what it predicts:"
 
     result = await llm_complete(
         messages=[
@@ -972,7 +1061,8 @@ async def generate_report(
         stored = get_analysis(sim_id) or {}
         lens_context = build_lens_context(sim, stored.get("artifact"))
 
-        outline_prompt = OUTLINE_PROMPT.format(
+        outline_prompt = _prompt(
+            OUTLINE_PROMPT,
             prediction_goal=sim["prediction_goal"],
             platforms=", ".join(sim.get("platforms") or ["twitter_x"]),
             agent_count=agent_count,
@@ -1059,7 +1149,8 @@ async def generate_report(
         conclusion_raw = await llm_complete(
             messages=[
                 {"role": "system", "content": REPORT_SYSTEM_PROMPT},
-                {"role": "user", "content": CONCLUSION_PROMPT.format(
+                {"role": "user", "content": _prompt(
+                CONCLUSION_PROMPT,
                 prediction_goal=sim["prediction_goal"],
                 platforms=platforms,
                 agent_count=agent_count,
@@ -1093,7 +1184,8 @@ async def generate_report(
         exec_summary_raw = await llm_complete(
             messages=[
                 {"role": "system", "content": REPORT_SYSTEM_PROMPT},
-                {"role": "user", "content": EXECUTIVE_SUMMARY_PROMPT.format(
+                {"role": "user", "content": _prompt(
+                EXECUTIVE_SUMMARY_PROMPT,
                 prediction_goal=sim["prediction_goal"],
                 platforms=platforms,
                 agent_count=agent_count,

@@ -70,7 +70,7 @@ def _save(fig) -> bytes:
 
 
 def render_sentiment_arc_png(
-    rows: list[ChartRow], title: str = "Measured valence by round"
+    rows: list[ChartRow], title: str = "Measured sentiment by round"
 ) -> bytes:
     """Mean valence per round as columns with 95% whiskers.
 
@@ -101,7 +101,7 @@ def render_sentiment_arc_png(
     ax.set_ylim(-1.15, 1.15)
     ax.set_xticks(x)
     ax.set_xticklabels([f"R{row.label}" for row in rows], fontsize=9, color=INK_MID)
-    ax.set_ylabel("Mean valence", fontsize=9, color=INK_MID)
+    ax.set_ylabel("Mean sentiment", fontsize=9, color=INK_MID)
     ax.set_title(title, fontsize=12, color=INK, fontweight="bold", loc="left")
     ax.yaxis.grid(True, color=GRID, linewidth=0.6, linestyle=(0, (2, 2)))
     ax.set_axisbelow(True)
@@ -134,7 +134,7 @@ def render_interval_rows_png(
     *,
     domain: tuple[float, float] = (-1.0, 1.0),
     signed: bool = True,
-    axis_label: str = "Mean valence",
+    axis_label: str = "Mean sentiment",
 ) -> bytes:
     """A dot-and-whisker row per estimate, with the figures printed alongside."""
     if not rows:

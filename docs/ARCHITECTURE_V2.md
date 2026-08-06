@@ -1871,6 +1871,99 @@ their rival.
 
 ---
 
+## [2026-08-06] The report spoke a different language from the product
+
+### The scan stopped at the wire
+
+`frontend/src/test/ia.test.ts` holds every screen to a list of twelve words a
+founder should never have to learn, and after `44b6f18` it reported zero hits
+with no debt list. The 27-page PDF from the demo run carried five of those words
+on twenty-four pages:
+
+```
+adversarial   pages 1, 4, 6, 11, 12, 13, 15, 16
+cohort        pages 1, 3, 4, 5, 6, 7, 9, 11
+archetype     pages 3, 6, 7, 18, 19, 20, 21, 25
+valence       pages 3, 7, 12, 23, 24, 25
+variant       page 20
+```
+
+The scanner is a TypeScript file that walks `frontend/src`. Nothing walked
+`backend/app`, so the half of the product that produces the artifact a founder
+forwards to a board was never in scope. A rule enforced on one side of a wire is
+a rule the other side does not have.
+
+`tests/test_report_vocabulary.py` is the missing half. It does not scan source:
+`build_report_html` is pure, so it renders the whole document — every scoreboard
+shape, so a section that does not render cannot pass by not existing — and reads
+what a reader reads. Text nodes, the `<text>` inside each SVG, the announced
+attributes, and the `content:` strings in the print stylesheet that set the
+running head. A string that never reaches a page cannot fail it, and a string
+that reaches one cannot hide behind an `if`.
+
+### Where the words were, and where they were fixed
+
+**Once, at the composer.** `adversarial.disclosure`, the scoreboard verdict and
+the quality caveats are written into the artifact and rendered verbatim by the
+viewer, the print page, the PDF and the JSON export — PRD §4 requires all four to
+agree. Rewriting them in `report_document.py` would have fixed one surface and
+left three. They are fixed in `analysis_builder.py` and `variant_scoreboard.py`,
+and the test runs those composers over a real `RunData` rather than reading the
+fixture's hand-written copies of their output.
+
+That distinction found the branch nobody had covered. The disclosure writes a
+different sentence when a competitor was named, the fixture only ever exercised
+the unnamed one, and the named branch said "the material uploaded to this
+**project**" — the word the whole vocabulary migration was about, in the one
+sentence PRD §4 makes mandatory.
+
+**A raw enum on the page.** The objections table rendered
+`objection.originating_cohort` straight from the column, so a page whose every
+other word had been rewritten printed the literal string `adversarial` in a
+cell. `COHORT_NAMES` mapped the other cohort field and this one had no map at
+all. Both keys are mapped now, including `buyer` — a `.get(key, key)` that
+happens to read correctly is one rename away from printing a column name.
+
+**The other author.** Roughly half the PDF is narrative written by a model, and
+no scan can reach it. `report_agent.py` was telling it to: the prompts asked for
+"agent/persona archetype analysis", "archetype migration", "cluster agents by
+behavior patterns", and the executive-summary prompt's worked example was a
+political campaign — LA Times, Spencer Pratt, "Conflicted Moderates" — which is
+the strongest instruction in any prompt, because a model imitates the example
+before it obeys the rule. The examples are now a founder's run, and `HOUSE_STYLE`
+is one substitution table injected into all four prompts through `_prompt()`,
+which **raises** on a template lacking the placeholder rather than letting
+`str.format` silently accept an unused keyword.
+
+### The defect the test found before it fixed any copy
+
+Building a three-version run where every version performs identically —
+the A/A/A control described in `_paired_verdict`'s own docstring — produced
+`verdict=""` with a non-`None` comparison. A non-`None` comparison is what makes
+the paired result govern, so the empty string shipped: the report printed
+**"No winner."** followed by nothing, and the writer's prompt carried
+`VERDICT FROM THE MEASUREMENT:` with a blank line after it. Only
+`_executive_summary` had an `or` fallback, which is why it had never been
+noticed. The branch now says what it means — every person who saw both did the
+same thing on both.
+
+### Two sources of truth, named rather than removed
+
+`COHORT_NAMES` mirrors `frontend/src/lib/groups.ts` and `JARGON` mirrors the
+list in `ia.test.ts`. Neither can be shared: one side is Python and the other is
+TypeScript, and a build step that reads `.ts` from pytest costs more than it
+buys. Both are commented as mirrors, and `test_the_vocabulary_rule_names_every_banned_word`
+asserts the prose block a model reads names every word the regex list checks —
+so the writer cannot be taught around the scan.
+
+The chart labels are shorter than the screen's on purpose: `interval_rows_svg`
+gives a row label 104pt at 7.2pt type and does not truncate, so
+"People happy with what they already use" would run into the plot. The word
+"synthetic" that was in the old label moved to the caption and the cover
+callout, and a test asserts it arrived rather than being dropped in the edit.
+
+---
+
 ## Known issues carried into Phase 2
 
 Recorded here so they are not rediscovered. Items 1, 2 and 7 from the Phase 1

@@ -583,7 +583,21 @@ def _paired_verdict(
             upper=round(mean_d, 4),
             separates=False,
         )
-        return None, "", comparison
+        # This branch used to return an empty verdict alongside a non-None
+        # comparison, and a non-None comparison is what makes the paired result
+        # govern — so the scoreboard shipped `verdict=""`. The report then
+        # printed "No winner." followed by nothing, and the writer's prompt
+        # carried "VERDICT FROM THE MEASUREMENT:" with the line blank after it.
+        # The A/A/A control run named in this function's own docstring is the
+        # exact input that reaches here.
+        return (
+            None,
+            f"No winner: every one of the {n} people who saw both "
+            f"{best.label or best.variant_key} and "
+            f"{second.label or second.variant_key} did the same thing on both. "
+            f"There is no difference here to measure.",
+            comparison,
+        )
 
     margin = _Z_95 * math.sqrt(variance / n)
     lower, upper = mean_d - margin, mean_d + margin
@@ -644,13 +658,13 @@ def _resolve_winner(ranked: list[VariantScore]) -> tuple[str | None, str]:
     samples, which they are not.
     """
     if not ranked:
-        return None, "No variant produced a measurable result."
+        return None, "No version produced a measurable result."
     if len(ranked) == 1:
-        return None, "Only one variant produced events; there is nothing to compare."
+        return None, "Only one version got a reaction; there is nothing to compare."
 
     best, second = ranked[0], ranked[1]
     if best.objective_rate.n == 0:
-        return None, "No agent in the leading variant was measured."
+        return None, "Nobody who saw the leading version was measured."
 
     if best.objective_rate.lower > second.objective_rate.upper:
         return (

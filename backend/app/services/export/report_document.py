@@ -91,9 +91,28 @@ PLATFORM_NAMES: dict[str, str] = {
     "custom": "Custom",
 }
 
+# The two sides of the room, in the words the app uses for them. `cohort` is the
+# column in the database and the key in the artifact; it is never the word on the
+# page. Both keys are mapped, not just the adversarial one — a `.get(key, key)`
+# that happens to be right for "buyer" is one rename away from printing a column
+# name, and the objections table did exactly that with the raw enum.
+#
+# ⚠ Mirrors `frontend/src/lib/groups.ts`. The screen and the PDF must name the
+# same group the same way, or a founder reading both is looking at two products.
+# The wording here is the shorter of the two on purpose: `interval_rows_svg`
+# gives a row label 104pt at 7.2pt type, roughly 28 characters, and there is no
+# truncation — a longer label runs into the plot. The word "synthetic" that used
+# to sit in this label is carried by the figure's caption and by the disclosure
+# callout instead, which is where PRD §4 wants it anyway.
 COHORT_NAMES: dict[str, str] = {
-    "buyer": "Buyers",
-    "adversarial": "Incumbent-aligned (synthetic)",
+    "buyer": "Your buyers",
+    "adversarial": "Arguing against you",
+}
+
+#: The same two, phrased to finish the sentence "this objection started with …".
+COHORT_SHORT_NAMES: dict[str, str] = {
+    "buyer": "a buyer",
+    "adversarial": "someone arguing against you",
 }
 
 
@@ -259,7 +278,7 @@ def _cover(doc: ReportDocumentInput, analysis: SimulationAnalysis | None) -> str
     if doc.agent_count:
         facts.append(("Agents", f"{doc.agent_count:,}"))
     if doc.variants and doc.variants > 1:
-        facts.append(("Message arenas", str(doc.variants)))
+        facts.append(("Message versions", str(doc.variants)))
     facts.append(("Report reference", doc.report_id[:8].upper()))
 
     pairs = [f'<td><span class="k">{_h(k)}</span>{_h(v)}</td>' for k, v in facts]
@@ -283,7 +302,8 @@ def _cover(doc: ReportDocumentInput, analysis: SimulationAnalysis | None) -> str
     disclosure = ""
     if analysis and analysis.adversarial.enabled:
         disclosure = _callout(
-            "Synthetic adversarial cohort", f"<p>{_h(analysis.adversarial.disclosure)}</p>"
+            "Some of this room was built to argue against you",
+            f"<p>{_h(analysis.adversarial.disclosure)}</p>",
         )
 
     return f"""
@@ -360,7 +380,7 @@ def _executive_summary(
         if _measured(headline.valence):
             metrics.append(
                 _metric(
-                    "Overall valence",
+                    "Overall sentiment",
                     format_signed(headline.valence.mean),
                     f"95% CI {format_signed(headline.valence.lower)} to "
                     f"{format_signed(headline.valence.upper)} · n={headline.valence.n}"
@@ -446,10 +466,10 @@ def _scoreboard_verdict_callout(scoreboard: VariantScoreboard) -> str:
         if scoreboard.paired is not None:
             paired = scoreboard.paired
             body += (
-                f"<p>Decided by a paired comparison of the top two arenas: "
-                f"{paired.shared_agents} agents saw both, "
+                f"<p>Decided by comparing the top two versions person by person: "
+                f"{paired.shared_agents} people saw both, "
                 f"{paired.discordant_agents} behaved differently between them, "
-                f"and the mean per-agent difference is "
+                f"and the mean per-person difference is "
                 f"{format_signed(paired.mean_difference)} "
                 f"(95% CI {format_signed(paired.lower)} to "
                 f"{format_signed(paired.upper)}).</p>"
@@ -467,7 +487,7 @@ def _scoreboard_verdict_callout(scoreboard: VariantScoreboard) -> str:
 
     body = (
         f"<p><strong>No winner.</strong> {_h(scoreboard.verdict)}</p>"
-        "<p>The arenas below appear in display order. That order is not a "
+        "<p>The versions below appear in display order. That order is not a "
         "ranking: where the intervals overlap, this run does not establish "
         "that one message outperformed another, and acting on the top row "
         "would be acting on sampling noise.</p>"
@@ -475,10 +495,10 @@ def _scoreboard_verdict_callout(scoreboard: VariantScoreboard) -> str:
     if scoreboard.paired is not None:
         paired = scoreboard.paired
         body += (
-            f"<p>The paired comparison of the top two arenas had "
-            f"{paired.shared_agents} shared agents, of whom "
+            f"<p>Comparing the top two versions person by person, "
+            f"{paired.shared_agents} people saw both and "
             f"{paired.discordant_agents} behaved differently between them — "
-            f"a mean per-agent difference of "
+            f"a mean per-person difference of "
             f"{format_signed(paired.mean_difference)} "
             f"(95% CI {format_signed(paired.lower)} to "
             f"{format_signed(paired.upper)}), which includes zero.</p>"
@@ -490,18 +510,18 @@ def _scope_section(
     doc: ReportDocumentInput, analysis: SimulationAnalysis | None
 ) -> str:
     parts: list[str] = []
-    parts.append("<h3>Question put to the swarm</h3>")
+    parts.append("<h3>Question put to the room</h3>")
     parts.append(f"<blockquote>{_h(doc.prediction_goal or '—')}</blockquote>")
 
     parts.append("<h3>Run parameters</h3>")
     rows: list[tuple[str, str]] = [
-        ("Simulation", doc.simulation_name),
+        ("Run", doc.simulation_name),
         ("Platforms", ", ".join(platform_label(p) for p in doc.platforms) or "—"),
         ("Rounds", str(doc.max_rounds) if doc.max_rounds else "—"),
-        ("Agents generated", f"{doc.agent_count:,}" if doc.agent_count else "—"),
-        ("Message arenas", str(doc.variants or 1)),
+        ("People generated", f"{doc.agent_count:,}" if doc.agent_count else "—"),
+        ("Message versions", str(doc.variants or 1)),
         ("Run started", doc.run_started or "—"),
-        ("Simulation reference", doc.simulation_id),
+        ("Run reference", doc.simulation_id),
     ]
     if analysis:
         quality = analysis.quality
@@ -512,7 +532,7 @@ def _scope_section(
                     f"{quality.events_measured:,} of {quality.events_total:,} "
                     f"({quality.coverage_pct:.1f}%)",
                 ),
-                ("Agents active", f"{quality.agents_active} of {quality.agents_total}"),
+                ("People who spoke", f"{quality.agents_active} of {quality.agents_total}"),
                 ("Measurement model", quality.measurement_model or "—"),
                 ("Mean interval width", format_plain(quality.mean_ci_width)),
                 ("Stated confidence", quality.confidence),
@@ -532,10 +552,10 @@ def _scope_section(
             body += f"<p><strong>Roles:</strong> {_h(roles)}</p>"
         if adversarial.archetypes:
             body += (
-                "<p><strong>Archetypes:</strong> "
+                "<p><strong>Kinds of person:</strong> "
                 f"{_h(', '.join(adversarial.archetypes))}</p>"
             )
-        parts.append("<h3>Adversarial cohort disclosure</h3>")
+        parts.append("<h3>Who was arguing against you</h3>")
         parts.append(_callout("Required disclosure", body, warn=True))
 
     return "".join(parts)
@@ -560,10 +580,10 @@ def _measured_response_section(
     if len(arc_rows) >= 2:
         parts.append(
             figures.render(
-                "Measured valence by round",
+                "Measured sentiment by round",
                 sentiment_arc_svg(arc_rows),
-                "Columns are the mean valence of the round; whiskers are the 95% "
-                "confidence interval across agents. Solid columns are positive, "
+                "Columns are the mean sentiment of the round; whiskers are the 95% "
+                "confidence interval across people. Solid columns are positive, "
                 "hatched columns negative, so the sign survives a greyscale "
                 "print. A round that produced no measurable opinion is absent "
                 "from the axis rather than drawn at zero.",
@@ -584,7 +604,7 @@ def _measured_response_section(
     if len(platform_rows) >= 2:
         parts.append(
             figures.render(
-                "Measured valence by platform",
+                "Measured sentiment by platform",
                 interval_rows_svg(platform_rows),
                 "Ordered most negative first. Where two bands overlap, this run "
                 "does not resolve a difference between those platforms and the "
@@ -606,10 +626,10 @@ def _measured_response_section(
     if len(archetype_rows) >= 2:
         parts.append(
             figures.render(
-                "Measured valence by archetype",
+                "Measured sentiment by kind of person",
                 interval_rows_svg(archetype_rows),
-                "Which kind of person reacted how. Archetypes whose agents "
-                "produced no measurable opinion are omitted.",
+                "Which kind of person reacted how. A kind of person who "
+                "produced no measurable opinion is omitted.",
             )
         )
 
@@ -620,7 +640,7 @@ def _measured_response_section(
             lower=slice_.valence.lower,
             upper=slice_.valence.upper,
             n=slice_.valence.n,
-            note=f"{slice_.agent_count} of {slice_.agents_total} allocated agents spoke",
+            note=f"{slice_.agent_count} of {slice_.agents_total} spoke",
         )
         for slice_ in analysis.by_cohort
         if _measured(slice_.valence)
@@ -628,11 +648,11 @@ def _measured_response_section(
     if len(cohort_rows) >= 2:
         parts.append(
             figures.render(
-                "Buyers against the incumbent-aligned cohort",
+                "Buyers against the people arguing with them",
                 interval_rows_svg(cohort_rows),
-                "How much of the headline came from agents constructed to argue "
-                "against adopting the subject. Both cohorts are synthetic; the "
-                "split exists so the headline can be read either way.",
+                "How much of the headline came from people built to argue "
+                "against switching. Both sides are synthetic; the split exists "
+                "so the headline can be read either way.",
             )
         )
 
@@ -674,17 +694,17 @@ def _scoreboard_section(analysis: SimulationAnalysis, figures: _Figures) -> str:
     rows = [variant for variant in scoreboard.variants if _measured(variant.objective_rate)]
     if not rows:
         return (
-            '<div class="note">No arena produced a measurable objective rate, '
+            '<div class="note">No version produced a measurable objective rate, '
             "so there is no scoreboard to show.</div>"
         )
 
     parts: list[str] = []
     objective = scoreboard.objective or "any committing action"
     parts.append(
-        f"<p>Every arena received the same swarm, agent for agent. The metric is "
-        f"the share of an arena's active agents whose measured intent was "
-        f"<strong>{_h(objective)}</strong>, taken over agents rather than events "
-        f"so one talkative agent cannot carry a variant.</p>"
+        f"<p>Every version was shown to the same room, person for person. The "
+        f"metric is the share of the people who saw a version and went on to "
+        f"<strong>{_h(objective)}</strong>, counted over people rather than "
+        f"events so one talkative person cannot carry a version.</p>"
     )
     parts.append(_scoreboard_verdict_callout(scoreboard))
 
@@ -703,9 +723,9 @@ def _scoreboard_section(analysis: SimulationAnalysis, figures: _Figures) -> str:
         for variant in rows
     ]
     caption = (
-        "Objective rate per arena with its 95% interval. "
+        "Objective rate per version with its 95% interval. "
         + (
-            "The filled marker is the variant the paired comparison named."
+            "The filled marker is the version the person-by-person comparison named."
             if scoreboard.winner_variant_key
             else "No marker is emphasised: this test named no winner, and the "
             "order shown is display order rather than a ranking."
@@ -713,10 +733,10 @@ def _scoreboard_section(analysis: SimulationAnalysis, figures: _Figures) -> str:
     )
     parts.append(
         figures.render(
-            "Objective rate by message arena",
+            "Objective rate by message version",
             interval_rows_svg(
                 forest, domain=(0.0, 1.0), signed=False,
-                axis_label="Share of active agents taking the objective action",
+                axis_label="Share of people who took the objective action",
             ),
             caption,
         )
@@ -724,11 +744,11 @@ def _scoreboard_section(analysis: SimulationAnalysis, figures: _Figures) -> str:
 
     show_virality = any(variant.virality.score is not None for variant in rows)
     header = (
-        "<tr><th>Arena</th>"
+        "<tr><th>Version</th>"
         '<th class="num">Objective rate</th>'
         '<th class="num">95% CI</th>'
-        '<th class="num">Agents</th>'
-        '<th class="num">Valence</th>'
+        '<th class="num">People</th>'
+        '<th class="num">Sentiment</th>'
         '<th class="num">95% CI</th>'
         + ('<th class="num">Virality</th>' if show_virality else "")
         + "<th>Notes</th></tr>"
@@ -773,8 +793,9 @@ def _scoreboard_section(analysis: SimulationAnalysis, figures: _Figures) -> str:
 
     footnotes = [
         "Blank cells are unmeasured, not zero.",
-        "Objective rate is a proportion over agents; the interval is computed "
-        "across agents, so a small arena reports a visibly wider band.",
+        "Objective rate is a proportion over people; the interval is computed "
+        "across people, so a version that fewer people saw reports a visibly "
+        "wider band.",
     ]
     if show_virality:
         footnotes.append(
@@ -796,17 +817,18 @@ def _objections_section(analysis: SimulationAnalysis) -> str:
         return ""
 
     parts: list[str] = [
-        "<p>Ranked by load-bearing weight — reach × intensity × cohort spread — "
-        "rather than by how often an objection was repeated. The two are usually "
-        "different objections, and only the first predicts a lost deal.</p>"
+        "<p>Ranked by load-bearing weight — reach × intensity × how many kinds of "
+        "person carried it — rather than by how often an objection was repeated. "
+        "The two are usually different objections, and only the first predicts a "
+        "lost deal.</p>"
     ]
 
     header = (
         "<tr><th>Objection</th>"
         '<th class="num">Weight</th>'
-        '<th class="num">Agents</th>'
+        '<th class="num">People</th>'
         '<th class="num">First seen</th>'
-        "<th>Originating cohort</th>"
+        "<th>Started with</th>"
         "<th>Crossed into buyers</th></tr>"
     )
     body = ""
@@ -821,12 +843,16 @@ def _objections_section(analysis: SimulationAnalysis) -> str:
             else "no" if objection.originated_adversarial
             else ""
         )
+        # The database column is `buyer` / `adversarial`; the page is not. This
+        # rendered the raw enum, so "adversarial" printed in a cell on a page
+        # whose every other word had been rewritten.
+        started_with = COHORT_SHORT_NAMES.get(objection.originating_cohort or "", "")
         body += (
             f'<tr><td class="rowhead">{_h(objection.label)}</td>'
             f'<td class="num">{objection.load_bearing_score:.1f}</td>'
             f'<td class="num">{objection.agent_count}</td>'
             f'<td class="num">{first_seen}</td>'
-            f"<td>{_h(objection.originating_cohort or '')}</td>"
+            f"<td>{_h(started_with)}</td>"
             f"<td>{crossed}</td></tr>"
         )
     parts.append(
@@ -835,7 +861,7 @@ def _objections_section(analysis: SimulationAnalysis) -> str:
     parts.append(
         '<p class="provenance">An empty cell is a value this run did not '
         "measure. &ldquo;Crossed into buyers&rdquo; is only meaningful for an "
-        "objection that started in the incumbent-aligned cohort, so it is blank "
+        "objection that started with someone arguing against you, so it is blank "
         "for the rest.</p>"
     )
 
@@ -843,7 +869,7 @@ def _objections_section(analysis: SimulationAnalysis) -> str:
     if quoted:
         parts.append("<h3>Verbatim</h3>")
         parts.append(
-            "<p>Agent output, unedited. Every objection above resolves to the "
+            "<p>What they wrote, unedited. Every objection above resolves to the "
             "events that produced it; these are the first two of each.</p>"
         )
         for objection in quoted:
@@ -917,10 +943,10 @@ def _methodology_section(
     )
     parts.append("<h3>How to read an interval</h3>")
     parts.append(
-        "<p>Confidence intervals are computed across <em>agents</em>, not "
-        "events. A run of 25 agents that produced 400 events has 25 independent "
-        "observations, not 400 — one agent posting ten times is one opinion "
-        "repeated. A small swarm therefore reports a visibly wide band rather "
+        "<p>Confidence intervals are computed across <em>people</em>, not "
+        "events. A run of 25 people that produced 400 events has 25 independent "
+        "observations, not 400 — one person posting ten times is one opinion "
+        "repeated. A small room therefore reports a visibly wide band rather "
         "than manufacturing precision out of its own verbosity. Where two bands "
         "overlap, the difference between them is not resolved by this run, "
         "whatever order they appear in.</p>"
@@ -938,14 +964,14 @@ def _methodology_section(
 
     parts.append("<h3>Scope</h3>")
     parts.append(
-        "<p>Every agent in this run is synthetic. This document reports what a "
-        "constructed swarm did in a simulation; it is evidence about a message, "
-        "not a survey of a population.</p>"
+        "<p>Everybody in this run is synthetic. This document reports what a "
+        "constructed room did when it was shown your material; it is evidence "
+        "about a message, not a survey of a population.</p>"
     )
     rows = [
         ("Document generated", doc.generated_at.strftime("%d %B %Y at %H:%M UTC")),
         ("Report reference", doc.report_id),
-        ("Simulation reference", doc.simulation_id),
+        ("Run reference", doc.simulation_id),
         (
             "Artifact format",
             f"{analysis.schema_version} (this build reads 1–{SUPPORTED_SCHEMA_VERSION})"
@@ -953,8 +979,8 @@ def _methodology_section(
             else f"not read (this build reads 1–{SUPPORTED_SCHEMA_VERSION})",
         ),
         (
-            "Arenas included",
-            "all arenas in the run" if (doc.variants or 1) > 1 else "single arena",
+            "Versions included",
+            "every version in the run" if (doc.variants or 1) > 1 else "a single version",
         ),
     ]
     parts.append(_kv_table(rows))
@@ -1021,7 +1047,7 @@ def build_report_html(doc: ReportDocumentInput) -> str:
         )
         add(
             "scoreboard",
-            "Message arena scoreboard",
+            "Message scoreboard",
             _scoreboard_section(analysis, figures),
         )
         add("objections", "Objections", _objections_section(analysis))

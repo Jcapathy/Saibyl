@@ -259,12 +259,12 @@ def _adversarial_disclosure(run: RunData) -> AdversarialDisclosure:
     })
 
     named = (
-        f" Competitor names appear only where the material uploaded to this "
-        f"project named them ({', '.join(run.named_competitors)}); no claim about "
-        f"a real company originates from the model."
+        f" A rival is named ({', '.join(run.named_competitors)}) only because the "
+        f"material uploaded to this product named it; no claim about a real "
+        f"company originates from the model."
         if run.named_competitors
-        else " No competitor was named: the cohort argues about the category and "
-        "the cost of switching, with no real company involved."
+        else " No rival was named: they argue about the category and the cost of "
+        "switching, with no real company involved."
     )
 
     return AdversarialDisclosure(
@@ -277,12 +277,12 @@ def _adversarial_disclosure(run: RunData) -> AdversarialDisclosure:
         roles=run.adversarial_roles,
         named_competitors=run.named_competitors,
         disclosure=(
-            f"{run.agents_adversarial} of {run.agents_total} agents "
-            f"({realised * 100:.0f}%) were configured as incumbent-aligned: they "
-            f"argue against adopting the subject by construction. They are "
-            f"synthetic, like every agent in this run, and their reactions are "
-            f"reported separately from buyers' so the headline can be read "
-            f"either way.{named}"
+            f"{run.agents_adversarial} of {run.agents_total} people in this run "
+            f"({realised * 100:.0f}%) were built to argue against you: they are "
+            f"happy with what they already use, and they push back on switching "
+            f"by construction. They are synthetic, like everyone else in this "
+            f"run, and what they said is reported separately from the buyers' so "
+            f"the headline can be read either way.{named}"
         ),
     )
 
@@ -461,8 +461,8 @@ def _quality(run: RunData, timeline: list[TimelinePoint], overall_n: int) -> Qua
         )
     if overall_n < 30:
         caveats.append(
-            f"{overall_n} agents produced measurable opinions. Intervals are wide "
-            "at this swarm size — treat differences smaller than the bands as "
+            f"{overall_n} people produced measurable opinions. Intervals are wide "
+            "at this size — treat differences smaller than the bands as "
             "unresolved."
         )
     if len(timeline) < 2:
@@ -483,9 +483,9 @@ def _quality(run: RunData, timeline: list[TimelinePoint], overall_n: int) -> Qua
         # this is the block the viewer puts next to the headline number.
         share = run.agents_adversarial * 100 / run.agents_total
         caveats.append(
-            f"{share:.0f}% of this swarm was configured as incumbent-aligned and "
-            "argues against adoption by construction. The headline includes them; "
-            "the cohort breakdown separates them."
+            f"{share:.0f}% of the room was built to argue against you and pushes "
+            "back on switching by construction. The headline includes them; the "
+            "breakdown further down separates them out."
         )
 
     return QualityBlock(
