@@ -1964,6 +1964,99 @@ callout, and a test asserts it arrived rather than being dropped in the edit.
 
 ---
 
+## [2026-08-06] The answer drafter was arguing for the other side
+
+The founder read the first real draft — twelve assets for the ParryAI run — and
+called it commercially suicidal. Three of the twelve:
+
+```
+Disclosure: What We Have Not Yet Measured
+Disclosure: We Don't Yet Know Our Own ROI Numbers
+ParryAI Removal & Migration Guide (Draft)      <- answering "creates lock-in"
+```
+
+Queried before theorising, because the handoff's diagnosis was explicitly
+marked unverified. The rows confirm all of it and add two things the paste did
+not show. `projects.name` for that run is **ParryAI**, so the migration guide is
+a removal guide for the founder's own product — its first line is "This document
+describes what it takes to remove ParryAI from a running agentic deployment."
+And **two of the three disclosures were the only asset drafted for their
+objection**, so the founder's entire answer to "your ROI claim is unproven" was
+a page agreeing with it.
+
+### It was doing what it was told
+
+The diagnosis in the handoff is right: the anti-fabrication rules had been
+over-learned. They are correct for *measurement* — the report must not invent a
+number — and wrong for *asset drafting*, where the job is to make the case the
+material supports. The prompt taught the confession in as many words:
+
+> Asked to answer "there is no proof this works", the honest asset says what the
+> team does not yet know and what they will run to find out.
+
+That sentence *is* "Disclosure: What We Have Not Yet Measured". It was the
+worked example, which is the strongest instruction in any prompt. It is replaced
+by the rule it should always have been: not having a number is not the same as
+having nothing to say — state the mechanism, then say plainly which part is not
+yet measured. The claim comes first and the limit qualifies it.
+
+Two more things the prompt never said, and now does: **which side the drafter is
+on** (the product's name is passed in and the copy is written for it, by name),
+and **which direction a `migration_guide` runs**. The type's comment said "how to
+get off the incumbent"; the prompt never repeated it, and a model handed the
+objection "you create lock-in" wrote the guide in the only direction the
+objection pointed.
+
+`ASSET_TYPES` is reordered. It is interpolated into the prompt as the menu, a
+model reaches for the first plausible item on a list, and `disclosure` was
+first. Order in that tuple is prompt copy, and it is commented as such.
+
+### Three checks, because a prompt rule is a request
+
+Same reasoning as `_evidence_claims`, which already existed one layer over.
+
+**`_leads_away`** drops any asset that teaches the reader to leave. It is
+anchored on the product's own name and requires the name to be the *object* of
+the leaving verb — `remove ParryAI`, or the compound `ParryAI Removal`. A
+character window around the two words was the first attempt and it failed its own
+test: "Wiring Tallyhook in takes one workflow file. Remove the three scripts you
+wrote to paper over the gap" puts the name 45 characters from "Remove", and it
+is the best sentence in the draft. Only the opening 400 characters of the body
+count, so a closing sentence saying the door is not locked still passes — that
+is the correct answer to a lock-in objection, not a violation of it. With no
+product name the check returns "" rather than falling back to keywords: a
+fallback would drop "Removing the friction from your CI", which is a worse
+failure than the one being guarded against, and silent.
+
+**`_cap_concessions`** allows at most one `disclosure` per objection and logs at
+ERROR when every asset for an objection concedes. Deliberately a cap and not a
+ban: DECISIONS §4's headline claim is that an honest disclosure measurably moved
+an objection, and forbidding the type would delete the finding along with the
+failure mode. The all-concessions case keeps one rather than dropping to zero,
+because the UI cannot show the difference between "one asset" and "one asset
+that concedes" — the log is the only place that distinction exists.
+
+**`_unpublishable_title`** rejects "(Draft)", "[draft]", "TBD" and
+"placeholder". This module's own prompt defines an asset as "something a team
+can publish tomorrow", and the real title ended in "(Draft)".
+
+### A fourth declaration of the same list
+
+`ASSET_TYPES`, `AssetType` in the schema, the edit endpoint's `Literal`, and
+`frontend/src/lib/founder.ts`. None can import another — pydantic needs a static
+`Literal`, and the tuple is what reaches the prompt. Reordering the tuple is
+exactly the edit that leaves the third behind, and the symptom would be a
+founder's edit rejected as an unknown type, so the three Python ones are now
+asserted equal as sets. The fourth is a union rather than an ordered list, so
+order cannot drift there and membership drift is a build error.
+
+**Not yet verified live.** Everything above is a passing test, and this session's
+own history says a passing test is evidence that the code does what its author
+believed. The drafter is one main-model call; only a real draft shows whether
+the prompt rewrite moved the writing.
+
+---
+
 ## Known issues carried into Phase 2
 
 Recorded here so they are not rediscovered. Items 1, 2 and 7 from the Phase 1

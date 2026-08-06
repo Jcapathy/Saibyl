@@ -39,23 +39,40 @@ INOCULATION_SCHEMA_VERSION = 1
 # artefact a founder can publish, and the list is the menu the drafting pass
 # chooses from. A free-form type drifts into "messaging", which is not something
 # anyone can go and write.
+#
+# ⚠ **Order is load-bearing.** This tuple is interpolated into the drafting
+# prompt as the menu, and a model reaches for the first plausible item on a
+# list. `disclosure` used to be first, and the first live draft a founder read
+# came back three-twelfths confessions — "Disclosure: What We Have Not Yet
+# Measured", "Disclosure: We Don't Yet Know Our Own ROI Numbers" — two of which
+# were the *only* asset drafted for their objection. The types that make a case
+# come first now, and `disclosure` is last with its narrow job stated.
 ASSET_TYPES: tuple[str, ...] = (
-    # A plain statement of a limitation, published before someone finds it.
-    "disclosure",
-    # What is coming and when. Answers "this is missing" without claiming it
-    # exists.
-    "roadmap",
+    # The direct answer to a specific question, in the buyer's words.
+    "faq_entry",
     # Why the price is the price. The most common request behind a price
     # objection is a reason, not a discount.
     "pricing_rationale",
+    # How the product is built to be safe, concretely.
     "security_page",
-    # How to get off the incumbent. The direct answer to switching cost, which
-    # is the objection the adversarial cohort exists to surface.
+    # How to move **onto** this product from whatever the buyer uses today. The
+    # direct answer to switching cost. Never a guide to leaving — see
+    # `inoculation._leads_away`, which exists because a lock-in objection was
+    # once answered with a removal guide for the founder's own product.
     "migration_guide",
-    "faq_entry",
+    # What is coming and when. Answers "this is missing" without claiming it
+    # exists.
+    "roadmap",
     # "Why not just use X." Only permitted when a competitor was grounded in
     # uploaded material — see the drafting pass.
     "comparison_page",
+    # Last on purpose. A plain statement of a limitation, published before
+    # someone finds it. It is a real move — an honest disclosure that measurably
+    # kills an objection is the finding DECISIONS §4 is built on — but it is the
+    # move that concedes, and it cannot be the whole answer to an objection.
+    # `inoculation._cap_concessions` allows at most one per objection and never
+    # as the only one.
+    "disclosure",
 )
 
 AssetType = Literal[

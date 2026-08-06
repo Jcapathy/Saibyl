@@ -105,10 +105,32 @@ def _load_objections(simulation_id: str, keys: list[str] | None) -> list[dict[st
     return rows[:MAX_OBJECTIONS_TO_DRAFT]
 
 
+def _product_name(project_id: str | None) -> str:
+    """What the founder calls their product, for the copy and for the check.
+
+    Read from `projects.name` rather than parsed out of `prediction_goal`: the
+    goal is a sentence a founder wrote and the name inside it is wherever they
+    put it. Returns "" when there is no project or no name, and every caller
+    treats "" as "cannot check", never as "no match".
+    """
+    if not project_id:
+        return ""
+    row = (
+        get_supabase_admin()
+        .table("projects")
+        .select("name")
+        .eq("id", project_id)
+        .single()
+        .execute()
+    ).data or {}
+    return str(row.get("name") or "").strip()
+
+
 def _draft_prompt(
     sim: dict[str, Any],
     objections: list[dict[str, Any]],
     named_competitors: list[str],
+    product_name: str = "",
 ) -> str:
     blocks = []
     for objection in objections:
@@ -142,11 +164,18 @@ Do NOT use "comparison_page" and do NOT name any company, product, or
 open-source project. No competitor material was uploaded, so any name you
 produce would be invented. Write about the category and the status quo."""
 
-    return f"""A synthetic audience reacted to this, and these are the objections that
+    subject = product_name or "this product"
+
+    return f"""A room of buyers reacted to this, and these are the objections that
 carried the most weight. Draft the material the team should publish BEFORE the
-next audience sees it.
+next room sees it.
+
+You are writing **for {subject}, on {subject}'s side.** This copy goes on the
+team's own site, under their own name, to win the buyer who raised the
+objection. Every asset must make a case a reader could act on.
 
 SUBJECT: {sim.get('prediction_goal', '')}
+THE PRODUCT: {subject}
 
 OBJECTIONS, most load-bearing first:
 {chr(10).join(blocks)}
@@ -155,29 +184,56 @@ Draft {ASSETS_PER_OBJECTION} candidate assets per objection. Asset types:
 {', '.join(ASSET_TYPES)}
 {competitor_rule}
 
-RULES
+WHAT AN ASSET IS
+- **Every asset leads with a claim about what {subject} does.** First sentence,
+  before any qualification. "Every action is checked against your policy before
+  it reaches the API" is an asset. "Here is what we have not yet measured" is
+  not an asset, it is a confession, and a founder cannot publish it as an
+  answer to anything.
+- An asset is something a team can publish tomorrow. Write the actual copy, not
+  advice about what the copy should say. "Address concerns about pricing" is
+  not an asset; a pricing rationale page that states the price is.
+- Answer the objection the buyers actually voiced, in their words, not the
+  objection you think they should have had. The quotes above are the brief.
+- Titles are what the buyer clicks. No "Disclosure:", no "FAQ:", no "(Draft)",
+  no colon-prefixed category label. "What a seat costs, and why" — not
+  "Pricing Rationale: What You Pay For and Why".
+
+HONESTY, AND WHAT IT DOES NOT MEAN
 - **You have no evidence. Do not invent any.** You do not know this team's
   customer count, retention, benchmark results, study outcomes, correlation
-  coefficients, sample sizes, or dates. Asked to answer "there is no proof this
-  works", the honest asset says what the team does not yet know and what they
-  will run to find out. It does NOT say "in our 14-case dataset, rank-order
-  correlation was 0.74". That sentence is a fabrication a founder might publish
-  as their own claim, and it is the single worst thing you can produce here.
+  coefficients, sample sizes, or dates. Writing "in our 14-case dataset,
+  rank-order correlation was 0.74" is a fabrication a founder might publish as
+  their own claim, and it is the single worst thing you can produce here.
 - Numbers are allowed only when they appear in the material above, or when they
   describe something the team controls and has stated (its own price, its own
   tier limits). Every other figure must be omitted, not estimated.
-- An asset is something a team can publish tomorrow. Write the actual copy, not
-  advice about what the copy should say. "Address concerns about pricing" is
-  not an asset; a pricing rationale page is.
-- Answer the objection the agents actually voiced, in their words, not the
-  objection you think they should have had. The quotes above are the brief.
-- Where the objection is true, the asset says so. A disclosure that concedes a
-  real limitation moves an objection; a denial of a true one hardens it.
+- **Not having a number is not the same as having nothing to say.** Asked to
+  answer "there is no proof this works", the asset states the mechanism — what
+  {subject} does, and why that produces the outcome — and then says plainly
+  which part is not yet measured. The claim comes first and the limit qualifies
+  it. An asset that is only the limit answers nothing.
+- Where the objection is true, say so **inside an asset that still makes the
+  case**. One sentence conceding a real limitation lands; a page of them reads
+  as a product that does not believe in itself.
+
+WHAT YOU MUST NEVER WRITE
+- **Never help the reader leave.** No asset explains how to remove, uninstall,
+  rip out, decommission, offboard or cancel {subject}. A lock-in objection is
+  answered by what the buyer keeps and owns — exportable data in a documented
+  format, no proprietary formats, no re-architecture to undo — not by a removal
+  guide. A "migration_guide" is always about moving **onto** {subject} from
+  what the buyer uses today, never off it.
+- Never recommend a competitor, and never suggest the buyer wait, evaluate
+  alternatives, or come back later.
+
 - "hypothesis" states what you expect this to do, specifically enough to be
-  wrong: which cohort stops raising it, and roughly how far it should fall.
-  This is recorded before the test runs and judged against the measurement.
-- Two assets for the same objection should take genuinely different angles —
-  concede versus reframe, roadmap versus rationale — not two phrasings of one.
+  wrong: which kind of buyer stops raising it, and roughly how far it should
+  fall. This is recorded before the test runs and judged against the
+  measurement.
+- Two assets for the same objection take genuinely different angles — the
+  mechanism versus the price of it, the roadmap versus what already ships — not
+  two phrasings of one, and not two confessions.
 
 Return ONLY JSON:
 {{"assets": [
@@ -234,6 +290,157 @@ def _sourced_numbers(material: ProjectMaterial) -> set[str]:
     return set(_NUMBER_RE.findall(text))
 
 
+# Verbs for getting rid of something. Paired with the product's own name below —
+# on their own these are ordinary words ("remove the friction", "cancel the
+# meeting") and matching them alone would drop good copy.
+_LEAVING_VERBS = (
+    "removal", "remove", "removing", "uninstall", "uninstalling",
+    "rip out", "ripping out", "decommission", "decommissioning",
+    "offboard", "offboarding", "tear out", "tearing out",
+    "cancel", "cancelling", "canceling", "cancellation",
+    "migrate off", "migrating off", "migrate away", "migrating away",
+    "switch off", "switching off", "move off", "moving off",
+    "get off", "getting off", "back out", "backing out",
+    "exit plan", "exit strategy", "wind down", "winding down",
+)
+
+# Titles a founder cannot publish as-is, whatever the body says. Word-bounded
+# for the bare words, because a substring test on "tbd" is one odd product name
+# away from dropping a good asset.
+_UNPUBLISHABLE_TITLE_RE = re.compile(
+    r"\(\s*draft\s*\)|\[\s*draft\s*\]|\bTBD\b|\bplaceholder\b|\blorem ipsum\b",
+    re.IGNORECASE,
+)
+
+# The one asset type whose whole job is to concede. Named rather than inferred:
+# a founder should be able to disagree with this list, not reverse-engineer it.
+_CONCESSION_TYPES = ("disclosure",)
+
+
+def _leaving_pattern(product_name: str) -> re.Pattern[str] | None:
+    """"remove ParryAI" and "ParryAI Removal", and nothing looser than that.
+
+    The product has to be the **object** of the leaving verb. A character-window
+    around the two is not enough: "Wiring Tallyhook in takes one workflow file.
+    Remove the three scripts you wrote to paper over the gap" puts the name 45
+    characters from "Remove", and it is the best sentence in the draft.
+
+    Two shapes, because English writes this two ways — "remove ParryAI" and the
+    compound noun "ParryAI Removal", which is what the real title used.
+    """
+    if not product_name.strip():
+        return None
+    name = re.escape(product_name.strip())
+    verbs = "|".join(re.escape(verb) for verb in _LEAVING_VERBS)
+    return re.compile(
+        # verb, optionally an article or possessive, then the name
+        rf"(?:{verbs})\s+(?:the\s+|your\s+|our\s+|a\s+)?{name}\b"
+        # or the name used as the compound's first noun
+        rf"|\b{name}\s+(?:{verbs})\b",
+        re.IGNORECASE,
+    )
+
+
+def _leads_away(title: str, body: str, product_name: str) -> str:
+    """Does this asset teach the reader how to leave? Returns the reason, or "".
+
+    The defect this exists for, verbatim from production: answering a
+    **lock-in** objection with `ParryAI Removal & Migration Guide (Draft)`,
+    whose first line is "This document describes what it takes to remove ParryAI
+    from a running agentic deployment." No founder publishes that as an answer
+    to anything, and the drafting prompt had no rule against it because the
+    `migration_guide` type never stated its direction.
+
+    Without a product name it cannot fire at all, and that is the right failure.
+    A keyword-only fallback would drop "Removing the friction from your CI",
+    which is worse than the defect it guards against and silent besides.
+    """
+    pattern = _leaving_pattern(product_name)
+    if pattern is None:
+        return ""
+
+    match = pattern.search(title)
+    if match:
+        return f'title says "{match.group(0)}"'
+
+    # In the body, only the opening. An asset is judged on what it sets out to
+    # do, and a closing sentence saying the door is not locked is the correct
+    # answer to a lock-in objection rather than a violation of it.
+    match = pattern.search(body[:400])
+    if match:
+        return f'opens by saying "{match.group(0)}"'
+    return ""
+
+
+def _unpublishable_title(title: str) -> str:
+    """A title that says the copy is not finished. Returns the reason, or "".
+
+    `ParryAI Removal & Migration Guide (Draft)` carried this too. An asset is
+    defined in this module's own prompt as "something a team can publish
+    tomorrow", and a title ending in "(Draft)" is the drafter saying it is not.
+    """
+    match = _UNPUBLISHABLE_TITLE_RE.search(title)
+    return f'title contains "{match.group(0)}"' if match else ""
+
+
+def _cap_concessions(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Leave a founder at least one asset per objection that makes a case.
+
+    On the run that prompted this, three of twelve assets were `disclosure`,
+    every one titled "Disclosure: …" and every one a list of what the team does
+    not know. Two of the three were the *only* assets drafted for their
+    objection, so the founder's entire answer to "your ROI claim is unproven"
+    was a page agreeing with it.
+
+    Deliberately a cap and not a filter. A concession that sits beside a
+    positive asset is exactly what the loop is for — DECISIONS §4 is built on
+    being able to say an honest disclosure *moved* an objection, and forbidding
+    the type outright would remove the finding along with the failure. So: at
+    most one per objection, and never the only one.
+
+    Order is preserved, because the model emits its stronger angle first and the
+    UI shows them in that order.
+    """
+    by_objection: dict[str, list[int]] = {}
+    for index, row in enumerate(rows):
+        by_objection.setdefault(row["objection_key"], []).append(index)
+
+    dropped: set[int] = set()
+    for key, group in by_objection.items():
+        positives = [i for i in group if rows[i]["asset_type"] not in _CONCESSION_TYPES]
+        concessions = [i for i in group if rows[i]["asset_type"] in _CONCESSION_TYPES]
+
+        if not positives:
+            # Everything drafted for this objection concedes it. Keep the first
+            # so the founder has something rather than a silently empty
+            # objection, and say so at ERROR: this is the drafter failing at its
+            # job, not a property of the objection, and the UI cannot show the
+            # difference between "one asset" and "one asset that concedes".
+            logger.error(
+                "inoculation_only_concessions_drafted",
+                objection_key=key,
+                drafted=len(group),
+                titles=[rows[i]["title"][:80] for i in group],
+                detail=(
+                    "every asset for this objection concedes it. The founder is "
+                    "left agreeing with the objection and answering nothing."
+                ),
+            )
+
+        extra = concessions[1:]
+        dropped.update(extra)
+        if extra:
+            logger.info(
+                "inoculation_extra_concessions_dropped",
+                objection_key=key,
+                dropped=len(extra),
+            )
+
+    # Filtered in place, so the cap does not also reorder: the model emits its
+    # stronger angle first and the UI shows them in that order.
+    return [row for index, row in enumerate(rows) if index not in dropped]
+
+
 async def draft_assets(
     simulation_id: str,
     org_id: str,
@@ -287,13 +494,31 @@ async def draft_assets(
         )
     sourced = _sourced_numbers(gather_material(project_id)) if project_id else set()
 
+    # The product's own name, for two jobs the drafter could not do without it:
+    # writing copy that names the product, and refusing an asset that explains
+    # how to get rid of it. `_leads_away` cannot fire without this, so its
+    # absence is logged rather than absorbed — the same reasoning as the
+    # material above, and the same failure shape.
+    product_name = _product_name(project_id)
+    if not product_name:
+        logger.warning(
+            "inoculation_draft_product_name_unavailable",
+            simulation_id=simulation_id,
+            project_id=project_id,
+            detail=(
+                "no product name, so the drafter writes 'this product' and the "
+                "leads-away check cannot run. An asset explaining how to remove "
+                "the product would be stored."
+            ),
+        )
+
     with usage_context(
         "inoculation_draft", simulation_id=simulation_id, organization_id=org_id
     ):
         raw = await llm_complete(
             messages=[{
                 "role": "user",
-                "content": _draft_prompt(sim, objections, named),
+                "content": _draft_prompt(sim, objections, named, product_name),
             }],
             max_tokens=_DRAFT_MAX_TOKENS,
             temperature=0.5,
@@ -354,6 +579,36 @@ async def draft_assets(
             )
             continue
 
+        # Copy that works against the founder. Dropped for the same reason as a
+        # fabricated statistic: it is published under their name, and there is
+        # no partial version of "here is how to remove our product" worth
+        # keeping.
+        away = _leads_away(title, body, product_name)
+        if away:
+            logger.warning(
+                "inoculation_asset_dropped_leads_away",
+                objection_key=key,
+                asset_type=asset_type,
+                title=title[:80],
+                reason=away,
+                detail=(
+                    "asset helps the reader leave the product it is supposed to "
+                    "argue for; a lock-in objection is answered by what the "
+                    "buyer keeps, not by a removal guide"
+                ),
+            )
+            continue
+
+        unfinished = _unpublishable_title(title)
+        if unfinished:
+            logger.warning(
+                "inoculation_asset_dropped_unpublishable_title",
+                objection_key=key,
+                title=title[:80],
+                reason=unfinished,
+            )
+            continue
+
         rows.append({
             "simulation_id": simulation_id,
             "organization_id": org_id,
@@ -367,6 +622,8 @@ async def draft_assets(
             "created_by": created_by,
         })
 
+    rows = _cap_concessions(rows)
+
     if not rows:
         raise ValueError("Asset drafting produced nothing usable for these objections.")
 
@@ -376,6 +633,7 @@ async def draft_assets(
         simulation_id=simulation_id,
         objections=len(objections),
         assets=len(created),
+        concessions=sum(1 for r in rows if r["asset_type"] in _CONCESSION_TYPES),
     )
     return created
 

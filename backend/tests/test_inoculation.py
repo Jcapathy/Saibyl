@@ -300,7 +300,14 @@ _OBJECTION_ROW = {
 _GROUNDED_BODY = "Our benchmark is the standard run of 100 agents, at $99/mo."
 
 
-def _draft_env(monkeypatch, project_id, body=_GROUNDED_BODY):
+def _draft_env(
+    monkeypatch,
+    project_id,
+    body=_GROUNDED_BODY,
+    *,
+    assets=None,
+    product_name="Tallyhook",
+):
     from app.services.engine.personas import icp_synthesizer
     from app.services.intelligence import analysis_data, inoculation
 
@@ -308,6 +315,7 @@ def _draft_env(monkeypatch, project_id, body=_GROUNDED_BODY):
         "simulations": {"id": "sim-1", "project_id": project_id,
                         "prediction_goal": "goal", "icp_profile_id": None},
         "canonical_objections": [_OBJECTION_ROW],
+        "projects": {"name": product_name},
     })
     seen: dict[str, object] = {}
 
@@ -315,14 +323,17 @@ def _draft_env(monkeypatch, project_id, body=_GROUNDED_BODY):
         seen["project_id"] = pid
         return _MATERIAL
 
-    async def _complete(**_kw):
-        return json.dumps({"assets": [{
-            "objection_key": "price-too-high-for-small-teams",
-            "asset_type": "pricing_rationale",
-            "title": "Why we price the way we do",
-            "body": body,
-            "hypothesis": "Small teams stop raising it.",
-        }]})
+    drafted = assets if assets is not None else [{
+        "objection_key": "price-too-high-for-small-teams",
+        "asset_type": "pricing_rationale",
+        "title": "Why we price the way we do",
+        "body": body,
+        "hypothesis": "Small teams stop raising it.",
+    }]
+
+    async def _complete(**kwargs):
+        seen["prompt"] = kwargs["messages"][0]["content"]
+        return json.dumps({"assets": drafted})
 
     monkeypatch.setattr(inoculation, "get_supabase_admin", lambda: admin)
     monkeypatch.setattr(inoculation, "llm_complete", _complete)
@@ -357,6 +368,257 @@ async def test_the_fabrication_filter_stays_strict_with_material_loaded(monkeypa
 
     with pytest.raises(ValueError):
         await draft_assets("sim-1", "org-1")
+
+
+# ---------------------------------------------------------------------------
+# The asset has to argue for the product
+#
+# The founder read the first real draft and called it commercially suicidal.
+# They were right. Twelve assets came back for the ParryAI run; three were
+# titled "Disclosure: …" and were lists of what the team did not know, two of
+# those three were the *only* asset drafted for their objection, and the answer
+# to "patent-pending creates lock-in" was
+# `ParryAI Removal & Migration Guide (Draft)`, opening "This document describes
+# what it takes to remove ParryAI from a running agentic deployment."
+#
+# The diagnosis is not that the drafter is dishonest — it is that it had
+# over-learned the anti-fabrication rules. Those rules are right for
+# *measurement*: the report must not invent a number. They are wrong for *asset
+# drafting*, where the job is to make the case the material supports. The
+# prompt's own worked example taught it, in as many words: "the honest asset
+# says what the team does not yet know". The fixtures below are the real titles
+# and the real opening lines.
+# ---------------------------------------------------------------------------
+
+_REMOVAL_TITLE = "ParryAI Removal & Migration Guide (Draft)"
+_REMOVAL_BODY = (
+    "This document describes what it takes to remove ParryAI from a running "
+    "agentic deployment. We are publishing it before you buy, not after."
+)
+
+
+def _asset(objection_key, asset_type, title, body="Copy that makes a case."):
+    return {
+        "objection_key": objection_key,
+        "asset_type": asset_type,
+        "title": title,
+        "body": body,
+        "hypothesis": "They stop raising it.",
+    }
+
+
+def test_a_removal_guide_for_the_founders_own_product_is_caught():
+    from app.services.intelligence.inoculation import _leads_away
+
+    assert _leads_away(_REMOVAL_TITLE, _REMOVAL_BODY, "ParryAI")
+    # The title alone is enough — both halves of the claim are in it.
+    assert _leads_away(_REMOVAL_TITLE, "", "ParryAI")
+    # And the body alone, for a title that gives nothing away.
+    assert _leads_away("Your exit is documented", _REMOVAL_BODY, "ParryAI")
+
+
+def test_the_check_is_anchored_on_the_products_own_name():
+    """Otherwise it eats good copy.
+
+    Removing friction, cancelling a meeting and migrating off the incumbent are
+    all things an asset should be free to say. Only doing it *to the product
+    being argued for* is the defect.
+    """
+    from app.services.intelligence.inoculation import _leads_away
+
+    assert not _leads_away(
+        "Removing the friction from your CI",
+        "Wiring Tallyhook in takes one workflow file. Remove the three scripts "
+        "you wrote to paper over the gap.",
+        "Tallyhook",
+    )
+    assert not _leads_away(
+        "Moving off spreadsheets",
+        "Migrating off your spreadsheet takes an afternoon: export, import, done.",
+        "Tallyhook",
+    )
+    # The intended direction of a migration guide, which must not fire.
+    assert not _leads_away(
+        "Switching to Tallyhook from a manual chase",
+        "Tallyhook imports your open invoices on day one.",
+        "Tallyhook",
+    )
+
+
+def test_without_a_product_name_the_check_refuses_rather_than_guesses():
+    """"" means "cannot check", never "no match".
+
+    A keyword-only fallback would fire on "Removing the friction" and drop the
+    best asset in the draft, which is a worse failure than the one it is
+    guarding against — and a silent one.
+    """
+    from app.services.intelligence.inoculation import _leads_away
+
+    assert _leads_away(_REMOVAL_TITLE, _REMOVAL_BODY, "") == ""
+
+
+def test_reassurance_about_lock_in_late_in_the_body_is_not_a_removal_guide():
+    """The correct answer to a lock-in objection mentions leaving. It must pass.
+
+    An asset is judged on what it sets out to do, so only the opening counts.
+    A closing sentence saying the door is not locked is exactly the copy this
+    objection needs.
+    """
+    from app.services.intelligence.inoculation import _leads_away
+
+    body = (
+        "Your policy definitions are yours. They are exportable in a documented, "
+        "open schema, and nothing in them is specific to us. "
+        + "Every rule you write is portable. " * 12
+        + "If you ever remove ParryAI, the policies you wrote come with you."
+    )
+    assert _leads_away("What you keep", body, "ParryAI") == ""
+
+
+def test_a_title_that_says_it_is_unfinished_is_caught():
+    from app.services.intelligence.inoculation import _unpublishable_title
+
+    assert _unpublishable_title(_REMOVAL_TITLE)
+    assert _unpublishable_title("Pricing page [draft]")
+    assert _unpublishable_title("What a seat costs, and why") == ""
+
+
+def test_a_concession_never_stands_alone_for_an_objection():
+    """Two of the three real disclosures were the only asset for their objection.
+
+    So the founder's entire answer to "your ROI claim is unproven" was a page
+    agreeing with it. The cap keeps one — dropping it would hide the drafter's
+    failure — and the ERROR log is what makes it visible, because the UI cannot
+    show a difference between "one asset" and "one asset that concedes".
+    """
+    from app.services.intelligence.inoculation import _cap_concessions
+
+    rows = [
+        _asset("roi", "disclosure", "Disclosure: We Don't Yet Know Our Own ROI"),
+        _asset("roi", "disclosure", "Disclosure: What We Have Not Yet Measured"),
+    ]
+    kept = _cap_concessions(rows)
+
+    assert len(kept) == 1
+    assert kept[0]["title"] == "Disclosure: We Don't Yet Know Our Own ROI"
+
+
+def test_one_concession_beside_a_positive_asset_survives():
+    """The cap is a cap, not a ban.
+
+    DECISIONS §4's headline claim is that an honest disclosure measurably moved
+    an objection. Forbidding the type would delete the finding along with the
+    failure mode.
+    """
+    from app.services.intelligence.inoculation import _cap_concessions
+
+    rows = [
+        _asset("roi", "faq_entry", "How we measure blast radius today"),
+        _asset("roi", "disclosure", "Disclosure: What We Have Not Yet Measured"),
+    ]
+    assert len(_cap_concessions(rows)) == 2
+
+
+def test_extra_concessions_are_dropped_and_the_order_is_kept():
+    from app.services.intelligence.inoculation import _cap_concessions
+
+    rows = [
+        _asset("a", "faq_entry", "What it does"),
+        _asset("a", "disclosure", "First concession"),
+        _asset("a", "disclosure", "Second concession"),
+        _asset("b", "pricing_rationale", "What a seat costs"),
+    ]
+    kept = _cap_concessions(rows)
+
+    assert [r["title"] for r in kept] == [
+        "What it does", "First concession", "What a seat costs",
+    ]
+
+
+def test_the_menu_puts_the_case_making_types_first():
+    """A model reaches for the first plausible item on a list.
+
+    `disclosure` was first, and 3 of 12 assets in the first live draft were
+    disclosures. Order in this tuple is prompt copy, not bookkeeping.
+    """
+    from app.services.intelligence.inoculation_schema import ASSET_TYPES
+
+    assert ASSET_TYPES[0] != "disclosure"
+    assert ASSET_TYPES[-1] == "disclosure"
+
+
+def test_the_three_declarations_of_the_asset_menu_agree():
+    """`ASSET_TYPES`, the schema's `AssetType`, and the API's edit `Literal`.
+
+    Three spellings of one set, in two files, and none of them can import the
+    others: pydantic needs a static `Literal` and the tuple is what gets
+    interpolated into the prompt. Reordering the tuple for the prompt is exactly
+    the kind of edit that would leave the third behind, and the symptom would be
+    a founder's edit rejected as an unknown type.
+
+    `frontend/src/lib/founder.ts` carries a fourth. It cannot be reached from
+    pytest; it is a union rather than an ordered list, so order cannot drift,
+    and membership drift shows up as a build error there.
+    """
+    import typing
+
+    from app.api.inoculation import UpdateAssetBody
+    from app.services.intelligence.inoculation_schema import ASSET_TYPES, AssetType
+
+    assert set(typing.get_args(AssetType)) == set(ASSET_TYPES)
+
+    patch_type = UpdateAssetBody.model_fields["asset_type"].annotation
+    literal = next(
+        arg for arg in typing.get_args(patch_type) if typing.get_args(arg)
+    )
+    assert set(typing.get_args(literal)) == set(ASSET_TYPES)
+
+
+@pytest.mark.asyncio
+async def test_the_removal_guide_never_reaches_the_database(monkeypatch):
+    """End to end, on the asset the founder actually read."""
+    from app.services.intelligence.inoculation import draft_assets
+
+    admin, _ = _draft_env(
+        monkeypatch, "proj-1", product_name="ParryAI",
+        assets=[
+            _asset(
+                "price-too-high-for-small-teams", "faq_entry",
+                "What you keep if you leave",
+                "Your policy definitions are exportable in an open schema.",
+            ),
+            _asset(
+                "price-too-high-for-small-teams", "migration_guide",
+                _REMOVAL_TITLE, _REMOVAL_BODY,
+            ),
+        ],
+    )
+
+    created = await draft_assets("sim-1", "org-1")
+
+    assert [row["title"] for row in created] == ["What you keep if you leave"]
+    assert all(_REMOVAL_TITLE != row["title"] for row in admin.inserted)
+
+
+@pytest.mark.asyncio
+async def test_the_prompt_tells_the_drafter_whose_side_it_is_on(monkeypatch):
+    """The prompt is the lever the checks cannot replace.
+
+    Both halves are asserted: that it names the product, and that the worked
+    example it used to teach — "the honest asset says what the team does not yet
+    know" — is gone. That sentence is why the confessions were written.
+    """
+    from app.services.intelligence.inoculation import draft_assets
+
+    _, seen = _draft_env(monkeypatch, "proj-1", product_name="Tallyhook")
+    await draft_assets("sim-1", "org-1")
+    prompt = seen["prompt"]
+
+    assert "on Tallyhook's side" in prompt
+    assert "Every asset leads with a claim about what Tallyhook does" in prompt
+    assert "moving **onto** Tallyhook" in prompt
+    assert "the honest asset says what the team does not yet know" not in prompt
+    assert "no evidence. Do not invent any" in prompt.replace("**", "")
 
 
 # ---------------------------------------------------------------------------
