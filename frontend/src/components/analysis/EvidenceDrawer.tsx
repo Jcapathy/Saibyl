@@ -6,12 +6,12 @@ import { PLATFORM_NAMES, sentimentBarColor } from '@/lib/constants';
 import { formatSigned, type EvidenceEvent } from '@/lib/analysis';
 
 /**
- * The agent quotes behind a finding.
+ * The word-for-word quotes behind a finding.
  *
  * This drawer is what makes a measured number defensible: every figure in the
- * report traces to the events that produced it, and the reader can go and read
- * them. A number that cannot be opened is an assertion regardless of how it was
- * computed.
+ * report traces back to the things people actually said, and the reader can go
+ * and read them. A number that cannot be opened is an assertion regardless of
+ * how it was computed.
  */
 export default function EvidenceDrawer({
   simulationId,
@@ -44,7 +44,8 @@ export default function EvidenceDrawer({
         if (!cancelled) setEvents(res.data);
       })
       .catch((err) => {
-        if (!cancelled) setError(getErrorMessage(err, 'Could not load the evidence.'));
+        if (!cancelled)
+          setError(getErrorMessage(err, 'We could not load what was said here.'));
       });
     return () => {
       cancelled = true;
@@ -57,7 +58,7 @@ export default function EvidenceDrawer({
     <div className="fixed inset-0 z-50 flex justify-end">
       <button
         type="button"
-        aria-label="Close evidence"
+        aria-label="Close this panel"
         className="flex-1 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
       />
@@ -65,14 +66,14 @@ export default function EvidenceDrawer({
         <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-saibyl-border">
           <div className="min-w-0">
             <p className="text-[10px] uppercase tracking-wider text-saibyl-muted">
-              Evidence
+              What was actually said
             </p>
             <h3 className="text-[15px] font-semibold text-saibyl-platinum truncate">
               {label}
             </h3>
             <p className="text-[11px] text-saibyl-muted mt-0.5">
-              {eventIds.length.toLocaleString()} event
-              {eventIds.length === 1 ? '' : 's'}
+              {eventIds.length.toLocaleString()}{' '}
+              {eventIds.length === 1 ? 'post or reply' : 'posts and replies'}
               {truncated ? ' — showing the first 200' : ''}
             </p>
           </div>
@@ -92,7 +93,7 @@ export default function EvidenceDrawer({
           )}
           {events?.length === 0 && (
             <p className="text-[12px] text-saibyl-muted">
-              No events are linked to this finding.
+              Nothing anyone said is linked to this, so there is nothing to read.
             </p>
           )}
           {events?.map((event) => (
@@ -125,7 +126,7 @@ export default function EvidenceDrawer({
                 </p>
               ) : (
                 <p className="text-[12px] text-saibyl-muted italic">
-                  {event.event_type} — no text, counted as engagement only
+                  {event.event_type} — no words, just a reaction
                 </p>
               )}
 
@@ -136,16 +137,16 @@ export default function EvidenceDrawer({
                 {event.round_number != null && <span>round {event.round_number}</span>}
                 {event.stance && <span>{event.stance.replace('_', '-')}</span>}
                 {event.intensity != null && (
-                  <span>intensity {event.intensity.toFixed(2)}</span>
+                  <span>how strongly they meant it: {event.intensity.toFixed(2)}</span>
                 )}
                 {event.is_novel_claim && (
-                  <span className="text-saibyl-insight-violet">new claim</span>
+                  <span className="text-saibyl-insight-violet">brought up something new</span>
                 )}
               </div>
 
               {event.objections?.length > 0 && (
                 <p className="text-[10px] text-saibyl-muted mt-1.5">
-                  Raised: {event.objections.join(' · ')}
+                  Pushed back on: {event.objections.join(' · ')}
                 </p>
               )}
             </div>

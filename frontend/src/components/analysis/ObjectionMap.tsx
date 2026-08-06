@@ -3,16 +3,18 @@ import { ChevronDown, ChevronRight, Quote } from 'lucide-react';
 import { PLATFORM_NAMES } from '@/lib/constants';
 import type { ObjectionSummary } from '@/lib/analysis';
 import Panel, { NoData } from './Panel';
+import { groupLabel } from '@/lib/groups';
 
 /**
- * Canonical objections, ranked by load-bearing weight.
+ * What people pushed back on, worst first.
  *
- * Not by frequency. Reach x intensity x cohort spread is what separates the
- * objection that loses the deal from the one that is merely most quotable —
- * an objection voiced once by every cohort, firmly, outranks one repeated ten
- * times inside a single archetype.
+ * Not most frequent first. How far it spread × how strongly it was meant × how
+ * many different kinds of buyer raised it is what separates the objection that
+ * loses the deal from the one that is merely most quotable — something said
+ * once, firmly, by every kind of buyer outranks something repeated ten times
+ * inside a single group.
  *
- * Every row expands to the verbatim agent quotes behind it. That is the
+ * Every row opens onto the word-for-word quotes behind it. That is the
  * difference between a finding and an assertion.
  */
 export default function ObjectionMap({
@@ -28,11 +30,12 @@ export default function ObjectionMap({
 
   if (objections.length === 0) {
     return (
-      <Panel title="Objection map">
+      <Panel title="What they pushed back on">
         <NoData>
-          No agent raised an objection to the subject in this run. That is a
-          finding, not a gap — but check the stance split before reading it as
-          approval: a swarm that was mostly off-topic never engaged.
+          Nobody raised an objection to what you put in front of them. That is a
+          result, not a gap — but before you read it as approval, look at how many
+          were for and against: a room that mostly talked about something else
+          never really engaged with you.
         </NoData>
       </Panel>
     );
@@ -42,12 +45,12 @@ export default function ObjectionMap({
 
   return (
     <Panel
-      title="Objection map"
+      title="What they pushed back on"
       note={
         <>
-          Ranked by load-bearing weight — how far it reached, how firmly it was
-          held, and how many cohorts it crossed. Not by how often it was
-          repeated.
+          Worst first — worked out from how many people raised it, how strongly
+          they meant it, and how many different kinds of buyer it spread to. Not
+          from how often it came up.
         </>
       }
     >
@@ -89,14 +92,14 @@ export default function ObjectionMap({
                       />
                     </div>
                     <p className="text-[11px] text-saibyl-muted mt-1.5">
-                      {objection.agent_count} agents · first seen round{' '}
+                      {objection.agent_count} people · first came up in round{' '}
                       {objection.first_round_seen ?? '—'}
                       {objection.originating_cohort
-                        ? ` · started with ${objection.originating_cohort}`
+                        ? ` · started with ${groupLabel(objection.originating_cohort).toLowerCase()}`
                         : ''}
                       {cohorts.length > 1
-                        ? ` · reached ${cohorts.length} cohorts`
-                        : ' · confined to one cohort'}
+                        ? ` · spread to ${cohorts.length} groups`
+                        : ' · stayed inside one group'}
                     </p>
                   </div>
                 </div>
@@ -113,13 +116,18 @@ export default function ObjectionMap({
                   {cohorts.length > 0 && (
                     <div>
                       <p className="text-[10px] uppercase tracking-wider text-saibyl-muted mb-1.5">
-                        Share of each cohort holding it
+                        How much of each group raised it
                       </p>
                       <div className="space-y-1">
                         {cohorts.map(([cohort, share]) => (
                           <div key={cohort} className="flex items-center gap-2">
-                            <span className="text-[11px] text-saibyl-silver w-40 truncate">
-                              {cohort}
+                            {/* The label, never the raw key — otherwise this row
+                                reads "adversarial" at a founder. */}
+                            <span
+                              className="text-[11px] text-saibyl-silver w-40 truncate"
+                              title={groupLabel(cohort)}
+                            >
+                              {groupLabel(cohort)}
                             </span>
                             <div className="flex-1 h-1.5 bg-saibyl-void rounded-full overflow-hidden">
                               <div
@@ -168,7 +176,7 @@ export default function ObjectionMap({
                       }
                       className="text-[11px] text-saibyl-signal-blue hover:underline"
                     >
-                      Show all {objection.event_count} events →
+                      Read all {objection.event_count} times it came up →
                     </button>
                   )}
                 </div>

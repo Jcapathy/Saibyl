@@ -6,31 +6,32 @@ const BLUE = '#2563EB'; // Signal Blue
 const VIOLET = '#8B5CF6'; // Insight Violet
 
 const OBJECTIVE_LABELS: Record<string, string> = {
-  clicks: 'Click intent',
-  foot_traffic: 'Visit intent',
-  product_sale: 'Purchase intent',
-  service_sale: 'Inquiry intent',
-  signup: 'Trial intent',
-  awareness: 'Share intent',
+  clicks: 'Would click',
+  foot_traffic: 'Would visit',
+  product_sale: 'Would buy',
+  service_sale: 'Would get in touch',
+  signup: 'Would sign up',
+  awareness: 'Would share it',
 };
 
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
 
 /**
- * The N-way matched-swarm scoreboard.
+ * Which of several messages won, when the same people saw all of them.
  *
  * Two rules this component exists to honour, both easy to break by making the
  * UI look more decisive:
  *
- * **The verdict outranks the ordering.** The list is sorted by the objective
- * metric, but that ordering is display order, not a claim. When the server
- * declines to name a winner — because the top two intervals overlap — no row is
- * marked as winning. Highlighting row one anyway would put a number the product
- * explicitly refused to stand behind in front of a spend decision.
+ * **The verdict outranks the ordering.** The list is sorted by whichever
+ * outcome the run was aiming at, but that ordering is display order, not a
+ * claim. When the server declines to name a winner — because the ranges around
+ * the top two overlap — no row is marked as winning. Highlighting row one
+ * anyway would put a number the product explicitly refused to stand behind in
+ * front of a spend decision.
  *
- * **null is not zero.** A virality component that could not be measured renders
- * as "not measured", never as 0%. Showing a dash where a gap exists is the
- * difference between "this variant did not travel" and "we did not measure
+ * **null is not zero.** Anything about spread that could not be measured
+ * renders as "not measured", never as 0%. Showing a dash where a gap exists is
+ * the difference between "this one did not travel" and "we did not look at
  * whether it travelled".
  */
 export default function VariantScoreboardPanel({
@@ -43,18 +44,18 @@ export default function VariantScoreboardPanel({
   if (!scoreboard || scoreboard.variants.length === 0) return null;
 
   const metricLabel = scoreboard.objective
-    ? (OBJECTIVE_LABELS[scoreboard.objective] ?? 'Objective intent')
-    : 'Committing intent';
+    ? (OBJECTIVE_LABELS[scoreboard.objective] ?? 'Would act on it')
+    : 'Would act on it';
 
   return (
     <div className="mb-8">
       <div className="flex items-baseline justify-between mb-3 gap-4 flex-wrap">
         <h2 className="text-sm font-semibold text-saibyl-pearl">
-          Variant scoreboard
+          Which message won
         </h2>
         <span className="text-[11px] text-saibyl-muted">
-          Ranked by {metricLabel.toLowerCase()} · {scoreboard.variants.length} variants ·
-          one shared audience
+          Ordered by how many {metricLabel.toLowerCase()} · {scoreboard.variants.length}{' '}
+          versions · the same people saw every one
         </span>
       </div>
 
@@ -79,48 +80,48 @@ export default function VariantScoreboardPanel({
       </div>
 
       {/*
-        How the verdict was reached. Shown because from schema version 4 the
-        winner is decided by comparing the top two arenas *agent by agent* —
-        the same people saw every variant, so an agent who converted on both
-        tells you nothing about which is better, and only the ones who
-        disagreed carry information.
+        How the call was reached. Shown because from schema version 4 the
+        winner is decided by comparing the top two *person by person* — the
+        same people saw every message, so someone who acted on both tells you
+        nothing about which is better, and only the ones who split carry
+        information.
 
         `discordant_agents` is therefore the honest sample size of the
-        comparison, and it is usually much smaller than the swarm. Showing it
+        comparison, and it is usually much smaller than the room. Showing it
         is the difference between "we tested this on 250 people" and "31 of
-        them behaved differently between these two, and that is what the call
-        rests on".
+        them went one way on one and the other way on the other, and that is
+        what the call rests on".
 
         Absent on v3 artifacts, which predate the paired comparison. Nothing is
         rendered in that case rather than a zeroed block that would read as
-        "no agents disagreed".
+        "nobody split".
       */}
       {scoreboard.paired && (
         <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 mb-4">
           <p className="text-[11px] font-mono uppercase tracking-widest text-saibyl-muted mb-1.5">
-            How this was decided
+            How we decided
           </p>
           <p className="text-[12px] leading-relaxed text-saibyl-muted">
             The same{' '}
             <span className="text-saibyl-silver">
               {scoreboard.paired.shared_agents}
             </span>{' '}
-            agents saw both of the top two.{' '}
+            people saw both of the top two.{' '}
             <span className="text-saibyl-silver">
               {scoreboard.paired.discordant_agents}
             </span>{' '}
-            of them behaved differently between the two — that difference, and
-            not the headline rates, is what the call above rests on.
+            of them went one way on one and the other way on the other. The call
+            above rests on those people, not on the headline percentages.
           </p>
-          {/* The unpaired rule, for one release, so a changed answer reads as a
+          {/* The older rule, for one release, so a changed answer reads as a
               documented change rather than the product changing its mind. */}
           {scoreboard.unpaired_verdict &&
             scoreboard.unpaired_winner_variant_key !==
               scoreboard.winner_variant_key && (
               <p className="text-[11px] leading-relaxed text-saibyl-muted mt-2 pt-2 border-t border-white/[0.06]">
-                Under the previous method, which compared the arenas as if
-                different people had seen each one, this run would have read:{' '}
-                <span className="italic">{scoreboard.unpaired_verdict}</span>
+                The way we used to work this out treated each message as though a
+                different set of people had seen it. That way, this run would have
+                read: <span className="italic">{scoreboard.unpaired_verdict}</span>
               </p>
             )}
         </div>
@@ -175,7 +176,7 @@ function VariantRow({
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[11px] text-saibyl-muted">#{rank}</span>
             <span className="text-[13px] font-semibold text-saibyl-pearl">
-              {variant.label || `Variant ${variant.variant_key.toUpperCase()}`}
+              {variant.label || `Version ${variant.variant_key.toUpperCase()}`}
             </span>
             {isWinner && (
               <span
@@ -209,41 +210,41 @@ function VariantRow({
         </div>
       </div>
 
-      {/* An arena nobody engaged with is a finding, not an absence. It stays on
-          the board, and it says why the row is empty. */}
+      {/* A message nobody engaged with is a finding, not an absence. It stays
+          on the board, and it says why the row is empty. */}
       {silent ? (
         <p className="text-[11px] text-saibyl-muted mt-3">
-          No agent produced a measured event in this arena. Nothing to score —
-          this is a result, not a gap.
+          Nobody reacted to this one at all, so there is nothing to score. That
+          is itself the answer, not a gap in the data.
         </p>
       ) : (
         <>
           <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4 text-[11px]">
-            <Stat label="Agents" value={String(variant.agent_count)} />
-            <Stat label="Events" value={String(variant.event_count)} />
+            <Stat label="People" value={String(variant.agent_count)} />
+            <Stat label="Posts and replies" value={String(variant.event_count)} />
             <Stat
-              label="Sentiment"
+              label="How they felt"
               value={variant.valence.mean.toFixed(3)}
-              hint="Supporting metric, not the score"
+              hint="Worth knowing, but not what picks the winner"
             />
             <Stat
-              label="Virality"
+              label="How far it spread"
               value={
                 variant.virality.score === null
                   ? 'not measured'
                   : variant.virality.score.toFixed(0)
               }
-              hint={`${variant.virality.components_used} of ${variant.virality.components_total} components measured`}
+              hint={`${variant.virality.components_used} of the ${variant.virality.components_total} things we look at could be measured`}
               accent={VIOLET}
             />
             <Stat
-              label="Takeaway accuracy"
+              label="Repeated it right"
               value={
                 variant.takeaway_accuracy === null
                   ? 'not measured'
                   : pct(variant.takeaway_accuracy)
               }
-              hint="Approximate — lexical overlap with the copy"
+              hint="Rough — we compare their words against yours"
             />
           </div>
 
@@ -261,7 +262,7 @@ function VariantRow({
                     key={slice.archetype}
                     className="px-2 py-0.5 rounded text-[10px]"
                     style={{ backgroundColor: `${BLUE}14`, color: '#9CB4E8' }}
-                    title={`${slice.agent_count} agents, ${slice.event_count} events`}
+                    title={`${slice.agent_count} people, ${slice.event_count} posts and replies`}
                   >
                     {slice.archetype} · {pct(slice.objective_rate.mean)}
                   </span>
@@ -277,7 +278,7 @@ function VariantRow({
               className="mt-3 text-[11px] underline underline-offset-2"
               style={{ color: BLUE }}
             >
-              Read what this arena actually said
+              Read what people said about this one
             </button>
           )}
         </>
@@ -287,45 +288,47 @@ function VariantRow({
 }
 
 /**
- * The six components.
+ * The six things "how far it spread" is made of.
  *
- * A component the run could not measure shows "not measured" rather than a
- * zero, and the cascade figure is labelled branching — the adapters have no
- * reply-to-reply, so a depth number would be 2 for every variant that got a
- * single reply.
+ * Anything the run could not measure shows "not measured" rather than a zero,
+ * and replies are counted per post rather than by how deep a thread went — the
+ * platforms modelled here have no reply-to-a-reply, so a depth number would be
+ * 2 for every message that got a single reply.
  */
 function ViralityBreakdown({ variant }: { variant: VariantScore }) {
   const v = variant.virality;
   const parts: Array<[string, string]> = [
     [
-      'Cross-archetype reach',
-      `${v.archetypes_reached}/${v.archetypes_total} (${pct(v.cross_archetype_reach)})`,
+      'Reached different kinds of buyer',
+      `${v.archetypes_reached} of ${v.archetypes_total} (${pct(v.cross_archetype_reach)})`,
     ],
-    ['Share intent', pct(v.share_intent_rate.mean)],
+    ['Said they would share it', pct(v.share_intent_rate.mean)],
     [
-      'Cross-platform jump',
+      'Carried to another platform',
       v.cross_platform_jump === null ? 'not measured' : pct(v.cross_platform_jump),
     ],
     [
-      'Restatement',
+      'Repeated in their own words',
       v.restatement_rate === null ? 'not measured' : pct(v.restatement_rate),
     ],
     [
-      'Cascade branching',
+      'Replies it drew',
       v.cascade_branching === null
         ? 'not measured'
-        : `${v.cascade_branching.toFixed(1)} replies/post`,
+        : `${v.cascade_branching.toFixed(1)} per post`,
     ],
     [
-      'Peak round',
-      v.velocity_rounds_to_peak === null ? 'not measured' : `R${v.velocity_rounds_to_peak}`,
+      'Busiest round',
+      v.velocity_rounds_to_peak === null
+        ? 'not measured'
+        : `round ${v.velocity_rounds_to_peak}`,
     ],
   ];
 
   return (
     <details className="mt-3 group">
       <summary className="text-[11px] text-saibyl-muted cursor-pointer select-none hover:text-saibyl-silver">
-        Virality components
+        What &ldquo;how far it spread&rdquo; is made of
       </summary>
       <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1.5">
         {parts.map(([label, value]) => (
@@ -344,10 +347,10 @@ function ViralityBreakdown({ variant }: { variant: VariantScore }) {
         ))}
       </div>
       <p className="text-[10px] text-saibyl-muted mt-2 leading-relaxed">
-        Cross-archetype reach carries the heaviest weight: content that spreads
-        only inside the cohort it started in is an echo chamber, not virality.
-        Cascade is measured as branching rather than depth — the platform
-        adapters support replies to posts, not replies to replies.
+        Reaching different kinds of buyer counts for the most. Something that only
+        travels inside the group it started in is an echo chamber, not reach.
+        Replies are counted per post rather than by how deep a thread went,
+        because replies to replies are not modelled here.
       </p>
     </details>
   );
@@ -367,29 +370,48 @@ function Flags({
     <div className="mt-3 space-y-2">
       {variant.viral_but_off_message && (
         <Flag
+          kind="warning"
           color={GOLD}
-          title="Viral but off-message"
-          body={`It spreads, and agents restate it as something other than what it says (takeaway accuracy below ${pct(offMessageThreshold)}). It will travel as a message you did not write.`}
+          title="It spreads, but not as you wrote it"
+          body={`People pass it on and change what it says on the way — fewer than ${pct(offMessageThreshold)} of them repeat it accurately. It will travel as a message you did not write.`}
         />
       )}
       {variant.converts_but_wont_travel && (
         <Flag
+          kind="reach"
           color={BLUE}
-          title="Converts but won't travel"
-          body="It performs on the objective and does not spread. Good copy that needs paid distribution rather than organic reach."
+          title="It works, but it will not spread"
+          body="It gets people to act and nobody passes it on. Good copy that you will have to pay to put in front of people."
         />
       )}
     </div>
   );
 }
 
-function Flag({ color, title, body }: { color: string; title: string; body: string }) {
+/**
+ * `kind` picks the icon, rather than sniffing the first word of `title`.
+ *
+ * It used to be `title.startsWith('Viral')`, so rewording the heading silently
+ * changed the icon — copy and behaviour coupled through a string prefix, which
+ * is exactly the kind of link nobody remembers when they edit a label.
+ */
+function Flag({
+  kind,
+  color,
+  title,
+  body,
+}: {
+  kind: 'warning' | 'reach';
+  color: string;
+  title: string;
+  body: string;
+}) {
   return (
     <div
       className="rounded-xl border px-3 py-2 flex items-start gap-2"
       style={{ borderColor: `${color}33`, backgroundColor: `${color}0D` }}
     >
-      {title.startsWith('Viral') ? (
+      {kind === 'warning' ? (
         <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" style={{ color }} />
       ) : (
         <Radio className="w-3.5 h-3.5 mt-0.5 shrink-0" style={{ color }} />

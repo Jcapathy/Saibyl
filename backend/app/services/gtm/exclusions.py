@@ -1,6 +1,8 @@
 # PUBLIC INTERFACE
 # ─────────────────────────────────────────────────────────
 # build_exclusions(profile) -> CategoryExclusions
+# sells_in_category(text, category) -> bool
+# category_terms(category) -> list[str]
 # CategoryExclusions, ExcludedCompany, ExclusionReason
 # MAX_EXCLUSIONS_IN_QUERY, MIN_EXCLUDED_NAME_CHARS, MIN_DOMAIN_STEM_CHARS
 # ─────────────────────────────────────────────────────────
@@ -31,9 +33,21 @@ competitors are, and both say it about *this* founder:
 
 `category` is why the second derivation holds rather than a third source of
 names. It describes what the founder sells; the makers of the incumbent tools
-sell into it; so they are competitors. It is carried on `CategoryExclusions` so
-the preview can say what the exclusions are *for*, and it is never negated as a
-search term — the queries need it to find buyers.
+sell into it; so they are competitors.
+
+**It is still never negated as a search term** — `companies using observability
+tooling -"observability tooling"` returns nothing, and the queries need the
+category to find buyers at all.
+
+**But it is now matched at the filter.** The first version stopped at the two
+name-based derivations, and a founder in AI security ran a real discovery and
+got back a company whose own one-liner opens *"A company focused on AI
+security"*. Nothing named it and no archetype ran it, so both derivations were
+blind to it — and it was, on its own description, a competitor. A name-based
+exclusion can only catch competitors somebody already knew about, which is the
+opposite of what discovery is for. `sells_in_category` reads what the candidate
+says about itself and is the only mechanism here that can catch a rival the
+founder had never heard of.
 
 **Two mechanisms, because one of them cannot be trusted alone.**
 
@@ -99,13 +113,14 @@ MIN_EXCLUDED_NAME_CHARS = 3
 # Below this, a domain-stem prefix match is a coincidence rather than a signal.
 MIN_DOMAIN_STEM_CHARS = 4
 
-ExclusionReason = Literal["named_rival", "incumbent_tool"]
+ExclusionReason = Literal["named_rival", "incumbent_tool", "same_category"]
 
 # Founder-facing. Says why this company is on the list, in the register of
 # `AudienceReview.tsx`: no field names, no terms of art.
 _REASON_NOTE: dict[str, str] = {
     "named_rival": "your uploaded material names them as a rival",
     "incumbent_tool": "makes a tool your buyers already run, so they sell what you sell",
+    "same_category": "describes itself as selling what you sell",
 }
 
 # Dropped before matching so "Datadog" matches "Datadog, Inc." A suffix here can
@@ -274,6 +289,64 @@ class CategoryExclusions(BaseModel):
             ):
                 return company
         return None
+
+
+# Words that carry no category meaning on their own. "software company" and
+# "platform" describe almost every candidate a B2B search returns, so matching on
+# them would exclude the entire result set. Only the distinctive remainder of a
+# category is allowed to decide.
+_CATEGORY_STOPWORDS: frozenset[str] = frozenset({
+    "a", "an", "and", "app", "apps", "based", "cloud", "company", "for",
+    "management", "of", "platform", "platforms", "product", "products",
+    "saas", "service", "services", "software", "solution", "solutions",
+    "suite", "system", "systems", "the", "tool", "tooling", "tools",
+})
+
+# Phrases that mark the sentence as describing what a company *sells* rather
+# than what it *uses*. A buyer's page says "we use X"; a vendor's says "we
+# provide X". Without this a founder's actual customers - who legitimately talk
+# about the category they buy in - would be excluded along with their rivals.
+_VENDOR_PHRASES: tuple[str, ...] = (
+    "focused on", "offering", "offers", "provider of", "provides",
+    "providing", "specialis", "specializ", "builds", "building",
+    "develops", "developing", "vendor", "maker of", "sells", "selling",
+    "helps companies", "helps teams", "enables companies", "enables teams",
+)
+
+
+def category_terms(category: str) -> list[str]:
+    """The distinctive words of a category, in order, stopwords removed."""
+    return [t for t in _tokens(category) if t not in _CATEGORY_STOPWORDS]
+
+
+def sells_in_category(text: str, category: str) -> bool:
+    """Does this company describe itself as selling what the founder sells?
+
+    Deterministic and deliberately conservative. Two things must both hold:
+
+      1. every distinctive word of the category appears in the text, and
+      2. the text reads as a description of what the company provides, not of
+         what it uses.
+
+    (2) is what keeps a founder's real customers on the list. A buyer's page
+    says "we run observability tooling"; a rival's says "we provide
+    observability tooling". Requiring a vendor phrase costs some recall - a
+    terse one-liner with no verb in it will not match - and the direction of
+    that error is the safe one: a competitor left on the list is visible to the
+    founder, and a buyer silently removed is not.
+
+    A category of only stopwords ("software platform") matches nothing rather
+    than everything, which is the honest reading of a category that says
+    nothing distinctive.
+    """
+    terms = category_terms(category)
+    if not terms:
+        return False
+    haystack = " ".join(_tokens(text))
+    if not all(term in haystack.split() for term in terms):
+        return False
+    lowered = text.lower()
+    return any(phrase in lowered for phrase in _VENDOR_PHRASES)
 
 
 def build_exclusions(profile: ICPProfile) -> CategoryExclusions:

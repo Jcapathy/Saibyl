@@ -222,12 +222,25 @@ async def credit_balance(auth: dict = Depends(get_current_org)):
     """Current credit balance, grant, and the run caps for this tier."""
     balance, granted, plan = get_credit_balance(auth["org_id"])
     caps = tier_caps(plan)
+    per_run = standard_run_credits()
     return {
         "plan": plan,
         "credits_balance": balance,
         "credits_granted": granted,
         "balance_pct": round(balance * 100 / granted, 1) if granted else 0.0,
         "caps": caps.model_dump(),
+        # What a run of the reference shape costs, so a client can say "about
+        # four more runs" instead of printing a five-digit number at someone
+        # deciding whether they can afford to click. Sent rather than computed
+        # client-side: the run price is a pricing fact and belongs on one side.
+        "standard_run_credits": per_run,
+        # Aliases. The two readers of this endpoint were both written against
+        # `balance`/`grant` and would have rendered silent zeros - a balance of
+        # 0 is the one number that stops a founder clicking. Kept as aliases
+        # rather than renamed, because `credits_balance` is what the older
+        # callers read and breaking them to tidy a name is not worth it.
+        "balance": balance,
+        "grant": granted,
     }
 
 

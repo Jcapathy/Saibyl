@@ -222,3 +222,24 @@ def test_the_api_returns_the_sentence_not_a_validation_code():
     # And the handler still refuses it, with words.
     with pytest.raises(TopupRefusedError):
         quote_topup(500)
+
+
+def test_the_credits_endpoint_sends_every_field_its_readers_ask_for():
+    """Two clients read `balance`/`grant`; the endpoint sent `credits_*`.
+
+    Neither would have thrown. Both would have rendered a balance of zero —
+    which is the single number most likely to stop a founder clicking, and it
+    would have been wrong for every account with credits on it. Caught by
+    reading the route against the component rather than by either side's tests,
+    because each was internally consistent.
+
+    Asserted on the handler's returned keys so it holds without a server.
+    """
+    import inspect
+
+    from app.api import billing
+
+    source = inspect.getsource(billing.credit_balance)
+    for key in ('"balance"', '"grant"', '"standard_run_credits"',
+                '"credits_balance"', '"credits_granted"'):
+        assert key in source, f"{key} is no longer returned by /billing/credits"

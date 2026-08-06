@@ -10,10 +10,14 @@ const ACCENT: Record<QualityBlock['confidence'], string> = {
 /**
  * What this run's numbers are entitled to claim.
  *
- * Shown to the customer rather than kept internal. A 25-agent free run
- * genuinely has wide bands, and saying so plainly is both the honest read and
- * the most credible argument for buying more agents — far better than quietly
- * rendering the same confident-looking chart at every swarm size.
+ * Shown to the customer rather than kept internal. A 25-person free run
+ * genuinely has wide ranges, and saying so plainly is both the honest read and
+ * the most credible argument for putting more people in the room — far better
+ * than quietly rendering the same confident-looking chart at every size.
+ *
+ * The sentence under the heading comes from `CONFIDENCE_COPY` in `lib/analysis`
+ * and is still written in method language. That file is not this one's to
+ * change; the heading and the counts below are.
  */
 export default function QualityNotice({ quality }: { quality: QualityBlock }) {
   const accent = ACCENT[quality.confidence];
@@ -28,20 +32,20 @@ export default function QualityNotice({ quality }: { quality: QualityBlock }) {
         <div className="min-w-0">
           <p className="text-[13px] font-semibold" style={{ color: accent }}>
             {quality.confidence === 'low'
-              ? 'Low confidence'
+              ? 'Treat this as a rough read'
               : quality.confidence === 'moderate'
-                ? 'Moderate confidence'
-                : 'High confidence'}
+                ? 'Solid on the big differences, not the small ones'
+                : 'Solid enough to act on'}
           </p>
           <p className="text-[12px] text-saibyl-silver mt-1 leading-relaxed">
             {CONFIDENCE_COPY[quality.confidence]}
           </p>
 
           <p className="text-[11px] text-saibyl-muted mt-2">
-            {quality.events_measured.toLocaleString()} of{' '}
-            {quality.events_total.toLocaleString()} events measured (
+            We could read {quality.events_measured.toLocaleString()} of the{' '}
+            {quality.events_total.toLocaleString()} posts and replies (
             {quality.coverage_pct.toFixed(1)}%) · {quality.agents_active} of{' '}
-            {quality.agents_total} agents active · {quality.rounds} rounds
+            {quality.agents_total} people said something · {quality.rounds} rounds
             {quality.measurement_model ? ` · scored by ${quality.measurement_model}` : ''}
           </p>
 

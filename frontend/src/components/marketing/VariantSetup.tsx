@@ -84,7 +84,7 @@ export default function VariantSetup({
         setVariants(stored);
         onSavedChange?.(stored.filter((v) => v.content.trim()).length);
       } catch (err) {
-        if (!cancelled) setError(getErrorMessage(err, 'Could not load variants'));
+        if (!cancelled) setError(getErrorMessage(err, 'We could not load your versions.'));
       }
     })();
     return () => {
@@ -115,7 +115,7 @@ export default function VariantSetup({
       setSaved(true);
       onSavedChange?.(payload.length);
     } catch (err) {
-      setError(getErrorMessage(err, 'Could not save variants'));
+      setError(getErrorMessage(err, 'We could not save your versions.'));
     } finally {
       setSaving(false);
     }
@@ -127,9 +127,10 @@ export default function VariantSetup({
     return (
       <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
         <p className="text-[12px] text-saibyl-silver">
-          This run has started. Variants are fixed once a run begins — the
-          comparison&rsquo;s claim is that the arenas differed only in their
-          copy. Clone the run to test different variants.
+          This run has already started, so the wording is locked. The whole
+          claim of the comparison is that the only thing that differed was the
+          words &mdash; an edit now would describe a test nobody ran. Copy the
+          run if you want to try different wording.
         </p>
       </div>
     );
@@ -149,7 +150,7 @@ export default function VariantSetup({
           }}
           className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-[13px] text-saibyl-pearl"
         >
-          <option value="">Sentiment only (no objective)</option>
+          <option value="">Nothing in particular — just how people react</option>
           {objectives.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label} — {opt.question}
@@ -157,10 +158,10 @@ export default function VariantSetup({
           ))}
         </select>
         <p className="text-[11px] text-saibyl-muted mt-1.5 leading-relaxed">
-          The objective decides the headline metric. Sentiment stays measured and
-          reported, but an ad meant to drive foot traffic and one meant to sell a
-          service succeed differently — scoring both on sentiment measures
-          neither.
+          This decides the number at the top of your report. We measure how the
+          room felt either way — but a post meant to get people signing up and
+          one meant to get them talking succeed in different ways, and scoring
+          both on mood measures neither.
         </p>
       </div>
 
@@ -192,7 +193,7 @@ export default function VariantSetup({
                 type="button"
                 onClick={() => update(variants.filter((_, j) => j !== i))}
                 className="text-saibyl-muted hover:text-red-400"
-                aria-label={`Remove variant ${String.fromCharCode(65 + i)}`}
+                aria-label={`Remove version ${String.fromCharCode(65 + i)}`}
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -201,7 +202,7 @@ export default function VariantSetup({
               value={variant.content}
               maxLength={MAX_CONTENT}
               rows={3}
-              placeholder="The copy this arena's agents will react to…"
+              placeholder="The words this version puts in front of the room…"
               onChange={(e) => {
                 const next = [...variants];
                 next[i] = { ...variant, content: e.target.value };
@@ -221,7 +222,7 @@ export default function VariantSetup({
           style={{ color: BLUE }}
         >
           <Plus className="w-3.5 h-3.5" />
-          Add variant
+          Add another version
         </button>
       )}
 
@@ -233,18 +234,19 @@ export default function VariantSetup({
           style={{ borderColor: `${GOLD}33`, backgroundColor: `${GOLD}0D` }}
         >
           <p className="text-[11px] leading-relaxed" style={{ color: GOLD }}>
-            {filled} variants means {filled} arenas. The same audience reacts to
-            each one, so this run costs about {filled}× the agent actions of a
-            single-variant run. You&rsquo;ll see the exact credit cost before you
-            start it.
+            {filled} versions means the room does this {filled} times over. The
+            same people react to each one from scratch, so this run costs about
+            {' '}{filled}&times; what a single message costs. You&rsquo;ll see the exact
+            credit cost before you start it.
           </p>
         </div>
       )}
 
       {filled === 1 && (
         <p className="text-[11px] text-amber-400/90">
-          One variant is not a comparison. Add a second, or remove it to run an
-          ordinary single-arena simulation.
+          One version on its own is not a comparison &mdash; there is nothing to
+          compare it against. Add a second, or delete it and the run goes ahead
+          with a single message.
         </p>
       )}
 
@@ -258,11 +260,11 @@ export default function VariantSetup({
           className="px-4 py-2 rounded-xl text-[12px] font-semibold disabled:opacity-40"
           style={{ backgroundColor: GOLD, color: '#0A0F1C' }}
         >
-          {saving ? 'Saving…' : 'Save variants'}
+          {saving ? 'Saving…' : 'Save these versions'}
         </button>
         {saved && (
           <span className="text-[11px] text-saibyl-muted">
-            Saved. Variants freeze when the run starts.
+            Saved. These lock the moment the run starts.
           </span>
         )}
       </div>

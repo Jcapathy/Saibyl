@@ -8,6 +8,7 @@ import api from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
 import { cleanContent, stripDuplicateTitle } from '@/lib/utils';
 import { REPORT_TERMINAL_STATUSES } from '@/lib/constants';
+import { isFinished } from '@/lib/status';
 import {
   isSupportedSchema,
   withSchemaDefaults,
@@ -72,16 +73,16 @@ function asReportNotReady(err: unknown): ReportNotReady | null {
 const UNKNOWN_STATUS_POLL_LIMIT = 24;
 
 const TAB_LABELS = [
-  'Findings',
-  'Objections',
-  'Audience',
-  // Sits next to Objections because that is where the founder already is when
-  // they decide to do something about one. Appended rather than inserted:
+  'What happened',
+  'What they pushed back on',
+  'Who said what',
+  // Sits next to the pushback tab because that is where the founder already is
+  // when they decide to do something about it. Appended rather than inserted:
   // `activeTab` is an index, and renumbering the existing tabs would silently
   // change what any bookmarked or linked position points at.
-  'Narrative',
-  'Raw data',
-  'Inoculate',
+  'The write-up',
+  'The raw numbers',
+  'Answer them back',
 ] as const;
 
 const INOCULATE_TAB = 5;
@@ -91,10 +92,10 @@ const INOCULATE_TAB = 5;
 /* ------------------------------------------------------------------ */
 
 function statusColor(status: string): string {
+  if (isFinished(status)) {
+    return 'bg-saibyl-signal-blue/15 text-saibyl-signal-blue border-saibyl-signal-blue/30';
+  }
   switch (status.toLowerCase()) {
-    case 'complete':
-    case 'completed':
-      return 'bg-saibyl-signal-blue/15 text-saibyl-signal-blue border-saibyl-signal-blue/30';
     case 'running':
     case 'analyzing':
       return 'bg-saibyl-gold/15 text-saibyl-gold border-saibyl-gold/30';
@@ -102,6 +103,36 @@ function statusColor(status: string): string {
       return 'bg-saibyl-negative/15 text-saibyl-negative border-saibyl-negative/30';
     default:
       return 'bg-saibyl-muted/15 text-saibyl-muted border-saibyl-muted/30';
+  }
+}
+
+/**
+ * What this run's state is called on screen.
+ *
+ * Never `simulation.status` raw. The database holds both `complete` and
+ * `completed` — see `lib/status.ts` — so rendering the column directly is why a
+ * founder saw the same finished run labelled "COMPLETED" on one load and
+ * "COMPLETE" on the next.
+ */
+function runStateWord(status: string): string {
+  if (isFinished(status)) return 'Finished';
+  switch (status) {
+    case 'stopped':
+      return 'Stopped';
+    case 'failed':
+      return 'Failed';
+    case 'preparing':
+      return 'Building the room';
+    case 'running':
+      return 'Running';
+    case 'analyzing':
+      return 'Working out what happened';
+    case 'ready':
+      return 'Ready to start';
+    case 'draft':
+      return 'Not started yet';
+    default:
+      return status;
   }
 }
 
@@ -232,7 +263,7 @@ export default function ReportViewerPage() {
           // when the artifact is *newer* than this build — an older one renders,
           // because the schema is additive.
           setAnalysisError(
-            `This analysis uses schema version ${payload.schema_version}; this app renders up to version ${SUPPORTED_SCHEMA_VERSION}. Reload to pick up the current build.`,
+            `These figures were written by a newer version of Saibyl (format ${payload.schema_version}; this page reads up to ${SUPPORTED_SCHEMA_VERSION}). We are showing nothing rather than the parts we recognise. Reload the page to pick up the current version.`,
           );
           return;
         }
@@ -242,7 +273,7 @@ export default function ReportViewerPage() {
           setAnalysisError(
             getErrorMessage(
               err,
-              'This run has not been analysed, so it has no measured figures.',
+              'Nobody has scored what was said in this run, so there are no figures for it.',
             ),
           );
         }
@@ -283,7 +314,7 @@ export default function ReportViewerPage() {
         ...prev,
         {
           role: 'assistant',
-          content: data.answer || data.response || data.message || 'No response received.',
+          content: data.answer || data.response || data.message || 'We got no answer back. Try asking again.',
         },
       ]);
     } catch (err) {
@@ -309,7 +340,10 @@ export default function ReportViewerPage() {
       }
       setChatMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: getErrorMessage(err, 'Error getting response.') },
+        {
+          role: 'assistant',
+          content: getErrorMessage(err, 'Something went wrong answering that. Try again.'),
+        },
       ]);
     } finally {
       setChatLoading(false);
@@ -317,11 +351,11 @@ export default function ReportViewerPage() {
   };
 
   /**
-   * Write the report again, from the measurements that already exist.
+   * Write it up again, from the scores that already exist.
    *
-   * The measured findings on this page do not depend on the prose and are
-   * unaffected by its failure, so this re-runs the write-up only — it does not
-   * re-run the simulation, and costs nothing near what that would.
+   * Everything measured on this page is independent of the prose and unaffected
+   * by its failure, so this redoes the write-up only — it does not put anybody
+   * back in the room, and costs nothing near what that would.
    */
   const regenerateReport = async () => {
     if (!simId) return;
@@ -333,7 +367,7 @@ export default function ReportViewerPage() {
       pollHalted.current = false;
       setPollNonce((n) => n + 1);
     } catch (err) {
-      setRegenerateError(getErrorMessage(err, 'Could not start the report again.'));
+      setRegenerateError(getErrorMessage(err, 'We could not start writing it again.'));
     } finally {
       setRegenerating(false);
     }
@@ -395,31 +429,34 @@ export default function ReportViewerPage() {
   if (error || !report) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-saibyl-void gap-4">
-        <p className="text-[18px] font-bold text-saibyl-platinum">Report not found</p>
+        <p className="text-[18px] font-bold text-saibyl-platinum">
+          There is nothing written up for this run
+        </p>
         <p className="text-[13px] text-saibyl-muted">
-          The report for this simulation could not be loaded.
+          We could not load it. That happens when the run never finished, or when the
+          write-up failed and has not been started again.
         </p>
         <Link
           to="/app/simulations"
           className="flex items-center gap-1.5 text-[13px] text-saibyl-signal-blue hover:text-saibyl-platinum transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back to Simulations
+          Back to your runs
         </Link>
       </div>
     );
   }
 
   const measurementMissing = (
-    <Panel title="No measured figures">
+    <Panel title="Nothing here has been measured yet">
       <NoData>
         {analysisError ||
-          'This run has not been analysed, so there are no measured figures to show.'}
+          'Nobody has scored what was said in this run, so there are no figures to show.'}
         <br />
         <br />
-        Nothing on this page is estimated from the report text. If the
-        measurement pass has not run, the charts stay empty rather than being
-        filled in.
+        No number on this page is worked back out of the written report. If the
+        scoring has not happened, the charts stay empty rather than being filled
+        in with something plausible.
       </NoData>
     </Panel>
   );
@@ -432,7 +469,7 @@ export default function ReportViewerPage() {
           to="/app/simulations"
           className="text-[12px] text-saibyl-muted hover:text-saibyl-platinum transition-colors flex items-center gap-1"
         >
-          <ArrowLeft className="w-3.5 h-3.5" /> Simulations
+          <ArrowLeft className="w-3.5 h-3.5" /> Your runs
         </Link>
         <span className="text-saibyl-border text-[11px]">&rsaquo;</span>
         <span className="text-[12px] font-semibold text-saibyl-silver">{simulation?.name}</span>
@@ -445,9 +482,17 @@ export default function ReportViewerPage() {
             <h1 className="text-[24px] font-extrabold text-saibyl-platinum leading-tight">
               {simulation?.name ?? 'Report'}
             </h1>
-            <p className="text-[12px] font-mono text-saibyl-muted mt-0.5">
-              SIM-{simId?.slice(0, 4).toUpperCase()}
-            </p>
+            {/* No `SIM-{first four characters of the id}` line. It read as a
+                reference number and was not one — four characters off the front
+                of a UUID identify nothing and collide between runs, and a
+                founder reported three different runs all showing the same
+                "SIM-1111". The run's own question is real and is what tells
+                one report from another. */}
+            {simulation?.prediction_goal && (
+              <p className="text-[12px] text-saibyl-muted mt-1 max-w-2xl leading-relaxed">
+                {simulation.prediction_goal}
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <ReportExport
@@ -461,7 +506,7 @@ export default function ReportViewerPage() {
               className="flex items-center gap-1.5 text-[12px] px-4 py-1.5 rounded-lg bg-saibyl-gold text-saibyl-void font-semibold hover:bg-saibyl-gold-hover transition-colors"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              Re-run
+              Run this again
             </Link>
           </div>
         </div>
@@ -473,22 +518,27 @@ export default function ReportViewerPage() {
                 simulation.status,
               )}`}
             >
-              {simulation.status}
+              {/* Never the raw column value. It holds both `complete` and
+                  `completed`, which is how the same run read differently
+                  between two loads. */}
+              {runStateWord(simulation.status)}
             </span>
           )}
           {simulation?.completed_at && (
             <span className="text-[11px] text-saibyl-muted">
+              finished{' '}
               {formatDistanceToNow(new Date(simulation.completed_at), { addSuffix: true })}
             </span>
           )}
           {analysis && (
             <>
               <span className="text-[11px] text-saibyl-muted">
-                {analysis.quality.agents_active} of {analysis.quality.agents_total} agents
-                active
+                {analysis.quality.agents_active} of {analysis.quality.agents_total} people
+                said something
               </span>
               <span className="text-[11px] text-saibyl-muted">
-                {analysis.quality.events_measured.toLocaleString()} events measured
+                {analysis.quality.events_measured.toLocaleString()} posts and replies we
+                could read
               </span>
             </>
           )}
@@ -519,8 +569,9 @@ export default function ReportViewerPage() {
             <div className="flex items-center gap-3">
               <span className="inline-flex h-3 w-3 rounded-full bg-saibyl-negative shrink-0" />
               <span className="text-[14px] text-saibyl-platinum">
-                The written report failed to generate and will not arrive. The measured findings
-                below are unaffected — they come from the analysis artifact, not the prose.
+                The written-up version failed and is not coming. Everything measured below is
+                unaffected — it is scored from what people actually said, not from the
+                write-up.
               </span>
             </div>
             <button
@@ -529,7 +580,7 @@ export default function ReportViewerPage() {
               className="mt-3 ml-6 flex items-center gap-1.5 text-[12px] px-3 py-1.5 rounded-lg bg-saibyl-gold text-saibyl-void font-semibold hover:bg-saibyl-gold-hover disabled:opacity-50 transition-colors"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              {regenerating ? 'Starting…' : 'Write the report again'}
+              {regenerating ? 'Starting…' : 'Write it up again'}
             </button>
             {regenerateError && (
               <p className="mt-2 ml-6 text-[12px] text-saibyl-negative">{regenerateError}</p>
@@ -545,8 +596,8 @@ export default function ReportViewerPage() {
                 <span className="relative inline-flex rounded-full h-3 w-3 bg-saibyl-insight-violet" />
               </span>
               <span className="text-[14px] text-saibyl-platinum">
-                The written report is still generating. The measured findings below are complete
-                and do not depend on it.
+                The written-up version is still being put together. Everything measured below
+                is already complete and does not wait on it.
               </span>
             </div>
           )}
@@ -555,24 +606,24 @@ export default function ReportViewerPage() {
         {activeTab === 0 &&
           (analysis ? (
             <>
-              {/* On a multi-variant run the scoreboard comes first and the
-                  headline is demoted, because the headline aggregates every
-                  arena into one number — the average of several competing
-                  messages, describing none of them. Reversing this order would
-                  put a meaningless figure at the top of a matched-swarm test. */}
+              {/* When several messages were tested, which one won comes first
+                  and the overall figures are demoted — those average every
+                  message into one number, which describes none of them.
+                  Reversing this order would put a meaningless figure at the top
+                  of the page. */}
               {analysis.scoreboard ? (
                 <>
                   <VariantScoreboardPanel
                     scoreboard={analysis.scoreboard}
-                    // The panel's callback carries only event ids; the evidence
-                    // drawer also wants a heading. Supplied here rather than
-                    // making `label` optional, because an untitled drawer is
-                    // how a reader loses track of which variant they opened.
-                    onDrillDown={(ids) => drillDown(ids, 'Variant evidence')}
+                    // The panel's callback carries only ids; the drawer also
+                    // wants a heading. Supplied here rather than making `label`
+                    // optional, because an untitled drawer is how a reader
+                    // loses track of which message they opened.
+                    onDrillDown={(ids) => drillDown(ids, 'What people said about this message')}
                   />
                   <p className="text-[11px] text-saibyl-muted mb-3">
-                    The figures below pool every variant. On a matched-swarm test
-                    they describe the audience, not any one message.
+                    The figures below mix every message together. They tell you about
+                    your audience, not about any one thing you wrote.
                   </p>
                 </>
               ) : null}
@@ -615,11 +666,11 @@ export default function ReportViewerPage() {
               <AdversarialNotice adversarial={analysis.adversarial} />
               {/* Full width and first. A −0.4 headline means something
                   different depending on which side of the room produced it,
-                  and no archetype table makes that legible. */}
+                  and no table of buyer types makes that legible. */}
               {analysis.by_cohort.length > 0 && (
                 <div className="mb-6">
                   <GroupBreakdown
-                    title="Buyers vs. incumbent-aligned"
+                    title="Your buyers, against the people who already have something else"
                     slices={analysis.by_cohort}
                     objectionLabels={objectionLabels}
                   />
@@ -627,12 +678,12 @@ export default function ReportViewerPage() {
               )}
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                 <GroupBreakdown
-                  title="By platform"
+                  title="Where they were"
                   slices={analysis.by_platform}
                   objectionLabels={objectionLabels}
                 />
                 <GroupBreakdown
-                  title="By archetype"
+                  title="What kind of buyer they were"
                   slices={analysis.by_archetype}
                   objectionLabels={objectionLabels}
                 />
@@ -646,8 +697,8 @@ export default function ReportViewerPage() {
         {activeTab === 3 && (
           <div className="space-y-6">
             {report.sections.length === 0 && (
-              <Panel title="Narrative">
-                <NoData>The written report has not been generated yet.</NoData>
+              <Panel title="The write-up">
+                <NoData>Nobody has written this up yet.</NoData>
               </Panel>
             )}
             {report.sections.map((section) => (
@@ -695,14 +746,14 @@ export default function ReportViewerPage() {
                         (s) => `## ${s.title}\n\n${stripDuplicateTitle(s.title, s.content)}`,
                       )
                       .join('\n\n---\n\n') ||
-                    'No raw data available.'}
+                    'There is nothing written up to show here yet.'}
                 </ReactMarkdown>
               </div>
             </div>
             {analysis && (
               <Panel
-                title="Analysis artifact"
-                note="The exact object every figure above was read from. Nothing is derived on the client."
+                title="The exact numbers behind every chart"
+                note="Every figure on this page was read straight out of this. Nothing is worked out in your browser."
               >
                 <pre className="text-[10px] text-saibyl-muted overflow-auto max-h-96 leading-relaxed">
                   {JSON.stringify(analysis, null, 2)}
@@ -739,14 +790,14 @@ export default function ReportViewerPage() {
           style={{ background: 'linear-gradient(135deg, #8B5CF6, #2563EB)' }}
         >
           <MessageCircle className="w-5 h-5" />
-          Ask about this report
+          Ask about this run
         </button>
       )}
 
       {chatOpen && (
         <div className="fixed top-0 right-0 w-[360px] h-full z-50 bg-saibyl-void border-l border-saibyl-border flex flex-col shadow-2xl">
           <div className="flex items-center justify-between px-4 py-3 border-b border-saibyl-border">
-            <h3 className="text-[14px] font-semibold text-saibyl-platinum">Report Assistant</h3>
+            <h3 className="text-[14px] font-semibold text-saibyl-platinum">Ask about this</h3>
             <button
               onClick={() => setChatOpen(false)}
               className="p-1 rounded-lg text-saibyl-muted hover:text-saibyl-platinum hover:bg-saibyl-surface transition-colors"
@@ -758,7 +809,7 @@ export default function ReportViewerPage() {
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             {chatMessages.length === 0 && (
               <p className="text-[12px] text-saibyl-muted text-center mt-8">
-                Ask anything about this report.
+                Ask anything about what happened in this run.
               </p>
             )}
             {chatMessages.map((msg, i) => (
@@ -808,9 +859,9 @@ export default function ReportViewerPage() {
               {chatNotReady.status === 'failed' ? (
                 <>
                   <p className="text-[11px] text-saibyl-muted mt-1.5 leading-relaxed">
-                    It is not still coming — we have stopped waiting for it. The measured
-                    findings on this page are unaffected; only the written-up version is
-                    missing. Write it again and the assistant will have something to answer
+                    It is not still coming — we have stopped waiting for it. Everything
+                    measured on this page is unaffected; only the written-up version is
+                    missing. Write it again and there will be something here to answer
                     from.
                   </p>
                   <button
@@ -819,7 +870,7 @@ export default function ReportViewerPage() {
                     className="mt-2.5 flex items-center gap-1.5 text-[12px] px-3 py-1.5 rounded-lg bg-saibyl-gold text-saibyl-void font-semibold hover:bg-saibyl-gold-hover disabled:opacity-50 transition-colors"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
-                    {regenerating ? 'Starting…' : 'Write the report again'}
+                    {regenerating ? 'Starting…' : 'Write it up again'}
                   </button>
                   {regenerateError && (
                     <p className="mt-2 text-[12px] text-saibyl-negative">{regenerateError}</p>
@@ -843,7 +894,7 @@ export default function ReportViewerPage() {
               onChange={(e) => setChatInput(e.target.value)}
               disabled={!!chatNotReady}
               placeholder={
-                chatNotReady ? 'Nothing to ask about yet…' : 'Ask a question...'
+                chatNotReady ? 'Nothing to ask about yet…' : 'e.g. Why did they hate the price?'
               }
               className="flex-1 bg-saibyl-surface border border-saibyl-border rounded-lg px-3 py-2 text-[13px] text-saibyl-platinum placeholder-saibyl-muted focus:outline-none focus:ring-1 focus:ring-saibyl-gold focus:border-saibyl-gold disabled:opacity-50"
             />

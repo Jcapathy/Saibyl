@@ -10,25 +10,41 @@ import FounderLensStep, { type FounderConfig } from '@/components/founder/Founde
 import type { OrgPersonaPack, PersonaPack, Project } from '@/types';
 
 const PLATFORMS = [
-  { id: 'twitter_x', name: 'Twitter / X', desc: 'Engagement-weighted feeds' },
-  { id: 'reddit', name: 'Reddit', desc: 'Hot ranking, nested threads' },
-  { id: 'linkedin', name: 'LinkedIn', desc: 'Professional, connections' },
-  { id: 'instagram', name: 'Instagram', desc: 'Visual-first, stories' },
-  { id: 'tiktok', name: 'TikTok', desc: 'Short-form video, duets' },
-  { id: 'youtube', name: 'YouTube', desc: 'Long-form video, comments' },
-  { id: 'facebook', name: 'Facebook', desc: 'Groups, reactions, shares' },
-  { id: 'threads', name: 'Threads', desc: 'Text-based, reposts' },
-  { id: 'hacker_news', name: 'Hacker News', desc: 'Technical, karma decay' },
-  { id: 'discord', name: 'Discord', desc: 'Channel-based, roles' },
-  { id: 'news_comments', name: 'News Comments', desc: 'Article reactions' },
+  { id: 'twitter_x', name: 'Twitter / X', desc: 'Hot takes travel fastest' },
+  { id: 'reddit', name: 'Reddit', desc: 'Threads, and depth gets rewarded' },
+  { id: 'linkedin', name: 'LinkedIn', desc: 'Professional, and negativity sinks' },
+  { id: 'instagram', name: 'Instagram', desc: 'Pictures first, then stories' },
+  { id: 'tiktok', name: 'TikTok', desc: 'Short video, duets and stitches' },
+  { id: 'youtube', name: 'YouTube', desc: 'Long video, comments underneath' },
+  { id: 'facebook', name: 'Facebook', desc: 'Groups, reactions and shares' },
+  { id: 'threads', name: 'Threads', desc: 'Text posts and reposts' },
+  { id: 'hacker_news', name: 'Hacker News', desc: 'Technical crowd, front page fades fast' },
+  { id: 'discord', name: 'Discord', desc: 'Channels and roles' },
+  { id: 'news_comments', name: 'News Comments', desc: 'Comments under an article' },
   { id: 'custom', name: 'Custom', desc: 'Your own rules' },
 ];
 
-const STEPS = ['Setup', 'Platforms', 'Personas', 'Lens', 'Configure', 'Review'];
+/* Six steps. The heading counts them out of this array rather than restating
+   the number — it read "in 5 steps" above six of them for as long as the sixth
+   has existed, and a hand-written count is a second place for the truth to
+   live. */
+const STEPS = ['Setup', 'Where', 'Who reacts', 'Your buyers', 'Size', 'Review'];
 const LAST_STEP = STEPS.length - 1;
 
 const inputClass = 'w-full rounded-xl px-4 py-3 text-[14px] text-saibyl-platinum placeholder-saibyl-muted/50 focus:outline-none focus:ring-2 focus:ring-saibyl-gold/50 focus:border-transparent transition';
 const inputBg = 'bg-[#0B1120] border border-white/[0.08]';
+
+/**
+ * `pre_launch_positioning` → `Pre launch positioning`.
+ *
+ * The review list used to lean on a `capitalize` class for these two values,
+ * which also title-cased every full sentence beside them. Casing the two values
+ * that need it here lets the sentences render as sentences.
+ */
+function sentenceCase(value: string): string {
+  const words = value.replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
 
 function Hint({ children }: { children: React.ReactNode }) {
   return (
@@ -133,7 +149,7 @@ export default function NewSimulationPage() {
       setCustomName('');
       setCustomDesc('');
     } catch (err) {
-      setError(getErrorMessage(err, 'Failed to create custom persona'));
+      setError(getErrorMessage(err, 'We could not build that group.'));
     } finally {
       setCreatingCustom(false);
     }
@@ -187,7 +203,7 @@ export default function NewSimulationPage() {
       api.post(`/simulations/${sim.id}/prepare`).catch(() => {});
       navigate(`/app/simulations/${sim.id}`);
     } catch (err) {
-      setError(getErrorMessage(err, 'Failed to create simulation'));
+      setError(getErrorMessage(err, 'We could not start this run.'));
     } finally {
       setSubmitting(false);
     }
@@ -202,8 +218,11 @@ export default function NewSimulationPage() {
   return (
     <div className="p-8 bg-saibyl-void min-h-full">
       <div className="max-w-3xl mx-auto">
-        <h1 className="text-h1 text-saibyl-white mb-2">New Simulation</h1>
-        <p className="text-small mb-8">Configure your swarm simulation in 5 steps.</p>
+        <h1 className="text-h1 text-saibyl-white mb-2">Start a new run</h1>
+        <p className="text-small mb-8">
+          {STEPS.length} steps to set it up. Then we put it in front of the room and
+          tell you what they push back on.
+        </p>
 
         {/* Step indicator */}
         <div className="flex items-center mb-8 gap-1">
@@ -235,24 +254,26 @@ export default function NewSimulationPage() {
           {step === 0 && (
             <div className="space-y-5">
               <Hint>
-                Write your prediction goal as a specific question. The more precise the scenario, the sharper the simulation results.
-                Instead of "How will people react?" try "How will mid-career engineers on Reddit react to X?"
+                Ask one specific question. The narrower it is, the sharper the answer —
+                instead of &ldquo;How will people react?&rdquo;, try &ldquo;Would solo
+                founders pay $49 a month for this, or say they could build it themselves
+                in a weekend?&rdquo;
               </Hint>
               <div>
-                <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-2">Simulation Name</label>
+                <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-2">Name this run</label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Tesla Q1 Earnings Reaction"
+                  placeholder="e.g. New pricing page, before launch"
                   className={`${inputClass} ${inputBg}`}
                 />
               </div>
               <div>
-                <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-2">Project</label>
+                <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-2">Product</label>
                 {projects.length === 0 ? (
                   <div className={`${inputClass} ${inputBg} text-saibyl-muted/50`}>
-                    No projects yet — <button onClick={() => navigate('/app/projects')} className="text-saibyl-gold hover:underline">create one first</button>
+                    Nothing here yet — <button onClick={() => navigate('/app/projects')} className="text-saibyl-gold hover:underline">add your product first</button>
                   </div>
                 ) : (
                   <div className="relative">
@@ -262,7 +283,7 @@ export default function NewSimulationPage() {
                       className={`${inputClass} ${inputBg} appearance-none cursor-pointer`}
                       style={{ colorScheme: 'dark' }}
                     >
-                      <option value="" className="bg-[#0B1120] text-saibyl-muted">Select a project...</option>
+                      <option value="" className="bg-[#0B1120] text-saibyl-muted">Choose a product…</option>
                       {projects.map((p) => (
                         <option key={p.id} value={p.id} className="bg-[#0B1120] text-saibyl-platinum">{p.name}</option>
                       ))}
@@ -274,12 +295,12 @@ export default function NewSimulationPage() {
                 )}
               </div>
               <div>
-                <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-2">Prediction Goal</label>
+                <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-2">What do you want to know</label>
                 <textarea
                   value={predictionGoal}
                   onChange={(e) => setPredictionGoal(e.target.value)}
                   rows={4}
-                  placeholder="Describe what you want to predict in plain language. e.g. 'How will retail investors react on Twitter and Reddit if Tesla Q1 earnings beat expectations by 15%?'"
+                  placeholder="In your own words. e.g. 'If I launch this on Reddit and Hacker News at $49 a month, what will solo founders object to — the price, the fact that it needs my API key, or that they could wire this up themselves?'"
                   className={`${inputClass} ${inputBg} resize-none`}
                 />
                 <p className="text-[11px] text-saibyl-muted/50 mt-1.5">{predictionGoal.length} characters</p>
@@ -291,10 +312,11 @@ export default function NewSimulationPage() {
           {step === 1 && (
             <div>
               <Hint>
-                Each platform has its own algorithmic behavior — Twitter amplifies hot takes, Reddit rewards depth, LinkedIn suppresses negativity.
-                More platforms = richer cross-platform insights, but adds to run time.
+                Each place behaves differently — X amplifies hot takes, Reddit rewards
+                depth, LinkedIn buries anything negative. Picking more of them tells you
+                more, and takes longer to run.
               </Hint>
-              <p className="text-[14px] text-saibyl-muted mb-5">Select the platforms to simulate. Each uses real algorithmic behavior.</p>
+              <p className="text-[14px] text-saibyl-muted mb-5">Where will this be seen? Each one is modelled on how that place actually behaves.</p>
               <div className="grid grid-cols-2 gap-3">
                 {PLATFORMS.map((p) => {
                   const selected = selectedPlatforms.includes(p.id);
@@ -325,12 +347,14 @@ export default function NewSimulationPage() {
           {step === 2 && (
             <div>
               <Hint>
-                Mixing different persona packs (e.g. "Tech Workers" + "Policy Analysts") creates realistic cross-demographic debates.
-                The friction between groups is where the best insights live. You can also create fully custom personas.
+                Mixing groups is where the useful arguments come from. Put tech workers and
+                finance people in the same room and they will disagree with each other —
+                that disagreement is usually the thing you needed to see. You can also
+                describe a group of your own.
               </Hint>
-              <p className="text-[14px] text-saibyl-muted mb-5">Choose persona packs to populate your simulation agents, or create a custom persona.</p>
+              <p className="text-[14px] text-saibyl-muted mb-5">Who is in the room? Pick as many ready-made groups as you like, or describe your own.</p>
               {packs.length === 0 ? (
-                <div className="text-center py-8 text-saibyl-muted">Loading persona packs...</div>
+                <div className="text-center py-8 text-saibyl-muted">Loading…</div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {/* Create Custom card */}
@@ -340,9 +364,9 @@ export default function NewSimulationPage() {
                   >
                     <div className="flex items-center gap-2 mb-1">
                       <svg className="w-5 h-5 text-saibyl-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                      <span className="font-medium text-[14px] text-saibyl-gold">Create Custom Persona</span>
+                      <span className="font-medium text-[14px] text-saibyl-gold">Describe your own group</span>
                     </div>
-                    <p className="text-[11px] text-saibyl-muted leading-relaxed">Describe a persona and we'll generate a full archetype pack with demographics, personality, and behavior traits.</p>
+                    <p className="text-[11px] text-saibyl-muted leading-relaxed">Tell us who they are and we&rsquo;ll build out a room of them — ages, jobs, temperaments, and how they behave online.</p>
                   </button>
 
                   {packs.map((pack) => {
@@ -364,7 +388,11 @@ export default function NewSimulationPage() {
                         <p className="text-[11px] text-saibyl-muted leading-relaxed">{pack.description}</p>
                         <div className="flex items-center gap-2 mt-2">
                           <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/[0.04] text-saibyl-muted">{pack.category}</span>
-                          <span className="text-[10px] text-saibyl-muted">{pack.archetype_count} archetypes</span>
+                          <span className="text-[10px] text-saibyl-muted">
+                            {pack.archetype_count === 1
+                              ? '1 kind of person'
+                              : `${pack.archetype_count} kinds of people`}
+                          </span>
                         </div>
                       </button>
                     );
@@ -386,8 +414,8 @@ export default function NewSimulationPage() {
                   </button>
                 </div>
                 <p className="text-[12px] text-saibyl-muted mb-3 leading-relaxed">
-                  Buyers Saibyl worked out for one of your projects and you kept. Pick as many
-                  as you like — the run blends them with anything selected above.
+                  Buyers Saibyl worked out for one of your products and you kept. Pick as many
+                  as you like — the run mixes them in with anything selected above.
                 </p>
 
                 {orgPacksError ? (
@@ -398,7 +426,7 @@ export default function NewSimulationPage() {
                 ) : orgPacks.length === 0 ? (
                   <p className="text-[12px] text-saibyl-muted">
                     Nothing saved yet. Work out your buyers on the next step and you can keep
-                    them for every other project.
+                    them for every other product you build.
                   </p>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -435,7 +463,7 @@ export default function NewSimulationPage() {
                 )}
               </div>
 
-              <p className="text-[12px] text-saibyl-muted mt-4">{selectedPacks.length} pack{selectedPacks.length !== 1 ? 's' : ''} selected</p>
+              <p className="text-[12px] text-saibyl-muted mt-4">{selectedPacks.length} group{selectedPacks.length !== 1 ? 's' : ''} selected</p>
 
               {/* Custom Persona Modal */}
               {showCustomModal && (
@@ -445,27 +473,27 @@ export default function NewSimulationPage() {
                     animate={{ opacity: 1, scale: 1 }}
                     className="glass rounded-2xl p-8 w-full max-w-lg mx-4"
                   >
-                    <h3 className="text-[18px] font-semibold text-saibyl-white mb-1">Create Custom Persona</h3>
-                    <p className="text-[12px] text-saibyl-muted mb-6">Describe the persona and we'll generate a complete pack with archetypes, demographics, and behavior traits.</p>
+                    <h3 className="text-[18px] font-semibold text-saibyl-white mb-1">Describe your own group</h3>
+                    <p className="text-[12px] text-saibyl-muted mb-6">Tell us who these people are and we&rsquo;ll build out a room of them — the different kinds of person in it, their ages, jobs and temperaments, and how they behave online.</p>
 
                     <div className="space-y-4">
                       <div>
-                        <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-2">Persona Name</label>
+                        <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-2">What would you call them?</label>
                         <input
                           type="text"
                           value={customName}
                           onChange={(e) => setCustomName(e.target.value)}
-                          placeholder="e.g. Crypto Day Trader, Healthcare Administrator, Gen Z Activist"
+                          placeholder="e.g. Solo SaaS founders, Agency owners, Heads of RevOps"
                           className={`${inputClass} ${inputBg}`}
                         />
                       </div>
                       <div>
-                        <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-2">Description</label>
+                        <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-2">Who are they?</label>
                         <textarea
                           value={customDesc}
                           onChange={(e) => setCustomDesc(e.target.value)}
                           rows={4}
-                          placeholder="Describe who this persona is, what drives them, how they behave on social media, and what topics they care about. The more detail you provide, the richer the generated archetypes will be."
+                          placeholder="What they do, what drives them, how they behave online, what they already pay for. The more you write here, the more like real people they come out."
                           className={`${inputClass} ${inputBg} resize-none`}
                         />
                       </div>
@@ -484,7 +512,7 @@ export default function NewSimulationPage() {
                         disabled={creatingCustom || !customName.trim() || !customDesc.trim()}
                         className="px-6 py-2.5 rounded-xl bg-[#C9A227] text-[#0A0F1C] font-medium text-sm disabled:opacity-50 transition-all hover:bg-[#D4AF37] hover:-translate-y-0.5"
                       >
-                        {creatingCustom ? 'Generating...' : 'Create Persona'}
+                        {creatingCustom ? 'Building…' : 'Build this group'}
                       </button>
                     </div>
                   </motion.div>
@@ -496,11 +524,16 @@ export default function NewSimulationPage() {
           {/* ── Step 4: Lens ── */}
           {step === 3 && (
             <div>
+              {/* Written to the reader, not to the team. This said "a run with no
+                  lens behaves exactly as it did before, which is what every run
+                  made before this feature existed did" — a sentence about our
+                  release history, addressed to somebody who has no before. */}
               <Hint>
-                The Founder lens changes what the run is asked to answer and who it
-                asks. Skip it for a general run — a simulation with no lens behaves
-                exactly as it did before, which is what every run made before this
-                feature existed did.
+                This step is optional, and it is the one that makes the answers about
+                your product rather than about the topic. Tell us where you are with
+                it and we&rsquo;ll read what you&rsquo;ve uploaded to work out who your
+                buyers are and who will argue against you. Skip it and the run just
+                uses the groups you picked on the last step.
               </Hint>
               <FounderLensStep
                 projectId={projectId}
@@ -548,37 +581,62 @@ export default function NewSimulationPage() {
           {/* ── Step 6: Review ── */}
           {step === LAST_STEP && (
             <div>
-              <h2 className="text-[18px] font-semibold text-saibyl-platinum mb-5">Review &amp; Launch</h2>
+              <h2 className="text-[18px] font-semibold text-saibyl-platinum mb-5">One last look</h2>
+              {/* Every row here is something the reader chose. A row with
+                  nothing behind it is dropped rather than filled with an em
+                  dash: five of these used to render "—", which reads as a
+                  setting whose value is a dash instead of a setting that was
+                  never reached.
+
+                  `capitalize` also came off the value: it is on the shared span
+                  and it title-cased whole sentences, so the product name and
+                  "One — add more on the run's page before you start it" came
+                  out with a capital on every word. The one value that wanted it
+                  is capitalised where it is built. */}
               <div className="space-y-3">
-                {[
-                  ['Name', name],
-                  ['Project', projects.find((p) => p.id === projectId)?.name || '—'],
-                  ['Prediction goal', predictionGoal || '—'],
-                  ['Platforms', selectedPlatforms.map((id) => PLATFORMS.find((p) => p.id === id)?.name || id).join(', ') || 'Twitter / X'],
-                  ['Persona packs', `${selectedPacks.length} selected`],
-                  ['Lens', founder.stage ? 'Founder' : 'None'],
-                  ['Stage', founder.stage ? founder.stage.replace(/_/g, ' ') : '—'],
-                  ['Synthesized ICP', founder.icpProfileId ? 'Selected' : '—'],
+                {(
                   [
-                    'Incumbent-aligned',
-                    founder.icpProfileId
-                      ? `${(founder.adversarialShare * 100).toFixed(0)}% of the swarm`
-                      : '—',
-                  ],
-                  ['People in the room', String(shape.agent_count)],
-                  ['Rounds', String(shape.rounds)],
-                  [
-                    'Messages tested',
-                    'One — add more on the run’s page before you start it',
-                  ],
-                  ['Report depth', shape.depth],
-                  ['Timezone', timezone],
-                ].map(([label, value]) => (
-                  <div key={label} className="flex items-start gap-4 py-2 border-b border-white/[0.04] last:border-0">
-                    <span className="text-[13px] text-saibyl-muted w-36 shrink-0">{label}</span>
-                    <span className="text-[13px] text-saibyl-platinum flex-1 capitalize">{value}</span>
-                  </div>
-                ))}
+                    ['Name', name.trim()],
+                    ['Product', projects.find((p) => p.id === projectId)?.name ?? ''],
+                    ['Your question', predictionGoal.trim()],
+                    [
+                      'Where',
+                      selectedPlatforms
+                        .map((id) => PLATFORMS.find((p) => p.id === id)?.name || id)
+                        .join(', ') || 'Twitter / X',
+                    ],
+                    [
+                      'Groups picked',
+                      selectedPacks.length === 1 ? '1 group' : `${selectedPacks.length} groups`,
+                    ],
+                    ['Where you are', founder.stage ? sentenceCase(founder.stage) : ''],
+                    [
+                      'Your own buyers',
+                      founder.icpProfileId ? 'Worked out from what you uploaded' : '',
+                    ],
+                    [
+                      'Arguing against you',
+                      founder.icpProfileId
+                        ? `${(founder.adversarialShare * 100).toFixed(0)}% of the room`
+                        : '',
+                    ],
+                    ['People in the room', String(shape.agent_count)],
+                    ['Rounds', String(shape.rounds)],
+                    [
+                      'Messages tested',
+                      'One — add more on the run’s page before you start it',
+                    ],
+                    ['Report depth', sentenceCase(shape.depth)],
+                    ['Timezone', timezone],
+                  ] as [string, string][]
+                )
+                  .filter(([, value]) => value !== '')
+                  .map(([label, value]) => (
+                    <div key={label} className="flex items-start gap-4 py-2 border-b border-white/[0.04] last:border-0">
+                      <span className="text-[13px] text-saibyl-muted w-36 shrink-0">{label}</span>
+                      <span className="text-[13px] text-saibyl-platinum flex-1">{value}</span>
+                    </div>
+                  ))}
               </div>
 
               {/* Re-priced here rather than echoing the figure from step 4: a
@@ -613,14 +671,24 @@ export default function NewSimulationPage() {
                 Next →
               </button>
             ) : (
-              <button
-                onClick={handleSubmit}
-                disabled={submitting || !!quoteError}
-                title={quoteError || undefined}
-                className="px-8 py-2.5 rounded-xl bg-saibyl-gold text-saibyl-void font-semibold text-[14px] disabled:opacity-50 transition-all hover:bg-saibyl-gold-hover hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(201,162,39,0.3)]"
-              >
-                {submitting ? 'Launching...' : 'Start Simulation →'}
-              </button>
+              /* The reason a run cannot start is written next to the button
+                 rather than hidden in a `title`. A tooltip is no explanation on
+                 a touch screen and invisible in a screenshot, and this is the
+                 last screen before money is spent. */
+              <div className="flex items-center gap-3">
+                {quoteError && (
+                  <span className="text-[12px] text-saibyl-warning">
+                    {quoteError} Nothing can start until we can tell you what it costs.
+                  </span>
+                )}
+                <button
+                  onClick={handleSubmit}
+                  disabled={submitting || !!quoteError}
+                  className="px-8 py-2.5 rounded-xl bg-saibyl-gold text-saibyl-void font-semibold text-[14px] disabled:opacity-50 transition-all hover:bg-saibyl-gold-hover hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(201,162,39,0.3)]"
+                >
+                  {submitting ? 'Starting…' : 'Start this run →'}
+                </button>
+              </div>
             )}
           </div>
         </motion.div>

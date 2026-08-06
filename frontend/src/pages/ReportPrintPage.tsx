@@ -17,9 +17,11 @@ import {
 import { format } from 'date-fns';
 import api from '@/lib/api';
 import SectionRenderer from '@/components/report/SectionRenderer';
+import { groupLabel } from '@/lib/groups';
 import { PRINT_PIE_COLORS, PRINT_PLATFORM_COLORS } from '@/lib/constants';
 import { cleanContent, stripDuplicateTitle } from '@/lib/utils';
 import {
+  TRAJECTORY_COPY,
   formatSigned,
   isSupportedSchema,
   withSchemaDefaults,
@@ -140,7 +142,7 @@ export default function ReportPrintPage() {
   if (loading) {
     return (
       <div style={centeredStyle}>
-        <p style={{ fontSize: 18 }}>Preparing report for export...</p>
+        <p style={{ fontSize: 18 }}>Getting this ready to print…</p>
       </div>
     );
   }
@@ -148,7 +150,7 @@ export default function ReportPrintPage() {
   if (!report || !simulation) {
     return (
       <div style={centeredStyle}>
-        <p style={{ fontSize: 18 }}>Report data could not be loaded.</p>
+        <p style={{ fontSize: 18 }}>We could not load this run.</p>
       </div>
     );
   }
@@ -199,10 +201,10 @@ export default function ReportPrintPage() {
      scalar onto an invented positive/neutral/negative population. */
   const stanceData = analysis
     ? [
-        { name: 'Support', value: Math.round(analysis.headline.stance.support_pct) },
+        { name: 'For it', value: Math.round(analysis.headline.stance.support_pct) },
         { name: 'Undecided', value: Math.round(analysis.headline.stance.undecided_pct) },
-        { name: 'Oppose', value: Math.round(analysis.headline.stance.oppose_pct) },
-        { name: 'Off-topic', value: Math.round(analysis.headline.stance.off_topic_pct) },
+        { name: 'Against it', value: Math.round(analysis.headline.stance.oppose_pct) },
+        { name: 'Talking about something else', value: Math.round(analysis.headline.stance.off_topic_pct) },
       ].filter((slice) => slice.value > 0)
     : [];
 
@@ -292,8 +294,14 @@ export default function ReportPrintPage() {
           <h1 style={{ fontSize: 32, fontWeight: 800, margin: '40px 0 8px', lineHeight: 1.2 }}>
             {simulation.name}
           </h1>
+          {/* No `SIM-{first four characters of the id}` line. It read as a
+              reference number and was not one — four characters off the front
+              of a UUID identify nothing and collide between runs, and a founder
+              reported three different runs all showing the same "SIM-1111". On
+              a document that gets forwarded, a fake identifier is worse than
+              none: someone will quote it back. */}
           <p style={{ fontSize: 14, color: MUTED, fontWeight: 500, margin: '0 0 40px' }}>
-            SIM-{simId?.slice(0, 4).toUpperCase()} &middot; Intelligence Report
+            What people said before you launched
           </p>
 
           <div
@@ -305,12 +313,15 @@ export default function ReportPrintPage() {
               color: '#333',
             }}
           >
-            <Field label="Date Generated" value={format(new Date(), 'MMMM d, yyyy')} />
+            <Field label="Printed" value={format(new Date(), 'MMMM d, yyyy')} />
             <Field
               label="Platforms"
               value={simulation.platforms.map((p) => PLATFORM_NAMES[p] ?? p).join(', ')}
             />
-            <Field label="Agents" value={simulation.agent_count?.toString() ?? '—'} />
+            <Field
+              label="People in the room"
+              value={simulation.agent_count?.toString() ?? 'not recorded'}
+            />
             <Field label="Rounds" value={String(simulation.max_rounds)} />
           </div>
 
@@ -328,22 +339,24 @@ export default function ReportPrintPage() {
                 paddingLeft: 12,
               }}
             >
-              Every figure in this document is measured from what the simulated
-              agents wrote. {analysis.quality.events_measured.toLocaleString()} of{' '}
-              {analysis.quality.events_total.toLocaleString()} events were scored (
-              {analysis.quality.coverage_pct.toFixed(1)}% coverage) across{' '}
-              {analysis.quality.agents_active} active agents and{' '}
-              {analysis.quality.rounds} rounds. Confidence intervals are computed
-              across agents. Overall confidence: {analysis.quality.confidence}.
+              Every figure in this document was measured from what people in the
+              room actually wrote — none of it is estimated.{' '}
+              {analysis.quality.events_measured.toLocaleString()} of the{' '}
+              {analysis.quality.events_total.toLocaleString()} posts and replies could
+              be read and scored ({analysis.quality.coverage_pct.toFixed(1)}%), across{' '}
+              {analysis.quality.agents_active} people who said something and{' '}
+              {analysis.quality.rounds} rounds. Ranges are worked out across people, so
+              somebody posting ten times counts as one opinion rather than ten.
             </p>
           )}
 
           {/* On the cover page, alongside the measurement statement. PRD §4
-              requires adversarial agents to be labelled synthetic in every
-              report and export, and a printed report is the artefact most
-              likely to be forwarded to someone who never saw the run being
-              configured. The sentence is composed on the server so this page,
-              the viewer, the PDF and the JSON export cannot disagree. */}
+              requires the people built to argue against you to be labelled
+              synthetic in every report and export, and a printed report is the
+              artefact most likely to be forwarded to someone who never saw the
+              run being set up. The sentence is composed on the server so this
+              page, the viewer, the PDF and the JSON export cannot disagree —
+              which is also why it is the one string here not rewritten. */}
           {analysis?.adversarial?.enabled && (
             <p
               style={{
@@ -375,10 +388,10 @@ export default function ReportPrintPage() {
 
         {/* ================= 1. Source Material ================= */}
         <div style={{ pageBreakAfter: 'always' }}>
-          <SectionHeader number="1" title="Source Material" />
+          <SectionHeader number="1" title="What went in" />
 
           <p style={{ fontSize: 14, fontWeight: 600, color: '#333', marginBottom: 8 }}>
-            Scenario / Question Analyzed
+            What we asked
           </p>
           {simulation.prediction_goal.length > 300 ? (
             <div style={quoteBlockStyle}>{simulation.prediction_goal}</div>
@@ -391,7 +404,7 @@ export default function ReportPrintPage() {
           {report.source_documents && report.source_documents.length > 0 && (
             <>
               <p style={{ fontSize: 14, fontWeight: 600, color: '#333', marginBottom: 8 }}>
-                Input Article / Document
+                What you gave us to read
               </p>
               {report.source_documents.map((doc) => (
                 <div key={doc.filename} style={{ ...quoteBlockStyle, marginBottom: 12 }}>
@@ -417,24 +430,24 @@ export default function ReportPrintPage() {
           )}
 
           <p style={{ fontSize: 14, fontWeight: 600, color: '#333', margin: '20px 0 8px' }}>
-            Simulation Parameters
+            How this run was set up
           </p>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <tbody>
               {[
-                ['Agents generated', simulation.agent_count?.toString() ?? '—'],
+                ['People in the room', simulation.agent_count?.toString() ?? 'not recorded'],
                 ['Rounds', String(simulation.max_rounds)],
                 ['Platforms', simulation.platforms.map((p) => PLATFORM_NAMES[p] ?? p).join(', ')],
                 ...(simulation.persona_pack_ids?.length
-                  ? [['Persona packs', simulation.persona_pack_ids.join(', ')]]
+                  ? [['Groups of buyers', simulation.persona_pack_ids.join(', ')]]
                   : []),
                 ...(analysis
                   ? [
                       [
-                        'Events measured',
+                        'Posts and replies we could read',
                         `${analysis.quality.events_measured.toLocaleString()} of ${analysis.quality.events_total.toLocaleString()} (${analysis.quality.coverage_pct.toFixed(1)}%)`,
                       ],
-                      ['Measurement model', analysis.quality.measurement_model || '—'],
+                      ['Scored by', analysis.quality.measurement_model || 'not recorded'],
                     ]
                   : []),
                 [
@@ -459,7 +472,7 @@ export default function ReportPrintPage() {
 
         {/* ================= 2. Executive Summary ================= */}
         <div style={{ pageBreakAfter: 'always' }}>
-          <SectionHeader number="2" title="Executive Summary" />
+          <SectionHeader number="2" title="The short version" />
 
           {analysis ? (
             <>
@@ -473,36 +486,36 @@ export default function ReportPrintPage() {
                 }}
               >
                 <MetricBox
-                  label="Overall sentiment"
+                  label="How the room felt"
                   value={
                     analysis.headline.valence.n > 0
                       ? formatSigned(analysis.headline.valence.mean)
-                      : 'N/A'
+                      : '—'
                   }
                   sub={
                     analysis.headline.valence.n > 1
-                      ? `95% CI ${formatSigned(analysis.headline.valence.lower)} to ${formatSigned(analysis.headline.valence.upper)}`
-                      : 'not resolvable'
+                      ? `somewhere between ${formatSigned(analysis.headline.valence.lower)} and ${formatSigned(analysis.headline.valence.upper)}`
+                      : 'too few people to read'
                   }
                 />
                 <MetricBox
-                  label="Opposed"
+                  label="Against it"
                   value={`${analysis.headline.stance.oppose_pct.toFixed(0)}%`}
-                  sub={`${analysis.headline.stance.support_pct.toFixed(0)}% support`}
+                  sub={`${analysis.headline.stance.support_pct.toFixed(0)}% were for it`}
                 />
                 <MetricBox
-                  label="Trajectory"
+                  label="Which way it moved"
                   value={
                     analysis.headline.trajectory === 'flat'
-                      ? 'Flat'
+                      ? 'Held steady'
                       : formatSigned(analysis.headline.trajectory_delta)
                   }
-                  sub={analysis.headline.trajectory}
+                  sub={TRAJECTORY_COPY[analysis.headline.trajectory]}
                 />
                 <MetricBox
-                  label="Agents measured"
+                  label="People we could read"
                   value={String(analysis.headline.valence.n)}
-                  sub={`of ${analysis.quality.agents_total} generated`}
+                  sub={`of ${analysis.quality.agents_total} in the room`}
                 />
               </div>
 
@@ -519,7 +532,7 @@ export default function ReportPrintPage() {
                     lineHeight: 1.7,
                   }}
                 >
-                  <strong style={{ color: '#333' }}>What this run can and cannot show</strong>
+                  <strong style={{ color: '#333' }}>What this run can and cannot tell you</strong>
                   <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
                     {analysis.quality.caveats.map((caveat) => (
                       <li key={caveat}>{caveat}</li>
@@ -530,8 +543,8 @@ export default function ReportPrintPage() {
             </>
           ) : (
             <p style={{ ...noticeStyle, marginBottom: 24 }}>
-              This run has not been analysed, so no measured figures are included.
-              Nothing in this document is estimated from the narrative text.
+              Nobody has scored what was said in this run, so there are no figures
+              here. Nothing in this document is estimated from the written text.
             </p>
           )}
 
@@ -544,22 +557,23 @@ export default function ReportPrintPage() {
 
         {/* ================= 3. Data & Analysis ================= */}
         <div style={{ pageBreakBefore: 'always' }}>
-          <SectionHeader number="3" title="Data &amp; Analysis" />
+          <SectionHeader number="3" title="The numbers" />
 
           {!analysis && (
             <p style={noticeStyle}>
-              No analysis artifact exists for this run, so there are no charts.
-              Charts are only drawn from measured data.
+              Nothing in this run has been scored, so there are no charts. Charts are
+              only ever drawn from things that were actually measured.
             </p>
           )}
 
           {analysis && arcData.length > 0 && (
             <div className="print-figure" style={{ marginBottom: 32 }}>
-              <ChartTitle>Sentiment by round</ChartTitle>
+              <ChartTitle>How the room felt, round by round</ChartTitle>
               <ChartNote>
-                Bars are the mean valence per round; whiskers are the 95% confidence
-                interval computed across agents. Rounds with no measurable opinion
-                are omitted rather than interpolated.
+                Each bar is how the room felt that round, on a scale where +1 is loved
+                it and −1 is hated it. The whisker is the range the real figure is
+                likely to sit in. Rounds where nobody said anything we could read are
+                left out rather than guessed at.
               </ChartNote>
               <BarChart
                 width={700}
@@ -583,7 +597,7 @@ export default function ReportPrintPage() {
                   labelFormatter={(label) => {
                     const round = String(label ?? '');
                     const point = arcData.find((d) => String(d.round) === round);
-                    return `${round} — ${point?.agents ?? 0} agents`;
+                    return `${round} — ${point?.agents ?? 0} people`;
                   }}
                 />
                 <Bar dataKey="mean" radius={[3, 3, 0, 0]}>
@@ -601,10 +615,10 @@ export default function ReportPrintPage() {
 
           {analysis && platformData.length > 0 && (
             <div className="print-figure" style={{ marginBottom: 32 }}>
-              <ChartTitle>Sentiment by platform</ChartTitle>
+              <ChartTitle>How the room felt, by platform</ChartTitle>
               <ChartNote>
-                Ordered most negative first. Where whiskers overlap, this run does
-                not resolve a difference between those platforms.
+                Worst first. Where the whiskers overlap, this run cannot tell those
+                platforms apart.
               </ChartNote>
               <BarChart
                 width={700}
@@ -631,7 +645,7 @@ export default function ReportPrintPage() {
                   labelFormatter={(label) => {
                     const name = String(label ?? '');
                     const row = platformData.find((d) => String(d.name) === name);
-                    return `${name} — ${row?.agents ?? 0} agents`;
+                    return `${name} — ${row?.agents ?? 0} people`;
                   }}
                 />
                 <Bar dataKey="mean" radius={[0, 3, 3, 0]}>
@@ -646,11 +660,11 @@ export default function ReportPrintPage() {
 
           {analysis && stanceData.length > 0 && (
             <div className="print-figure" style={{ marginBottom: 32 }}>
-              <ChartTitle>Stance distribution</ChartTitle>
+              <ChartTitle>For, against and undecided</ChartTitle>
               <ChartNote>
-                Share of measured events taking each position on the subject.
-                Off-topic events are shown rather than dropped — a swarm that
-                never engaged is a different result from one that disagreed.
+                How much of what was said took each position. Anything off the subject
+                is shown rather than dropped — a room that never engaged is a very
+                different result from one that disagreed.
               </ChartNote>
               <PieChart width={700} height={280}>
                 <Pie
@@ -675,15 +689,16 @@ export default function ReportPrintPage() {
 
           {analysis && analysis.objections.length > 0 && (
             <div className="print-figure" style={{ marginBottom: 32 }}>
-              <ChartTitle>Objections, ranked by load-bearing weight</ChartTitle>
+              <ChartTitle>What they pushed back on, worst first</ChartTitle>
               <ChartNote>
-                Weight is reach × intensity × cohort spread — not how often an
-                objection was repeated. Quotes are verbatim agent output.
+                Weight is how far it spread, how strongly it was meant and how many
+                kinds of buyer raised it — not how often it came up. Quotes are word
+                for word.
               </ChartNote>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead>
                   <tr>
-                    {['Objection', 'Weight', 'Agents', 'First seen', 'Originating cohort'].map(
+                    {['What they said', 'Weight', 'People', 'First came up', 'Started with'].map(
                       (heading) => (
                         <th
                           key={heading}
@@ -710,7 +725,14 @@ export default function ReportPrintPage() {
                       <td style={cellStyle}>{objection.load_bearing_score.toFixed(1)}</td>
                       <td style={cellStyle}>{objection.agent_count}</td>
                       <td style={cellStyle}>R{objection.first_round_seen ?? '—'}</td>
-                      <td style={cellStyle}>{objection.originating_cohort ?? '—'}</td>
+                      {/* The label, never the raw key. This document gets
+                          forwarded, and "adversarial" in a table cell is a word
+                          the reader has to be taught. */}
+                      <td style={cellStyle}>
+                        {objection.originating_cohort
+                          ? groupLabel(objection.originating_cohort)
+                          : '—'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -750,17 +772,18 @@ export default function ReportPrintPage() {
 
           {analysis && analysis.flashpoints.length > 0 && (
             <div className="print-figure" style={{ marginBottom: 32 }}>
-              <ChartTitle>Flashpoints</ChartTitle>
+              <ChartTitle>Where the mood turned</ChartTitle>
               <ChartNote>
-                Round-to-round shifts larger than 0.15. Only shifts whose intervals
-                separate are marked as measured; the rest are directional.
+                Moments where the room moved noticeably between one round and the
+                next. A move is only called real when the ranges around the two
+                figures do not overlap.
               </ChartNote>
               <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, lineHeight: 1.8 }}>
                 {analysis.flashpoints.slice(0, 6).map((flash) => (
                   <li key={`${flash.round_number}-${flash.delta}`}>
                     <strong>Round {flash.round_number}:</strong>{' '}
                     {formatSigned(flash.valence_before)} → {formatSigned(flash.valence_after)}{' '}
-                    ({flash.significant ? 'measured shift' : 'within the bands'})
+                    ({flash.significant ? 'a real move' : 'too small to be sure'})
                   </li>
                 ))}
               </ul>
@@ -770,9 +793,9 @@ export default function ReportPrintPage() {
 
         {/* ================= 4. Detailed Findings ================= */}
         <div>
-          <SectionHeader number="4" title="Detailed Findings" />
+          <SectionHeader number="4" title="In detail" />
           {detailedSections.length === 0 && (
-            <p style={{ fontSize: 14, color: MUTED }}>No additional sections available.</p>
+            <p style={{ fontSize: 14, color: MUTED }}>Nothing more was written up.</p>
           )}
           {detailedSections.map((section) => (
             <div key={section.title} style={{ marginBottom: 24 }}>
@@ -789,7 +812,7 @@ export default function ReportPrintPage() {
 
         {/* ================= 5. Strategic Implications ================= */}
         <div>
-          <SectionHeader number="5" title="Strategic Implications &amp; Recommended Actions" />
+          <SectionHeader number="5" title="What to do about it" />
           {conclusionSection?.content ? (
             <div style={{ fontSize: 16, lineHeight: 1.7 }}>
               <SectionRenderer
@@ -802,7 +825,7 @@ export default function ReportPrintPage() {
             </div>
           ) : (
             <p style={{ fontSize: 14, color: MUTED }}>
-              Strategic implications will appear once the report generation completes.
+              This appears once the write-up finishes.
             </p>
           )}
         </div>

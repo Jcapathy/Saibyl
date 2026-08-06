@@ -16,7 +16,13 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import api from '@/lib/api';
-import type { BillingStatus } from '@/types';
+
+interface CreditBalance {
+  balance: number;
+  grant: number;
+  /** Runs the balance still affords, or null when the run price is unknown. */
+  runs_left: number | null;
+}
 
 /* ------------------------------------------------------------------ */
 /*  Nav definitions                                                    */
@@ -59,8 +65,8 @@ const coreNav: NavItem[] = [
  * of the main path.
  */
 const alsoNav: NavItem[] = [
-  { path: '/app/projects', label: 'All your files', Icon: FolderOpen },
-  { path: '/app/audiences', label: 'Saved audiences', Icon: Users },
+  { path: '/app/projects', label: 'Everything you uploaded', Icon: FolderOpen },
+  { path: '/app/audiences', label: 'Audiences you can reuse', Icon: Users },
   { path: '/app/prospects', label: 'Companies', Icon: Building2 },
   { path: '/app/marketing', label: 'Message tests', Icon: MessageSquare },
   { path: '/app/simulations', label: 'Every run', Icon: Clock },
@@ -70,13 +76,6 @@ const alsoNav: NavItem[] = [
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
-
-function formatCount(n: number | undefined | null): string {
-  if (n == null) return '—';
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(n % 1_000 === 0 ? 0 : 1)}K`;
-  return n.toString();
-}
 
 function getInitials(value: string): string {
   const parts = value.trim().split(/\s+/);
@@ -136,35 +135,6 @@ function NavLink({ item, pathname, onClick }: { item: NavItem; pathname: string;
   );
 }
 
-function UsageBar({
-  label,
-  used,
-  limit,
-}: {
-  label: string;
-  used: number;
-  limit: number;
-}) {
-  const pct = limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
-
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between text-[11px]">
-        <span className="text-[#5A6578]">{label}</span>
-        <span className="text-[#8B97A8] font-mono">
-          {formatCount(used)} / {formatCount(limit)}
-        </span>
-      </div>
-      <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
-        <div
-          className="h-full rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#2563EB] transition-all"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
 function UsageSkeleton() {
   return (
     <div className="space-y-3 animate-pulse">
@@ -191,22 +161,36 @@ export default function AppLayout() {
   const { user, org, logout } = useAuthStore();
 
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [billing, setBilling] = useState<BillingStatus | null>(null);
-  const [billingLoading, setBillingLoading] = useState(true);
+  const [credits, setCredits] = useState<CreditBalance | null>(null);
+  const [creditsLoading, setCreditsLoading] = useState(true);
 
-  // Fetch billing status on mount
   useEffect(() => {
     let cancelled = false;
     api
-      .get<BillingStatus>('/billing/status')
+      .get<{ balance: number; grant: number; standard_run_credits?: number }>(
+        '/billing/credits',
+      )
       .then(({ data }) => {
-        if (!cancelled) setBilling(data);
+        if (cancelled) return;
+        const perRun = data.standard_run_credits;
+        setCredits({
+          balance: data.balance ?? 0,
+          grant: data.grant ?? 0,
+          // Floored, so it can only understate. Null rather than 0 when we do
+          // not know the run price - "about 0 runs left" reads as a refusal.
+          runs_left:
+            typeof perRun === 'number' && perRun > 0
+              ? Math.floor((data.balance ?? 0) / perRun)
+              : null,
+        });
       })
       .catch(() => {
-        /* silent — usage bars just won't show */
+        /* The bar simply does not draw. A balance we could not read must not
+           render as a number, and 0 is the number that would frighten someone
+           into not clicking. */
       })
       .finally(() => {
-        if (!cancelled) setBillingLoading(false);
+        if (!cancelled) setCreditsLoading(false);
       });
     return () => {
       cancelled = true;
@@ -257,34 +241,57 @@ export default function AppLayout() {
           <NavLink key={item.path} item={item} pathname={location.pathname} onClick={closeMobile} />
         ))}
 
-        <SectionLabel>Also here</SectionLabel>
+        <SectionLabel>Everything else</SectionLabel>
         {alsoNav.map((item) => (
           <NavLink key={item.path} item={item} pathname={location.pathname} onClick={closeMobile} />
         ))}
       </nav>
 
-      {/* Usage bars */}
-      <div className="px-4 py-3 border-t border-[#1E293B] space-y-3">
-        {billingLoading ? (
+      {/* What you have left, in the unit that is actually metered.
+
+          This showed "Runs 3/15" and "People in the room 0/50K". Neither
+          number constrained anything:
+
+          - `simulations_limit` reads `PLAN_LIMITS`, whose keys are the V1 plan
+            names. Signup creates every account on plan `free`, which is not a
+            key, so every new founder saw the *starter* limit.
+          - `agents_limit` is `agent_limits.get(plan, 50_000)` over a table of
+            150,000 / 7,500,000 / 50,000,000. The 50K every signup saw was a
+            hardcoded `.get()` default belonging to no plan at all.
+
+          Credits are the metered unit (DECISIONS §15b) - they are what a run
+          is charged against and what runs out. So that is what is shown, with
+          what it buys next to it, because "1,317" means nothing on its own to
+          someone deciding whether they can afford to click. */}
+      <div className="px-4 py-3 border-t border-[#1E293B]">
+        {creditsLoading ? (
           <UsageSkeleton />
-        ) : billing ? (
+        ) : credits ? (
           <>
-            {/* "Simulations" and "Agents" are what the API calls these. They
-                are not what a founder calls them, and this bar sits on every
-                screen in the product — including the five steps, which are
-                written for someone who has never heard either word. */}
-            <UsageBar
-              label="Runs"
-              used={billing.simulations_used}
-              limit={billing.simulations_limit}
-            />
-            {billing.agents_used != null && billing.agents_limit != null && (
-              <UsageBar
-                label="People in the room"
-                used={billing.agents_used}
-                limit={billing.agents_limit}
-              />
+            <div className="flex items-center justify-between text-[11px] mb-1">
+              <span className="text-[#5A6578]">Credits left</span>
+              <span className="text-[#8B97A8] font-mono">
+                {credits.balance.toLocaleString()}
+              </span>
+            </div>
+            {credits.grant > 0 && (
+              <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#2563EB] transition-all"
+                  style={{
+                    width: `${Math.min((credits.balance / credits.grant) * 100, 100)}%`,
+                  }}
+                />
+              </div>
             )}
+            <Link
+              to="/app/settings"
+              className="block text-[10.5px] text-[#5A6578] hover:text-[#8B97A8] mt-1.5 leading-snug transition-colors"
+            >
+              {credits.runs_left !== null
+                ? `About ${credits.runs_left} more ${credits.runs_left === 1 ? 'run' : 'runs'} \u2014 add more`
+                : 'Add more'}
+            </Link>
           </>
         ) : null}
       </div>

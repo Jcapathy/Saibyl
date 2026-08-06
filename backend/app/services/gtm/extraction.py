@@ -64,7 +64,7 @@ from pydantic import ValidationError
 from app.core.config import settings
 from app.services.billing.usage_ledger import record_llm_call
 from app.services.engine.personas.icp_schema import ICPArchetype, ICPProfile
-from app.services.gtm.exclusions import CategoryExclusions, build_exclusions
+from app.services.gtm.exclusions import CategoryExclusions, build_exclusions, sells_in_category
 from app.services.gtm.privacy import CONTACT_BLOCKED_DOMAINS, rejects_as_personal_data
 from app.services.gtm.schema import (
     EVIDENCED_FIELDS,
@@ -476,6 +476,28 @@ def verify_candidates(
             if hit is not None:
                 rejections["sells_what_the_founder_sells"] += 1
                 excluded_names.append(f"{raw.company_name.strip()}~{hit.name}")
+                continue
+
+            # The name-based match above can only catch a rival somebody
+            # already named, or one whose product an archetype already runs.
+            # A founder in AI security ran a real discovery and got back a
+            # company whose own one-liner opens "A company focused on AI
+            # security" - unnamed, unrun, and by its own description a
+            # competitor. Discovery exists to surface companies the founder
+            # had not heard of, so an exclusion that only knows the ones they
+            # had is blind exactly where it matters.
+            #
+            # Read from what the candidate says about itself, and only when
+            # that reads as a description of what they sell rather than what
+            # they use - see `sells_in_category`.
+            described = " ".join(
+                part for part in (raw.one_liner, raw.industry) if part
+            )
+            if described and sells_in_category(described, exclusions.category):
+                rejections["sells_what_the_founder_sells"] += 1
+                excluded_names.append(
+                    f"{raw.company_name.strip()}~{exclusions.category}"
+                )
                 continue
 
         source = by_url.get(raw.source_url)

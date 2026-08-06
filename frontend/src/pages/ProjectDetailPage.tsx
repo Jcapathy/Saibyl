@@ -1,14 +1,24 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Building2, FileText, MessageSquare, Users } from 'lucide-react';
+import { ArrowRight, Building2, FileText, MessageSquare, Users } from 'lucide-react';
 import api, { unwrapList } from '@/lib/api';
 import { formatPlatforms } from '@/lib/constants';
 import StatusBadge from '@/components/StatusBadge';
 import { describeRun } from '@/lib/gtm';
+import { isRead } from '@/lib/status';
 import { getErrorMessage } from '../lib/errors';
 import type { DiscoveryRun, MaterialKind, Project, ProjectDocument, Simulation } from '@/types';
 
 type Tab = 'documents' | 'companies' | 'simulations';
+
+/** One of the things this page offers to do next. */
+interface Action {
+  key: string;
+  label: string;
+  blurb: string;
+  to: string;
+  Icon: React.ComponentType<{ className?: string }>;
+}
 
 /**
  * What a discovery run asked for, delivered and actually cost.
@@ -51,7 +61,7 @@ const MATERIAL_KINDS: { value: MaterialKind; label: string; help: string }[] = [
   {
     value: 'competitor',
     label: "A competitor's",
-    help: 'Something a rival published. Lets Saibyl name them in a simulation.',
+    help: 'Something a rival published. Lets Saibyl name them out loud.',
   },
   {
     value: 'market',
@@ -85,20 +95,35 @@ export default function ProjectDetailPage() {
   const [uploadError, setUploadError] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
 
-  // Load project + documents + simulations
+  /*
+    Did each list actually come back?
+
+    Set only on success, never in a `catch`. Everything on this page that counts
+    something reads one of these first: a tab that says "(0)" and an empty state
+    that says "nothing here yet" are both claims about the account, and a
+    request that failed supports neither. Until the answer is in, the count is
+    simply not rendered.
+  */
+  const [documentsLoaded, setDocumentsLoaded] = useState(false);
+  const [simulationsLoaded, setSimulationsLoaded] = useState(false);
+  const [runsLoaded, setRunsLoaded] = useState(false);
+
+  // Load project + documents + runs
   useEffect(() => {
     if (!id) return;
     api.get(`/projects/${id}`).then((r) => setProject(r.data)).catch(() => {});
     loadDocuments();
     api.get('/simulations', { params: { project_id: id, limit: 50 } }).then((r) => {
       setSimulations(unwrapList<Simulation>(r.data).items);
+      setSimulationsLoaded(true);
     }).catch(() => {});
-    /* Company searches run against this project. Fetched here so the project is
+    /* Company searches run against this product. Fetched here so the product is
        a real route into that work rather than a dead end that only offers
-       another simulation — and so the money each search actually cost is
-       visible on the same screen that spent it. */
+       another run — and so the money each search actually cost is visible on
+       the same screen that spent it. */
     api.get('/gtm/runs', { params: { project_id: id, limit: 20 } }).then((r) => {
       setRuns(unwrapList<DiscoveryRunWithDelivery>(r.data).items);
+      setRunsLoaded(true);
     }).catch(() => {});
   }, [id]);
 
@@ -112,7 +137,13 @@ export default function ProjectDetailPage() {
 
   function loadDocuments() {
     api.get('/documents', { params: { project_id: id } })
-      .then((r) => setDocuments(unwrapList<ProjectDocument>(r.data).items))
+      .then((r) => {
+        setDocuments(unwrapList<ProjectDocument>(r.data).items);
+        setDocumentsLoaded(true);
+      })
+      // Left as it was found — a failed read shows no files, and
+      // `documentsLoaded` stays false so nothing on the page claims there are
+      // none. Deliberately not `setDocumentsLoaded(true)` here.
       .catch(() => setDocuments([]));
   }
 
@@ -182,44 +213,60 @@ export default function ProjectDetailPage() {
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   }
 
+  /* Counts are a claim about the account, so a tab whose list has not come back
+     shows a name and no number rather than "(0)". `undefined` is already how the
+     renderer below spells "no number". */
   const tabs: { key: Tab; label: string; count?: number }[] = [
-    { key: 'documents', label: 'Your material', count: documents.length },
-    { key: 'companies', label: 'Companies', count: runs.length },
-    { key: 'simulations', label: 'Simulations', count: simulations.length },
+    { key: 'documents', label: 'Your material', count: documentsLoaded ? documents.length : undefined },
+    { key: 'companies', label: 'Companies', count: runsLoaded ? runs.length : undefined },
+    { key: 'simulations', label: 'Runs', count: simulationsLoaded ? simulations.length : undefined },
   ];
 
-  /* ── The routes out of a project ──
-     Until this existed, opening a project offered exactly one thing to do: run
-     another simulation. Audiences, company discovery and message testing were
-     all built, deployed and reachable only by typing a URL — which is the same
-     as not having shipped them.
+  /* A file whose text reached the product. Everything that reads your material
+     needs this rather than "a file exists" — an upload that is still queued, or
+     that failed to parse, has given Saibyl nothing to work from. */
+  const readable = documents.filter((d) => isRead(d.processing_status));
+  const stillReading = documentsLoaded && documents.length > 0 && readable.length === 0;
+
+  /* ── What you can do with this product ──
+     Until this existed, opening a product offered exactly one thing to do: start
+     another run. Audiences, company discovery and message testing were all
+     built, deployed and reachable only by typing a URL — which is the same as
+     not having shipped them.
 
      Named for what the founder gets, not for the discipline. Nobody arriving
-     here has heard the phrase "ICP", and nothing on this page requires them to
-     learn it. */
-  const routes: {
-    key: string;
-    label: string;
-    blurb: string;
-    to: string;
-    Icon: React.ComponentType<{ className?: string }>;
-  }[] = [
+     here has heard the phrase "ideal customer profile", and nothing on this page
+     requires them to learn it.
+
+     The list is built from what this product actually has. Every product used to
+     show all four regardless of state, so a product with nothing uploaded
+     offered "Find real companies" exactly as a finished one did — and that one
+     cannot work: finding companies searches for the buyers, the buyers are
+     derived by reading your files, and with no readable file
+     `POST /icp/synthesize` refuses with "No processed documents in this
+     project". Offering a button that is guaranteed to dead-end is worse than not
+     offering it, so it is not built, and the sentence under the grid says why. */
+  const actions: Action[] = [
     {
       key: 'audiences',
       label: 'Who buys this',
       blurb:
-        'The groups of people Saibyl worked out for you, saved and reusable across every project.',
+        'The buyers Saibyl worked out for you, kept and ready to use on anything else you sell.',
       to: '/app/audiences',
       Icon: Users,
     },
-    {
-      key: 'companies',
-      label: 'Find real companies',
-      blurb:
-        'Search the web for companies that look like your buyers. Every company comes with the page that says so.',
-      to: `/app/prospects/discover?project_id=${id}`,
-      Icon: Building2,
-    },
+    ...(readable.length > 0
+      ? [
+          {
+            key: 'companies',
+            label: 'Find real companies',
+            blurb:
+              'Search the web for companies that look like your buyers. Every one comes back with the page that says so.',
+            to: `/app/prospects/discover?project_id=${id}`,
+            Icon: Building2,
+          },
+        ]
+      : []),
     {
       key: 'messages',
       label: 'Test more than one message',
@@ -229,10 +276,10 @@ export default function ProjectDetailPage() {
       Icon: MessageSquare,
     },
     {
-      key: 'simulate',
-      label: 'Run a simulation',
+      key: 'run',
+      label: 'Start a run',
       blurb:
-        'Show your material to a room of simulated buyers and read what they say back.',
+        'Show what you have written to a room of simulated buyers and read what they say back.',
       to: `/app/simulations/new?project=${id}`,
       Icon: FileText,
     },
@@ -242,25 +289,51 @@ export default function ProjectDetailPage() {
     <div className="p-8 bg-saibyl-void min-h-full">
       <div className="max-w-5xl mx-auto">
         {/* Header */}
-        <h1 className="text-h1 text-saibyl-white mb-1">{project?.name || 'Project'}</h1>
+        <h1 className="text-h1 text-saibyl-white mb-1">{project?.name || 'Product'}</h1>
         <p className="text-small mb-6">{project?.description}</p>
 
-        {/* What you can do with this project */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
-          {routes.map(({ key, label, blurb, to, Icon }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => navigate(to)}
-              className="text-left glass glass-hover rounded-2xl p-5 transition-all"
-            >
-              <div className="flex items-center gap-2.5 mb-1.5">
-                <Icon className="w-4 h-4 text-saibyl-gold shrink-0" />
-                <span className="text-[14px] font-medium text-saibyl-platinum">{label}</span>
-              </div>
-              <p className="text-[12px] text-saibyl-muted leading-relaxed">{blurb}</p>
-            </button>
-          ))}
+        {/*
+          What you can do with this product.
+
+          These are buttons and they now look like it. They shipped as
+          `glass glass-hover` with no arrow, no visible border at rest and no
+          focus ring, and an acceptance reader took them for explanatory text —
+          they only found out by guessing. A control whose only affordance
+          appears on hover is invisible to anyone on a touch screen and to
+          anyone reading a screenshot, so the border, the arrow and the press
+          feedback are all rendered at rest.
+        */}
+        <div className="mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {actions.map(({ key, label, blurb, to, Icon }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => navigate(to)}
+                className="group text-left rounded-2xl border border-white/[0.12] bg-white/[0.03] p-5 transition-all hover:border-saibyl-gold/45 hover:bg-white/[0.06] hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-saibyl-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-saibyl-void"
+              >
+                <div className="flex items-center gap-2.5 mb-1.5">
+                  <Icon className="w-4 h-4 text-saibyl-gold shrink-0" />
+                  <span className="text-[14px] font-medium text-saibyl-platinum">{label}</span>
+                  <ArrowRight
+                    aria-hidden="true"
+                    className="w-4 h-4 text-saibyl-gold shrink-0 ml-auto transition-transform group-hover:translate-x-1"
+                  />
+                </div>
+                <p className="text-[12px] text-saibyl-muted leading-relaxed">{blurb}</p>
+              </button>
+            ))}
+          </div>
+
+          {/* Why there is no "Find real companies" card. Said once, under the
+              grid, rather than as a fifth card the reader would try to press. */}
+          {documentsLoaded && readable.length === 0 && (
+            <p className="text-[12px] text-saibyl-muted leading-relaxed mt-4 max-w-2xl">
+              {stillReading
+                ? 'We are still reading what you uploaded. Once that finishes, Saibyl can work out who buys this and go looking for real companies that match.'
+                : 'Finding real companies is not offered yet. It searches for the people who buy this, and Saibyl only knows who they are once it has read something you wrote — add a file on the Your material tab below and the option appears here.'}
+            </p>
+          )}
         </div>
 
         {/* Tabs */}
@@ -292,8 +365,16 @@ export default function ProjectDetailPage() {
           <div className="space-y-5">
             {/* Upload area */}
             <div className="glass rounded-2xl p-6">
-              <h3 className="text-[14px] font-medium text-saibyl-platinum mb-3">Upload Documents</h3>
-              <p className="text-[12px] text-saibyl-muted mb-4">Supported: PDF, DOCX, TXT, MD (max 50MB each)</p>
+              <h3 className="text-[14px] font-medium text-saibyl-platinum mb-1.5">
+                What you have written
+              </h3>
+              <p className="text-[12px] text-saibyl-muted mb-1.5 leading-relaxed max-w-2xl">
+                A deck, a landing page, a pricing page, a spec. Saibyl reads these to work out
+                who buys this — nothing else is used.
+              </p>
+              <p className="text-[12px] text-saibyl-muted mb-4">
+                PDF, Word, plain text or Markdown. Up to 50MB each.
+              </p>
               <div className="flex items-center gap-3">
                 <input
                   ref={fileInput}
@@ -315,7 +396,8 @@ export default function ProjectDetailPage() {
               {pending.length > 0 && (
                 <div className="mt-5 space-y-3">
                   <p className="text-[13px] text-saibyl-platinum">
-                    Whose is this? We ask so we know what the simulation is allowed to say.
+                    Whose is this? We ask so we know what the simulated buyers are allowed
+                    to say.
                   </p>
                   {pending.map((item, i) => (
                     <div
@@ -372,11 +454,11 @@ export default function ProjectDetailPage() {
                         as a competitor&rsquo;s
                       </p>
                       <p className="text-[11px] text-saibyl-muted leading-relaxed">
-                        That lets simulated skeptics name that company out loud, and quote it,
-                        using only what this document actually says. Without a document like
-                        this, Saibyl refuses to name anyone — a model asked about a rival will
-                        confidently make things up, and you would have no way of telling which
-                        parts. Only mark material a rival genuinely published.
+                        That lets doubters in the room name that company out loud, and quote
+                        it, using only what this document actually says. Without a document
+                        like this, Saibyl refuses to name anyone — a model asked about a rival
+                        will confidently make things up, and you would have no way of telling
+                        which parts. Only mark material a rival genuinely published.
                       </p>
                     </div>
                   )}
@@ -384,11 +466,18 @@ export default function ProjectDetailPage() {
               )}
             </div>
 
-            {/* Document list */}
+            {/* Document list. "Nothing here yet" is only said once the list has
+                actually come back — a failed read has no idea whether there are
+                files, and telling the founder there are none is the same defect
+                as printing a zero we never counted. */}
             {documents.length === 0 ? (
               <div className="glass rounded-2xl p-12 text-center">
                 <div className="text-3xl mb-3 opacity-30">📄</div>
-                <p className="text-saibyl-muted text-sm">No documents yet. Upload files to get started.</p>
+                <p className="text-saibyl-muted text-sm">
+                  {documentsLoaded
+                    ? 'Nothing uploaded yet — the deck is usually the best one to start with.'
+                    : 'We could not read your files just now, so none are listed. Reload the page to try again.'}
+                </p>
               </div>
             ) : (
               <div className="glass rounded-2xl overflow-hidden">
@@ -435,18 +524,26 @@ export default function ProjectDetailPage() {
               </div>
             )}
 
-            {/* CTA to create simulation after docs uploaded */}
-            {documents.length > 0 && (
-              <div className="glass rounded-2xl p-5 flex items-center justify-between">
+            {/* The way on, once there is something to work from. Gated on a file
+                Saibyl has actually read rather than on a file existing — an
+                upload still in the queue has given it nothing yet. */}
+            {readable.length > 0 && (
+              <div className="glass rounded-2xl p-5 flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-[14px] font-medium text-saibyl-platinum">Documents ready</p>
-                  <p className="text-[12px] text-saibyl-muted mt-0.5">Create a simulation to predict reactions to your content.</p>
+                  <p className="text-[14px] font-medium text-saibyl-platinum">
+                    {readable.length === 1
+                      ? 'Your file has been read'
+                      : `All ${readable.length} of your files have been read`}
+                  </p>
+                  <p className="text-[12px] text-saibyl-muted mt-0.5">
+                    Put this in front of a room of buyers and find out what they argue with.
+                  </p>
                 </div>
                 <button
                   onClick={handleRunSimulation}
                   className="px-5 py-2 rounded-lg bg-[#C9A227] text-[#0A0F1C] font-medium text-sm transition-all hover:bg-[#D4AF37] hover:-translate-y-0.5 shrink-0"
                 >
-                  New Simulation →
+                  Start a run →
                 </button>
               </div>
             )}
@@ -458,7 +555,9 @@ export default function ProjectDetailPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-4">
               <p className="text-[14px] text-saibyl-muted">
-                {runs.length} company search{runs.length !== 1 ? 'es' : ''} for this project
+                {runsLoaded
+                  ? `${runs.length} company search${runs.length !== 1 ? 'es' : ''} for this product`
+                  : 'Company searches for this product'}
               </p>
               <button
                 onClick={() => navigate(`/app/prospects/discover?project_id=${id}`)}
@@ -470,18 +569,29 @@ export default function ProjectDetailPage() {
 
             {runs.length === 0 ? (
               <div className="glass rounded-2xl p-12 text-center">
-                <p className="text-saibyl-platinum font-medium mb-2">No company searches yet</p>
-                <p className="text-saibyl-muted text-sm mb-5 max-w-md mx-auto leading-relaxed">
-                  Once Saibyl has worked out who buys this, it can go and find real
-                  companies that look like them — with the page that says so attached
-                  to every one.
-                </p>
-                <button
-                  onClick={() => navigate(`/app/prospects/discover?project_id=${id}`)}
-                  className="bg-saibyl-gold text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-[#4B4FDE]"
-                >
-                  Find companies
-                </button>
+                {runsLoaded ? (
+                  <>
+                    <p className="text-saibyl-platinum font-medium mb-2">
+                      No company searches yet
+                    </p>
+                    <p className="text-saibyl-muted text-sm mb-5 max-w-md mx-auto leading-relaxed">
+                      Once Saibyl has worked out who buys this, it can go and find real
+                      companies that look like them — with the page that says so attached
+                      to every one.
+                    </p>
+                    <button
+                      onClick={() => navigate(`/app/prospects/discover?project_id=${id}`)}
+                      className="bg-saibyl-gold text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-[#4B4FDE]"
+                    >
+                      Find companies
+                    </button>
+                  </>
+                ) : (
+                  <p className="text-saibyl-muted text-sm max-w-md mx-auto leading-relaxed">
+                    We could not read your company searches just now, so none are listed.
+                    Reload the page to try again.
+                  </p>
+                )}
               </div>
             ) : (
               <div className="space-y-3">
@@ -540,24 +650,39 @@ export default function ProjectDetailPage() {
         {tab === 'simulations' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <p className="text-[14px] text-saibyl-muted">{simulations.length} simulation{simulations.length !== 1 ? 's' : ''} for this project</p>
+              <p className="text-[14px] text-saibyl-muted">
+                {simulationsLoaded
+                  ? `${simulations.length} run${simulations.length !== 1 ? 's' : ''} on this product`
+                  : 'Runs on this product'}
+              </p>
               <button
                 onClick={() => navigate(`/app/simulations/new?project=${id}`)}
                 className="bg-saibyl-gold text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-[#4B4FDE]"
               >
-                + New Simulation
+                + New run
               </button>
             </div>
             {simulations.length === 0 ? (
               <div className="glass rounded-2xl p-12 text-center">
-                <p className="text-saibyl-platinum font-medium mb-2">No simulations yet</p>
-                <p className="text-saibyl-muted text-sm mb-5">Create a simulation to predict how people will react to your content.</p>
-                <button
-                  onClick={() => navigate(`/app/simulations/new?project=${id}`)}
-                  className="bg-saibyl-gold text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-[#4B4FDE]"
-                >
-                  Create Simulation
-                </button>
+                {simulationsLoaded ? (
+                  <>
+                    <p className="text-saibyl-platinum font-medium mb-2">No runs yet</p>
+                    <p className="text-saibyl-muted text-sm mb-5">
+                      Start one and find out how people react to what you have written.
+                    </p>
+                    <button
+                      onClick={() => navigate(`/app/simulations/new?project=${id}`)}
+                      className="bg-saibyl-gold text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-[#4B4FDE]"
+                    >
+                      Start a run
+                    </button>
+                  </>
+                ) : (
+                  <p className="text-saibyl-muted text-sm max-w-md mx-auto leading-relaxed">
+                    We could not read your runs just now, so none are listed. Reload the page
+                    to try again.
+                  </p>
+                )}
               </div>
             ) : (
               <div className="space-y-3">

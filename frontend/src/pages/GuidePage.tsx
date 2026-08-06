@@ -2,9 +2,8 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  FolderOpen,
+  Building2,
   FlaskConical,
-  Play,
   FileText,
   Clock,
   Users,
@@ -20,37 +19,47 @@ import {
 
 const stagger = (i: number) => ({ delay: i * 0.06 });
 
-/* ── How-it-works steps ── */
+/* ── How it works ──
+   These are the five steps the product actually has, in the order each one
+   consumes the last. It described a different four - "Create a Project",
+   "Configure a Simulation" - which was the old shape and pointed the reader at
+   the superseded pages. A guide that explains a product you no longer ship is
+   worse than no guide: the reader trusts it and ends up somewhere else. */
 const STEPS = [
   {
     num: 1,
-    title: 'Create a Project',
-    desc: 'Projects group related simulations together. Think of them as folders — one for each topic, campaign, or research question.',
-    Icon: FolderOpen,
+    title: 'Work out who buys this',
+    desc: 'Upload the deck, the landing page or the pricing page. Saibyl reads it and proposes the groups of people likely to buy — what they do, what they already use, and what would make them doubt you. You confirm it or correct it.',
+    Icon: Users,
     color: 'text-saibyl-blue',
-    link: '/app/projects',
-    linkLabel: 'Go to Projects',
+    link: '/app/home',
+    linkLabel: 'Go to your products',
   },
   {
     num: 2,
-    title: 'Configure a Simulation',
-    desc: 'Write your prediction goal in plain language, pick the social platforms to simulate, choose persona packs, and set how many AI agents will participate.',
-    Icon: FlaskConical,
+    title: 'Find out what they object to',
+    desc: 'Those buyers read your material and argue about it. You get back what they said and the things they pushed back on, ranked by how much of the room carried each one — not by how often the words appeared.',
+    Icon: MessageSquare,
     color: 'text-saibyl-gold',
-    link: '/app/simulations/new',
-    linkLabel: 'New Simulation',
   },
   {
     num: 3,
-    title: 'Watch It Run',
-    desc: 'Agents debate, react, and post in real time across the platforms you selected. Watch sentiment shift, viral moments emerge, and narratives form — live.',
-    Icon: Play,
+    title: 'Answer the objections, and find out if it worked',
+    desc: 'Draft the material that answers each objection, publish it, and put the same room through it again. Answers that moved nothing are reported as moving nothing.',
+    Icon: FlaskConical,
     color: 'text-saibyl-positive',
   },
   {
     num: 4,
-    title: 'Read Your Report',
-    desc: 'When the simulation finishes, an intelligence report is generated automatically — complete with sentiment trajectories, agent archetypes, platform dynamics, and predictive insights.',
+    title: 'Find real companies that match',
+    desc: 'Your buyers become web searches, and the search brings back real companies with the page that says so attached to each one. A company you cannot trace back is a lead you cannot act on.',
+    Icon: Building2,
+    color: 'text-saibyl-blue',
+  },
+  {
+    num: 5,
+    title: 'Test which message wins',
+    desc: 'Put several versions of the same pitch in front of one shared room, so the difference you see is the wording rather than who happened to be listening. When the versions are too close to call, it says so instead of naming a winner.',
     Icon: FileText,
     color: 'text-saibyl-gold',
   },
@@ -76,7 +85,7 @@ const TIPS = [
   },
   {
     title: 'Use A/B testing for narrative comparison',
-    body: 'Enable A/B testing to run two variants of your prediction simultaneously — for example, testing how the same audience reacts to an optimistic vs. pessimistic framing of the same news.',
+    body: 'Write more than one version of the same pitch and the room reacts to each of them from scratch — so the only thing that differed is your wording, not who happened to be listening. The report names a winner only when the evidence actually separates them.',
   },
   {
     title: 'Start with 20 agents and 5 rounds',
@@ -84,7 +93,7 @@ const TIPS = [
   },
   {
     title: 'Use "Deep" report depth for rich analysis',
-    body: 'Standard depth is fast but may produce thinner sections. Deep depth gathers 2x more evidence per section and interviews more agents — producing reports with sentiment arcs, archetype clusters, and predictive forecasts.',
+    body: 'Standard is quick and gives you the headline and the objections. Deep gathers twice as much evidence per section and goes back to more people for their reasoning, so you get how feeling moved round by round and how it split between different kinds of buyer.',
   },
 ];
 
@@ -95,8 +104,8 @@ const FAQ = [
     a: 'Agents are AI-generated personas with unique demographics, personality traits, political leanings, and social media behavior patterns. They debate and react to your prediction goal as if they were real people on the platforms you selected.',
   },
   {
-    q: 'How long does a simulation take?',
-    a: 'A typical simulation with 20 agents and 5 rounds completes in 2-4 minutes. Larger simulations (100 agents, 15 rounds, multiple platforms) can take 10-20 minutes. The report generation adds 1-3 minutes depending on depth.',
+    q: 'How long does a run take?',
+    a: 'A room of 20 people over 5 rounds takes 2–4 minutes. A big one — 100 people, 15 rounds, several places at once — takes 10–20 minutes. Writing the report adds another 1–3.',
   },
   {
     q: 'How is this different from a focus group?',
@@ -104,19 +113,19 @@ const FAQ = [
   },
   {
     q: 'What are "persona packs"?',
-    a: 'Pre-built collections of agent archetypes organized by domain — like "Tech Workers", "Retail Investors", or "Healthcare Professionals". Each pack includes diverse archetypes with different demographics, MBTI types, and behavior patterns. You can also create custom personas.',
+    a: 'Ready-made rooms of people, grouped by who they are — "Tech Workers", "Retail Investors", "Healthcare Professionals". Each one holds a mix of ages, jobs and temperaments rather than one kind of person repeated. You can also describe a group of your own, and if you have uploaded your material we work your actual buyers out instead.',
   },
   {
     q: 'What does the report include?',
-    a: 'Reports include an executive summary, sentiment trajectory analysis (how feelings changed over rounds), platform-specific dynamics, agent archetype clusters, key trigger events, viral moments, and predictive implications.',
+    a: 'A summary you can read in a minute, how the room felt round by round, how that differed by place and by kind of buyer, the moments that turned it, and what people objected to — with the sentences behind every one of them.',
   },
   {
     q: 'Can I chat with the report?',
-    a: 'Yes. After a report is generated, you can ask follow-up questions using the chat interface. The AI will reference the simulation data and report content to answer.',
+    a: 'Yes. Once the report is written you can ask it follow-up questions, and it answers from what was actually said in the run rather than from general knowledge.',
   },
   {
     q: 'What is A/B testing?',
-    a: 'A/B testing runs two simulation variants simultaneously with the same agents. This lets you compare how different framings, announcements, or scenarios play out — and the report will identify which variant achieved stronger results.',
+    a: 'Put two or more versions of the same message in front of one shared room. Everyone reacts to every version, so the comparison is like for like — and when the versions are too close to call, the report says so instead of picking one.',
   },
 ];
 
@@ -200,7 +209,7 @@ export default function GuidePage() {
                 <p className="text-[13px] text-saibyl-muted leading-relaxed">
                   Delivers actionable insights in <span className="text-saibyl-blue font-medium">~3 minutes</span>.
                   That's what would take a focus group 2-4 weeks and $5,000-$15,000.
-                  Scale up when you need deeper analysis — even a 100-agent, 15-round simulation finishes in under 20 minutes.
+                  Scale up when you need deeper analysis — even 100 people over 15 rounds finishes in under 20 minutes.
                 </p>
               </div>
             </div>
@@ -331,11 +340,11 @@ export default function GuidePage() {
           className="text-center pb-8"
         >
           <Link
-            to="/app/projects"
+            to="/app/home"
             className="inline-flex items-center gap-2 px-8 py-3 rounded-xl bg-[#C9A227] text-[#0A0F1C] font-semibold text-[15px] hover:bg-[#D4AF37] transition-all hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(201,162,39,0.3)]"
           >
             <FlaskConical className="w-4 h-4" />
-            Start a New Project
+            Add your first product
           </Link>
           <p className="text-[12px] text-saibyl-muted mt-3">Results in minutes, not weeks.</p>
         </motion.div>

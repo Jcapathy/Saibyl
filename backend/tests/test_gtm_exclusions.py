@@ -444,3 +444,81 @@ def test_no_founder_facing_string_uses_the_product_s_internal_vocabulary():
 
     for word in jargon:
         assert word not in rendered, f"{word!r} reaches the founder"
+
+
+# ---------------------------------------------------------------------------
+# The competitor nobody had named — reported from a real discovery run
+# ---------------------------------------------------------------------------
+
+def test_a_rival_the_founder_never_named_is_still_excluded():
+    """The case that reached a founder, verbatim.
+
+    A founder selling AI security ran a real discovery and the first result was
+    a company whose own one-liner opens "A company focused on AI security".
+    Nothing in their material named it and no buyer type ran it, so both
+    name-based derivations were blind to it — and by its own description it was
+    a competitor.
+
+    That is the whole point of discovery: it exists to surface companies the
+    founder had *not* heard of. An exclusion set that can only recognise the
+    ones they had is blind exactly where the product is supposed to work.
+    """
+    from app.services.gtm.exclusions import sells_in_category
+
+    protect_ai = (
+        "A company focused on AI security, offering integrity requirements for "
+        "AI outputs to remain accurate and unaltered, including defense against "
+        "adversarial attacks and traceability between inputs and outputs."
+    )
+    assert sells_in_category(protect_ai, "AI security")
+
+
+def test_a_buyer_who_merely_mentions_the_category_is_kept():
+    """"We use X" is a customer. "We provide X" is a competitor.
+
+    Without this distinction the filter would remove the founder's actual
+    buyers, who talk about the category they buy in — which would be a far
+    worse failure than the one it was added to fix, and a silent one.
+    """
+    from app.services.gtm.exclusions import sells_in_category
+
+    assert not sells_in_category(
+        "We use AI security tooling across our engineering org", "AI security"
+    )
+    assert not sells_in_category(
+        "Series B fintech running observability tooling in production",
+        "observability tooling",
+    )
+
+
+def test_a_services_company_is_not_excluded_by_the_category_alone():
+    """A systems integrator that partners with vendors is not itself a vendor.
+
+    Reported alongside the case above and deliberately left in the results: the
+    founder's own judgement about channel conflict is a judgement, and removing
+    a company because it partners with somebody would be the tool making a
+    commercial call on their behalf.
+    """
+    from app.services.gtm.exclusions import sells_in_category
+
+    ecs = (
+        "Federal IT services company that partnered with CISA and Elastic to "
+        "offer AI-powered SIEM as a service to federal civilian executive "
+        "branch agencies"
+    )
+    assert not sells_in_category(ecs, "AI security")
+
+
+def test_a_category_of_only_generic_words_matches_nothing():
+    """"software platform" describes every candidate a B2B search returns.
+
+    Matching on it would empty the result set, and the founder would be told
+    every company they found sells what they sell. Nothing is the honest
+    reading of a category that says nothing distinctive.
+    """
+    from app.services.gtm.exclusions import category_terms, sells_in_category
+
+    assert category_terms("software platform") == []
+    assert not sells_in_category(
+        "Provider of software platform solutions", "software platform"
+    )

@@ -53,12 +53,12 @@ export default function ProjectsPage() {
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-saibyl-platinum">Projects</h1>
+        <h1 className="text-2xl font-bold text-saibyl-platinum">Your products</h1>
         <button
           onClick={() => setShowModal(true)}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#C9A227] text-white font-medium text-sm transition-all hover:bg-[#B08D1F] hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(201,162,39,0.25)]"
         >
-          + New Project
+          + New product
         </button>
       </div>
 
@@ -75,10 +75,10 @@ export default function ProjectsPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
             </svg>
           </div>
-          <p className="text-saibyl-platinum font-medium mb-1">No projects yet</p>
-          <p className="text-saibyl-muted text-sm mb-6">Organize your simulations into projects</p>
+          <p className="text-saibyl-platinum font-medium mb-1">No products yet</p>
+          <p className="text-saibyl-muted text-sm mb-6">One product for each thing you are trying to sell</p>
           <button onClick={() => setShowModal(true)} className="bg-saibyl-gold text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-[#4B4FDE] transition">
-            Create Project
+            Create your first product
           </button>
         </div>
       ) : (
@@ -101,8 +101,36 @@ export default function ProjectsPage() {
                   </svg>
                 </div>
                 <h3 className="font-semibold text-saibyl-platinum mb-1 group-hover:text-white transition-colors">{p.name}</h3>
-                <p className="text-sm text-saibyl-muted mb-4 line-clamp-2">{p.description || 'No description'}</p>
-                <span className="font-mono text-[11px] text-saibyl-muted/60">{p.asset_count ?? 0} documents</span>
+                {/* Only when there is one. "No description" is filler standing in
+                    for something nobody wrote, and it reads as a fact about the
+                    product rather than an absence of one. */}
+                {p.description && (
+                  <p className="text-sm text-saibyl-muted line-clamp-2">{p.description}</p>
+                )}
+                {/*
+                  There was an "N documents" line here, rendered from
+                  `asset_count`, and it read "0 documents" on products that
+                  demonstrably had files in them.
+
+                  `projects.asset_count` is not a count of documents. It is a
+                  denormalised counter incremented by an RPC from the upload
+                  route, and every path into it leaks: migration 010 added the
+                  column with `DEFAULT 0` and never backfilled it from
+                  `documents`, migration 025 records that the single-argument
+                  RPC the API calls existed only because someone added it to
+                  production by hand, the media ingestion path built the same
+                  request without `.execute()` so those uploads never counted at
+                  all, and `api/documents.py` logs and carries on when the RPC
+                  fails rather than failing the upload. A zero here means "this
+                  counter was never incremented", which is not the same claim as
+                  "this product has no files".
+
+                  The real number is one request away — `GET /documents?project_id=`
+                  — but that is a request per card on a grid, so nothing is
+                  rendered instead. Open the product and the file list is the
+                  answer. Do not put this line back without a figure that was
+                  actually counted.
+                */}
               </Link>
               <button
                 onClick={(e) => {
@@ -114,7 +142,7 @@ export default function ProjectsPage() {
                 }}
                 disabled={deletingId === p.id}
                 className="absolute top-3 right-3 w-7 h-7 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 bg-white/[0.04] hover:bg-red-500/20 text-saibyl-muted hover:text-red-400 transition-all"
-                title="Delete project"
+                title="Delete this product"
               >
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -140,29 +168,37 @@ export default function ProjectsPage() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 12 }}
               transition={{ duration: 0.2 }}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="new-product-heading"
               className="glass rounded-2xl p-6 w-full max-w-md border border-white/[0.08] shadow-[0_0_60px_rgba(0,0,0,0.5)]"
             >
-              <h2 className="text-lg font-semibold text-saibyl-platinum mb-5">Create Project</h2>
+              <h2
+                id="new-product-heading"
+                className="text-lg font-semibold text-saibyl-platinum mb-5"
+              >
+                New product
+              </h2>
               <form onSubmit={handleCreate} className="space-y-4">
                 <div>
-                  <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-1.5">Name</label>
+                  <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-1.5">What is it called?</label>
                   <input
                     required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="My Research Project"
+                    placeholder="Acme Invoicing"
                     className="w-full bg-white/[0.04] border border-white/[0.07] rounded-xl px-4 py-2.5 text-saibyl-platinum placeholder-saibyl-muted/40 focus:outline-none focus:ring-2 focus:ring-saibyl-gold/50 transition text-sm"
                   />
                 </div>
                 <div>
                   <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-1.5">
-                    Description <span className="normal-case text-saibyl-muted/50 ml-1 font-normal">(optional)</span>
+                    What does it do? <span className="normal-case text-saibyl-muted/50 ml-1 font-normal">(optional)</span>
                   </label>
                   <textarea
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     rows={3}
-                    placeholder="What is this project about?"
+                    placeholder="What does it do, in one line?"
                     className="w-full bg-white/[0.04] border border-white/[0.07] rounded-xl px-4 py-2.5 text-saibyl-platinum placeholder-saibyl-muted/40 focus:outline-none focus:ring-2 focus:ring-saibyl-gold/50 transition text-sm resize-none"
                   />
                 </div>
@@ -179,7 +215,7 @@ export default function ProjectsPage() {
                     disabled={creating}
                     className="bg-saibyl-gold text-white px-5 py-2 rounded-xl text-sm font-medium hover:bg-[#4B4FDE] disabled:opacity-50 transition"
                   >
-                    {creating ? 'Creating...' : 'Create Project'}
+                    {creating ? 'Creating…' : 'Create product'}
                   </button>
                 </div>
               </form>

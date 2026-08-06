@@ -1,14 +1,26 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Clock, Users, FileText, Zap, ArrowRight } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import api, { unwrapList } from '@/lib/api';
 import { ACTIVE_STATUSES } from '@/lib/constants';
+import { getErrorMessage } from '@/lib/errors';
 import type { BillingStatus, Simulation } from '@/types';
 
-function formatCount(n: number | undefined | null): string {
-  if (n == null) return '—';
+/**
+ * How many runs the list request asks for.
+ *
+ * Named because the count of finished runs is derived from that list, and a
+ * derived count off a truncated page is a floor being rendered as a total. The
+ * card is withheld when the page comes back full.
+ */
+const RUN_PAGE_SIZE = 100;
+
+/** Statuses that exist before any agent row has been written. */
+const BEFORE_AGENTS = new Set(['draft', 'preparing']);
+
+function formatCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(n % 1_000 === 0 ? 0 : 1)}K`;
   return n.toString();
@@ -50,6 +62,14 @@ function Skeleton({ className }: { className: string }) {
   return <div className={`animate-pulse bg-[#111827] rounded-2xl ${className}`} />;
 }
 
+/**
+ * One figure.
+ *
+ * `value` is a `number`, not a node, and there is no "unknown" rendering. A card
+ * whose figure is not known is not built at all — the callers below decide that.
+ * This used to take a node so it could be handed `'—'`, and a dash sitting in a
+ * 2xl bold slot reads as a value rather than as an absence.
+ */
 function StatCard({
   icon,
   label,
@@ -62,7 +82,7 @@ function StatCard({
 }: {
   icon: React.ReactNode;
   label: string;
-  value: React.ReactNode;
+  value: number;
   meta: string;
   gradientFrom: string;
   gradientTo: string;
@@ -93,7 +113,7 @@ function StatCard({
           <span style={{ color: iconColor }}>{icon}</span>
         </div>
       </div>
-      <p className="text-2xl font-bold text-[#E8ECF2]">{value}</p>
+      <p className="text-2xl font-bold text-[#E8ECF2]">{formatCount(value)}</p>
       <p className="text-xs text-[#5A6578] mt-1">{meta}</p>
     </motion.div>
   );
@@ -104,31 +124,61 @@ export default function DashboardPage() {
   const [allSims, setAllSims] = useState<Simulation[]>([]);
   const [billing, setBilling] = useState<BillingStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  /**
+   * Empty until the fetch has actually come back.
+   *
+   * The three requests go out as one `Promise.all`, so this is one flag for all
+   * three: either everything below was read or none of it was. It exists so a
+   * failed load renders as a failed load. The catch here used to be `catch {}`
+   * with a comment saying the page "renders with fallback values" — and the
+   * fallback value for every count on it was zero, so a dashboard that could
+   * not reach the server was indistinguishable from an account that had never
+   * done anything.
+   */
+  const [loadError, setLoadError] = useState('');
+
+  const fetchData = useCallback(async () => {
+    setLoadError('');
+    try {
+      const [recentRes, allRes, billRes] = await Promise.all([
+        api.get('/simulations', { params: { limit: 5 } }),
+        api.get('/simulations', { params: { limit: RUN_PAGE_SIZE } }),
+        api.get('/billing/status'),
+      ]);
+      setRecentSims(unwrapList<Simulation>(recentRes.data).items);
+      setAllSims(unwrapList<Simulation>(allRes.data).items);
+      setBilling(billRes.data);
+    } catch (err) {
+      setLoadError(getErrorMessage(err, 'We could not read your account just now.'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    async function fetchData() {
-      try {
-        const [recentRes, allRes, billRes] = await Promise.all([
-          api.get('/simulations', { params: { limit: 5 } }),
-          api.get('/simulations', { params: { limit: 100 } }),
-          api.get('/billing/status'),
-        ]);
-        setRecentSims(unwrapList<Simulation>(recentRes.data).items);
-        setAllSims(unwrapList<Simulation>(allRes.data).items);
-        setBilling(billRes.data);
-      } catch {
-        // Dashboard renders with fallback values
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
-  }, []);
+    void fetchData();
+  }, [fetchData]);
 
   // Derived stats
   const completedSims = allSims.filter(
     (s) => s.status === 'completed' || s.status === 'complete',
   );
+
+  /*
+    Whether the finished-run figure is a total or a floor.
+
+    `completedSims` is counted out of a page of `RUN_PAGE_SIZE`. A full page
+    means there are more runs than were fetched, so the count is a lower bound —
+    and a lower bound rendered in the same slot as a total is a wrong number.
+    Withheld rather than approximated.
+  */
+  const finishedCountIsKnown = loadError === '' && allSims.length < RUN_PAGE_SIZE;
+
+  /* A retry that fails leaves the previous response in state. These figures are
+     described as "this month", so showing last attempt's numbers under a
+     "we could not read your account" notice would be presenting a stale figure
+     as a current one. */
+  const figuresKnown = loadError === '' && billing != null;
 
   // There is deliberately no average-sentiment tile here. A simulation row
   // carries no valence field of any name, and the only per-run reading —
@@ -137,15 +187,15 @@ export default function DashboardPage() {
 
   /** Past-tense phrasing for each status the backend can write. */
   const STATUS_ACTIVITY: Record<string, { action: string; dotColor: string }> = {
-    draft:     { action: 'created',          dotColor: '#8B5CF6' },
-    preparing: { action: 'started preparing', dotColor: '#F59E0B' },
-    ready:     { action: 'ready to run',     dotColor: '#2563EB' },
-    running:   { action: 'started running',  dotColor: '#2563EB' },
-    analyzing: { action: 'being analysed',   dotColor: '#F59E0B' },
-    complete:  { action: 'completed',        dotColor: '#22C55E' },
-    completed: { action: 'completed',        dotColor: '#22C55E' },
-    stopped:   { action: 'stopped',          dotColor: '#5A6578' },
-    failed:    { action: 'failed',           dotColor: '#EF4444' },
+    draft:     { action: 'was set up',           dotColor: '#8B5CF6' },
+    preparing: { action: 'started getting ready', dotColor: '#F59E0B' },
+    ready:     { action: 'is ready to start',    dotColor: '#2563EB' },
+    running:   { action: 'started',              dotColor: '#2563EB' },
+    analyzing: { action: 'is being read',        dotColor: '#F59E0B' },
+    complete:  { action: 'finished',             dotColor: '#22C55E' },
+    completed: { action: 'finished',             dotColor: '#22C55E' },
+    stopped:   { action: 'was stopped',          dotColor: '#5A6578' },
+    failed:    { action: 'failed',               dotColor: '#EF4444' },
   };
 
   // Activity feed derived from recent sims
@@ -156,7 +206,7 @@ export default function DashboardPage() {
     };
     return {
       id: sim.id,
-      text: `Simulation "${sim.name}" ${action}`,
+      text: `Run "${sim.name}" ${action}`,
       dotColor,
       time: formatDistanceToNow(new Date(sim.created_at), { addSuffix: true }),
     };
@@ -189,63 +239,96 @@ export default function DashboardPage() {
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       {/* Page Header */}
       <div className="flex items-center justify-between">
-        <h1 className="font-extrabold text-[22px] text-[#E8ECF2]">Dashboard</h1>
+        <h1 className="font-extrabold text-[22px] text-[#E8ECF2]">Your account</h1>
         <Link
           to="/app/projects"
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#C9A227] text-[#0A0F1C] font-semibold text-sm hover:bg-[#D4AF37] transition-all hover:-translate-y-0.5"
         >
-          Start a New Project
+          Start a new product
         </Link>
       </div>
 
-      {/* Stat Cards */}
+      {loadError && (
+        <div className="bg-[#111827] border border-[#EF4444]/25 rounded-2xl p-5">
+          <p className="text-sm font-medium text-[#E8ECF2]">
+            We could not load your figures
+          </p>
+          <p className="text-xs text-[#8B97A8] mt-1.5 leading-relaxed max-w-xl">
+            {loadError} Nothing is being shown below rather than zeros — none of these
+            numbers were read, and a zero would say you had done nothing.
+          </p>
+          <button
+            type="button"
+            onClick={() => void fetchData()}
+            className="mt-3 px-4 py-2 rounded-lg bg-[#C9A227] text-[#0A0F1C] text-[13px] font-medium hover:bg-[#D4AF37] transition-colors"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
+      {/*
+        Stat cards.
+
+        Each one is built only when its figure was actually read. There is no
+        placeholder rendering and no zero: an account that could not be reached
+        shows fewer cards, which is the honest shape of not knowing.
+
+        The denominators that used to sit beside the first two — "/ 15",
+        "/ 50K" — are gone, and deliberately. `GET /billing/status` derives
+        both from lookups keyed on the org's plan string, and both fall through
+        to a default when the plan is not one of `starter` / `pro` /
+        `enterprise`. Every account created by signup is on `free`
+        (`api/auth.py:DEFAULT_SIGNUP_PLAN`), which is in neither table — so the
+        50,000 a founder read next to "0" is a constant in
+        `stripe_service.py`, not their allowance. A limit nobody set is not a
+        limit to render.
+      */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <StatCard
-          icon={<Clock className="w-5 h-5" />}
-          label="Simulations"
-          value={
-            <>
-              {billing?.simulations_used ?? '—'}
-              <span className="text-sm font-normal text-[#5A6578] ml-1">
-                / {billing?.simulations_limit ?? '—'}
-              </span>
-            </>
-          }
-          meta="this billing period"
-          gradientFrom="#8B5CF6"
-          gradientTo="#2563EB"
-          iconBg="rgba(139,92,246,0.1)"
-          iconColor="#8B5CF6"
-        />
-        <StatCard
-          icon={<Users className="w-5 h-5" />}
-          label="Agents Deployed"
-          value={
-            <>
-              {billing?.agents_used != null ? formatCount(billing.agents_used) : '—'}
-              {billing?.agents_limit != null && (
-                <span className="text-sm font-normal text-[#5A6578] ml-1">
-                  / {formatCount(billing.agents_limit)}
-                </span>
-              )}
-            </>
-          }
-          meta={billing?.plan ?? '—'}
-          gradientFrom="#2563EB"
-          gradientTo="#8B5CF6"
-          iconBg="rgba(0,212,255,0.1)"
-          iconColor="#2563EB"
-        />
-        <StatCard
-          icon={<FileText className="w-5 h-5" />}
-          label="Reports"
-          value={completedSims.length}
-          meta="completed simulations"
-          gradientFrom="#22C55E"
-          gradientTo="#2563EB"
-          iconBg="rgba(34,197,94,0.1)"
-          iconColor="#22C55E"
-        />
+        {figuresKnown && (
+          <StatCard
+            icon={<Clock className="w-5 h-5" />}
+            label="Runs"
+            value={billing.simulations_used}
+            meta="started since the 1st of this month"
+            gradientFrom="#8B5CF6"
+            gradientTo="#2563EB"
+            iconBg="rgba(139,92,246,0.1)"
+            iconColor="#8B5CF6"
+          />
+        )}
+        {/*
+          "Agents deployed" read 0 while every run listed underneath said 100
+          agents, and both numbers were right — they answer different questions.
+          This one counts the people Saibyl actually built, in `simulation_agents`,
+          created since the 1st of the current calendar month. A run started in
+          July has its people, and none of them were made this month. The meta
+          line now says which question is being answered.
+        */}
+        {figuresKnown && (
+          <StatCard
+            icon={<Users className="w-5 h-5" />}
+            label="People built for you"
+            value={billing.agents_used}
+            meta="created since the 1st of this month"
+            gradientFrom="#2563EB"
+            gradientTo="#8B5CF6"
+            iconBg="rgba(0,212,255,0.1)"
+            iconColor="#2563EB"
+          />
+        )}
+        {finishedCountIsKnown && (
+          <StatCard
+            icon={<FileText className="w-5 h-5" />}
+            label="Finished"
+            value={completedSims.length}
+            meta="runs with a report you can read"
+            gradientFrom="#22C55E"
+            gradientTo="#2563EB"
+            iconBg="rgba(34,197,94,0.1)"
+            iconColor="#22C55E"
+          />
+        )}
       </div>
 
       {/* Two-Column Layout */}
@@ -258,23 +341,32 @@ export default function DashboardPage() {
           className="lg:col-span-3 bg-[#111827] border border-[#1E293B] rounded-2xl overflow-hidden"
         >
           <div className="px-5 py-4 border-b border-[#1E293B] flex items-center justify-between">
-            <h2 className="font-semibold text-[#E8ECF2] text-sm">Recent Simulations</h2>
+            <h2 className="font-semibold text-[#E8ECF2] text-sm">Your latest runs</h2>
             <Link
               to="/app/simulations"
               className="text-xs text-[#C9A227] hover:text-[#D4AF37] transition-colors flex items-center gap-1"
             >
-              View All <ArrowRight className="w-3 h-3" />
+              See all of them <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
 
-          {recentSims.length === 0 ? (
+          {/* An empty list and an unread list are different things, so the
+              "you have not done this yet" copy is shown only when the request
+              came back. */}
+          {loadError ? (
             <div className="py-12 text-center">
-              <p className="text-[#5A6578] text-sm mb-4">No simulations yet</p>
+              <p className="text-[#5A6578] text-sm">
+                Your runs could not be read, so none are listed.
+              </p>
+            </div>
+          ) : recentSims.length === 0 ? (
+            <div className="py-12 text-center">
+              <p className="text-[#5A6578] text-sm mb-4">No runs yet</p>
               <Link
                 to="/app/simulations/new"
                 className="text-sm text-[#C9A227] hover:text-[#D4AF37] transition-colors"
               >
-                Create your first simulation
+                Start your first run
               </Link>
             </div>
           ) : (
@@ -294,9 +386,14 @@ export default function DashboardPage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-4 shrink-0 ml-4">
-                    {sim.agent_count != null && (
+                    {/* `simulations.agent_count` is written from the request
+                        body when a run is created and overwritten with the real
+                        figure once the people are built. Before that it is what
+                        was asked for, not what exists — so it is shown only
+                        from the point where those two are the same thing. */}
+                    {sim.agent_count != null && !BEFORE_AGENTS.has(sim.status) && (
                       <span className="text-xs text-[#5A6578] font-mono">
-                        {formatCount(sim.agent_count)} agents
+                        {formatCount(sim.agent_count)} people
                       </span>
                     )}
                     {sim.platforms && sim.platforms.length > 0 && (
@@ -329,15 +426,17 @@ export default function DashboardPage() {
                   <Zap className="w-5 h-5 text-[#8B5CF6]" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-[#E8ECF2]">Start a New Project</h3>
-                  <p className="text-xs text-[#5A6578]">Set up your scenario and run your first simulation</p>
+                  <h3 className="text-sm font-semibold text-[#E8ECF2]">Add something you sell</h3>
+                  <p className="text-xs text-[#5A6578]">
+                    Upload what you have written and find out what people will argue with
+                  </p>
                 </div>
               </div>
               <Link
                 to="/app/projects"
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#C9A227] text-[#0A0F1C] font-semibold text-sm hover:bg-[#D4AF37] transition-all hover:-translate-y-0.5 mt-2"
               >
-                Start a Project <ArrowRight className="w-4 h-4" />
+                New product <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
           </motion.div>
@@ -350,11 +449,15 @@ export default function DashboardPage() {
             className="bg-[#111827] border border-[#1E293B] rounded-2xl overflow-hidden"
           >
             <div className="px-5 py-4 border-b border-[#1E293B]">
-              <h2 className="font-semibold text-[#E8ECF2] text-sm">Recent Activity</h2>
+              <h2 className="font-semibold text-[#E8ECF2] text-sm">What happened recently</h2>
             </div>
-            {activityEntries.length === 0 ? (
+            {loadError ? (
               <div className="py-8 text-center">
-                <p className="text-[#5A6578] text-sm">No recent activity</p>
+                <p className="text-[#5A6578] text-sm">Nothing could be read.</p>
+              </div>
+            ) : activityEntries.length === 0 ? (
+              <div className="py-8 text-center">
+                <p className="text-[#5A6578] text-sm">Nothing has happened yet</p>
               </div>
             ) : (
               <div className="divide-y divide-[#1E293B]/50">

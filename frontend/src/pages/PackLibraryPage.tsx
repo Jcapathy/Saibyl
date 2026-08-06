@@ -18,7 +18,39 @@ import type { OrgPersonaPack } from '@/types';
  * archetype count shows nothing rather than a zero: "we were not told" and
  * "this audience contains nobody" are different facts, and only one of them
  * should worry the reader.
+ *
+ * What each row *shows* changed after an acceptance reader asked what this page
+ * was for. It rendered `description` — a machine-written one-liner that came out
+ * as `bi-directional AI security for regulated enterprise decision-makers, low
+ * switching cost`, which is a database column printed at a person. The names of
+ * the buyers inside (`archetype_labels`, computed by the server from the pack
+ * body) are the thing a human can actually recognise, so those are what the row
+ * leads with now. `description` is no longer rendered anywhere: it is derived
+ * from the same pack body the labels come from, so nothing is lost that the
+ * labels do not say more plainly.
  */
+
+/** How many buyer names a row shows before it stops listing them. */
+const NAMES_SHOWN = 4;
+
+/**
+ * The buyers inside a saved audience, named.
+ *
+ * `archetype_labels` is computed by the server off the pack body and defaults a
+ * missing label to an empty string, so blanks are dropped here rather than
+ * rendered as an unnamed buyer. Returns an empty list when the field is absent
+ * entirely — the caller renders nothing in that case, because "we were not told
+ * who is in here" is not something to paper over with a placeholder.
+ */
+function buyerNames(pack: OrgPersonaPack): string[] {
+  const labels = (pack.archetype_labels ?? []).map((l) => l.trim()).filter(Boolean);
+  if (labels.length <= NAMES_SHOWN) return labels;
+  return [
+    ...labels.slice(0, NAMES_SHOWN),
+    `and ${labels.length - NAMES_SHOWN} more`,
+  ];
+}
+
 export default function PackLibraryPage() {
   const navigate = useNavigate();
   const [packs, setPacks] = useState<OrgPersonaPack[]>([]);
@@ -92,10 +124,14 @@ export default function PackLibraryPage() {
     <div className="p-8 bg-saibyl-void min-h-full">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-h1 text-saibyl-white mb-1">Saved audiences</h1>
+        <p className="text-small mb-2 max-w-2xl">
+          Working out who buys something is the slow part. Saibyl has to read everything you
+          have written before it can tell you, and it charges you for that reading.
+        </p>
         <p className="text-small mb-8 max-w-2xl">
-          Once Saibyl has worked out who buys your product, you can keep that audience and
-          reuse it on any project in your account. Pick one — or several — when you set up a
-          run, and the simulation blends them.
+          So you only have to do it once. Keep a set of buyers here and you can point it at
+          anything else you sell — pick one when you set up a run, or pick several and they
+          all end up in the same room.
         </p>
 
         {actionError && (
@@ -135,9 +171,9 @@ export default function PackLibraryPage() {
           <div className="glass rounded-2xl p-12 text-center">
             <p className="text-saibyl-platinum font-medium mb-2">Nothing saved yet</p>
             <p className="text-saibyl-muted text-sm max-w-md mx-auto leading-relaxed">
-              When you set up a run, Saibyl reads your project documents and works out who
-              your buyers are. Keep that audience and it will show up here, ready for every
-              other project.
+              When you set up a run, Saibyl reads what you have uploaded and works out who
+              your buyers are. Keep that set of buyers and it shows up here, ready to use on
+              anything else you sell.
             </p>
             <button
               onClick={() => navigate('/app/simulations/new')}
@@ -150,7 +186,9 @@ export default function PackLibraryPage() {
 
         {!loading && !loadError && packs.length > 0 && (
           <div className="glass rounded-2xl overflow-hidden">
-            {packs.map((pack, i) => (
+            {packs.map((pack, i) => {
+              const names = buyerNames(pack);
+              return (
               <div
                 key={pack.id}
                 className={`px-5 py-4 ${i > 0 ? 'border-t border-white/[0.04]' : ''}`}
@@ -190,11 +228,23 @@ export default function PackLibraryPage() {
                       <p className="text-[14px] font-medium text-saibyl-platinum truncate">
                         {pack.name}
                       </p>
-                      <div className="flex items-center gap-3 mt-0.5">
+                      {/* Who is actually in it, in the words the buyers were
+                          given. This is the line that makes the row mean
+                          something: a name alone tells you what you called it,
+                          not who you would be selling to. Empty labels are
+                          dropped rather than rendered as gaps — the server
+                          defaults a missing one to "" and a bare separator
+                          would read as a buyer with no name. */}
+                      {names.length > 0 && (
+                        <p className="text-[12px] text-saibyl-silver mt-1 leading-relaxed">
+                          {names.join(' · ')}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-3 mt-1">
                         {pack.archetype_count != null && (
                           <span className="text-[11px] text-saibyl-muted">
-                            {pack.archetype_count} group
-                            {pack.archetype_count === 1 ? '' : 's'} of people
+                            {pack.archetype_count} kind
+                            {pack.archetype_count === 1 ? '' : 's'} of buyer
                           </span>
                         )}
                         {pack.created_at && (
@@ -203,11 +253,6 @@ export default function PackLibraryPage() {
                           </span>
                         )}
                       </div>
-                      {pack.description && (
-                        <p className="text-[12px] text-saibyl-muted mt-1 line-clamp-2 leading-relaxed">
-                          {pack.description}
-                        </p>
-                      )}
                     </div>
                   )}
 
@@ -236,9 +281,9 @@ export default function PackLibraryPage() {
                 {confirmingId === pack.id && (
                   <div className="mt-3 px-4 py-3 rounded-xl bg-saibyl-negative/[0.08] border border-saibyl-negative/20">
                     <p className="text-[12px] text-saibyl-silver leading-relaxed">
-                      Delete &ldquo;{pack.name}&rdquo;? Simulations that already used it keep
-                      their results — those agents were created when the run started. What
-                      you lose is the ability to pick this audience for a new run.
+                      Delete &ldquo;{pack.name}&rdquo;? Runs that already used these buyers
+                      keep their results — those people were created when the run started.
+                      What you lose is the ability to pick this audience for a new run.
                     </p>
                     <div className="flex items-center gap-3 mt-3">
                       <button
@@ -258,7 +303,8 @@ export default function PackLibraryPage() {
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

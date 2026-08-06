@@ -3,10 +3,10 @@ import { formatSigned, type Flashpoint } from '@/lib/analysis';
 import Panel, { NoData } from './Panel';
 
 /**
- * Rounds where sentiment moved, with the events that moved it.
+ * Rounds where the mood turned, and what turned it.
  *
- * A move is only called significant when the two rounds' confidence intervals
- * do not overlap. Everything else is labelled directional and shown greyed —
+ * A move is only called real when the ranges around the two rounds do not
+ * overlap. Everything else is shown greyed and marked too small to be sure —
  * the reader gets to see it without being told it means something the data
  * cannot support.
  */
@@ -21,10 +21,10 @@ export default function FlashpointList({
 }) {
   if (flashpoints.length === 0) {
     return (
-      <Panel title="Flashpoints">
+      <Panel title="Where the mood turned">
         <NoData>
-          Sentiment never moved by more than 0.15 between rounds. The
-          conversation held its shape — which is itself worth knowing before a
+          The mood never moved much from one round to the next. Nothing you put in
+          front of them turned the room — which is itself worth knowing before a
           launch.
         </NoData>
       </Panel>
@@ -33,8 +33,8 @@ export default function FlashpointList({
 
   return (
     <Panel
-      title="Flashpoints"
-      note="Round-to-round shifts larger than 0.15. Only shifts whose confidence intervals separate are marked measured."
+      title="Where the mood turned"
+      note="Moments where the room moved noticeably between one round and the next. A move is only called real when the ranges around the two figures do not overlap."
     >
       <div className="space-y-3">
         {flashpoints.map((flash) => (
@@ -78,7 +78,7 @@ export default function FlashpointList({
                         : 'bg-white/[0.04] text-saibyl-muted'
                     }`}
                   >
-                    {flash.significant ? 'measured shift' : 'within the bands'}
+                    {flash.significant ? 'a real move' : 'too small to be sure'}
                   </span>
                   {flash.objection_keys.map((key) => (
                     <span
@@ -94,12 +94,12 @@ export default function FlashpointList({
                       onClick={() =>
                         onDrillDown(
                           flash.trigger_event_ids,
-                          `Round ${flash.round_number} shift`,
+                          `Round ${flash.round_number}: what turned it`,
                         )
                       }
                       className="text-[10px] text-saibyl-signal-blue hover:underline"
                     >
-                      what caused it →
+                      read what turned it →
                     </button>
                   )}
                 </div>

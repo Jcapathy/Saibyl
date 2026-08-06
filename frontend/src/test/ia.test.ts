@@ -61,43 +61,7 @@ const JARGON = [
  * piece of work from building the rail. Listing them by name is the point: the
  * debt is countable, and the assertion below fails if it grows.
  */
-const JARGON_DEBT: Record<string, string> = {
-  'src/pages/SimulationsPage.tsx': 'legacy run list, not on the rail',
-  'src/pages/SimulationDetailPage.tsx': 'legacy run detail, not on the rail',
-  'src/pages/SimulationRunPage.tsx': 'legacy live run view, not on the rail',
-  'src/pages/NewSimulationPage.tsx': 'legacy run configurator, reached from the rail by link',
-  'src/pages/ComparisonPage.tsx': 'legacy comparison, reached from the rail by link',
-  'src/pages/MarketingPage.tsx': 'legacy message-test setup, reached from the rail by link',
-  'src/pages/DashboardPage.tsx': 'legacy dashboard, superseded by /app/home',
-  'src/pages/ProjectsPage.tsx': 'legacy project list, superseded by /app/home',
-  'src/pages/ProjectDetailPage.tsx': 'legacy project detail, superseded by the rail',
-  'src/pages/PackLibraryPage.tsx': 'saved audiences, not on the rail',
-  'src/pages/GuidePage.tsx': 'explains the product, so it names its own concepts',
-  'src/pages/ReportViewerPage.tsx': 'report chrome, not on the rail',
-  'src/pages/ReportPrintPage.tsx': 'print chrome, not on the rail',
-  'src/pages/SettingsPage.tsx': 'plan and usage copy, not on the rail',
-  'src/pages/ProspectDiscoverPage.tsx': 'company search, reached from the rail by link',
-  'src/pages/ProspectDetailPage.tsx': 'company detail, reached from the rail by link',
-  'src/pages/ProspectsPage.tsx': 'company list, reached from the rail by link',
-  'src/pages/ProspectSettingsPage.tsx': 'company search settings, not on the rail',
-  'src/pages/LandingPage.tsx': 'public marketing page, reviewed separately',
-  'src/pages/SignupPage.tsx': 'public, reviewed separately',
-  'src/pages/LoginPage.tsx': 'public, reviewed separately',
-  'src/components/RunConfigurator.tsx': 'legacy configurator, reached from the rail by link',
-  'src/components/analysis/AdversarialNotice.tsx': 'legacy analysis panel',
-  'src/components/analysis/EvidenceDrawer.tsx': 'legacy analysis panel',
-  'src/components/analysis/FlashpointList.tsx': 'legacy analysis panel',
-  'src/components/analysis/GroupBreakdown.tsx': 'legacy analysis panel',
-  'src/components/analysis/HeadlineStats.tsx': 'legacy analysis panel',
-  'src/components/analysis/ObjectionMap.tsx': 'legacy analysis panel',
-  'src/components/analysis/QualityNotice.tsx': 'legacy analysis panel',
-  'src/components/analysis/SentimentArc.tsx': 'legacy analysis panel',
-  'src/components/analysis/VariantScoreboard.tsx': 'legacy analysis panel',
-  'src/components/founder/FounderLensStep.tsx': 'legacy configurator step',
-  'src/components/founder/InoculationWorkbench.tsx': 'legacy answers workbench',
-  'src/components/marketing/VariantSetup.tsx': 'legacy message-test setup',
-  'src/components/gtm/RunCard.tsx': 'legacy company-search card',
-};
+const JARGON_DEBT: Record<string, string> = {};
 
 function jargonHits(files: ReturnType<typeof sourceFiles>) {
   const hits: { path: string; word: string; text: string }[] = [];

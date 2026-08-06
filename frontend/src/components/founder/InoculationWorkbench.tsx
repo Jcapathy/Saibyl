@@ -36,7 +36,7 @@ function DeltaRow({ delta }: { delta: ObjectionDelta }) {
           <p className="text-[13px] text-saibyl-platinum font-medium">{delta.label}</p>
           {delta.asset_titles.length > 0 && (
             <p className="text-[11px] text-saibyl-muted mt-0.5">
-              Targeted by: {delta.asset_titles.join(', ')}
+              Answered by: {delta.asset_titles.join(', ')}
             </p>
           )}
         </div>
@@ -62,7 +62,7 @@ function DeltaRow({ delta }: { delta: ObjectionDelta }) {
         {!delta.significant && delta.verdict !== 'unchanged' && (
           <span className="text-saibyl-gold/80">
             {' '}
-            The two runs' intervals overlap, so this swarm cannot resolve the difference.
+            The two rooms overlap too much to call this a real change.
           </span>
         )}
       </p>
@@ -87,19 +87,23 @@ function ResultPanel({ result }: { result: InoculationResult }) {
       title="Before and after"
       note={
         result.assets_effective === 0
-          ? `None of the ${result.assets_tested} tested assets moved its objection beyond the confidence bands. That is a result, not a failure of the run — it means this material does not change the reaction.`
-          : `${result.assets_effective} of ${result.assets_tested} assets measurably moved the objection they were written against.`
+          ? `${
+              result.assets_tested === 1
+                ? 'The one thing you tested did not move'
+                : `None of the ${result.assets_tested} things you tested moved`
+            } its objection by more than this run can tell apart from noise. That is a real answer, not a failed run — it means this material does not change how people react.`
+          : `${result.assets_effective} of the ${result.assets_tested} things you tested measurably moved the objection ${result.assets_effective === 1 ? 'it was' : 'they were'} written against.`
       }
     >
       <div className="mb-4 pb-3 border-b border-white/[0.06] text-[12px] text-saibyl-muted">
-        Headline sentiment {formatSigned(result.headline_before.mean)} →{' '}
+        How the room felt overall: {formatSigned(result.headline_before.mean)} →{' '}
         {formatSigned(result.headline_after.mean)}
         {result.headline_before.lower <= result.headline_after.upper &&
           result.headline_after.lower <= result.headline_before.upper && (
             <span className="text-saibyl-gold/80">
               {' '}
-              — inside the bands. An asset can kill an objection without moving the headline, and
-              that is still worth having.
+              — too small a move to call. Something you wrote can kill one objection without
+              shifting the overall mood, and that is still worth having.
             </span>
           )}
       </div>
@@ -107,7 +111,7 @@ function ResultPanel({ result }: { result: InoculationResult }) {
       {targeted.length > 0 ? (
         targeted.map((delta) => <DeltaRow key={delta.objection_key} delta={delta} />)
       ) : (
-        <NoData>No objection in this comparison had an asset written against it.</NoData>
+        <NoData>Nothing here was written against a particular objection.</NoData>
       )}
 
       {untargeted.length > 0 && (
@@ -184,7 +188,7 @@ export default function InoculationWorkbench({
       });
       setAssets((prev) => [...prev, ...data]);
     } catch (err) {
-      setError(getErrorMessage(err, 'Drafting failed'));
+      setError(getErrorMessage(err, 'We could not write anything against these.'));
     } finally {
       setDrafting(false);
     }
@@ -202,7 +206,7 @@ export default function InoculationWorkbench({
       // and charges it like any other run.
       navigate(`/app/simulations/${child.id}`);
     } catch (err) {
-      setError(getErrorMessage(err, 'Could not create the re-simulation'));
+      setError(getErrorMessage(err, 'We could not set up the second run.'));
       setLaunching(false);
     }
   };
@@ -215,8 +219,8 @@ export default function InoculationWorkbench({
     return (
       <Panel title="Before and after">
         <NoData>
-          This run was inoculated, but its comparison has not been built yet. It is built when the
-          run completes.
+          You put new material in front of the same room. The before-and-after appears once this
+          run finishes.
         </NoData>
       </Panel>
     );
@@ -238,11 +242,11 @@ export default function InoculationWorkbench({
       )}
 
       <Panel
-        title="Pre-position against these objections"
-        note="Assets are drafted against the objections ranked by reach × intensity × cohort spread — not by how often they were said. The loudest objection and the one that kills the deal are usually different objections."
+        title="Get ahead of these objections"
+        note="We write against the objections that reached the most people, hit them hardest and spread widest between groups — not the ones said most often. The loudest objection and the one that loses you the sale are usually not the same objection."
       >
         {objections.length === 0 ? (
-          <NoData>This run produced no canonical objections to write against.</NoData>
+          <NoData>Nobody in this run raised an objection clearly enough to write against.</NoData>
         ) : (
           <>
             <div className="space-y-1 mb-4">
@@ -250,8 +254,9 @@ export default function InoculationWorkbench({
                 <div key={objection.key} className="flex items-baseline gap-3 text-[12px]">
                   <span className="text-saibyl-platinum flex-1 truncate">{objection.label}</span>
                   <span className="text-saibyl-muted text-[11px] whitespace-nowrap">
-                    {objection.agent_count} agents
-                    {objection.originated_adversarial && ' · started incumbent-aligned'}
+                    {objection.agent_count} {objection.agent_count === 1 ? 'person' : 'people'}
+                    {objection.originated_adversarial &&
+                      ' · first raised by someone arguing against you'}
                   </span>
                 </div>
               ))}
@@ -268,11 +273,11 @@ export default function InoculationWorkbench({
               ) : (
                 <PenLine className="w-4 h-4" />
               )}
-              {drafting ? 'Drafting…' : 'Draft counter-assets'}
+              {drafting ? 'Writing…' : 'Write answers to these'}
             </button>
             {cost && (
               <p className="text-[11px] text-saibyl-muted mt-2">
-                {cost.credits_required.toLocaleString()} credits per drafting pass.
+                {cost.credits_required.toLocaleString()} credits each time you do this.
               </p>
             )}
           </>
@@ -282,7 +287,7 @@ export default function InoculationWorkbench({
       {assets.length > 0 && (
         <Panel
           title="Choose what to test"
-          note="Each asset states a hypothesis, recorded before the re-simulation runs. The comparison judges the asset against it — including when the answer is that it did nothing."
+          note="Each one says up front what it expects to change, and that is written down before the second run happens. We hold it to that — including when the answer is that it changed nothing."
         >
           <div className="space-y-3">
             {[...byObjection.entries()].map(([key, group]) => (
@@ -321,7 +326,7 @@ export default function InoculationWorkbench({
                         </p>
                         {asset.hypothesis && (
                           <p className="text-[11px] text-saibyl-muted mt-2 italic">
-                            Predicts: {asset.hypothesis}
+                            Expects to: {asset.hypothesis}
                           </p>
                         )}
                       </button>
@@ -344,13 +349,14 @@ export default function InoculationWorkbench({
               ) : (
                 <FlaskConical className="w-4 h-4" />
               )}
-              Re-simulate with {selected.length} asset{selected.length === 1 ? '' : 's'}
+              {selected.length === 1
+                ? 'Run it again with this one'
+                : `Run it again with these ${selected.length}`}
             </button>
             <p className="text-[11px] text-saibyl-muted mt-2 leading-relaxed">
-              The same agents run again — copied from this run, not regenerated — with this
-              material published alongside the subject. Nothing else changes, which is what makes
-              the before/after attributable to the assets. The re-run is not charged for agent
-              generation it does not perform.
+              The same people react again — the exact ones from this run, not a fresh set — only
+              this time they have seen what you wrote. Nothing else changes, so any difference is
+              down to your material. You are not charged again for building the room.
             </p>
           </div>
         </Panel>

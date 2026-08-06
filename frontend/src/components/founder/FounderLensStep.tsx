@@ -90,7 +90,7 @@ export default function FounderLensStep({
       // generated blob.
       setReviewingId(data.id);
     } catch (err) {
-      setError(getErrorMessage(err, 'We could not work out your buyers from this project.'));
+      setError(getErrorMessage(err, 'We could not work out your buyers from this product.'));
     } finally {
       setSynthesizing(false);
     }
@@ -107,7 +107,7 @@ export default function FounderLensStep({
       {/* ── Stage ─────────────────────────────────────────────────── */}
       <div>
         <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-3">
-          Stage
+          Where are you with this
         </label>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {stages.map((spec) => {
@@ -179,9 +179,9 @@ export default function FounderLensStep({
           Who will react to this
         </label>
         <p className="text-[12px] text-saibyl-muted mb-3 leading-relaxed">
-          Saibyl reads the documents on this project — your pitch, landing page, deck, pricing
-          — and works out who your buyers are and what they care about. You get to check it
-          before anything runs.
+          Saibyl reads what you have uploaded for this product — your pitch, landing page,
+          deck, pricing — and works out who your buyers are and what they care about. You get
+          to check it before anything runs.
         </p>
 
         {profiles.length > 0 && (
@@ -277,50 +277,64 @@ export default function FounderLensStep({
         </button>
         {synthCost && (
           <p className="text-[11px] text-saibyl-muted mt-2">
-            {synthCost.credits_required.toLocaleString()} credits, charged once — not per run.
-            Every simulation in this project reuses the same buyers.
+            {synthCost.credits_required.toLocaleString()} credits, charged once — not every
+            time. Every run on this product reuses the same buyers.
           </p>
         )}
       </div>
 
-      {/* ── Adversarial share ─────────────────────────────────────── */}
+      {/* ── How much of the room argues back ──────────────────────────
+          The percentage and the slider render **only once buyers exist.**
+
+          They used to render either way, and picking a stage seeds this value
+          from that stage's default — so a founder with no buyers worked out yet
+          read "30%" above a sentence saying there was no share to set. The
+          sentence was the true half: the run sends `adversarial_share: 0`
+          without a profile, the API rejects a share without one outright, and
+          the ready-made packs carry nobody who argues back. The 30% was a
+          number nothing would act on, which is the one thing this product must
+          never put on screen. */}
       <div>
-        <div className="flex items-baseline justify-between mb-2">
-          <label className="text-[12px] font-medium text-saibyl-muted uppercase tracking-wide">
-            How many will push back
-          </label>
-          <span className="text-[13px] font-mono text-saibyl-platinum">
-            {(value.adversarialShare * 100).toFixed(0)}%
-          </span>
-        </div>
-        <input
-          type="range"
-          min={0}
-          max={50}
-          step={5}
-          value={Math.round(value.adversarialShare * 100)}
-          onChange={(e) =>
-            onChange({ ...value, adversarialShare: Number(e.target.value) / 100 })
-          }
-          disabled={!value.icpProfileId}
-          className="w-full accent-saibyl-gold disabled:opacity-40"
-        />
-        <p className="text-[11px] text-saibyl-muted mt-2 leading-relaxed">
-          {!value.icpProfileId ? (
-            <>
-              Work out your buyers first. The people who argue against you are built from the
-              documents you uploaded — the ready-made persona packs have nobody like that in
-              them, so there is no share to set.
-            </>
-          ) : (
-            <>
+        {!value.icpProfileId ? (
+          <>
+            <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-2">
+              How many will push back
+            </label>
+            <p className="text-[11px] text-saibyl-muted leading-relaxed">
+              Nobody, on this run. The people who argue against you are built out of the
+              documents you uploaded, and the ready-made groups above have nobody like that in
+              them. Work out your buyers first and you can set the share here.
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="flex items-baseline justify-between mb-2">
+              <label className="text-[12px] font-medium text-saibyl-muted uppercase tracking-wide">
+                How many will push back
+              </label>
+              <span className="text-[13px] font-mono text-saibyl-platinum">
+                {(value.adversarialShare * 100).toFixed(0)}%
+              </span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={50}
+              step={5}
+              value={Math.round(value.adversarialShare * 100)}
+              onChange={(e) =>
+                onChange({ ...value, adversarialShare: Number(e.target.value) / 100 })
+              }
+              className="w-full accent-saibyl-gold"
+            />
+            <p className="text-[11px] text-saibyl-muted mt-2 leading-relaxed">
               These are people happy with whatever they use today, so they talk your score down
               on purpose. The report always keeps them separate from your buyers and says where
-              they came from. 50% is the ceiling: past half the room, the score is measuring the
-              number you picked here rather than the market.
-            </>
-          )}
-        </p>
+              they came from. Half the room is the ceiling: past that, the score is measuring
+              the number you picked here rather than the market.
+            </p>
+          </>
+        )}
         {profile && profile.profile.competitors.some((c) => c.mentioned_in.length > 0) && (
           <p className="text-[11px] text-saibyl-muted mt-2">
             Rivals we can name:{' '}

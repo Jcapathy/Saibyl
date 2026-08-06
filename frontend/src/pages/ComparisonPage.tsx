@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import api, { unwrapList } from '@/lib/api';
+import { getErrorMessage } from '@/lib/errors';
+import { isFinished } from '@/lib/status';
 import type { Simulation } from '@/types';
 
 /** `POST /comparison` — a per-run rollup, not a `simulations` row. */
@@ -25,15 +28,21 @@ export default function ComparisonPage() {
   const [simulations, setSimulations] = useState<Simulation[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [result, setResult] = useState<{ simulations: SimSummary[]; analysis: string } | null>(null);
 
   useEffect(() => {
     api.get('/simulations', { params: { limit: 50 } }).then((r) => {
-      const completed = unwrapList<Simulation>(r.data).items.filter(
-        (s: Simulation) => ['complete', 'completed'].includes(s.status)
+      // `isFinished` rather than a hand-written list. The database holds both
+      // `complete` and `completed`, and a list built from one spelling silently
+      // hides half the runs a founder is trying to compare.
+      const finished = unwrapList<Simulation>(r.data).items.filter((s: Simulation) =>
+        isFinished(s.status),
       );
-      setSimulations(completed);
-    }).catch(() => {});
+      setSimulations(finished);
+    }).catch((err) => {
+      setError(getErrorMessage(err, 'We could not load your runs.'));
+    });
   }, []);
 
   const toggleSim = (id: string) => {
@@ -45,25 +54,43 @@ export default function ComparisonPage() {
   const runComparison = async () => {
     if (selected.length < 2) return;
     setLoading(true);
+    setError('');
     try {
       const { data } = await api.post('/compare', { simulation_ids: selected });
       setResult(data);
-    } catch { /* ignore */ } finally {
+    } catch (err) {
+      // Previously swallowed, which left the button flipping back to its idle
+      // label having said nothing about why no table appeared.
+      setError(getErrorMessage(err, 'We could not compare those runs.'));
+    } finally {
       setLoading(false);
     }
   };
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
-      <h1 className="text-h1 text-saibyl-white mb-2">Multi-Simulation Comparison</h1>
-      <p className="text-small mb-6">Select 2-5 completed simulations to compare outcomes, sentiment, and engagement across different configurations.</p>
+      <h1 className="text-h1 text-saibyl-white mb-2">Put your runs side by side</h1>
+      <p className="text-small mb-6">
+        Pick two to five finished runs and we&rsquo;ll show you what changed between
+        them — how people took it, how much they had to say, and where.
+      </p>
 
       {!result ? (
         <>
           <div className="glass rounded-2xl p-6 mb-6">
-            <h2 className="text-[11px] font-mono text-saibyl-muted uppercase tracking-widest mb-4">Select Simulations</h2>
+            <h2 className="text-[11px] font-mono text-saibyl-muted uppercase tracking-widest mb-4">Pick the runs</h2>
             {simulations.length === 0 ? (
-              <p className="text-saibyl-muted text-[13px]">No completed simulations found.</p>
+              <div>
+                <p className="text-saibyl-muted text-[13px] mb-3">
+                  You have no finished runs yet, so there is nothing to compare.
+                </p>
+                <Link
+                  to="/app/simulations/new"
+                  className="text-[13px] text-saibyl-gold hover:underline"
+                >
+                  Start a run →
+                </Link>
+              </div>
             ) : (
               <div className="space-y-2">
                 {simulations.map((sim) => {
@@ -81,7 +108,7 @@ export default function ComparisonPage() {
                       <div className="flex items-center justify-between">
                         <div>
                           <span className="text-[14px] font-medium text-saibyl-platinum">{sim.name}</span>
-                          <span className="text-[11px] text-saibyl-muted ml-3">{sim.agent_count ?? '—'} agents</span>
+                          <span className="text-[11px] text-saibyl-muted ml-3">{sim.agent_count ?? '—'} people</span>
                           <span className="text-[11px] text-saibyl-muted ml-2">{new Date(sim.created_at).toLocaleDateString()}</span>
                         </div>
                         {isSelected && (
@@ -95,28 +122,38 @@ export default function ComparisonPage() {
                 })}
               </div>
             )}
-            <div className="flex items-center justify-between mt-4">
-              <p className="text-[12px] text-saibyl-muted">{selected.length} selected (min 2, max 5)</p>
+            <div className="flex items-center justify-between mt-4 gap-4">
+              <p className="text-[12px] text-saibyl-muted">
+                {selected.length === 0
+                  ? 'Pick at least two.'
+                  : selected.length === 1
+                    ? 'Pick one more — you need at least two to compare.'
+                    : `${selected.length} picked. You can compare up to five at once.`}
+              </p>
               <button
                 onClick={runComparison}
                 disabled={loading || selected.length < 2}
-                className="px-6 py-2.5 rounded-xl bg-saibyl-gold text-white text-[13px] font-medium hover:bg-[#4B4FDE] disabled:opacity-50 transition-all"
+                className="px-6 py-2.5 rounded-xl bg-saibyl-gold text-saibyl-void text-[13px] font-semibold hover:bg-saibyl-gold-hover disabled:opacity-50 transition-all shrink-0"
               >
-                {loading ? 'Comparing...' : 'Compare Simulations'}
+                {loading ? 'Comparing…' : 'Compare them'}
               </button>
             </div>
+
+            {error && (
+              <p className="mt-3 text-[12px] text-saibyl-negative leading-relaxed">{error}</p>
+            )}
           </div>
         </>
       ) : (
         <>
           {/* Results */}
           <div className="glass rounded-2xl p-6 mb-6">
-            <h2 className="text-[11px] font-mono text-saibyl-muted uppercase tracking-widest mb-4">Comparison Results</h2>
+            <h2 className="text-[11px] font-mono text-saibyl-muted uppercase tracking-widest mb-4">Side by side</h2>
             <div className="overflow-x-auto">
               <table className="w-full text-[13px]">
                 <thead>
                   <tr className="border-b border-white/[0.06]">
-                    <th className="text-left py-3 pr-4 text-saibyl-muted font-medium">Metric</th>
+                    <th className="text-left py-3 pr-4 text-saibyl-muted font-medium">&nbsp;</th>
                     {result.simulations.map((s) => (
                       <th key={s.simulation_id} className="text-center py-3 px-3 text-saibyl-platinum font-medium">{s.name}</th>
                     ))}
@@ -124,35 +161,40 @@ export default function ComparisonPage() {
                 </thead>
                 <tbody className="divide-y divide-white/[0.04]">
                   <tr>
-                    <td className="py-3 pr-4 text-saibyl-muted">Total Events</td>
+                    <td className="py-3 pr-4 text-saibyl-muted">Posts and replies</td>
                     {result.simulations.map((s) => (
                       <td key={s.simulation_id} className="text-center py-3 px-3 text-saibyl-platinum font-mono">{s.total_events}</td>
                     ))}
                   </tr>
                   <tr>
-                    <td className="py-3 pr-4 text-saibyl-muted">Avg Sentiment</td>
+                    <td className="py-3 pr-4 text-saibyl-muted">
+                      How they felt
+                      <span className="block text-[11px] text-saibyl-muted/70">
+                        +1 loved it, &minus;1 hated it
+                      </span>
+                    </td>
                     {result.simulations.map((s) => (
                       <td key={s.simulation_id} className={`text-center py-3 px-3 font-mono ${s.avg_sentiment === null ? 'text-saibyl-muted' : s.avg_sentiment > 0.2 ? 'text-saibyl-positive' : s.avg_sentiment < -0.2 ? 'text-saibyl-negative' : 'text-saibyl-muted'}`}>
-                        {s.avg_sentiment === null ? <span title="No measured sentiment for this run — it is not comparable on this row.">not measured</span> : s.avg_sentiment.toFixed(3)}
+                        {s.avg_sentiment === null ? <span title="Nothing in this run could be measured, so it cannot be compared on this row.">not measured</span> : s.avg_sentiment.toFixed(3)}
                       </td>
                     ))}
                   </tr>
                   <tr>
-                    <td className="py-3 pr-4 text-saibyl-muted">Agents</td>
+                    <td className="py-3 pr-4 text-saibyl-muted">People in the room</td>
                     {result.simulations.map((s) => (
                       <td key={s.simulation_id} className="text-center py-3 px-3 text-saibyl-platinum font-mono">{s.agent_count}</td>
                     ))}
                   </tr>
                   <tr>
-                    <td className="py-3 pr-4 text-saibyl-muted">Top Platform</td>
+                    <td className="py-3 pr-4 text-saibyl-muted">Busiest platform</td>
                     {result.simulations.map((s) => (
                       <td key={s.simulation_id} className="text-center py-3 px-3 text-saibyl-blue">{s.top_platform}</td>
                     ))}
                   </tr>
                   <tr>
-                    <td className="py-3 pr-4 text-saibyl-muted">Persona Packs</td>
+                    <td className="py-3 pr-4 text-saibyl-muted">Groups of buyers</td>
                     {result.simulations.map((s) => (
-                      <td key={s.simulation_id} className="text-center py-3 px-3 text-saibyl-muted text-[11px]">{s.persona_packs.join(', ') || 'N/A'}</td>
+                      <td key={s.simulation_id} className="text-center py-3 px-3 text-saibyl-muted text-[11px]">{s.persona_packs.join(', ') || 'Worked out fresh'}</td>
                     ))}
                   </tr>
                 </tbody>
@@ -162,12 +204,15 @@ export default function ComparisonPage() {
 
           {/* Analysis */}
           <div className="glass rounded-2xl p-6 mb-6">
-            <h2 className="text-[11px] font-mono text-saibyl-muted uppercase tracking-widest mb-4">Analysis</h2>
+            <h2 className="text-[11px] font-mono text-saibyl-muted uppercase tracking-widest mb-4">What changed between them</h2>
             <p className="text-[13px] text-saibyl-platinum/80 leading-relaxed whitespace-pre-wrap">{result.analysis}</p>
           </div>
 
-          <button onClick={() => setResult(null)} className="text-[12px] text-saibyl-gold hover:underline">
-            ← New comparison
+          <button
+            onClick={() => { setResult(null); setError(''); }}
+            className="text-[12px] text-saibyl-gold hover:underline"
+          >
+            ← Compare a different set
           </button>
         </>
       )}

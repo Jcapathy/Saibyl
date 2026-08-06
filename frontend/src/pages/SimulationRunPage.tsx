@@ -110,7 +110,7 @@ export default function SimulationRunPage() {
       {/* Top bar */}
       <div className="bg-saibyl-deep border-b border-white/[0.04] px-6 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-4">
-          <h1 className="text-[15px] font-bold text-saibyl-platinum">Live Simulation</h1>
+          <h1 className="text-[15px] font-bold text-saibyl-platinum">Watching it happen</h1>
           <AnimatePresence mode="wait">
             {isRunning ? (
               <motion.span
@@ -143,7 +143,7 @@ export default function SimulationRunPage() {
             <span className="font-bold text-saibyl-gold">{roundNumber}</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-saibyl-muted">Events</span>
+            <span className="text-saibyl-muted">Reactions so far</span>
             <span className="font-bold text-saibyl-blue">{totalEvents.toLocaleString()}</span>
           </div>
         </div>
@@ -164,19 +164,23 @@ export default function SimulationRunPage() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
                       </svg>
                     </div>
-                    <p className="text-saibyl-muted text-sm">Waiting for events...</p>
-                    <p className="text-saibyl-muted/50 text-[12px] font-mono">Events will appear here in real time</p>
+                    <p className="text-saibyl-muted text-sm">Waiting for the first reaction…</p>
+                    <p className="text-saibyl-muted/50 text-[12px] font-mono">They show up here as people post</p>
                   </>
                 ) : (
                   <>
                     <p className="text-saibyl-muted text-sm">
-                      Simulation {simStatus === 'failed' ? 'failed' : simStatus === 'stopped' ? 'stopped' : 'finished'} with no events.
+                      {simStatus === 'failed'
+                        ? 'This run failed before anyone said anything.'
+                        : simStatus === 'stopped'
+                          ? 'You stopped this run before anyone said anything.'
+                          : 'This run finished without anyone saying anything.'}
                     </p>
                     <Link
                       to={`/app/simulations/${id}`}
                       className="text-saibyl-gold text-sm hover:underline"
                     >
-                      ← Back to simulation details
+                      ← Back to this run
                     </Link>
                   </>
                 )}
@@ -193,21 +197,21 @@ export default function SimulationRunPage() {
             )}
           </div>
 
-          {/* Sentiment is deliberately absent from this page. Valence is scored
-              from event content after the run completes, so there is nothing to
-              plot while the swarm is still talking. The measured arc lives on
-              the report, built from the analysis artifact. */}
+          {/* How the room felt is deliberately absent from this page. It is
+              scored from what people wrote only after the run finishes, so
+              there is nothing to plot while they are still talking. The
+              measured version lives on the report. */}
         </div>
 
         {/* Right panel — live event feed */}
         <div className="w-[300px] bg-saibyl-deep border-l border-white/[0.04] flex flex-col shrink-0">
           <div className="px-4 py-3 border-b border-white/[0.04]">
-            <h2 className="text-[12px] font-semibold text-saibyl-platinum uppercase tracking-widest">Live Feed</h2>
+            <h2 className="text-[12px] font-semibold text-saibyl-platinum uppercase tracking-widest">As it happens</h2>
           </div>
           <div ref={feedRef} className="flex-1 overflow-y-auto p-3 space-y-2">
             <AnimatePresence initial={false}>
               {recentEvents.length === 0 ? (
-                <p className="text-[11px] text-saibyl-muted text-center mt-10 font-mono">Waiting for events...</p>
+                <p className="text-[11px] text-saibyl-muted text-center mt-10 font-mono">Nothing yet…</p>
               ) : (
                 recentEvents.slice(-50).map((evt, i) => (
                   <EventCard key={i} evt={evt} />

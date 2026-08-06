@@ -7,17 +7,13 @@ import {
   type PlatformSlice,
 } from '@/lib/analysis';
 import Panel, { NoData } from './Panel';
+import { groupLabel } from '@/lib/groups';
 
 type Slice = PlatformSlice | ArchetypeSlice | CohortSlice;
 
-const COHORT_LABELS: Record<string, string> = {
-  buyer: 'Buyers',
-  adversarial: 'Incumbent-aligned',
-};
-
 function labelOf(slice: Slice): string {
   if ('platform' in slice) return PLATFORM_NAMES[slice.platform] ?? slice.platform;
-  if ('cohort' in slice) return COHORT_LABELS[slice.cohort] ?? slice.cohort;
+  if ('cohort' in slice) return groupLabel(slice.cohort);
   return slice.archetype;
 }
 
@@ -27,11 +23,11 @@ function colorOf(slice: Slice): string {
 }
 
 /**
- * Per-platform or per-archetype sentiment, with intervals drawn to scale.
+ * How each group felt, with the range around every figure drawn to scale.
  *
- * Slices arrive from the server most-negative first, and the ranking is only
- * asserted where the intervals actually separate. A "worst platform" callout
- * over two overlapping bands is the same false precision as a generated number,
+ * Groups arrive from the server worst-first, and the ranking is only asserted
+ * where the ranges actually separate. A "worst platform" callout over two
+ * overlapping ranges is the same false precision as a generated number,
  * arrived at more expensively.
  */
 export default function GroupBreakdown({
@@ -48,7 +44,10 @@ export default function GroupBreakdown({
   if (slices.length === 0) {
     return (
       <Panel title={title}>
-        <NoData>No measured events in this run to break down.</NoData>
+        <NoData>
+          Nobody in this run said anything we could measure, so there is nothing to
+          break down.
+        </NoData>
       </Panel>
     );
   }
@@ -67,8 +66,8 @@ export default function GroupBreakdown({
       note={
         slices.length > 1
           ? resolved
-            ? `${labelOf(worst)} is measurably more negative than ${labelOf(best)} — their intervals do not overlap.`
-            : 'Intervals overlap across every group, so this run does not resolve a difference between them.'
+            ? `${labelOf(worst)} took this worse than ${labelOf(best)}, and the gap is wide enough to be real — the ranges around the two figures do not overlap.`
+            : 'The ranges around every group overlap, so this run cannot tell them apart.'
           : undefined
       }
     >
@@ -84,14 +83,15 @@ export default function GroupBreakdown({
                 <span className="text-saibyl-silver text-[11px] whitespace-nowrap">
                   {valence.n < 2 ? (
                     <span className="text-saibyl-muted">
-                      {valence.n} agent — not resolvable
+                      {valence.n === 1 ? 'one person only' : 'nobody spoke'} — too few to
+                      read anything into
                     </span>
                   ) : (
                     <>
                       {formatSigned(valence.mean)}{' '}
                       <span className="text-saibyl-muted">
-                        ({formatSigned(valence.lower)} to {formatSigned(valence.upper)},{' '}
-                        {valence.n} agents)
+                        (somewhere between {formatSigned(valence.lower)} and{' '}
+                        {formatSigned(valence.upper)}, across {valence.n} people)
                       </span>
                     </>
                   )}
@@ -122,17 +122,18 @@ export default function GroupBreakdown({
 
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-[10px] text-saibyl-muted">
                 <span>
-                  {slice.stance.oppose_pct.toFixed(0)}% oppose ·{' '}
-                  {slice.stance.support_pct.toFixed(0)}% support
+                  {slice.stance.oppose_pct.toFixed(0)}% against ·{' '}
+                  {slice.stance.support_pct.toFixed(0)}% for
                 </span>
-                <span>{slice.event_count} events</span>
-                {/* A cohort that was allocated agents and barely spoke is a
-                    finding, not a rounding error — but only if the allocation
-                    is the denominator. Platform and archetype slices carry no
-                    allocation, so this appears on cohorts alone. */}
+                <span>{slice.event_count} posts and replies</span>
+                {/* A group that was given places in the room and barely spoke is
+                    a finding, not a rounding error — but only if the places
+                    given are the denominator. Platform and buyer-type splits
+                    carry no allocation, so this appears on the buyers-versus-
+                    sceptics split alone. */}
                 {'agents_total' in slice && slice.agents_total > slice.agent_count && (
                   <span>
-                    {slice.agent_count} of {slice.agents_total} agents spoke
+                    {slice.agent_count} of {slice.agents_total} said anything
                   </span>
                 )}
                 {objections.map((key) => (

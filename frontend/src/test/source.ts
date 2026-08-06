@@ -147,9 +147,22 @@ export function renderedStrings(file: SourceFile): string[] {
   const JSX_TEXT = /(?<!=)>([^<>{}]*[A-Za-z][^<>{}]*)</g;
   for (const match of withoutInterpolations.matchAll(JSX_TEXT)) {
     const text = match[1].trim();
-    // Prose does not contain statement punctuation. Anything that does is a
-    // fragment of code the match ran through, not something rendered.
-    if (text && !/[;=`]/.test(text)) out.push(text);
+    /*
+      Entities are stripped *before* the code test, not after.
+
+      The test rejects text containing `;` on the grounds that prose does not
+      carry statement punctuation. Prose written for this product does: every
+      `&mdash;`, `&rsquo;` and `&amp;` ends in a semicolon. So two rendered
+      sentences with typographic dashes in them were invisible to the whole
+      jargon scan and shipped with "project" in them, and a reader working
+      through the pages found them by eye.
+
+      A scan that silently drops the best-typeset copy on the site is worse
+      than no scan, because the copy most likely to be read carefully is
+      exactly the copy most likely to carry an entity.
+    */
+    const prose = text.replace(/&[a-zA-Z]+;|&#\d+;/g, ' ');
+    if (prose && !/[;=`]/.test(prose)) out.push(prose);
   }
 
   /*

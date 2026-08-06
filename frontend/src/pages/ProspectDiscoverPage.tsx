@@ -300,14 +300,14 @@ export default function ProspectDiscoverPage() {
 
         {projects.length > 1 && (
           <label className="block">
-            <span className="block text-[12px] text-[#8B97A8] mb-1.5">Project</span>
+            <span className="block text-[12px] text-[#8B97A8] mb-1.5">Product</span>
             <select
               value={projectId}
               onChange={(e) => setParam({ project_id: e.target.value, icp_profile_id: '' })}
               className={selectClass}
               style={{ colorScheme: 'dark' }}
             >
-              <option value="">Choose a project…</option>
+              <option value="">Choose a product…</option>
               {projects.map((project) => (
                 <option key={project.id} value={project.id}>
                   {project.name}
@@ -325,18 +325,18 @@ export default function ProspectDiscoverPage() {
             ) : profiles.length === 0 ? (
               <div className="rounded-xl border border-[#F59E0B]/25 bg-[#F59E0B]/[0.06] p-4">
                 <p className="text-[12px] text-[#F59E0B]">
-                  This project has no buyers worked out yet
+                  We have not worked out who buys this one yet
                 </p>
                 <p className="text-[11px] text-[#8B97A8] mt-1.5 leading-relaxed">
                   We cannot search for companies that look like your buyers until we know who
-                  your buyers are. Open the project and work them out first &mdash; it reads
-                  your uploaded documents and proposes them.
+                  your buyers are. Open the product and do that first &mdash; Saibyl reads
+                  what you have uploaded and tells you who it thinks will buy this.
                 </p>
                 <Link
                   to={`/app/projects/${projectId}`}
                   className="inline-block mt-2.5 text-[12px] text-[#C9A227] hover:underline"
                 >
-                  Open this project
+                  Open this product
                 </Link>
               </div>
             ) : (

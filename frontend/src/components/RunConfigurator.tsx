@@ -101,6 +101,19 @@ function clamp(n: number, low: number, high: number): number {
 }
 
 /**
+ * "1 round" / "5 rounds".
+ *
+ * Every count on this screen comes from the plan's caps or from the server's
+ * estimate, so any of them can legitimately be 1 — and each one was written as
+ * `{n} rounds`. A founder on a plan capped at one message read "you can put up
+ * to 1 different messages in front of the same room". One helper rather than
+ * seven inline ternaries, because seven is how one of them gets missed.
+ */
+function count(n: number, singular: string, plural = `${singular}s`): string {
+  return `${n} ${n === 1 ? singular : plural}`;
+}
+
+/**
  * One number, set two ways.
  *
  * **The displayed number and the submitted number are the same value.** The
@@ -329,6 +342,21 @@ export default function RunConfigurator({
       ? (budget.credits_after / budget.credits_remaining) * 100
       : 100;
 
+  /* How many more standard runs the balance is worth, or null.
+     Null rather than a number whenever the division has no meaning — the
+     warning below used to fall back to an em dash, and a dash inside a sentence
+     about how much you have left is worse than the sentence stopping early.
+     A zero-credit or zero-equivalent estimate would divide to Infinity or NaN
+     and render it as a figure the founder is being asked to plan against. */
+  const creditsPerStandardRun =
+    estimate && estimate.credits > 0 && estimate.standard_run_equivalents > 0
+      ? estimate.credits / estimate.standard_run_equivalents
+      : null;
+  const standardRunsLeft =
+    budget && creditsPerStandardRun !== null
+      ? (budget.credits_after / creditsPerStandardRun).toFixed(1)
+      : null;
+
   return (
     <div className="space-y-6">
       {!readOnly && (
@@ -338,9 +366,9 @@ export default function RunConfigurator({
               <p className="text-[12px] text-saibyl-silver leading-relaxed">
                 {planLabel} tops out at{' '}
                 {[
-                  reduced.agent_count != null && `${caps.max_agents} people`,
-                  reduced.rounds != null && `${caps.max_rounds} rounds`,
-                  reduced.variants != null && `${caps.max_variants} messages`,
+                  reduced.agent_count != null && count(caps.max_agents, 'person', 'people'),
+                  reduced.rounds != null && count(caps.max_rounds, 'round'),
+                  reduced.variants != null && count(caps.max_variants, 'message'),
                 ]
                   .filter(Boolean)
                   .join(', ')}
@@ -391,12 +419,27 @@ export default function RunConfigurator({
             <p className="text-[11px] text-saibyl-muted uppercase tracking-wide mb-1">
               Testing more than one message
             </p>
+            {/* The ceiling can be 1, and the sentence for that case is not the
+                same sentence with a different number in it — "up to 1 different
+                messages" told a founder on the smallest plan they could do
+                something the plan does not let them do. */}
             <p className="text-[12px] text-saibyl-silver leading-relaxed">
-              You can put up to {caps.max_variants} different messages in front of
-              the same room — same people, same order, so the difference is down
-              to the words and not to who happened to be listening. Write them on
-              the run&rsquo;s page once you&rsquo;ve created it; the price updates
-              when you do, because each message is a full run of its own.
+              {caps.max_variants <= 1 ? (
+                <>
+                  {planLabel} puts one message in front of the room per run. To
+                  compare two ways of saying the same thing, you would need to
+                  move up a plan.
+                </>
+              ) : (
+                <>
+                  You can put up to {count(caps.max_variants, 'message')} in front
+                  of the same room — same people, same order, so any difference is
+                  down to the words and not to who happened to be listening. Write
+                  them on the run&rsquo;s page once you&rsquo;ve created it; the
+                  price updates when you do, because each message means the whole
+                  room does it again.
+                </>
+              )}
             </p>
           </div>
 
@@ -421,9 +464,9 @@ export default function RunConfigurator({
               ))}
             </div>
             <p className="text-[11px] text-saibyl-muted/70 mt-1.5">
-              Depth sets how many sections the written report has. Report writing
-              runs on the expensive model, so this is the one setting that changes
-              cost without changing the simulation.
+              This sets how many sections your written report has. Writing the
+              report runs on the expensive model, so it is the one setting that
+              changes the price without changing what happens in the room.
             </p>
           </div>
         </>
@@ -440,9 +483,10 @@ export default function RunConfigurator({
         {estimate && budget && (
           <div className={loading ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
             <p className="text-[12px] text-saibyl-muted mb-3">
-              {estimate.agent_count} agents · {estimate.rounds} rounds ·{' '}
-              {estimate.platforms} platform{estimate.platforms === 1 ? '' : 's'} ·{' '}
-              {estimate.variants} variant{estimate.variants === 1 ? '' : 's'}
+              {count(estimate.agent_count, 'person', 'people')} ·{' '}
+              {count(estimate.rounds, 'round')} ·{' '}
+              {count(estimate.platforms, 'platform')} ·{' '}
+              {count(estimate.variants, 'message')}
             </p>
 
             <dl className="space-y-2 text-[13px]">
@@ -481,8 +525,8 @@ export default function RunConfigurator({
               capacity
             </p>
             <p className="text-[11px] text-saibyl-muted/70 mt-1">
-              A <strong className="text-saibyl-muted">standard run</strong> is 100 agents,
-              5 rounds, 2 platforms, 1 variant. Larger runs use more of your monthly
+              A <strong className="text-saibyl-muted">standard run</strong> is 100 people,
+              5 rounds, 2 platforms, 1 message. Bigger runs use more of your monthly
               credits — you always see the exact cost before starting.
             </p>
           </div>
@@ -509,10 +553,10 @@ export default function RunConfigurator({
               }
               className="mt-3 px-3 py-1.5 rounded-lg text-[12px] font-medium bg-saibyl-gold text-saibyl-void hover:bg-saibyl-gold-hover transition-colors"
             >
-              Reduce to fit my balance ({data.largest_affordable.agent_count} agents,{' '}
-              {data.largest_affordable.rounds} rounds,{' '}
-              {data.largest_affordable.variants} variant
-              {data.largest_affordable.variants === 1 ? '' : 's'})
+              Reduce to fit my balance (
+              {count(data.largest_affordable.agent_count, 'person', 'people')},{' '}
+              {count(data.largest_affordable.rounds, 'round')},{' '}
+              {count(data.largest_affordable.variants, 'message')})
             </button>
           )}
         </div>
@@ -526,14 +570,10 @@ export default function RunConfigurator({
             credits
           </p>
           <p className="text-[12px] text-saibyl-silver mt-1">
-            You&rsquo;ll have {budget.credits_after.toLocaleString()} left this cycle —
-            about{' '}
-            {estimate
-              ? (budget.credits_after / (estimate.credits / estimate.standard_run_equivalents)).toFixed(
-                  1,
-                )
-              : '—'}{' '}
-            standard runs.
+            You&rsquo;ll have {budget.credits_after.toLocaleString()} left this cycle
+            {standardRunsLeft !== null
+              ? ` — about ${standardRunsLeft} standard runs.`
+              : '.'}
           </p>
         </div>
       )}

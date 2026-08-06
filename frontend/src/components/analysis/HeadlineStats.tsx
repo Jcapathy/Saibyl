@@ -68,38 +68,40 @@ export default function HeadlineStats({
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
       <Stat
-        label="Overall sentiment"
+        label="How the room felt"
         value={valence.n > 0 ? formatSigned(valence.mean) : '—'}
         sub={
-          valence.n < 2
-            ? `${valence.n} agent produced a measurable opinion — not resolvable.`
-            : `95% CI ${formatSigned(valence.lower)} to ${formatSigned(valence.upper)}, across ${valence.n} agents.`
+          valence.n === 0
+            ? 'Nobody said anything we could measure.'
+            : valence.n === 1
+              ? 'Only one person said anything we could measure, so this is one voice rather than a reading of the room.'
+              : `Somewhere between ${formatSigned(valence.lower)} and ${formatSigned(valence.upper)}, across ${valence.n} people. +1 is loved it, −1 is hated it.`
         }
         icon={<Users className="w-4 h-4" />}
         accent="#C9A227"
       />
       <Stat
-        label="Trajectory"
+        label="Which way it moved"
         value={
           headline.trajectory === 'flat'
-            ? 'Flat'
+            ? 'Held steady'
             : `${formatSigned(headline.trajectory_delta)}`
         }
-        sub={`${TRAJECTORY_COPY[headline.trajectory]}, over ${quality.rounds} measured rounds.`}
+        sub={`${TRAJECTORY_COPY[headline.trajectory]}, over ${quality.rounds} rounds.`}
         icon={trendIcon}
         accent={trendAccent}
       />
       <Stat
-        label="Split"
-        value={`${headline.stance.oppose_pct.toFixed(0)}% oppose`}
-        sub={`${headline.stance.support_pct.toFixed(0)}% support, ${headline.stance.undecided_pct.toFixed(0)}% undecided. ${headline.polarization_pct.toFixed(0)}% of events sat opposite the run's own mean.`}
+        label="For and against"
+        value={`${headline.stance.oppose_pct.toFixed(0)}% against`}
+        sub={`${headline.stance.support_pct.toFixed(0)}% for, ${headline.stance.undecided_pct.toFixed(0)}% undecided. ${headline.polarization_pct.toFixed(0)}% of what was said sat on the opposite side from the room's average.`}
         icon={<Split className="w-4 h-4" />}
         accent="#2563EB"
       />
       <Stat
         label="New ground"
         value={`${headline.novel_claim_pct.toFixed(0)}%`}
-        sub="Share of events introducing a claim not already in the conversation. The rest is the audience repeating itself."
+        sub="How much of what was said brought up something the conversation had not already covered. The rest is people repeating each other."
         icon={<Sparkles className="w-4 h-4" />}
         accent="#8B5CF6"
       />

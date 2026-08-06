@@ -14,6 +14,7 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 import api, { unwrapList } from '@/lib/api';
 import { ACTIVE_STATUSES, SIMULATION_STATUSES } from '@/lib/constants';
+import { isFinished } from '@/lib/status';
 import type { Simulation } from '@/types';
 
 /* ------------------------------------------------------------------ */
@@ -62,8 +63,32 @@ const PLATFORM_MAP: Record<string, string> = {
 /*  Helpers                                                           */
 /* ------------------------------------------------------------------ */
 
+/**
+ * One spelling per state, so a filter and a pill cannot disagree.
+ *
+ * The database holds both `complete` and `completed` \u2014 see `lib/status.ts` \u2014
+ * and this used to be a hand-written `=== 'completed'` test. Reading through
+ * `isFinished` means there is one place that knows which spellings mean
+ * finished, and this file is not a second one.
+ */
 function normalizeStatus(s: string): string {
-  return s === 'completed' ? 'complete' : s;
+  return isFinished(s) ? 'complete' : s;
+}
+
+/** What a run's state is called on screen. Never the raw column value. */
+const STATE_WORD: Record<string, string> = {
+  draft: 'Not started',
+  preparing: 'Building the room',
+  ready: 'Ready to start',
+  running: 'Running',
+  analyzing: 'Working it out',
+  complete: 'Finished',
+  stopped: 'Stopped',
+  failed: 'Failed',
+};
+
+function stateWord(status: string): string {
+  return STATE_WORD[normalizeStatus(status)] ?? status;
 }
 
 function formatAgentCount(n: number | null | undefined): string {
@@ -225,7 +250,14 @@ export default function SimulationsPage() {
   }
 
   async function handleDelete(ids: string[]) {
-    if (!window.confirm(`Delete ${ids.length} simulation(s)? This cannot be undone.`)) return;
+    if (
+      !window.confirm(
+        ids.length === 1
+          ? 'Delete this run? You cannot undo this.'
+          : `Delete these ${ids.length} runs? You cannot undo this.`,
+      )
+    )
+      return;
     await Promise.all(ids.map((id) => api.delete(`/simulations/${id}`)));
     setSelected(new Set());
     setOpenMenu(null);
@@ -268,15 +300,16 @@ export default function SimulationsPage() {
           <div className="w-16 h-16 rounded-2xl bg-[#C9A227]/10 flex items-center justify-center mb-5">
             <FlaskConical className="w-8 h-8 text-[#C9A227]" />
           </div>
-          <p className="text-[#E8ECF2] font-semibold text-lg mb-1">No simulations yet</p>
-          <p className="text-[#5A6578] text-sm mb-8 max-w-xs">
-            Create your first simulation to see predicted public reactions
+          <p className="text-[#E8ECF2] font-semibold text-lg mb-1">No runs yet</p>
+          <p className="text-[#5A6578] text-sm mb-8 max-w-sm">
+            Start one and you&rsquo;ll see what people say about your product before
+            you spend anything putting it in front of them.
           </p>
           <Link
             to="/app/simulations/new"
             className="inline-flex items-center gap-2 bg-[#C9A227] text-[#0A0F1C] font-semibold px-5 py-2.5 rounded-lg hover:bg-[#D4AF37] transition-colors text-sm"
           >
-            <Plus className="w-4 h-4" /> Create Simulation
+            <Plus className="w-4 h-4" /> Start your first run
           </Link>
         </div>
       </div>
@@ -291,16 +324,16 @@ export default function SimulationsPage() {
       {/* ---- Page Header ---- */}
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="font-extrabold text-[22px] text-[#E8ECF2]">Simulations</h1>
+          <h1 className="font-extrabold text-[22px] text-[#E8ECF2]">Your runs</h1>
           <p className="text-xs text-[#5A6578] mt-0.5 font-mono">
-            {total} total &middot; {runningCount} running &middot; {completeCount} complete
+            {total} in total &middot; {runningCount} going now &middot; {completeCount} finished
           </p>
         </div>
         <Link
           to="/app/simulations/new"
           className="inline-flex items-center gap-2 bg-[#C9A227] text-[#0A0F1C] font-semibold px-4 py-2 rounded-lg hover:bg-[#D4AF37] transition-colors text-sm"
         >
-          <Plus className="w-4 h-4" /> New Simulation
+          <Plus className="w-4 h-4" /> New run
         </Link>
       </div>
 
@@ -311,7 +344,7 @@ export default function SimulationsPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5A6578]" />
           <input
             type="text"
-            placeholder="Search simulations..."
+            placeholder="Search your runs…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="bg-white/[0.03] border border-[#1E293B] rounded-lg pl-9 pr-4 py-2 text-sm text-[#E8ECF2] placeholder:text-[#5A6578] focus:outline-none focus:border-[#8B5CF6]/50 transition-colors w-64"
@@ -334,7 +367,7 @@ export default function SimulationsPage() {
                 }`}
               >
                 {f !== 'all' && statusDot(f)}
-                {f.charAt(0).toUpperCase() + f.slice(1)}
+                {f === 'all' ? 'All' : stateWord(f)}
                 <span className="ml-0.5 text-[10px] opacity-60">{count}</span>
               </button>
             );
@@ -398,10 +431,10 @@ export default function SimulationsPage() {
               {(
                 [
                   ['name', 'Name'],
-                  ['status', 'Status'],
+                  ['status', 'Where it got to'],
                   [null, 'Platforms'],
-                  ['agent_count', 'Agents'],
-                  ['created_at', 'Created'],
+                  ['agent_count', 'People'],
+                  ['created_at', 'Started'],
                   [null, ''],
                 ] as const
               ).map(([field, label], i) => (
@@ -426,7 +459,7 @@ export default function SimulationsPage() {
             {filteredSims.length === 0 ? (
               <tr>
                 <td colSpan={7} className="text-center py-12 text-[#5A6578] text-sm">
-                  No simulations match your filters
+                  Nothing matches what you have filtered to.
                 </td>
               </tr>
             ) : (
@@ -460,25 +493,36 @@ export default function SimulationsPage() {
                       />
                     </td>
 
-                    {/* Name */}
+                    {/* Name.
+
+                        There used to be a second line here reading
+                        `SIM-{first four characters of the id}`. It looked like
+                        a reference number and was not one: four characters off
+                        the front of a UUID identify nothing, collide between
+                        rows, and a founder reported three different runs all
+                        showing the same "SIM-1111". A run is identified by its
+                        name and when it started — both of which are already on
+                        this row and are both real. */}
                     <td className="px-4 py-3">
                       <div className="font-medium text-[#E8ECF2]">{sim.name}</div>
-                      <div className="text-[10px] font-mono text-[#5A6578] mt-0.5">
-                        SIM-{sim.id.slice(0, 4).toUpperCase()}
-                      </div>
+                      {sim.prediction_goal && (
+                        <div className="text-[11px] text-[#5A6578] mt-0.5 line-clamp-1 max-w-md">
+                          {sim.prediction_goal}
+                        </div>
+                      )}
                     </td>
 
                     {/* Status pill */}
                     <td className="px-4 py-3">
                       <span
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap"
                         style={{
                           backgroundColor: `${color}1A`,
                           color,
                         }}
                       >
                         {statusDot(sim.status, ACTIVE_STATUSES.includes(ns))}
-                        {ns.charAt(0).toUpperCase() + ns.slice(1)}
+                        {stateWord(sim.status)}
                       </span>
                     </td>
 
@@ -505,7 +549,7 @@ export default function SimulationsPage() {
                       {formatAgentCount(sim.agent_count)}
                     </td>
 
-                    {/* No sentiment column. A simulation row carries no valence
+                    {/* No "how they felt" column. A run's row carries no such
                         field, and the measured reading is only addressable one
                         id at a time via /simulations/{id}/analysis — a column
                         here would be one request per row, most of them 404. */}
@@ -538,7 +582,7 @@ export default function SimulationsPage() {
                               navigate(`/app/simulations/${sim.id}`);
                             }}
                           >
-                            View
+                            Open it
                           </button>
                           <button
                             className="w-full text-left px-3 py-2 text-[#8B97A8] hover:bg-white/[0.06] transition-colors"
