@@ -1,5 +1,9 @@
 # Handoff — the polish pass, 2026-08-05/06
 
+> **Updated 2026-08-06 after five more commits.** Items 1, 2, 3a, 3b, 3c, 5 and
+> backlog 6–7 are now code-complete. Nothing since `9127328` is deployed, and
+> the answer drafter has not met a live run. Read §0 and §5.
+
 **Saido Labs LLC** · Written mid-task for a cold context window.
 
 Read this, then `HANDOFF.md` §1a, §2, §2a. This file covers **only** the work
@@ -10,31 +14,39 @@ that there was "an insane amount of polish" still needed.
 
 ## 0. State right now
 
-Everything is **committed, pushed and deployed**. `master` and `v2` are the same
-commit. Working tree is clean apart from one **untracked directory that matters**
-— see §3.
+Everything is **committed**. `master` carries five more commits than the version
+described below; **nothing since `9127328` has been deployed or run live.**
 
 ```
-ef11ba7  Give the dashboard the job it was missing, and delete the V1 API
-44b6f18  Say it in words a founder already knows, everywhere
-2c917d2  Delete the scaffolding a solo founder never asked for
-61985e2  Say why $5 is too small, instead of "greater than or equal to 1000"
-f0d3ba5  $20 does not buy a full-size run, so stop saying it does
-03a4052  Let a founder spend $10 before deciding about $99 a month
+2fb8823  Stop telling a founder their products are gone when a request fails
+fe1f463  Say when the objections on screen predate the upload above them
+46a4ff4  Show the product on the page that sells it
+bb79c7d  Make the drafted answers argue for the founder, not against them
+0a7b5e0  Say it in the same words on the page a founder forwards
+9127328  Write the polish pass down before the context goes
 ```
 
-Gate, green at `ef11ba7`:
+Gate, green at `2fb8823`:
 
 ```
-backend   ruff clean · pytest 1032 passed, 4 skipped
-frontend  npm run build clean · eslint clean · vitest 15 passed
-          jargon scan: ZERO hits, with NO debt list
+backend   ruff clean · pytest 1066 passed, 4 skipped
+frontend  npm run build clean · eslint clean · vitest 16 passed
+          jargon scan: ZERO hits, frontend AND backend
 ```
 
-Migrations **017–031 all applied**. 031 is `credit_topups` + `apply_credit_topup`.
+Migrations **017–031 all applied**. No new migration was written; one is
+**owed** — see §5.
 
-**Spend today: ~$2.10** of the $40 the founder funded. Two live runs (one on
-their real product, one on the demo) plus two audience syntheses.
+**Spend today: ~$2.10** unchanged. Nothing in these five commits spent an LLM
+call: everything was verified by reading production with SQL, by rendering the
+frontend with Playwright, and by the two suites.
+
+> ### ⚠ Nothing here has met a live run.
+>
+> The standing gate requires one before a push and it has not happened. Four of
+> the five commits are deterministic and are checked as such. **The answer
+> drafter is not** — it is one main-model call and the change is mostly prompt,
+> so a passing test is evidence about the code and not about the writing.
 
 ---
 
@@ -43,12 +55,15 @@ their real product, one on the demo) plus two audience syntheses.
 | | Item | State |
 |---|---|---|
 | 1 | Delete the scaffolding | **Done** — `2c917d2`, −1,292 lines |
-| 2 | Finish the vocabulary migration | **Done** — `44b6f18`, 110 hits → 0 across 35 files |
+| 2 | Finish the vocabulary migration | **Done** on screens `44b6f18`; **done on the exported report** `0a7b5e0` |
 | 3a | Buyers: stop returning competitors | **Done** — category matcher at the filter |
-| 3b | Answers: the drafted assets are terrible | **NOT STARTED** — §2 |
-| 3c | Step 2 shows stale objections | **NOT STARTED** — §2 |
-| 4 | Re-run the cold read | **NOT STARTED** — do last |
-| 5 | A real landing page | **IN FLIGHT** — screenshots taken, page not built. §3 |
+| 3b | Answers: the drafted assets are terrible | **Code done, unverified live** — `bb79c7d`, §2 |
+| 3c | Step 2 shows stale objections | **Done** — `fe1f463`. Not the cause anyone guessed; §2 |
+| 4 | Re-run the cold read | **NOT STARTED** — do last, and after a deploy |
+| 5 | A real landing page | **Done** — `46a4ff4`, §3 |
+
+Plus, from §5's backlog: items **6** (swallowed exceptions) and **7**
+(`asset_count`) are done in `2fb8823`.
 
 ### Decisions the founder made, already applied
 
@@ -63,116 +78,89 @@ their real product, one on the demo) plus two audience syntheses.
 
 ---
 
-## 2. The engine work — the part that actually matters
+## 2. The engine work — what the five commits actually found
 
-Everything above is chrome. **These two are the product.**
+### 3b — The drafted answers (`bb79c7d`)
 
-### 3b — The drafted answers are unpublishable
+**The handoff's diagnosis was right and the data added two things it could not
+see.** Queried before anything was written:
 
-The founder pasted step 3's output. It is technically responsive and
-commercially suicidal:
+- `projects.name` for that run is **ParryAI**, so
+  `ParryAI Removal & Migration Guide (Draft)` is a removal guide for the
+  founder's own product. Its first line: "This document describes what it takes
+  to remove ParryAI from a running agentic deployment."
+- **Two of the three disclosures were the only asset drafted for their
+  objection.** The entire answer to "your ROI claim is unproven" was a page
+  agreeing with it.
 
-```
-Disclosure: What We Have Not Yet Measured
-Disclosure: We Don't Yet Know Our Own ROI Numbers
-ParryAI Removal & Migration Guide (Draft)      ← answering "creates lock-in"
-```
+The prompt was teaching the confession in as many words — "the honest asset says
+what the team does not yet know and what they will run to find out" was its
+worked example, which is the strongest instruction in any prompt. That is
+replaced, `ASSET_TYPES` is reordered so `disclosure` is no longer the first item
+a model reaches for, and three checks back the prompt up: `_leads_away`
+(anchored on the product's own name as the *object* of the leaving verb),
+`_cap_concessions` (at most one per objection, never the only one, ERROR when
+every asset concedes), and `_unpublishable_title`.
 
-**Diagnosis (mine, unverified in code):** the drafter has over-learned the
-anti-fabrication guardrails. Those rules are right for *measurement* — the
-report must not invent numbers — and wrong for *asset drafting*, where the job
-is to make a case the material supports. It has turned "be honest" into "admit
-weakness", and no founder can publish a migration guide for removing their own
-product as an answer to a lock-in objection.
+> **Still owed: a live draft.** The only thing that shows whether the rewrite
+> moved the writing is running it. Cheapest honest check is `draft_assets` on
+> the existing ParryAI run — one main-model call, no re-simulation.
 
-**What the fix probably needs** (decide after reading the drafter):
-1. An asset must state a **positive claim the uploaded material supports**.
-2. `disclosure` demoted from default to rare fallback, with a cap.
-3. Asset-type selection constrained by whether *publishing it helps the founder*.
-4. A live re-run to verify — **do not trust a passing test here**, the whole
-   session's history says otherwise.
+### 3c — Step 2's stale objections (`fe1f463`)
 
-Start at `backend/app/services/…` inoculation asset drafting; `AssetType` is in
-`frontend/src/lib/founder.ts` and mirrors the server enum.
+**Neither hypothesis was the live defect.** The run whose objections were pasted
+has **no `subject_briefs` row at all** and started **1h42m before**
+`subject_brief.py` first deployed, so its agents saw `prediction_goal` and
+nothing else. Its objections are reactions to the sentence "Trustless agentic
+run-time security that's patent-pending", almost word for word. The engine
+defect was already fixed and the page was picking the only run there was.
 
-### 3c — Step 2 shows objections derived from the description, not the upload
+What was not fixed: `subject_briefs.status` has recorded this in five values
+since 2026-08-05 and **nothing read it**. That recurs on every
+`material_unusable` and `distillation_failed`, not just on old runs. Step 2 now
+carries a `StaleResult` — a separate shape from `MissingInput` on purpose, since
+one warns about the next run and the other describes the answer already on
+screen.
 
-Founder-reported, **not yet reproduced**. Two very different causes:
+Found while wiring it: the page and the rail each chose "the latest run" by
+different keys (`created_at` vs `completed_at or created_at`).
+`StageState.produced_by` is now the single answer.
 
-- the page is picking the wrong run (a run from before they uploaded), or
-- the run genuinely read the one-line description over the documents.
+### The exported report's jargon (`0a7b5e0`) — **done**
 
-**Reproduce before theorising.** Note that `ReactionsStagePage` was already
-fixed once to exclude re-simulations (`2c709ec`), so the selection logic is
-suspect but was not the whole story.
+Five banned words on twenty-four of twenty-seven pages. Fixed at the composer
+where four renderers share a sentence, and at the prompt where a model writes
+one. `tests/test_report_vocabulary.py` renders the whole document and reads what
+a reader reads.
 
-### NEW — the exported report is the least-cleaned surface we have
+It also found a defect nobody was looking for: an **A/A/A run — identical copy
+in every version — shipped `verdict=""`**, so the report printed "No winner."
+followed by nothing and the writer's prompt carried
+`VERDICT FROM THE MEASUREMENT:` with a blank line after it.
 
-Found while verifying the export end to end. **Every screen now speaks plainly;
-the PDF a founder takes to a board meeting does not.** Scanned the real 27-page
-export from the demo run:
+## 3. Item 5 — the landing page (`46a4ff4`) — **done**
 
-```
-adversarial   pages 1, 4, 6, 11, 12, 13, 15, 16
-cohort        pages 1, 3, 4, 5, 6, 7, 9, 11
-archetype     pages 3, 6, 7, 18, 19, 20, 21, 25
-valence       pages 3, 7, 12, 23, 24, 25
-variant       page 20
-```
+The copy was never the problem. The page had **zero product imagery**, which is
+what "reads like an internal tool somebody built over a weekend" describes.
 
-This is **server-side report copy** — `report_document.py`, `report_agent.py`,
-and the composed `adversarial.disclosure`. The frontend jargon test cannot see
-it. One agent deliberately left `adversarial.disclosure` alone because PRD §4
-requires viewer / print / PDF / JSON to render it identically — so **fix it at
-the source, once**, not per surface.
+Now: a hero shot, two `Split` sections (copy beside screen, then flipped, copy
+first on mobile in both directions), a section showing what the Tallyhook run
+returned, and the three verified benchmark citations moved to `lib/benchmarks.ts`
+so the landing page and the billing page quote one declaration.
 
-Arguably higher value than the landing page: it is the artifact that leaves the
-building.
+`frontend/public/demo/` is committed. Retake rather than edit if the app's
+chrome changes — a touched-up screenshot is a claim about a screen that does not
+exist. `demoRun.ts` holds the six objections shown beside `objections.png`; they
+come from the same run and must move together.
 
----
+**Four defects came out of rendering it with Playwright and reading it.** Build,
+eslint and vitest were green the whole time:
 
-## 3. Item 5 — the landing page, in flight
-
-**What is already true:** the deployed page is 6,910px of centred prose on a
-starfield with **zero product imagery**. The copy is good and honest (it was
-rewritten to remove a 1,000× overstatement); it is not a website. The founder's
-words: "reads more like an internal tool that somebody built over a weekend."
-
-**What is done:** a neutral demo product exists and has been run live, so the
-imagery is real product output and not a mockup.
-
-> ### ⚠️ `frontend/public/demo/` is UNTRACKED. Commit it or the work is lost.
->
-> `objections.png`, `audience.png`, `rail.png` — 2× retina, clipped to the
-> content column so the demo account's own balance and email are not on a
-> marketing page.
-
-**The demo product — "Tallyhook"**, a fictional invoice-chaser for freelancers.
-Deliberately not a real company. Its run produced 26 genuinely good objections:
-
-```
-3 people  risk of damaging client relationships
-3 people  won't work on clients who intentionally delay payment
-2 people  too expensive for what it does
-2 people  real problem is the client relationship not the tool
-2 people  automated messages sound robotic or impersonal
-2 people  guilt about bothering clients for money
-```
-
-**What the founder asked the page to carry:** value proposition, CTA,
-capabilities, and *what the founder can use from the runs*. Plus: a story a
-stranger gets in four seconds, section rhythm rather than a wall, and an honest
-substitute for social proof while in beta.
-
-**Still to do:** write the page. `frontend/src/pages/LandingPage.tsx` and
-`frontend/src/components/landing/`. `tiers.ts` already holds every number traced
-to `agent_pricing.py` — **do not write a number that does not come from there.**
-
-**Three verified benchmark citations** already live in
-`frontend/src/components/billing/ValueCase.tsx`, with the two that were rejected
-and why. Reuse them; do not re-research.
-
----
+- `&nearr;` rendered as the six literal characters. **It was already shipping on
+  the billing page** — the landing page inherited it by copy.
+- "on the right" was wrong in two of the three layouts `Split` renders in.
+- The h1 left "out" alone on a fourth line.
+- Both split screenshots were unreadable at half width until cropped.
 
 ## 4. Things that are true now and were not this morning
 
@@ -198,30 +186,44 @@ and why. Reuse them; do not re-research.
 
 ## 5. Open, and roughly in value order
 
-1. **The exported report's jargon** (§2). Server-side, single source, high value.
-2. **3b, the answer drafter** (§2). The product's weakest output.
-3. **The landing page** (§3). Screenshots ready.
-4. **3c, stale objections** (§2). Reproduce first.
-5. **Re-run the cold read.** The first one never reached the build — it landed
+**1–4 and 6–7 from the previous list are done.** What is left:
+
+1. **Deploy, then verify what only a deploy can verify.** Five commits are
+   sitting on `master` unpushed to a running service. In order:
+   - `document_count` on `GET /projects` — free, one `curl`.
+   - Step 2's stale notice on the ParryAI product — free, it should now say the
+     run argued about the description.
+   - **A live `draft_assets` on the ParryAI run.** One main-model call, roughly
+     a dollar. This is the only thing that shows whether 3b's prompt rewrite
+     moved the writing, and this session's own history says a passing test is
+     not evidence of that.
+   - A full run + report export, to read the PDF's new vocabulary end to end.
+
+2. **A migration is owed.** `projects.asset_count` is now written by nobody's
+   reader and read by nothing, but `api/documents.py` still calls
+   `increment_asset_count` / `decrement_asset_count` on every upload and delete.
+   Dropping the column **must** land after this release is serving, or those two
+   RPCs start failing against a column that is gone — §2a's ordering rule, the
+   same shape as migration 019. Drop the column and both RPCs together.
+
+3. **Re-run the cold read.** The first one never reached the build — it landed
    on the old dashboard and gave up. Fresh agent, no design docs, real browser.
-6. **Swallowed exceptions**, reported by an agent and not fixed:
-   - `ProjectsPage.tsx:17` — a failed list renders "No products yet". The
-     founder is told their products are gone.
-   - `ProjectsPage.tsx:34,47` — create and delete fail silently.
-   - `ProjectDetailPage.tsx:114` — a 404 leaves the heading reading "Product"
-     with no explanation, indefinitely.
-7. **`projects.asset_count` is fiction.** Never backfilled; its RPC existed in
-   production only because someone added it by hand; one call site never called
-   `.execute()`. The UI no longer renders it. Fix: one-time
-   `UPDATE projects SET asset_count = (SELECT count(*) FROM documents d WHERE
-   d.project_id = projects.id)`, or return a real count from `GET /projects`.
-8. **Two behaviour bugs for the founder to decide**, both in run setup:
+   Worth much more now that there is a landing page and a rail to walk.
+
+4. **Two behaviour bugs for the founder to decide**, both in run setup:
    - picking a stage silently discards an adversarial share they set by hand;
    - that slider is unreachable until *after* the audience is built, yet the
      stage default is what compiles the initial audience.
-9. **Audit items 19, 39, 40.** 40 is new: `report_agent.py:768` defaults
-   `variant="a"` and its only caller passes nothing, so a matched-swarm report
-   illustrates whole-run statistics with one arena's quotes.
+
+5. **Audit items 19, 39, 40.** 40: `report_agent.py` defaults `variant="a"` and
+   its only caller passes nothing, so a matched-swarm report illustrates
+   whole-run statistics with one arena's quotes.
+
+6. **`REPORT_SYSTEM_PROMPT` still says "McKinsey or Bloomberg Intelligence
+   analyst".** The political-consultancy framing and its Spencer Pratt examples
+   are gone, and the vocabulary is a founder's, but the register above it was
+   left alone as out of scope. Worth a decision: the report's reader is a
+   founder and the people they forward it to.
 
 ### Hard stop, unchanged
 
@@ -246,16 +248,31 @@ Delete any of them whenever; nothing outside them refers to them.
 
 ## 7. The one lesson worth carrying
 
-**Nine defects were found today. The test suite caught none of them.**
+**Nine defects were found in the first pass. The test suite caught none of them.**
+The second pass found eight more, and the suite caught none of those either.
 
-Three came from screenshotting the deployed page, two from reading an API
-response against live data, one from uploading a real file, one from exporting a
-real PDF, and two from readers who had not built the thing.
+Where they came from:
 
-Three separate times a test agreed with the implementation because both were
-written from the same wrong assumption — the seeded `completed` status, the
-`round()` on the runs figure, and the refusal sentences that never crossed the
-API boundary. A green suite is evidence that the code does what its author
-believed. It is not evidence that the belief was right.
+| Method | Found |
+|---|---|
+| Querying production before theorising | ParryAI is the founder's own product; two disclosures were the only asset for their objection; `asset_count` wrong on 12 of 35; **the ParryAI run predates `subject_brief.py` by 1h42m** |
+| Rendering the page and reading it | `&nearr;` printing literally (**and already shipping on the billing page**); "on the right" wrong in two of three layouts; an orphaned word; two unreadable screenshots |
+| Writing the test before the fix | The A/A/A run shipping `verdict=""` |
 
-**Look at the running product. Then look at what it exports.**
+That last one is the pattern worth naming. The vocabulary test was written to
+scan copy, and the first thing it did was fail for a reason that had nothing to
+do with copy: constructing a three-version run where every version performs
+identically produced an empty verdict string, which the report printed as
+**"No winner."** followed by nothing. Nobody was looking for it. A test that
+builds a real input finds things a test that asserts on a fixture cannot,
+because the fixture was written by somebody who already believed the code was
+right.
+
+Twice more this pass, a fix was one edit away from introducing the defect it was
+fixing. `_leads_away` in its first form dropped "Remove the three scripts you
+wrote", the best sentence in the draft. `produced_by` exists because the stale
+notice would otherwise have named one run above another run's objections — a
+two-sources-of-truth bug introduced while fixing a two-sources-of-truth bug.
+
+**Look at the running product. Then look at what it exports. Then query the
+database before you explain either.**
