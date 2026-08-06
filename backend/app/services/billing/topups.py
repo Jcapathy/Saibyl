@@ -119,6 +119,24 @@ class TopupRefusedError(ValueError):
     """The amount is outside what we will take, with the reason in words."""
 
 
+def _runs_display(credits: int, per_run: int) -> float:
+    """How many runs this buys, rounded **down** to one decimal place.
+
+    Down, not to nearest, and this is not fussiness. At the current rate $20
+    buys 3,000 credits against a 3,014-credit run — 0.995 of one. Rounded to
+    nearest that displays as **1.0**, so the page tells a founder $20 buys a
+    full-size run and it does not. They find out when the run they paid for
+    will not start.
+
+    Rounding down can only ever understate what they get, which is the safe
+    direction for a number on a screen that is asking for money.
+    """
+    if per_run <= 0:
+        return 0.0
+    exact = Decimal(credits) / Decimal(per_run)
+    return float(exact.quantize(Decimal("0.1"), rounding=ROUND_FLOOR))
+
+
 def quote_topup(amount_cents: int) -> TopupQuote:
     """Price one top-up, or refuse it with a sentence a founder can act on."""
     if amount_cents < MIN_TOPUP_CENTS:
@@ -140,8 +158,6 @@ def quote_topup(amount_cents: int) -> TopupQuote:
         amount_cents=amount_cents,
         amount_usd=amount_cents / 100,
         credits=credits,
-        # One decimal place. `round(x, 1)` on 0.663 gives 0.7, which is the
-        # truthful reading of "not quite three quarters of a run".
-        standard_runs=round(credits / per_run, 1) if per_run else 0.0,
+        standard_runs=_runs_display(credits, per_run),
         subscription_is_cheaper_by_pct=_subscription_advantage_pct(),
     )

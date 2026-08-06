@@ -146,8 +146,12 @@ def test_ten_dollars_is_reported_as_a_fraction_of_a_run_not_rounded_to_one():
     """
     quote = quote_topup(1_000)
     assert 0 < quote.standard_runs < 1
-    expected = round(quote.credits / standard_run_credits(), 1)
-    assert quote.standard_runs == expected
+    # Floored to one decimal, not rounded to nearest. This assertion originally
+    # read `round(..., 1)` and passed — it encoded the very rounding that let
+    # $20 display as "1.0 runs" against a run it could not afford.
+    exact = quote.credits / standard_run_credits()
+    assert quote.standard_runs <= exact
+    assert exact - quote.standard_runs < 0.1
 
 
 def test_the_quoted_dollar_amount_matches_the_cents_charged():
@@ -162,3 +166,25 @@ def test_a_larger_payment_always_buys_more_credits():
     credits = [credits_for_topup(a) for a in amounts]
     assert credits == sorted(credits)
     assert len(set(credits)) > 1
+
+
+def test_a_near_miss_is_never_rounded_up_into_a_whole_run():
+    """$20 buys 3,000 credits against a 3,014-credit run. That is not 1 run.
+
+    Rounded to nearest it displays as 1.0, and the page then tells a founder
+    that $20 buys a full-size run. It does not, and they find out when the run
+    will not start. Caught by reading the deployed endpoint's own output, not
+    by this file - the original test only covered the $10 case.
+    """
+    per_run = standard_run_credits()
+    quote = quote_topup(2_000)
+    assert quote.credits < per_run
+    assert quote.standard_runs < 1.0
+
+
+def test_the_runs_figure_never_overstates_what_was_bought():
+    """Rounding down can only understate. That is the safe direction here."""
+    per_run = standard_run_credits()
+    for cents in range(MIN_TOPUP_CENTS, MAX_TOPUP_CENTS, 1_013):
+        quote = quote_topup(cents)
+        assert quote.standard_runs <= quote.credits / per_run
