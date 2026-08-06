@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from app.core.auth import get_current_org
@@ -79,6 +79,56 @@ async def generate_report(body: GenerateReportBody, auth: dict = Depends(get_cur
         "generate_report",
     ))
     return {"status": "started"}
+
+
+@router.get("")
+async def list_reports(
+    limit: int = Query(default=50, ge=1, le=200),
+    auth: dict = Depends(get_current_org),
+):
+    """Every report this organisation has, newest first.
+
+    Added for the dashboard. Reports could only be reached one at a time,
+    through the run that produced them — so a founder with a quarter of work
+    behind them had no way to see what they had, and the export endpoints that
+    turn a report into a PDF or a deck had **no caller anywhere in the
+    frontend**. The rendering was repaired on 2026-08-05 and remained
+    unreachable.
+
+    The run's name and its product come back with each row, because "report
+    a3f8" is not a thing anybody can choose between.
+    """
+    admin = get_supabase_admin()
+    result = (
+        admin.table("reports")
+        .select(
+            "id, status, created_at, simulation_id, "
+            "simulations!inner(name, organization_id, completed_at, "
+            "projects(name))"
+        )
+        .eq("simulations.organization_id", auth["org_id"])
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+
+    items = []
+    for row in result.data or []:
+        sim = row.get("simulations") or {}
+        project = sim.get("projects") or {}
+        items.append({
+            "id": row["id"],
+            "status": row.get("status"),
+            "created_at": row.get("created_at"),
+            "simulation_id": row.get("simulation_id"),
+            # Absent rather than a placeholder. A row whose run was deleted has
+            # no name, and "Untitled" would read as a name somebody chose.
+            "run_name": sim.get("name"),
+            "product_name": project.get("name"),
+        })
+
+    log.info("list_reports", org_id=auth["org_id"], count=len(items))
+    return {"items": items, "total": len(items)}
 
 
 @router.get("/by-simulation/{sim_id}")

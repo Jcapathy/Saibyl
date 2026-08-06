@@ -9,9 +9,6 @@ figure at all.
 """
 from __future__ import annotations
 
-import pytest
-from fastapi import HTTPException
-
 from app.services.intelligence.analysis_data import MeasuredEvent, RunData
 
 
@@ -178,91 +175,20 @@ class _FakeQuery:
         return type("Result", (), {"data": self._data})()
 
 
-def _patch_score_deps(monkeypatch, run: RunData, status: str = "complete"):
-    sim_row = [{
-        "id": "sim-1", "name": "Launch", "prediction_goal": "will it land",
-        "status": status,
-    }]
-    monkeypatch.setattr(
-        "app.api.score.get_supabase_admin",
-        lambda: type("Admin", (), {"table": lambda _self, _n: _FakeQuery(sim_row)})(),
-    )
-    monkeypatch.setattr("app.api.score.load_run_data", lambda _sim_id: run)
-
-    async def _summary(**_kwargs):
-        return "A summary."
-
-    monkeypatch.setattr("app.api.score.llm_complete", _summary)
-
-
-@pytest.mark.asyncio
-async def test_unmeasured_run_produces_no_saibyl_score(monkeypatch):
-    """The headline number must not exist when nothing behind it was measured.
-
-    A defaulted mean of 0.0 scores 50/100 and publishes "mixed outlook" as a
-    verdict — the single most visible fabricated number in the product.
-    """
-    from app.api.score import _compute_score
-
-    _patch_score_deps(monkeypatch, _run([
-        _event("a", 1, None, None, "react"),
-        _event("b", 1, 0.9, "off_topic"),
-    ]))
-
-    with pytest.raises(HTTPException) as exc:
-        await _compute_score("sim-1", "org-1")
-
-    assert exc.value.status_code == 422
-    assert "no measured sentiment" in str(exc.value.detail).lower()
-
-
-@pytest.mark.asyncio
-async def test_score_is_derived_from_measured_valence(monkeypatch):
-    from app.api.score import _compute_score
-
-    _patch_score_deps(monkeypatch, _run([
-        _event("a", 1, 0.5), _event("b", 1, 0.5), _event("c", 1, 0.5),
-    ]))
-
-    result = await _compute_score("sim-1", "org-1")
-    # (0.5 + 1) / 2 * 100, with no controversy boost: the agents agree.
-    assert result.score == 75
-    assert result.category == "positive"
-
-
-@pytest.mark.asyncio
-async def test_one_prolific_agent_is_not_a_divided_room(monkeypatch):
-    """Spread is measured across agents, so verbosity cannot earn the boost."""
-    from app.api.score import _compute_score
-
-    _patch_score_deps(monkeypatch, _run([
-        _event("a", 1, 1.0), _event("a", 2, -1.0),
-        _event("b", 1, 0.0),
-    ]))
-
-    result = await _compute_score("sim-1", "org-1")
-    # Agent means are 0.0 and 0.0 — no spread, so no +10 controversy boost.
-    assert result.score == 50
-
-
-# ── Comparison ───────────────────────────────────────────
-
-def test_comparison_states_an_unmeasured_run_as_unmeasured():
-    from app.api.comparison import _sentiment_line
-
-    line = _sentiment_line({
-        "avg_sentiment": None, "sentiment_ci": None, "sentiment_agents": 0,
-    })
-    assert "not measured" in line
-    assert "0.0" not in line
-
-
-def test_comparison_quotes_the_interval_with_the_mean():
-    from app.api.comparison import _sentiment_line
-
-    line = _sentiment_line({
-        "avg_sentiment": -0.42, "sentiment_ci": [-0.55, -0.29],
-        "sentiment_agents": 37,
-    })
-    assert "-0.42" in line
-    assert "37 agents" in line
+# ---------------------------------------------------------------------------
+# Removed with `/api/score`, 2026-08-05
+# ---------------------------------------------------------------------------
+#
+# Three tests here guarded `_compute_score`, the "Saibyl Score" headline: that
+# an unmeasured run must 422 rather than default its mean to 0.0, which scores
+# 50/100 and publishes "mixed outlook" as a verdict.
+#
+# They went with the endpoint, which the founder identified as V1 residue. The
+# scoring logic had exactly one caller and no UI, so nothing computes that
+# number any more and there is nothing left for those tests to hold.
+#
+# **The defect class they guarded is not gone**, and the rest of this file is
+# what still holds it: `compute_polarization` and the report readers below have
+# the same shape and the same temptation to turn an absent measurement into a
+# zero. If a headline score is ever reintroduced, reintroduce those three tests
+# with it - they are in the history at the commit that deleted /api/score.

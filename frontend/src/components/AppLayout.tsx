@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
+  FileText,
   LayoutDashboard,
   FolderOpen,
   Building2,
@@ -47,6 +48,10 @@ interface NavItem {
  */
 const coreNav: NavItem[] = [
   { path: '/app/home', label: 'Home', Icon: LayoutDashboard },
+  /* Was unlinked, and was an account summary duplicating Home. It is now the
+     export surface - every report, and three ways to take each one out - so it
+     has a reason to exist and therefore a link. Named for what it holds. */
+  { path: '/app/dashboard', label: 'Your reports', Icon: FileText },
   { path: '/app/settings', label: 'Settings', Icon: Settings },
 ];
 

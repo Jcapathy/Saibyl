@@ -10,7 +10,6 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.api import (
     accuracy,
     analysis,
-    api_keys,
     auth,
     billing,
     comparison,
@@ -27,7 +26,6 @@ from app.api import (
     products,
     projects,
     reports,
-    score,
     simulations,
     uploads,
     variants,
@@ -107,7 +105,7 @@ def create_app() -> FastAPI:
         allow_origins=cors_origins,
         allow_credentials=allow_credentials,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-API-Key"],
+        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
     )
 
     # Security response headers
@@ -153,7 +151,6 @@ def create_app() -> FastAPI:
     app.include_router(variants.router, prefix="/api/variants")
     app.include_router(platforms.router, prefix="/api/platforms")
     app.include_router(billing.router, prefix="/api/billing")
-    app.include_router(api_keys.router, prefix="/api/api-keys")
     # Mounted at /api because its paths are nested under /simulations/{id}/…
     # but it is a separate module from the simulation lifecycle router.
     # Registered after simulations.router so no path can shadow one of its
@@ -162,7 +159,6 @@ def create_app() -> FastAPI:
     app.include_router(exports.router, prefix="/api")
     app.include_router(uploads.router, prefix="/api/uploads")
     app.include_router(accuracy.router, prefix="/api/accuracy")
-    app.include_router(score.router, prefix="/api/score")
     app.include_router(comparison.router, prefix="/api/compare")
 
     # WebSocket + SSE streaming

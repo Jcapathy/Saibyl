@@ -255,15 +255,6 @@ describe('4. Inheritance is declared', () => {
 const NOT_CLICKABLE: Record<string, string> = {
   '/app/simulations/:p/run': 'entered by the configurator after a run starts',
   '/app/simulations/:p/report/print': 'opened by the print flow, not by a link',
-  // Superseded by `/app/home`, which is where signup and login now land. The
-  // route is kept so an existing bookmark resolves rather than bouncing to the
-  // landing page, and it is deliberately unlinked — a second home in the
-  // sidebar is how a founder ends up on the one that is not the product.
-  //
-  // This entry exists because the test caught it. Pointing login at the rail
-  // orphaned the dashboard in the same commit, and the reachability walk said
-  // so on the next run.
-  '/app/dashboard': 'superseded by /app/home; kept only so a bookmark resolves',
 };
 
 describe('5. Reachability', () => {

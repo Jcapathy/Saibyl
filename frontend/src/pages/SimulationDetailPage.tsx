@@ -189,14 +189,31 @@ export default function SimulationDetailPage() {
    * The request is unchanged. What changed is that the server's own sentence is
    * now rendered instead of dropped.
    */
+  /* A number between -1 and 1, actually typed. `parseFloat('')` is NaN and
+     `Number('')` is 0 - and 0 is a legitimate score meaning "nobody cared",
+     so an empty field must not become one. */
+  const parsedSentiment = actualSentiment.trim() === ''
+    ? null
+    : Number(actualSentiment);
+  const hasSentiment =
+    parsedSentiment !== null &&
+    Number.isFinite(parsedSentiment) &&
+    parsedSentiment >= -1 &&
+    parsedSentiment <= 1;
+
   const handleScoreAccuracy = async () => {
     if (!id) return;
+    // The control is not rendered without a number, so this is unreachable
+    // from the UI. It is here because the request 400s without one, and a
+    // second caller added later should be refused here rather than by the
+    // server returning a sentence written for an API client.
+    if (!hasSentiment) return;
     setScoringLoading(true);
     setScoringError('');
     try {
       const { data } = await api.post('/accuracy/score', {
         simulation_id: id,
-        actual_sentiment: actualSentiment ? parseFloat(actualSentiment) : null,
+        actual_sentiment: parsedSentiment,
         notes: actualNotes || null,
       });
       setAccuracyResult(data);
@@ -765,15 +782,34 @@ export default function SimulationDetailPage() {
                 </div>
               </div>
 
-              {/* Deliberately not gold. There is one gold button on this page
-                  and it is the one that opens the write-up. */}
+              {/*
+                It does not fire without the number.
+
+                It used to. The endpoint 400s without `actual_sentiment`, the
+                page sent `null` whenever the field was blank, and the failure
+                was swallowed - so the founder pressed a button, nothing
+                happened, and nothing said why. Twenty-two seconds of staring
+                at an unchanged panel was the reported experience.
+
+                Not disabled, either: a grey rectangle is the same silence with
+                a different colour. When there is no number the control is
+                replaced by the sentence explaining what it needs, which is the
+                same rule the rail runs on.
+              */}
+              {!hasSentiment ? (
+                <p className="text-[12.5px] text-saibyl-muted leading-relaxed">
+                  Put in how it actually went, above, and this can compare the
+                  two. Without that number there is nothing to score the run
+                  against.
+                </p>
+              ) : (
               <button
                 onClick={handleScoreAccuracy}
-                disabled={scoringLoading}
-                className="px-5 py-2 rounded-xl border border-saibyl-gold/40 text-saibyl-gold text-[13px] font-medium hover:bg-saibyl-gold/10 disabled:opacity-50 transition-colors"
+                className="px-5 py-2 rounded-xl border border-saibyl-gold/40 text-saibyl-gold text-[13px] font-medium hover:bg-saibyl-gold/10 transition-colors"
               >
                 {scoringLoading ? 'Working it out…' : 'Score this run against what happened'}
               </button>
+              )}
 
               {/* The server's own sentence. This used to be discarded, which is
                   why pressing the button appeared to do nothing at all. */}
