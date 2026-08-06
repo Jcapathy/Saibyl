@@ -13,6 +13,8 @@ import {
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import type { ApiKey, BillingStatus, CreatedApiKey } from '@/types';
+import CreditTopUp from '@/components/billing/CreditTopUp';
+import ValueCase from '@/components/billing/ValueCase';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -296,6 +298,10 @@ function UsageMeter({
 
 function BillingTab() {
   const [billing, setBilling] = useState<BillingStatus | null>(null);
+  // The balance the top-up panel adds to. Absent renders as no balance rather
+  // than as zero, which would read as "you have none".
+  const [credits, setCredits] = useState<number | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [upgrading, setUpgrading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
@@ -310,6 +316,10 @@ function BillingTab() {
       .catch(() => {})
       .finally(() => setLoading(false));
 
+    api
+      .get('/billing/credits')
+      .then((res) => setCredits(res.data?.balance ?? null))
+      .catch(() => setCredits(null));
     api
       .get('/billing/payment-method')
       .then((res) => setPaymentMethod(res.data))
@@ -399,6 +409,12 @@ function BillingTab() {
           </div>
         </div>
       </div>
+
+      {/* ---- Buy credits without committing to a plan ---- */}
+      <CreditTopUp balance={credits} />
+
+      {/* ---- Why the price is the price ---- */}
+      <ValueCase />
 
       {/* ---- Usage Meters ---- */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

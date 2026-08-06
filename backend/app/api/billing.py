@@ -13,6 +13,7 @@ from app.services.billing.agent_pricing import (
     estimate_simulation_cost,
     get_credit_balance,
     largest_affordable_run,
+    standard_run_credits,
     tier_caps,
 )
 from app.services.billing.run_quote import QuoteError, issue_quote
@@ -20,8 +21,17 @@ from app.services.billing.stripe_service import (
     create_checkout_session,
     create_customer_portal_session,
     create_flash_report_checkout,
+    create_topup_checkout,
     get_subscription_status,
     handle_webhook,
+)
+from app.services.billing.topups import (
+    MAX_TOPUP_CENTS,
+    MIN_TOPUP_CENTS,
+    SUGGESTED_TOPUP_USD,
+    TopupRefusedError,
+    credits_for_topup,
+    quote_topup,
 )
 
 router = APIRouter(tags=["billing"])
@@ -33,6 +43,18 @@ class CheckoutRequest(BaseModel):
 
 class FlashReportCheckoutRequest(BaseModel):
     report_type: str  # quick_read | deep_dive | war_room_brief
+
+
+class TopupRequest(BaseModel):
+    """How much a founder wants to put on, in cents.
+
+    Cents rather than dollars because money in a float drifts, and this number
+    is handed to Stripe and reconciled against it. The bounds here are a cheap
+    first refusal; `quote_topup` is the one that decides, and it is the one that
+    explains why in a sentence.
+    """
+
+    amount_cents: int = Field(ge=MIN_TOPUP_CENTS, le=MAX_TOPUP_CENTS)
 
 
 class RunShape(BaseModel):
@@ -61,6 +83,72 @@ async def flash_report_checkout(body: FlashReportCheckoutRequest, auth: dict = D
         url = await create_flash_report_checkout(auth["org_id"], body.report_type)
     except ValueError as e:
         raise HTTPException(400, str(e))
+    return {"checkout_url": url}
+
+
+@router.get("/topup/options")
+async def topup_options(auth: dict = Depends(get_current_org)):
+    """What a top-up costs and what each suggested amount buys.
+
+    Read before anything is charged, so the founder sees the credits, the runs
+    and the fact that subscribing is better value **before** they reach Stripe.
+    Priced by the same function that prices the real checkout, so the screen and
+    the charge cannot disagree.
+    """
+    quotes = []
+    for usd in SUGGESTED_TOPUP_USD:
+        try:
+            quotes.append(quote_topup(usd * 100).model_dump())
+        except TopupRefusedError:
+            # A suggested amount outside the accepted range is a configuration
+            # mistake, not a user error. Skipped rather than 500, and loud in
+            # the response by its absence.
+            continue
+    # What a full-size run costs **the founder**, not what it costs us. The
+    # serving cost is internal and deliberately stays off customer-facing
+    # surfaces; the number that belongs on a page asking for money is the price
+    # they would actually pay, at the rate this very panel charges.
+    run_credits = standard_run_credits()
+    per_dollar = credits_for_topup(100)
+    return {
+        "min_cents": MIN_TOPUP_CENTS,
+        "max_cents": MAX_TOPUP_CENTS,
+        "suggested": quotes,
+        "standard_run": {
+            "credits": run_credits,
+            "definition": "100 buyers, 5 rounds, 2 places",
+            # None rather than a divide-by-zero or a zero that reads as free.
+            "usd_at_topup_rate": (
+                round(run_credits / per_dollar, 2) if per_dollar else None
+            ),
+        },
+    }
+
+
+@router.post("/topup/quote")
+async def topup_quote(body: TopupRequest, auth: dict = Depends(get_current_org)):
+    """Price an arbitrary amount, for the field beside the suggested buttons."""
+    try:
+        return quote_topup(body.amount_cents).model_dump()
+    except TopupRefusedError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/topup")
+async def topup(body: TopupRequest, auth: dict = Depends(get_current_org)):
+    """Open Checkout for a one-off credit top-up of any amount.
+
+    Not restricted to owners and admins, unlike `/checkout`. A subscription
+    changes what the organisation is committed to every month; a top-up adds
+    credits once, and a member who has run out mid-task should not have to find
+    an admin to spend $10.
+    """
+    try:
+        url = await create_topup_checkout(
+            auth["org_id"], body.amount_cents, created_by=auth["user"]["id"]
+        )
+    except TopupRefusedError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"checkout_url": url}
 
 

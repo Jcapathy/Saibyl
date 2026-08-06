@@ -1,0 +1,147 @@
+# PUBLIC INTERFACE
+# ─────────────────────────────────────────────────────────
+# TOPUP_MARGIN_PCT     — the margin a one-off top-up is priced at
+# MIN_TOPUP_CENTS      — the smallest top-up we will take
+# MAX_TOPUP_CENTS      — the largest, before it should be a subscription
+# SUGGESTED_TOPUP_USD  — the amounts shown as buttons
+# TopupQuote           — what a given amount buys, and how it compares
+# TopupRefusedError    — the amount is outside what we will take
+# quote_topup(cents)   — price one top-up
+# ─────────────────────────────────────────────────────────
+"""One-off credit top-ups, priced above the subscription rate.
+
+**Why a top-up exists.** A founder deciding whether this is worth $99 a month
+should be able to spend $10 and find out. The alternative — a free tier that
+runs out and a monthly commitment as the only next step — asks for the big
+decision at the exact moment they have the least evidence.
+
+**Why it costs more per credit than a subscription.** Pay-as-you-go is priced
+at a higher margin so that subscribing is visibly and arithmetically the better
+deal, and the page says so in those words rather than hoping nobody divides.
+Concretely: a subscription buys credits at 80% margin, a top-up at 85%, so a
+subscribed credit is **33% cheaper**. That number is derived here rather than
+written down anywhere, so it cannot drift from the rates it describes.
+
+**No Stripe Price ID is involved.** A top-up is an ad-hoc `unit_amount` on a
+`mode="payment"` Checkout session, which is why this could ship while the tier
+migration is still blocked on Stripe Products.
+
+The rate lives in this module and nowhere else. Two places that both convert
+dollars to credits is the "two sources of truth" class, and the symptom is a
+founder charged at one rate and credited at another.
+"""
+from __future__ import annotations
+
+from decimal import ROUND_FLOOR, Decimal
+
+from pydantic import BaseModel
+
+from app.services.billing.agent_pricing import (
+    CREDITS_PER_USD,
+    TARGET_MARGIN_PCT,
+    standard_run_credits,
+)
+
+# A top-up is priced at a higher margin than a subscription, deliberately.
+# Raising this makes top-ups worse value and pushes harder toward subscribing;
+# lowering it toward TARGET_MARGIN_PCT makes them equivalent. It must never go
+# below TARGET_MARGIN_PCT — that would make the pay-as-you-go option cheaper
+# than the commitment, which is backwards, and the test suite asserts it.
+TOPUP_MARGIN_PCT = Decimal("85")
+
+# $10 is the floor because it is the smallest amount that buys a run a founder
+# would recognise as a result. Below it, Stripe's own per-transaction fee is a
+# double-digit percentage of the payment, and the founder gets a fraction of a
+# run — an experience that argues against the product.
+MIN_TOPUP_CENTS = 1_000
+
+# $500 is the ceiling. Past it a subscription is cheaper on the same credits and
+# refusing is the honest answer; the message says so and points at the plans.
+MAX_TOPUP_CENTS = 50_000
+
+# What the buttons offer. Any amount in range is accepted — these are shortcuts,
+# not a price list, and the field beside them takes anything.
+SUGGESTED_TOPUP_USD: tuple[int, ...] = (10, 20, 50, 100)
+
+
+class TopupQuote(BaseModel):
+    """What an amount buys, said in the units a founder actually thinks in."""
+
+    amount_cents: int
+    amount_usd: float
+    credits: int
+
+    # Runs of the reference shape. A float because 0.7 of a run is the honest
+    # answer at $10 and rounding it to "0 runs" or "1 run" would both be lies.
+    standard_runs: float
+
+    # How much better the same money is on a subscription, as a percentage.
+    # Stated so the founder can check the claim that subscribing is cheaper
+    # rather than being asked to believe it.
+    subscription_is_cheaper_by_pct: int
+
+
+def credits_for_topup(amount_cents: int) -> int:
+    """Credits bought by a payment, rounding **down**.
+
+    Down, not up — the opposite of `credits_for`, and for the same reason. That
+    function converts our cost into credits we must charge, so rounding up
+    protects the margin floor. This one converts a customer's payment into
+    credits we owe, so rounding up would give away a fraction of a credit on
+    every top-up. Both round in the direction that cannot serve a run at a loss.
+    """
+    if amount_cents <= 0:
+        return 0
+    dollars = Decimal(amount_cents) / Decimal(100)
+    cogs_share = (Decimal("100") - TOPUP_MARGIN_PCT) / Decimal("100")
+    credits = dollars * Decimal(CREDITS_PER_USD) * cogs_share
+    return int(credits.to_integral_value(rounding=ROUND_FLOOR))
+
+
+def _subscription_advantage_pct() -> int:
+    """How much further the same dollar goes on a subscription, in percent.
+
+    Derived from the two margins so it cannot disagree with them. At 80% and
+    85% a subscribed dollar buys 0.20/0.15 = 1.333… times as many credits, so
+    the answer is 33%.
+    """
+    sub_share = Decimal("100") - TARGET_MARGIN_PCT
+    topup_share = Decimal("100") - TOPUP_MARGIN_PCT
+    if topup_share <= 0:
+        # Unreachable while TOPUP_MARGIN_PCT < 100, and a division by zero if it
+        # ever is not. Loud rather than silently zero.
+        raise ValueError("TOPUP_MARGIN_PCT must be below 100")
+    ratio = (sub_share / topup_share) - Decimal(1)
+    return int((ratio * Decimal(100)).to_integral_value())
+
+
+class TopupRefusedError(ValueError):
+    """The amount is outside what we will take, with the reason in words."""
+
+
+def quote_topup(amount_cents: int) -> TopupQuote:
+    """Price one top-up, or refuse it with a sentence a founder can act on."""
+    if amount_cents < MIN_TOPUP_CENTS:
+        raise TopupRefusedError(
+            f"The smallest top-up is ${MIN_TOPUP_CENTS // 100}. Below that, the "
+            f"card fee takes a large share of it and you would not get enough "
+            f"credits to finish a run."
+        )
+    if amount_cents > MAX_TOPUP_CENTS:
+        raise TopupRefusedError(
+            f"The largest top-up is ${MAX_TOPUP_CENTS // 100:,}. Above that a "
+            f"monthly plan gives you more credits for the same money — have a "
+            f"look at those instead."
+        )
+
+    credits = credits_for_topup(amount_cents)
+    per_run = standard_run_credits()
+    return TopupQuote(
+        amount_cents=amount_cents,
+        amount_usd=amount_cents / 100,
+        credits=credits,
+        # One decimal place. `round(x, 1)` on 0.663 gives 0.7, which is the
+        # truthful reading of "not quite three quarters of a run".
+        standard_runs=round(credits / per_run, 1) if per_run else 0.0,
+        subscription_is_cheaper_by_pct=_subscription_advantage_pct(),
+    )

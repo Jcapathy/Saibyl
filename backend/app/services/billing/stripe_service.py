@@ -110,6 +110,95 @@ async def create_flash_report_checkout(org_id: UUID, report_type: str) -> str:
     return session.url
 
 
+async def create_topup_checkout(
+    org_id: UUID, amount_cents: int, created_by: str | None = None
+) -> str:
+    """Check out a one-off credit top-up of an arbitrary amount.
+
+    **No Price ID.** `price_data` carries the amount inline, which is the whole
+    reason this could ship while the tier migration is still waiting on Stripe
+    Products — a variable amount cannot be a fixed Price anyway.
+
+    The `credit_topups` row is written *before* the session is handed back, so
+    the webhook has something to claim when payment lands. Writing it afterwards
+    would leave a window in which a founder pays and the callback finds no row
+    to credit, which is the worst outcome this whole path has.
+
+    `credits` is stored on that row rather than recomputed on credit: the number
+    quoted on screen is what they are owed, even if the rate changes between
+    opening Checkout and paying.
+    """
+    from app.services.billing.topups import quote_topup
+
+    quote = quote_topup(amount_cents)
+
+    admin = get_supabase_admin()
+    org = admin.table("organizations").select("*").eq(
+        "id", str(org_id)
+    ).single().execute().data
+
+    customer_id = org.get("stripe_customer_id")
+    if not customer_id:
+        customer = stripe.Customer.create(
+            metadata={"org_id": str(org_id), "org_name": org["name"]},
+        )
+        customer_id = customer.id
+        admin.table("organizations").update({
+            "stripe_customer_id": customer_id,
+        }).eq("id", str(org_id)).execute()
+
+    session = stripe.checkout.Session.create(
+        customer=customer_id,
+        mode="payment",
+        line_items=[{
+            "quantity": 1,
+            "price_data": {
+                "currency": "usd",
+                "unit_amount": quote.amount_cents,
+                "product_data": {
+                    "name": f"{quote.credits:,} Saibyl credits",
+                    "description": (
+                        "Credits do not expire and are used as you run. "
+                        "One-off - this does not start a subscription."
+                    ),
+                },
+            },
+        }],
+        success_url=(
+            f"{settings.frontend_url}/app/settings/billing"
+            f"?topup=success&credits={quote.credits}"
+        ),
+        cancel_url=f"{settings.frontend_url}/app/settings/billing?topup=canceled",
+        metadata={
+            "org_id": str(org_id),
+            # The discriminator the webhook branches on. Without it a top-up
+            # falls through to the subscription branch, which would rewrite the
+            # org's plan and null its subscription id - the exact defect the
+            # Flash Report branch was added to fix.
+            "kind": "credit_topup",
+            "credits": str(quote.credits),
+        },
+    )
+
+    admin.table("credit_topups").insert({
+        "organization_id": str(org_id),
+        "stripe_session_id": session.id,
+        "amount_cents": quote.amount_cents,
+        "credits": quote.credits,
+        "status": "pending",
+        "created_by": created_by,
+    }).execute()
+
+    logger.info(
+        "topup_checkout_opened",
+        org_id=str(org_id),
+        amount_cents=quote.amount_cents,
+        credits=quote.credits,
+        session=session.id,
+    )
+    return session.url
+
+
 async def create_customer_portal_session(org_id: UUID) -> str:
     """Create a Stripe Customer Portal session."""
     admin = get_supabase_admin()
@@ -171,6 +260,55 @@ async def handle_webhook(payload: bytes, signature: str) -> None:
                 **limits,
             }).eq("id", org_id).execute()
             logger.info("subscription_activated", org_id=org_id, plan=plan)
+        elif metadata.get("kind") == "credit_topup":
+            # Credited by the database, not here. `apply_credit_topup` claims
+            # the row on `credited_at IS NULL` and moves the balance in one
+            # transaction, so a Stripe retry - which is routine, not an edge
+            # case - credits nothing the second time.
+            #
+            # Deliberately not `grant_credits`: that RPC sets
+            # `credits_granted = amount` and restarts the billing cycle, so a
+            # $10 top-up would take a founder org from 19,800 granted to 1,500
+            # and reset their month. Migration 031 has the full reasoning.
+            result = admin.rpc("apply_credit_topup", {
+                "session_id": data.get("id"),
+                "payment_intent": data.get("payment_intent"),
+            }).execute()
+            rows = result.data or []
+            if isinstance(rows, dict):
+                rows = [rows]
+            credited = int((rows[0] or {}).get("credited") or 0) if rows else 0
+            if credited:
+                logger.info(
+                    "topup_credited",
+                    org_id=org_id,
+                    session=data.get("id"),
+                    credits=credited,
+                    balance=(rows[0] or {}).get("balance"),
+                )
+            else:
+                # Either a retry of something already applied, or a session we
+                # have no row for. The second is money we took and cannot
+                # attribute, so it is an error rather than a shrug - but it is
+                # still a 200, because asking Stripe to retry will not conjure
+                # the row.
+                existing = admin.table("credit_topups").select("id").eq(
+                    "stripe_session_id", data.get("id")
+                ).execute().data
+                if existing:
+                    logger.info(
+                        "topup_already_credited",
+                        org_id=org_id,
+                        session=data.get("id"),
+                    )
+                else:
+                    logger.error(
+                        "topup_paid_with_no_row",
+                        org_id=org_id,
+                        session=data.get("id"),
+                        detail="a credit top-up was paid for and no "
+                               "credit_topups row exists to credit it",
+                    )
         elif metadata.get("report_type"):
             # A one-off Flash Report. **This used to fall through the
             # subscription branch**, because `plan` defaulted to "starter" when
