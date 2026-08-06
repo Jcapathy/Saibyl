@@ -49,12 +49,21 @@ class TopupRequest(BaseModel):
     """How much a founder wants to put on, in cents.
 
     Cents rather than dollars because money in a float drifts, and this number
-    is handed to Stripe and reconciled against it. The bounds here are a cheap
-    first refusal; `quote_topup` is the one that decides, and it is the one that
-    explains why in a sentence.
+    is handed to Stripe and reconciled against it.
+
+    **The bounds are deliberately not `ge`/`le` here.** Pydantic validates
+    before the handler runs, so declaring the range on the field meant a founder
+    who typed $5 got back `Input should be greater than or equal to 1000` — a
+    validation code, in cents, about a field name they never see. The sentences
+    in `quote_topup` were written precisely to avoid that and were unreachable
+    from the API; the tests passed because they call the function directly.
+
+    The loose bound that remains is an absurdity guard, not a price rule: it
+    stops an unbounded integer reaching Stripe. Everything a founder can
+    plausibly type is refused by `quote_topup`, in words, with the remedy.
     """
 
-    amount_cents: int = Field(ge=MIN_TOPUP_CENTS, le=MAX_TOPUP_CENTS)
+    amount_cents: int = Field(gt=0, le=100_000_000)
 
 
 class RunShape(BaseModel):

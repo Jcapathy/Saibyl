@@ -188,3 +188,37 @@ def test_the_runs_figure_never_overstates_what_was_bought():
     for cents in range(MIN_TOPUP_CENTS, MAX_TOPUP_CENTS, 1_013):
         quote = quote_topup(cents)
         assert quote.standard_runs <= quote.credits / per_run
+
+
+# ---------------------------------------------------------------------------
+# The refusal a founder actually receives
+# ---------------------------------------------------------------------------
+
+def test_the_api_returns_the_sentence_not_a_validation_code():
+    """The refusals above must survive the trip through FastAPI.
+
+    They did not. `TopupRequest.amount_cents` carried `ge`/`le`, so Pydantic
+    rejected out-of-range amounts *before* the handler ran and a founder who
+    typed $5 got back `Input should be greater than or equal to 1000` — a
+    validation code, in cents, naming a field they never see. Every test above
+    passed throughout, because they call `quote_topup` directly.
+
+    Found by reading the deployed endpoint's response. This one asserts on the
+    schema that produced the defect rather than on a live call, so it holds
+    without a server.
+    """
+    from app.api.billing import TopupRequest
+
+    field = TopupRequest.model_fields["amount_cents"]
+    constraints = {
+        type(m).__name__: getattr(m, "ge", getattr(m, "le", None))
+        for m in field.metadata
+    }
+    # A `Ge` of exactly the business floor means the business rule is back on
+    # the field, and the sentence is unreachable again.
+    assert constraints.get("Ge") != MIN_TOPUP_CENTS
+    assert constraints.get("Le") != MAX_TOPUP_CENTS
+
+    # And the handler still refuses it, with words.
+    with pytest.raises(TopupRefusedError):
+        quote_topup(500)
