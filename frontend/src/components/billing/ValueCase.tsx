@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import api from '@/lib/api';
+import { BENCHMARKS } from '@/lib/benchmarks';
 
 /**
  * Why this is worth paying for, argued rather than asserted.
@@ -10,62 +11,11 @@ import api from '@/lib/api';
  * about to run, and to the quarter they are about to spend positioned wrongly.
  * This block makes that comparison explicit.
  *
- * ────────────────────────────────────────────────────────────────────────────
- * **Every external number on this page has a primary source, linked, with its
- * methodology and date stated.** That rule is not decoration. This is an
- * advertising surface, the codebase has already shipped a 1,000x overstatement
- * on one of those, and a marketing statistic is the easiest place in a product
- * to launder a guess into a fact.
- *
- * Two figures were researched and **deliberately not used**:
- *
- *  - "37% of digital ad budgets produce no measurable business impact,
- *    attributed to Forrester." It appears only in vendor blogs. No Forrester
- *    publication carrying it could be found, so it is not a citation, it is a
- *    rumour with a brand name attached.
- *  - Forrester's real, findable figure — $7.4bn lost to fraudulent or
- *    unviewable display inventory — is from **2016** and states no methodology.
- *    Ten years stale is not a current claim.
- *
- * If a figure below cannot be re-verified at its link, delete it. Do not
- * replace it with one that "sounds about right".
- * ────────────────────────────────────────────────────────────────────────────
+ * The three outside figures live in `lib/benchmarks.ts`, with the sourcing rule
+ * they are held to and the two figures that were researched and rejected. The
+ * landing page quotes the same three, and a second copy of an advertising claim
+ * is the failure `LandingPage.tsx` already shipped once.
  */
-
-interface Benchmark {
-  stat: string;
-  claim: string;
-  /** Who published it, over what sample, and when. Shown, not just held. */
-  provenance: string;
-  href: string;
-}
-
-const BENCHMARKS: Benchmark[] = [
-  {
-    stat: '43%',
-    claim:
-      'of startups that shut down cite poor product-market fit — the second most common reason after running out of money, which the same study calls the final cause rather than the root one.',
-    provenance:
-      'CB Insights, analysis of 431 VC-backed companies that shut down since 2023 (385 with a stated reason)',
-    href: 'https://www.cbinsights.com/research/report/startup-failure-reasons-top/',
-  },
-  {
-    stat: '$26.8bn',
-    claim:
-      'in global media value is lost every year to programmatic inefficiency — before anyone has read a word of your message.',
-    provenance:
-      'Association of National Advertisers, Q2 2025 Programmatic Transparency Benchmark',
-    href: 'https://www.ana.net/content/show/id/pr-2025-08-programmatictrans',
-  },
-  {
-    stat: '56.7%',
-    claim:
-      'is the share of programmatic spend that reaches a qualified impression even for advertisers running disciplined quality controls. The rest of the budget is spent before the message is tested at all.',
-    provenance:
-      'Association of National Advertisers, Q4 2025 Programmatic Transparency Benchmark',
-    href: 'https://www.ana.net/content/show/id/pr-2026-02-programatic',
-  },
-];
 
 interface RunPrice {
   credits: number;
@@ -132,7 +82,7 @@ export default function ValueCase() {
               rel="noreferrer noopener"
               className="block text-[11px] text-[#8B97A8] mt-3 leading-relaxed hover:text-[#C9A227] transition-colors"
             >
-              {b.provenance} &nearr;
+              {b.provenance} ↗
             </a>
           </div>
         ))}

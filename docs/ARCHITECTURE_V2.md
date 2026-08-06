@@ -2057,6 +2057,89 @@ the prompt rewrite moved the writing.
 
 ---
 
+## [2026-08-06] The landing page describes software without showing any
+
+The founder's reading of the deployed page: "reads more like an internal tool
+that somebody built over a weekend." It was 6,910px of centred prose on a
+starfield with **zero product imagery** — every section a centred heading over
+a grid of cards, and not one picture of the thing being sold.
+
+The copy was not the problem. It had already been rewritten to remove a 1,000x
+overstatement and a stats bar of invented metrics, and what is left is honest
+and specific. What it lacked was anything to point at.
+
+### Three real screenshots, and why the product in them is fictional
+
+`frontend/public/demo/` is output from an actual run on **Tallyhook**, an
+invoice chaser for freelancers that does not exist. Fictional on purpose: a real
+customer's run is their commercial information, and a mockup is a drawing of a
+product rather than the product. Tallyhook was written, uploaded and put through
+the same five steps a visitor walks, and the 26 objections quoted on the page
+are the ones that came back.
+
+That is also the page's **honest substitute for social proof**. There are no
+customer logos because there are no customers, and the last set of invented
+"sample results" on this page — "87% probability of negative sentiment spike"
+and three siblings — took a week to remove. A run anyone could repeat, on a
+product nobody owns, is the version of the claim that survives being checked.
+
+The six objections in `demoRun.ts` are copied from the run behind
+`objections.png`, counts included, so the list and the image beside it are the
+same data. If the screenshots are retaken, retake the list from the same run.
+
+### What changed structurally
+
+- **A hero shot.** A reader who needs three paragraphs before they know what
+  the thing looks like has already decided.
+- **Two `Split` sections**, copy beside screen and then flipped, replacing two
+  centred cards. On narrow screens the copy leads in both directions: a reader
+  who has to scroll past a screenshot to find out what they are looking at has
+  been given a puzzle.
+- **`lib/benchmarks.ts`.** The three verified outside statistics were declared
+  inside `ValueCase.tsx`; the landing page now argues the same point, and a
+  second copy of an advertising claim is exactly how a "1M agents" card sat two
+  sections above a corrected pricing block for months. One declaration, with the
+  sourcing rule and the two rejected figures recorded beside it.
+- **Section tones re-alternate.** Two new sections shifted every seam below
+  them; without fixing it the page had two page-toned sections in a row.
+
+### Four things found by looking, none of which a test could see
+
+**`&nearr;` rendered as the six literal characters.** The JSX transform does not
+decode that entity, so every source link under a benchmark read
+`… Benchmark &nearr;`. **This was already shipping on the billing page** — the
+code was copied from `ValueCase.tsx`, which has carried it since the citations
+were added. Replaced with the character itself in both places.
+
+**"on the right" was wrong in two of three layouts.** `Split` renders the shot
+on the right, on the left when flipped, and underneath at every breakpoint below
+`lg`. Both captions pointed right. Rewritten to name what the reader is looking
+at rather than where it is.
+
+**The h1 left "out" alone on a fourth line.** A wider measure and a slightly
+lower clamp ceiling fit it on three.
+
+**The two split screenshots were unreadable at half width.** They are clipped to
+the content column but still carry a sliver of truncated step rail down the left
+edge, and `objections.png` opens on stage chips that mean nothing without the
+page around them — together a third of a half-width frame spent on furniture.
+`Shot` now takes a `crop`, applied in CSS so one asset serves both the
+full-width hero and the cropped split. Note the trap in that code: `marginTop`
+is the obvious spelling and is wrong, because a percentage margin resolves
+against the containing block's **width** on both axes. It uses `top`.
+
+### Verified by rendering it
+
+`npm run build` passing is not evidence that a page looks like anything. The
+page was served from `dist`, driven with Playwright at 1440 and at 390, scrolled
+to settle every reveal, and read: document height, horizontal overflow, whether
+each image actually decoded, console errors, and screenshots of each section.
+The entity bug and the wrong directions came out of that pass and out of nothing
+else. Build clean, eslint clean, 15 vitest passing, and all four defects still
+present.
+
+---
+
 ## Known issues carried into Phase 2
 
 Recorded here so they are not rediscovered. Items 1, 2 and 7 from the Phase 1

@@ -5,7 +5,6 @@ import {
   Check,
   MessageSquare,
   PenLine,
-  Quote,
   Search,
   SlidersHorizontal,
   Users,
@@ -15,6 +14,8 @@ import {
 import HeroAnimation from '@/components/HeroAnimation';
 import Faq, { type FaqItem } from '@/components/landing/Faq';
 import { Section, SectionHead } from '@/components/landing/Section';
+import { ObjectionList, Shot, Split } from '@/components/landing/Showcase';
+import { DEMO_OBJECTIONS_TOTAL } from '@/components/landing/demoRun';
 import { fadeUp, stagger } from '@/components/landing/motion';
 import {
   CONTACT_EMAIL,
@@ -23,6 +24,7 @@ import {
   TIERS,
   shapeLines,
 } from '@/components/landing/tiers';
+import { BENCHMARKS } from '@/lib/benchmarks';
 
 /**
  * The landing page.
@@ -76,9 +78,22 @@ import {
  *   six footer links to `#`     a link that goes nowhere is a dead end
  *
  * ── NUMBERS ────────────────────────────────────────────────────────────────
- * Every figure that renders comes from `components/landing/tiers.ts`, which is
- * the one file that transcribes the backend constants and carries the line
- * numbers they came from. Nothing in this file writes a number of its own.
+ * Every figure that renders comes from one of three files, and **nothing in
+ * this file writes a number of its own**:
+ *
+ *   `components/landing/tiers.ts`      tier caps and grants, transcribed from
+ *                                      agent_pricing.py with its line numbers
+ *   `lib/benchmarks.ts`                the three outside statistics, each with
+ *                                      a linked primary source and its date
+ *   `components/landing/demoRun.ts`    what the demo run actually returned
+ *
+ * ── IMAGERY ────────────────────────────────────────────────────────────────
+ * The page shipped with none: 6,910px of centred prose on a starfield, which
+ * read to the founder as "an internal tool that somebody built over a weekend".
+ * The copy was not the problem. Three real screenshots now carry the argument —
+ * see `Showcase.tsx` for where they come from and why the demo product is
+ * fictional — and the sections alternate between a centred block and a
+ * copy-beside-screen split so the page has a rhythm instead of a wall.
  */
 
 /* ── The five things the product does ──────────────────────────────────────
@@ -203,6 +218,9 @@ const FAQ_ITEMS: readonly FaqItem[] = [
 /* ── Page ──────────────────────────────────────────────────────────────── */
 
 const NAV_LINKS = [
+  // First, because it is the only link that answers "what does this actually
+  // give me" without asking the reader to take a sentence on trust.
+  { href: '#demo', label: 'A real run' },
   { href: '#free-run', label: 'How it works' },
   { href: '#product', label: 'What you get' },
   { href: '#pricing', label: 'Pricing' },
@@ -277,7 +295,7 @@ export default function LandingPage() {
               aria-hidden="true"
             />
 
-            <div className="relative z-10 max-w-3xl">
+            <div className="relative z-10 max-w-4xl">
               <motion.div
                 {...stagger(0)}
                 className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full border border-saibyl-insight-violet/20 bg-saibyl-insight-violet/10 mb-8"
@@ -294,7 +312,7 @@ export default function LandingPage() {
               <motion.h1
                 {...stagger(1)}
                 className="font-display font-extrabold leading-[1.05] tracking-tight mb-6 text-balance"
-                style={{ fontSize: 'clamp(2.5rem, 6vw, 4.25rem)' }}
+                style={{ fontSize: 'clamp(2.5rem, 5.5vw, 4rem)' }}
               >
                 <span className="text-gradient-brand">Find out what your buyers say</span>
                 <br className="hidden sm:block" />{' '}
@@ -339,6 +357,30 @@ export default function LandingPage() {
                 {free.credits} credits at signup — enough for one full run. No card, ever.
               </motion.p>
             </div>
+
+            {/* The four-second story.
+
+                A reader who has to get through three paragraphs before they
+                know what the thing looks like has already decided. This is the
+                second step of a real run on the demo product: the five steps
+                down the side, and the objections underneath. `priority` because
+                it is the one image above the fold. */}
+            <motion.div
+              {...stagger(6)}
+              className="relative z-10 mt-16 w-full max-w-5xl sm:mt-20"
+            >
+              <Shot
+                src="/demo/rail.png"
+                alt="Step 2 of a run: the five steps down the left, and underneath them the objections a room of freelancers raised about an invoice-chasing tool."
+                width={2240}
+                height={1240}
+                priority
+              />
+              <p className="mt-4 text-xs text-saibyl-muted">
+                A real run on a product we made up, so nobody&rsquo;s launch is on this
+                page. Everything below is what it returned.
+              </p>
+            </motion.div>
           </section>
 
           {/* ═══ The argument ═══ */}
@@ -355,54 +397,62 @@ export default function LandingPage() {
                 lede="Most of this category asks you to trust a model. Both of the things Saibyl does differently are things you can go and verify yourself."
               />
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <motion.div
-                  {...stagger(0)}
-                  className="bg-saibyl-surface border border-saibyl-border rounded-2xl p-8"
+              <div className="space-y-24 sm:space-y-28">
+                <Split
+                  eyebrow="Claim one"
+                  title="Your audience is built from your own material"
+                  shot={
+                    <Shot
+                      src="/demo/audience.png"
+                      // The step rail down the left edge, cut.
+                      crop={{ left: 0.21 }}
+                      alt="Step 1: one uploaded file, and under it the five kinds of buyer read out of it — solo freelancer, small studio owner, new freelancer who avoids confrontation, experienced freelancer with a process, and side-hustler watching every dollar."
+                      width={2240}
+                      height={1400}
+                    />
+                  }
                 >
-                  <div
-                    className="w-12 h-12 rounded-xl flex items-center justify-center mb-5 bg-saibyl-insight-violet/10"
-                    aria-hidden="true"
-                  >
-                    <Users className="w-6 h-6 text-saibyl-insight-violet" />
-                  </div>
-                  <h3 className="font-display font-bold text-2xl text-saibyl-platinum mb-3">
-                    Your audience is built from your own material
-                  </h3>
-                  <p className="text-sm text-saibyl-silver leading-relaxed mb-4">
+                  <p>
                     Other tools hand you a catalogue of personas and ask you to choose. You are
                     the wrong person to ask — which buyer you are actually selling to is the
                     thing you came here to work out.
                   </p>
-                  <p className="text-sm text-saibyl-silver leading-relaxed">
+                  <p>
                     So Saibyl reads what you uploaded and proposes who buys this, what they use
                     today, and what would make them doubt you — with the reason attached to each
-                    one. You confirm it or you fix it. And where your documents never said
-                    something, it stays blank and gets listed as a gap, because a guess dressed
-                    up as a finding is worse than an empty field.
+                    one. You confirm it or you fix it.
                   </p>
-                </motion.div>
+                  <p>
+                    Where your documents never said something, it stays blank and gets listed as
+                    a gap. A guess dressed up as a finding is worse than an empty field.
+                  </p>
+                  <p className="text-saibyl-muted">
+                    Those five came out of one uploaded file, and nothing else.
+                  </p>
+                </Split>
 
-                <motion.div
-                  {...stagger(1)}
-                  className="bg-saibyl-surface border border-saibyl-border rounded-2xl p-8"
+                <Split
+                  flip
+                  eyebrow="Claim two"
+                  title="Every number traces to something someone said"
+                  shot={
+                    <Shot
+                      src="/demo/objections.png"
+                      // The rail, and the stage chips above the list that mean
+                      // nothing without the page around them.
+                      crop={{ left: 0.21, top: 0.3 }}
+                      alt="Four objections from the run, each with a one-line summary and the number of people who carried it."
+                      width={2240}
+                      height={1060}
+                    />
+                  }
                 >
-                  <div
-                    className="w-12 h-12 rounded-xl flex items-center justify-center mb-5 bg-saibyl-signal-blue/10"
-                    aria-hidden="true"
-                  >
-                    <Quote className="w-6 h-6 text-saibyl-signal-blue" />
-                  </div>
-                  <h3 className="font-display font-bold text-2xl text-saibyl-platinum mb-3">
-                    Every number traces to something someone said
-                  </h3>
-                  <p className="text-sm text-saibyl-silver leading-relaxed mb-4">
+                  <p>
                     There is no scoring model quietly assigning points. When the report tells you
                     price was the objection, you open it and read the sentences that objected to
                     the price, and see who said them.
                   </p>
-
-                  <ol className="space-y-2 mb-4">
+                  <ol className="space-y-2">
                     {[
                       'A finding in the report',
                       'The sentences it was built from',
@@ -421,18 +471,73 @@ export default function LandingPage() {
                       </li>
                     ))}
                   </ol>
-
-                  <p className="text-sm text-saibyl-silver leading-relaxed">
+                  <p>
                     And when nothing was said, nothing is shown. Not a zero, not a dash that
                     reads like a measurement of nobody.
                   </p>
-                </motion.div>
+                  <p className="text-saibyl-muted">
+                    &ldquo;3 people&rdquo; means three of the room, not three comments.
+                    Somebody who says it five times still counts once.
+                  </p>
+                </Split>
               </div>
             </div>
           </Section>
 
+          {/* ═══ What a run gives back ═══
+
+              The page's honest substitute for social proof. There are no
+              customer logos because there are no customers, and the last set of
+              invented "sample results" on this page took a week to remove. A
+              run anyone could repeat, on a product nobody owns, is the version
+              of this claim that survives being checked. */}
+          <Section id="demo">
+            <div className="max-w-5xl mx-auto">
+              <SectionHead
+                eyebrow="What comes back"
+                title={
+                  <>
+                    We invented a product and{' '}
+                    <span className="text-gradient-brand">ran it for real</span>
+                  </>
+                }
+                lede="Tallyhook chases late invoices for freelancers. It does not exist — we wrote it, uploaded it, and put it through the same five steps you would. Nobody is a customer yet, so this is what we can show you instead of a logo wall."
+              />
+
+              <motion.div {...fadeUp} className="grid gap-8 lg:grid-cols-[1.15fr_1fr]">
+                <div>
+                  <p className="text-sm text-saibyl-silver leading-relaxed mb-5">
+                    {DEMO_OBJECTIONS_TOTAL} objections came back. These are the six the most
+                    people carried, unedited &mdash; and none of them is the one a founder
+                    building this would have braced for.
+                  </p>
+                  <ObjectionList />
+                </div>
+
+                <div className="rounded-2xl border border-saibyl-border bg-saibyl-surface p-7">
+                  <h3 className="font-sans font-semibold text-lg text-saibyl-platinum">
+                    What that is worth knowing on a Tuesday
+                  </h3>
+                  <p className="text-sm text-saibyl-silver leading-relaxed mt-3">
+                    Two of the top six are about the relationship with the client, not the
+                    software. One is that the tool sounds robotic. Only one is price.
+                  </p>
+                  <p className="text-sm text-saibyl-silver leading-relaxed mt-3">
+                    A founder about to write a pricing page has just found out that pricing is
+                    not the argument. That is the whole point of doing this before the launch
+                    rather than after it.
+                  </p>
+                  <p className="text-xs text-saibyl-muted leading-relaxed mt-5">
+                    Everyone in that room is synthetic, and the page says so on every screen it
+                    appears on. It is a rehearsal, not a survey.
+                  </p>
+                </div>
+              </motion.div>
+            </div>
+          </Section>
+
           {/* ═══ The free run ═══ */}
-          <Section id="free-run">
+          <Section id="free-run" tone="raised">
             <div className="max-w-6xl mx-auto">
               <SectionHead
                 eyebrow="The free run"
@@ -476,7 +581,7 @@ export default function LandingPage() {
           </Section>
 
           {/* ═══ The five things ═══ */}
-          <Section id="product" tone="raised">
+          <Section id="product">
             <div className="max-w-6xl mx-auto">
               <SectionHead
                 eyebrow="What you get"
@@ -560,6 +665,71 @@ export default function LandingPage() {
                   </p>
                 </motion.div>
               </div>
+            </div>
+          </Section>
+
+          {/* ═══ What this is competing with ═══
+
+              The comparison a founder actually makes is not to their other
+              subscriptions. It is to the campaign they are about to run.
+
+              The three figures are the ones in `lib/benchmarks.ts`, shared with
+              the billing page, each with its primary source linked and its date
+              stated. The two that were researched and rejected are recorded
+              there too. This page has shipped an invented statistic before; the
+              sourcing rule is what stops it happening twice. */}
+          <Section id="stakes" tone="raised">
+            <div className="max-w-5xl mx-auto">
+              <SectionHead
+                eyebrow="The arithmetic"
+                title={
+                  <>
+                    Testing the message first is the{' '}
+                    <span className="text-gradient-brand">cheapest thing on this list</span>
+                  </>
+                }
+                lede="Not compared to your other subscriptions. Compared to the campaign you are about to run, and the quarter you are about to spend saying the wrong thing to the right people."
+              />
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {BENCHMARKS.map((benchmark, i) => (
+                  <motion.div
+                    key={benchmark.href}
+                    {...stagger(i)}
+                    className="rounded-2xl border border-saibyl-border bg-saibyl-surface p-7 flex flex-col"
+                  >
+                    <p className="font-display font-extrabold text-3xl text-saibyl-gold leading-none">
+                      {benchmark.stat}
+                    </p>
+                    <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-saibyl-muted mt-2">
+                      {benchmark.short}
+                    </p>
+                    <p className="text-sm text-saibyl-silver leading-relaxed mt-4 flex-1">
+                      {benchmark.claim}
+                    </p>
+                    {/* The source is shown, not footnoted. A statistic whose
+                        provenance a reader has to hunt for is one they are
+                        being asked to take on faith. */}
+                    <a
+                      href={benchmark.href}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="text-[11px] text-saibyl-muted mt-5 leading-relaxed hover:text-saibyl-gold transition-colors"
+                    >
+                      {benchmark.provenance} ↗
+                    </a>
+                  </motion.div>
+                ))}
+              </div>
+
+              <motion.p
+                {...fadeUp}
+                className="text-sm text-saibyl-silver max-w-3xl mx-auto text-center mt-10 leading-relaxed"
+              >
+                Saibyl does not run your campaign and does not promise it will work. It tells
+                you what a room of your buyers argues about before you have paid to find out,
+                and shows you the sentence behind every number so you can disagree with it.
+              </motion.p>
             </div>
           </Section>
 
