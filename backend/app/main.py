@@ -31,7 +31,6 @@ from app.api import (
     simulations,
     uploads,
     variants,
-    webhooks,
     ws,
 )
 from app.core.config import settings
@@ -153,7 +152,6 @@ def create_app() -> FastAPI:
     app.include_router(inoculation.router, prefix="/api/inoculation")
     app.include_router(variants.router, prefix="/api/variants")
     app.include_router(platforms.router, prefix="/api/platforms")
-    app.include_router(webhooks.router, prefix="/api/webhooks")
     app.include_router(billing.router, prefix="/api/billing")
     app.include_router(api_keys.router, prefix="/api/api-keys")
     # Mounted at /api because its paths are nested under /simulations/{id}/…

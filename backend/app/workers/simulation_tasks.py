@@ -740,16 +740,6 @@ async def run_simulation(simulation_id: str):
 
     admin.table("simulations").update({"status": "running"}).eq("id", simulation_id).execute()
 
-    # Dispatch webhook: simulation started
-    try:
-        from app.services.billing.webhook_dispatcher import dispatch_webhook
-        await dispatch_webhook(sim["organization_id"], "simulation.started", {
-            "simulation_id": simulation_id,
-            "name": sim.get("name", ""),
-            "status": "running",
-        })
-    except Exception:
-        pass  # Webhooks are best-effort
 
     agents = admin.table("simulation_agents").select("*").eq("simulation_id", simulation_id).execute().data
     if not agents:
@@ -1037,13 +1027,6 @@ async def run_simulation(simulation_id: str):
             "status": "failed",
             "error_message": error_msg,
         }).eq("id", simulation_id).execute()
-        try:
-            from app.services.billing.webhook_dispatcher import dispatch_webhook
-            await dispatch_webhook(org_id, "simulation.failed", {
-                "simulation_id": simulation_id, "error": error_msg,
-            })
-        except Exception:
-            pass
         return {"simulation_id": simulation_id, "status": "failed", "total_events": total_events}
 
     if total_events == 0:
@@ -1134,18 +1117,6 @@ async def run_simulation(simulation_id: str):
     logger.info("simulation_complete", simulation_id=simulation_id, total_events=total_events)
 
     # Dispatch webhook: simulation complete
-    try:
-        from app.services.billing.webhook_dispatcher import dispatch_webhook
-        await dispatch_webhook(org_id, "simulation.complete", {
-            "simulation_id": simulation_id,
-            "name": sim.get("name", ""),
-            "status": "complete",
-            "total_events": total_events,
-            "agent_rounds": agent_rounds,
-            "measurement_coverage_pct": analysis_summary.get("coverage_pct", 0.0),
-        })
-    except Exception:
-        pass
 
     # Report generation runs after the artifact exists, and is awaited rather
     # than detached. The run is already marked complete, so the UI shows the

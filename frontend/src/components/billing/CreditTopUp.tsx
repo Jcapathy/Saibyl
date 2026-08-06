@@ -26,7 +26,6 @@ interface TopupQuote {
   amount_cents: number;
   amount_usd: number;
   credits: number;
-  standard_runs: number;
   subscription_is_cheaper_by_pct: number;
 }
 
@@ -34,14 +33,6 @@ interface TopupOptions {
   min_cents: number;
   max_cents: number;
   suggested: TopupQuote[];
-}
-
-function runsPhrase(runs: number): string {
-  // "0.5 runs" is the honest answer at $10 and both roundings are lies: down
-  // reads as buying nothing, up is an overpromise found out mid-run.
-  if (runs < 1) return `about ${runs} of a full-size run`;
-  if (runs === 1) return '1 full-size run';
-  return `about ${runs} full-size runs`;
 }
 
 export default function CreditTopUp({
@@ -192,23 +183,11 @@ export default function CreditTopUp({
             </label>
           </div>
 
-          {/* What the selected amount actually buys, in runs rather than in
-              credits — credits are our unit, runs are the founder's. */}
-          {active && (
-            <div className="mt-5 rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-              <p className="text-[13.5px] text-[#E8ECF2]">
-                ${active.amount_usd.toFixed(2)} buys{' '}
-                {active.credits.toLocaleString()} credits &mdash;{' '}
-                {runsPhrase(active.standard_runs)}.
-              </p>
-              <p className="text-[12px] text-[#8B97A8] mt-2 leading-relaxed">
-                A monthly plan buys credits{' '}
-                {active.subscription_is_cheaper_by_pct}% cheaper than this. If
-                you already know you will keep using it, the plan is the better
-                deal &mdash; this is for finding out first.
-              </p>
-            </div>
-          )}
+          {/* The runs comparison that sat here is gone by request. It told a
+              founder "$20 buys about 0.9 of a full-size run", which is
+              arithmetically true and reads as a warning on the button they are
+              being asked to press. The credit count is on every amount above;
+              what a run costs is on the plan page. */}
         </>
       )}
 

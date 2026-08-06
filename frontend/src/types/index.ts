@@ -173,34 +173,9 @@ export interface BillingStatus {
   current_period_end: string | null;
 }
 
-/**
- * `GET /api-keys`.
- *
- * The prefix field is `key_prefix`. There is no `prefix` field on either the
- * list or the create response.
- */
-export interface ApiKey {
-  id: string;
-  name: string;
-  /** First 12 characters of the key — all that survives creation. */
-  key_prefix: string;
-  scopes: string[];
-  last_used_at: string | null;
-  expires_at: string | null;
-  revoked_at: string | null;
-  created_at: string;
-}
-
-/** `POST /api-keys` — the only response that ever carries the full key. */
-export interface CreatedApiKey {
-  id: string;
-  /** The full secret, returned once and never again. */
-  key: string;
-  key_prefix: string;
-  name: string;
-  scopes: string[];
-  message: string;
-}
+/* `ApiKey` and `CreatedApiKey` were here. Removed with the API-keys tab:
+ * `verify_api_key` had zero callers, so a key issued from that screen
+ * authenticated nothing. Nothing in this product needs one. */
 
 /* ── Prospect discovery ───────────────────────────────────────────────
  *
