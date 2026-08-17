@@ -226,11 +226,13 @@ for the founder's explicit approval before the next. No multi-phase responses.
 | **D — The wow gate** | Five real founder ideas end-to-end vs. §5; the overdue cold read (fresh evaluator, no docs, real browser, deployed site); first live multi-variant run | the founder reads all five reports and would pay for each — then, and only then, the first email |
 | **E — Deferred** | Stripe tiers, Crisis return, calibration (V2 §10), cohort/bootcamp deals | out of scope until D passes |
 
-Phase IP's position in the order is the founder's call; the recommendation
-is **IP before B**: it is the smaller build (HTTP APIs only — no rendering
-infra), its methodology is fully specified by the founder's skill, the USPTO
-APIs are free so margin is LLM-only, and it monetizes the Validate stage the
-idea-brief intake just opened.
+**Order DECIDED by the founder, 2026-08-16: Phase IP first, then Phase B —
+and explicitly with no approval gate between them** ("Once that's done, with
+no gating step, proceed to phase B"). This is a recorded exception to the
+per-phase approval rule for these two phases only; Phase C onward returns to
+the normal gate. Rationale for IP-first: the smaller build (HTTP APIs only —
+no rendering infra), fully specified by the founder's skill, LLM-only margin,
+and it monetizes the Validate stage the idea-brief intake just opened.
 
 Standing verification gates (V2 §12) apply to every phase: `pytest`,
 `tsc --noEmit`, `eslint --quiet`, a live end-to-end run, the numeric-integrity
