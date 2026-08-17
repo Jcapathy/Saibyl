@@ -232,8 +232,13 @@ export default function AppLayout() {
         >
           S
         </span>
-        <span className="text-saibyl-ink font-extrabold text-base select-none" style={{ letterSpacing: '-0.035em' }}>
-          SAIBYL
+        <span className="flex flex-col select-none">
+          <span className="text-saibyl-ink font-extrabold text-base leading-none" style={{ letterSpacing: '-0.04em' }}>
+            Saibyl
+          </span>
+          <span className="font-mono text-[7.5px] tracking-[0.07em] text-saibyl-muted mt-0.5">
+            BY SAIDO LABS
+          </span>
         </span>
       </div>
 

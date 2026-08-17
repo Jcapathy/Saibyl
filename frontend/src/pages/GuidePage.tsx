@@ -47,7 +47,7 @@ const STEPS = [
     title: 'Answer the objections, and find out if it worked',
     desc: 'Draft the material that answers each objection, publish it, and put the same room through it again. Answers that moved nothing are reported as moving nothing.',
     Icon: FlaskConical,
-    color: 'text-saibyl-positive',
+    color: 'text-saibyl-blue',
   },
   {
     num: 4,

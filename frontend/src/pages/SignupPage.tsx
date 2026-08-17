@@ -190,10 +190,10 @@ export default function SignupPage() {
               <span className="font-serif font-bold text-white text-[19px] leading-none">S</span>
             </div>
             <span
-              className="text-gradient-brand font-extrabold text-[1.75rem]"
+              className="text-saibyl-ink font-extrabold text-[1.75rem]"
               style={{ letterSpacing: '-0.03em' }}
             >
-              SAIBYL
+              Saibyl
             </span>
           </div>
 
@@ -210,8 +210,8 @@ export default function SignupPage() {
 
           {/* Tagline */}
           <h2 className="text-[2.75rem] font-extrabold leading-[1.1] tracking-tight text-saibyl-ink">
-            Test your startup{' '}
-            <em className="font-serif italic text-saibyl-violet">on a synthetic market.</em>
+            Test your startup on a{' '}
+            <em className="font-serif italic text-saibyl-violet">synthetic market.</em>
           </h2>
 
           {/* Subtitle */}
@@ -262,10 +262,10 @@ export default function SignupPage() {
               <span className="font-serif font-bold text-white text-[19px] leading-none">S</span>
             </div>
             <span
-              className="text-gradient-brand font-extrabold text-xl"
+              className="text-saibyl-ink font-extrabold text-xl"
               style={{ letterSpacing: '-0.03em' }}
             >
-              SAIBYL
+              Saibyl
             </span>
           </div>
 
@@ -321,7 +321,7 @@ export default function SignupPage() {
           <div className="flex items-center gap-4 my-6">
             <div className="flex-1 h-px bg-saibyl-border" />
             <span
-              className="text-[11px] text-saibyl-muted uppercase tracking-[0.18em]"
+              className="text-[11px] text-saibyl-silver uppercase tracking-[0.18em]"
               style={{ fontFamily: "'DM Mono', monospace" }}
             >
               or
@@ -334,7 +334,7 @@ export default function SignupPage() {
             {/* Organization */}
             <div>
               <label
-                className="block text-[11px] font-medium text-saibyl-muted uppercase tracking-wider mb-1.5"
+                className="block text-[11px] font-medium text-saibyl-silver uppercase tracking-wider mb-1.5"
                 style={{ fontFamily: "'DM Mono', monospace" }}
               >
                 Organization
@@ -357,7 +357,7 @@ export default function SignupPage() {
             {/* Email */}
             <div>
               <label
-                className="block text-[11px] font-medium text-saibyl-muted uppercase tracking-wider mb-1.5"
+                className="block text-[11px] font-medium text-saibyl-silver uppercase tracking-wider mb-1.5"
                 style={{ fontFamily: "'DM Mono', monospace" }}
               >
                 Email
@@ -377,7 +377,7 @@ export default function SignupPage() {
             {/* Password */}
             <div>
               <label
-                className="block text-[11px] font-medium text-saibyl-muted uppercase tracking-wider mb-1.5"
+                className="block text-[11px] font-medium text-saibyl-silver uppercase tracking-wider mb-1.5"
                 style={{ fontFamily: "'DM Mono', monospace" }}
               >
                 Password
@@ -479,12 +479,11 @@ export default function SignupPage() {
           <p className="mt-4 text-center text-[11px] text-saibyl-muted leading-relaxed">
             By creating an account, you agree to our{' '}
             {/* TODO: Replace with actual Terms of Service URL */}
-            <a href="#" className="text-saibyl-blue hover:text-saibyl-gold-hover transition-colors">
+            <a href="/terms" className="text-saibyl-blue hover:text-saibyl-gold-hover transition-colors whitespace-nowrap">
               Terms of Service
             </a>{' '}
             and{' '}
-            {/* TODO: Replace with actual Privacy Policy URL */}
-            <a href="#" className="text-saibyl-blue hover:text-saibyl-gold-hover transition-colors">
+            <a href="/privacy" className="text-saibyl-blue hover:text-saibyl-gold-hover transition-colors whitespace-nowrap">
               Privacy Policy
             </a>
           </p>

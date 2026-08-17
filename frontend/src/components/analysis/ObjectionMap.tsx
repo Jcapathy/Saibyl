@@ -92,7 +92,7 @@ export default function ObjectionMap({
                       />
                     </div>
                     <p className="text-[11px] text-saibyl-muted mt-1.5">
-                      {objection.agent_count} people · first came up in round{' '}
+                      {objection.agent_count} {objection.agent_count === 1 ? 'person' : 'people'} · first came up in round{' '}
                       {objection.first_round_seen ?? '—'}
                       {objection.originating_cohort
                         ? ` · started with ${groupLabel(objection.originating_cohort).toLowerCase()}`
@@ -124,7 +124,7 @@ export default function ObjectionMap({
                             {/* The label, never the raw key — otherwise this row
                                 reads "adversarial" at a founder. */}
                             <span
-                              className="text-[11px] text-saibyl-silver w-40 truncate"
+                              className="text-[11px] text-saibyl-silver w-56 leading-tight line-clamp-2"
                               title={groupLabel(cohort)}
                             >
                               {groupLabel(cohort)}

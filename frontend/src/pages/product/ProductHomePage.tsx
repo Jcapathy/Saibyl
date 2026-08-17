@@ -26,12 +26,12 @@ function Attention({ line, productId }: { line: AttentionLine; productId: string
     <>
       <span
         className={`mt-[0.42rem] w-1.5 h-1.5 rounded-full shrink-0 ${
-          line.weight === 'high' ? 'bg-saibyl-gold' : 'bg-[#14294a]/20'
+          line.weight === 'high' ? 'bg-saibyl-gold' : 'bg-saibyl-warning/70'
         }`}
       />
       <span
         className={`text-[12.5px] leading-relaxed ${
-          line.weight === 'high' ? 'text-saibyl-platinum' : 'text-saibyl-muted'
+          line.weight === 'high' ? 'text-saibyl-platinum' : 'text-saibyl-silver'
         }`}
       >
         {line.text}
@@ -84,7 +84,9 @@ function ProductCard({ product }: { product: ProductState }) {
         >
           {product.name}
         </Link>
-        <span className="text-[12px] text-saibyl-gold">
+        {/* Category metadata, not a link — mono silver so blue stays spent on
+            actions only. */}
+        <span className="font-mono text-[11px] text-saibyl-silver">
           {product.moment.label}
           {product.moment.source === 'default' && (
             <span className="text-saibyl-muted"> · not set yet</span>
@@ -122,7 +124,7 @@ function ProductCard({ product }: { product: ProductState }) {
 
         <Link
           to={nextStep.href}
-          className="inline-flex items-center gap-1.5 mt-4 px-4 py-1.5 rounded-lg border border-saibyl-border-light text-[12.5px] text-saibyl-platinum hover:bg-[#14294a]/[0.04] transition-colors"
+          className="inline-flex items-center gap-1.5 mt-4 px-4 py-1.5 rounded-lg border border-saibyl-blue/40 text-[12.5px] font-medium text-saibyl-blue hover:bg-saibyl-blue/[0.05] transition-colors"
         >
           {nextStep.number}. {nextStep.label} — {nextStep.blurb}
         </Link>

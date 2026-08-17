@@ -27,7 +27,9 @@ function Stat({
           {label}
         </span>
       </div>
-      <p className="text-[24px] font-extrabold leading-none" style={{ color: accent }}>
+      {/* Value stays ink — the icon carries the accent, so color only ever
+          encodes meaning, never decorates a numeral. */}
+      <p className="text-[24px] font-extrabold leading-none text-saibyl-ink">
         {value}
       </p>
       <p className="text-[11px] text-saibyl-muted mt-2 leading-relaxed">{sub}</p>

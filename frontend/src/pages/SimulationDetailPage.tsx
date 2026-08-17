@@ -391,10 +391,10 @@ export default function SimulationDetailPage() {
     {
       value: sim.agent_count == null ? '—' : String(sim.agent_count),
       label: 'People in the room',
-      color: '#286cf0',
+      color: '#286cf0', // all three stat numerals one color — landing stat-band rule
     },
-    { value: String(sim.max_rounds), label: 'Rounds', color: '#6a4fe0' },
-    { value: String(sim.platforms?.length ?? 0), label: 'Platforms', color: '#0e7d55' },
+    { value: String(sim.max_rounds), label: 'Rounds', color: '#286cf0' },
+    { value: String(sim.platforms?.length ?? 0), label: 'Platforms', color: '#286cf0' },
   ];
 
   const isIdle = IDLE_STATUSES.includes(sim.status);

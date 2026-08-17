@@ -26,7 +26,7 @@ export default function StageHeader({ stage }: { stage: StageState }) {
           Step {stage.number} of 5
         </p>
         <h1 className="text-h1 text-saibyl-white mt-1.5">{stage.label}</h1>
-        <p className="text-[13.5px] text-saibyl-silver mt-1.5 italic">{def.ask}</p>
+        <p className="text-[13.5px] text-saibyl-silver mt-1.5">{def.ask}</p>
       </div>
 
       {stage.inherited.length > 0 && <Inherited lines={stage.inherited} />}

@@ -254,13 +254,13 @@ export default function NewSimulationPage() {
         <div className="flex items-center mb-8 gap-1">
           {STEPS.map((label, i) => (
             <div key={label} className="flex items-center">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-mono font-bold transition-colors ${
+              <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-[12px] font-mono font-bold transition-colors ${
                 i < step ? 'bg-saibyl-positive text-white' : i === step ? 'bg-saibyl-gold text-white' : 'bg-[#14294a]/[0.04] text-saibyl-muted'
               }`}>
                 {i < step ? '✓' : i + 1}
               </div>
-              <span className={`ml-1.5 text-[13px] hidden sm:inline ${i <= step ? 'text-saibyl-platinum' : 'text-saibyl-muted'}`}>{label}</span>
-              {i < STEPS.length - 1 && <div className={`w-8 h-px mx-2 ${i < step ? 'bg-saibyl-positive/40' : 'bg-saibyl-border'}`} />}
+              <span className={`ml-1.5 text-[13px] hidden sm:inline whitespace-nowrap ${i <= step ? 'text-saibyl-platinum' : 'text-saibyl-muted'}`}>{label}</span>
+              {i < STEPS.length - 1 && <div className={`w-3 sm:w-8 h-px mx-1 sm:mx-2 ${i < step ? 'bg-saibyl-positive/40' : 'bg-saibyl-border'}`} />}
             </div>
           ))}
         </div>
@@ -536,7 +536,7 @@ export default function NewSimulationPage() {
                       <button
                         onClick={handleCreateCustomPack}
                         disabled={creatingCustom || !customName.trim() || !customDesc.trim()}
-                        className="px-6 py-2.5 rounded-xl bg-saibyl-gold text-white font-medium text-sm disabled:opacity-50 transition-all hover:bg-saibyl-gold-hover hover:-translate-y-0.5"
+                        className="px-6 py-2.5 rounded-xl bg-saibyl-gold text-white font-medium text-sm disabled:bg-[#e2ebf9] disabled:text-[#60718e] transition-all hover:bg-saibyl-gold-hover hover:-translate-y-0.5"
                       >
                         {creatingCustom ? 'Building…' : 'Build this group'}
                       </button>
@@ -684,7 +684,7 @@ export default function NewSimulationPage() {
             <button
               onClick={() => setStep((s) => s - 1)}
               disabled={step === 0}
-              className="px-5 py-2.5 text-[14px] text-saibyl-muted hover:text-saibyl-platinum disabled:opacity-30 transition-colors"
+              className="px-5 py-2.5 text-[14px] text-saibyl-muted hover:text-saibyl-platinum disabled:opacity-60 transition-colors"
             >
               ← Back
             </button>
@@ -692,7 +692,7 @@ export default function NewSimulationPage() {
               <button
                 onClick={() => setStep((s) => s + 1)}
                 disabled={!canNext()}
-                className="bg-saibyl-gold text-white px-6 py-2.5 rounded-xl text-[14px] font-medium hover:bg-saibyl-gold-hover disabled:opacity-30 transition-all"
+                className="bg-saibyl-gold text-white px-6 py-2.5 rounded-xl text-[14px] font-medium hover:bg-saibyl-gold-hover disabled:bg-[#e2ebf9] disabled:text-[#60718e] transition-all"
               >
                 Next →
               </button>
@@ -710,7 +710,7 @@ export default function NewSimulationPage() {
                 <button
                   onClick={handleSubmit}
                   disabled={submitting || !!quoteError}
-                  className="px-8 py-2.5 rounded-xl bg-saibyl-gold text-saibyl-void font-semibold text-[14px] disabled:opacity-50 transition-all hover:bg-saibyl-gold-hover hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(40,108,240,0.3)]"
+                  className="px-8 py-2.5 rounded-xl bg-saibyl-gold text-saibyl-void font-semibold text-[14px] disabled:bg-[#e2ebf9] disabled:text-[#60718e] transition-all hover:bg-saibyl-gold-hover hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(40,108,240,0.3)]"
                 >
                   {submitting ? 'Starting…' : 'Start this run →'}
                 </button>

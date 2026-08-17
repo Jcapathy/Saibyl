@@ -92,8 +92,9 @@ const INOCULATE_TAB = 5;
 /* ------------------------------------------------------------------ */
 
 function statusColor(status: string): string {
+  // Green like every other "Finished" pill in the app — one status, one idiom.
   if (isFinished(status)) {
-    return 'bg-saibyl-signal-blue/15 text-saibyl-signal-blue border-saibyl-signal-blue/30';
+    return 'bg-saibyl-green/10 text-saibyl-positive border-saibyl-green/40';
   }
   switch (status.toLowerCase()) {
     case 'running':
@@ -563,7 +564,8 @@ export default function ReportViewerPage() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto p-8">
+      {/* pb-24 keeps the floating ask-pill off the last row of content. */}
+      <div className="flex-1 overflow-auto p-8 pb-24">
         {report.status === 'failed' && (
           <div className="mb-6 px-5 py-4 rounded-2xl bg-saibyl-negative/10 border border-saibyl-negative/20">
             <div className="flex items-center gap-3">
@@ -787,7 +789,7 @@ export default function ReportViewerPage() {
         <button
           onClick={() => setChatOpen(true)}
           className="fixed bottom-6 right-6 z-40 flex items-center gap-2 px-4 py-3 rounded-full text-white font-semibold text-[13px] shadow-lg transition-transform hover:scale-105"
-          style={{ background: 'linear-gradient(135deg, #8b73ee, #286cf0)' }}
+          style={{ background: 'linear-gradient(135deg, #286cf0, #5268e9)' }}
         >
           <MessageCircle className="w-5 h-5" />
           Ask about this run

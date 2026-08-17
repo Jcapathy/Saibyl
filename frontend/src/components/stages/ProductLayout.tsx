@@ -80,7 +80,7 @@ function RailItem({
       {stage.runnable !== 'ready' && (
         <p
           className={`text-[10.5px] mt-1.5 leading-snug pl-[1.4rem] ${
-            stage.runnable === 'blocked' ? 'text-[#6a4fe0]' : 'text-saibyl-gold'
+            stage.runnable === 'blocked' ? 'text-[#6a4fe0]' : 'text-saibyl-warning'
           }`}
         >
           {stage.runnable === 'blocked'

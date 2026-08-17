@@ -79,7 +79,7 @@ export default function GroupBreakdown({
           return (
             <div key={label}>
               <div className="flex justify-between items-baseline text-[13px] mb-1.5 gap-3">
-                <span className="text-saibyl-platinum font-medium truncate">{label}</span>
+                <span className="text-saibyl-platinum font-medium leading-tight line-clamp-2">{label}</span>
                 <span className="text-saibyl-silver text-[11px] whitespace-nowrap">
                   {valence.n < 2 ? (
                     <span className="text-saibyl-muted">

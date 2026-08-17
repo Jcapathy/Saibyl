@@ -60,7 +60,7 @@ export default function AdversarialNotice({
                 <span
                   key={role}
                   className="px-2 py-0.5 rounded text-[10px]"
-                  style={{ backgroundColor: `${ACCENT}1A`, color: ACCENT_TEXT }}
+                  style={{ backgroundColor: 'rgba(20,41,74,.05)', color: '#44587a' }}
                 >
                   {ROLE_LABELS[role] ?? role.replace(/_/g, ' ')} · {count}
                 </span>

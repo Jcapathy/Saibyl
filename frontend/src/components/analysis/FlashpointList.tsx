@@ -83,7 +83,7 @@ export default function FlashpointList({
                   {flash.objection_keys.map((key) => (
                     <span
                       key={key}
-                      className="text-[10px] px-1.5 py-0.5 rounded bg-saibyl-gold/10 text-saibyl-gold"
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-[#14294a]/[0.05] text-saibyl-silver"
                     >
                       {objectionLabels?.[key] ?? key}
                     </span>

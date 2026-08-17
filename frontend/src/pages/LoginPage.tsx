@@ -150,10 +150,10 @@ export default function LoginPage() {
               <span className="font-serif font-bold text-white text-[19px] leading-none">S</span>
             </div>
             <span
-              className="text-gradient-brand font-extrabold text-[1.75rem]"
-              style={{ letterSpacing: '-0.03em' }}
+              className="text-saibyl-ink font-extrabold text-[1.75rem]"
+              style={{ letterSpacing: '-0.04em' }}
             >
-              SAIBYL
+              Saibyl
             </span>
           </div>
 
@@ -167,8 +167,8 @@ export default function LoginPage() {
 
           {/* Tagline */}
           <h1 className="text-[2.75rem] font-extrabold tracking-tight leading-[1.1] text-saibyl-ink mb-5">
-            Test your startup{' '}
-            <em className="font-serif italic text-saibyl-violet">on a synthetic market.</em>
+            Test your startup on a{' '}
+            <em className="font-serif italic text-saibyl-violet">synthetic market.</em>
           </h1>
 
           {/* Subtitle */}
@@ -219,10 +219,10 @@ export default function LoginPage() {
               <span className="font-serif font-bold text-white text-[19px] leading-none">S</span>
             </div>
             <span
-              className="text-gradient-brand font-extrabold text-xl"
-              style={{ letterSpacing: '-0.03em' }}
+              className="text-saibyl-ink font-extrabold text-xl"
+              style={{ letterSpacing: '-0.04em' }}
             >
-              SAIBYL
+              Saibyl
             </span>
           </div>
 
@@ -276,7 +276,7 @@ export default function LoginPage() {
           <div className="flex items-center gap-4 my-6">
             <div className="flex-1 h-px bg-saibyl-border" />
             <span
-              className="text-[11px] text-saibyl-muted uppercase tracking-[0.18em]"
+              className="text-[11px] text-saibyl-silver uppercase tracking-[0.18em]"
               style={{ fontFamily: "'DM Mono', monospace" }}
             >
               or
@@ -289,7 +289,7 @@ export default function LoginPage() {
             {/* Email */}
             <div>
               <label
-                className="block text-[11px] font-medium text-saibyl-muted uppercase tracking-wider mb-2"
+                className="block text-[11px] font-medium text-saibyl-silver uppercase tracking-wider mb-2"
                 style={{ fontFamily: "'DM Mono', monospace" }}
               >
                 Email
@@ -310,7 +310,7 @@ export default function LoginPage() {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label
-                  className="block text-[11px] font-medium text-saibyl-muted uppercase tracking-wider"
+                  className="block text-[11px] font-medium text-saibyl-silver uppercase tracking-wider"
                   style={{ fontFamily: "'DM Mono', monospace" }}
                 >
                   Password
