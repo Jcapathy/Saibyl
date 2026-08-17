@@ -99,6 +99,8 @@ export default function NewProductPage() {
             <p className="text-[11px] text-saibyl-muted/70 mt-1.5 leading-relaxed">
               Optional. If you never upload anything, this one line is the only
               thing the simulated buyers get to read — so it is worth a minute.
+              And nothing written yet is fine — the next step takes a deck or a
+              landing page, or just your answers to five short questions.
             </p>
           </div>
 

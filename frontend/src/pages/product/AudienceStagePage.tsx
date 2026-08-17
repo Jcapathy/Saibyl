@@ -7,6 +7,7 @@ import { documentStateWord, isBeingRead, isRead } from '@/lib/status';
 import type { ICPProfile } from '@/lib/founder';
 import type { ProjectDocument, MaterialKind } from '@/types';
 import AudienceReview from '@/components/founder/AudienceReview';
+import IdeaBriefForm from '@/components/stages/IdeaBriefForm';
 import StageHeader from '@/components/stages/StageHeader';
 import {
   EmptyState,
@@ -59,6 +60,7 @@ export default function AudienceStagePage() {
   const [error, setError] = useState('');
 
   const [pending, setPending] = useState<{ file: File; kind: MaterialKind }[]>([]);
+  const [showBrief, setShowBrief] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [working, setWorking] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -124,6 +126,18 @@ export default function AudienceStagePage() {
     } finally {
       setUploading(false);
     }
+  }
+
+  /* The idea path lands here. The backend wrote the answers up as a document,
+     so this refreshes exactly what `upload` refreshes — the row is seeded first
+     so the list shows it before `load` returns with the server's copy. */
+  function briefCreated(doc: ProjectDocument) {
+    setShowBrief(false);
+    setDocuments((prev) =>
+      prev.some((d) => d.id === doc.id) ? prev : [...prev, doc],
+    );
+    load();
+    refresh();
   }
 
   async function workOutBuyers() {
@@ -282,17 +296,36 @@ export default function AudienceStagePage() {
           ) : documents.length === 0 ? (
             /* "Pick a file above" pointed at a control the reader had to go and
                find. The button opens it, which is the difference between naming
-               a way forward and being one. */
-            <p className="text-[12.5px] text-saibyl-muted">
-              Nothing uploaded yet — the deck is usually the best first one.{' '}
-              <button
-                type="button"
-                onClick={() => fileInput.current?.click()}
-                className="text-saibyl-gold hover:underline"
-              >
-                Choose a file
-              </button>
-            </p>
+               a way forward and being one. And a founder with nothing on disk
+               gets a second way forward, not a smaller version of the first:
+               the five questions below become the document this step reads. */
+            <div id="idea-brief" className="space-y-3 scroll-mt-6">
+              <p className="text-[12.5px] text-saibyl-muted">
+                Nothing uploaded yet — the deck is usually the best first one.{' '}
+                <button
+                  type="button"
+                  onClick={() => fileInput.current?.click()}
+                  className="text-saibyl-gold hover:underline"
+                >
+                  Choose a file
+                </button>
+              </p>
+              {showBrief ? (
+                <IdeaBriefForm productId={product.id} onCreated={briefCreated} />
+              ) : (
+                <p className="text-[12.5px] text-saibyl-muted">
+                  Just an idea so far? Answer five short questions and
+                  we&rsquo;ll build your audience from those.{' '}
+                  <button
+                    type="button"
+                    onClick={() => setShowBrief(true)}
+                    className="text-saibyl-gold hover:underline"
+                  >
+                    Answer the five questions
+                  </button>
+                </p>
+              )}
+            </div>
           ) : (
             <ul className="space-y-1.5">
               {documents.map((doc) => (
@@ -319,10 +352,25 @@ export default function AudienceStagePage() {
       <section className="space-y-4">
         {profile === null ? (
           readable.length === 0 ? (
+            /* The second sentence and the second way out only render while
+               there is truly nothing here — once a file is uploading or being
+               read, the founder is not stuck and the idea path above is gone. */
             <EmptyState
               headline="Nothing to read yet"
-              body="We work out who buys this by reading what you have written. Upload the deck, the landing page or the pricing page and this step can run."
+              body={
+                documents.length === 0
+                  ? 'We work out who buys this by reading what you have written. Upload the deck or the landing page — or, if the idea is all you have so far, answer five short questions and we will build your audience from those.'
+                  : 'We work out who buys this by reading what you have written. Upload the deck, the landing page or the pricing page and this step can run.'
+              }
               action={{ label: 'Upload something', href: '#upload' }}
+              secondary={
+                documents.length === 0
+                  ? {
+                      label: 'Just an idea? Answer five short questions',
+                      href: '#idea-brief',
+                    }
+                  : undefined
+              }
             />
           ) : (
             <div className="glass rounded-2xl p-6">
