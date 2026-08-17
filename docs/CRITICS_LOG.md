@@ -11,6 +11,16 @@ your check could only have passed for the reason you think it did.*
 
 ---
 
+## 2026-08-17 — A parked deliverable reads as shipped
+
+The founder approved the light redesign ("this is the look and feel of
+exactly what I was going for") and the prototype + implementation prompt
+went into the backlog awaiting an explicit "implement it" — while phases
+shipped around it. The founder then opened the live site and found the old
+dark page. Lesson: **when the founder approves a deliverable whose whole
+point is to be seen, implementation is the default next step, not a new
+decision.** A prototype accepted with enthusiasm is an order.
+
 ## 2026-08-16 — Phase C live gate (two catches)
 
 - **SDK guards are features you meet in production**: the Anthropic SDK

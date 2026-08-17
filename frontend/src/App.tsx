@@ -23,6 +23,7 @@ import MarketingPage from '@/pages/MarketingPage';
 import NewSimulationPage from '@/pages/NewSimulationPage';
 import PackLibraryPage from '@/pages/PackLibraryPage';
 import ProjectDetailPage from '@/pages/ProjectDetailPage';
+import PrivacyPage from '@/pages/PrivacyPage';
 import ProjectsPage from '@/pages/ProjectsPage';
 import ProspectDetailPage from '@/pages/ProspectDetailPage';
 import ProspectDiscoverPage from '@/pages/ProspectDiscoverPage';
@@ -32,6 +33,7 @@ import ReportPrintPage from '@/pages/ReportPrintPage';
 import ReportViewerPage from '@/pages/ReportViewerPage';
 import SettingsPage from '@/pages/SettingsPage';
 import SignupPage from '@/pages/SignupPage';
+import TermsPage from '@/pages/TermsPage';
 import SimulationDetailPage from '@/pages/SimulationDetailPage';
 import SimulationRunPage from '@/pages/SimulationRunPage';
 import SimulationsPage from '@/pages/SimulationsPage';
@@ -46,6 +48,8 @@ function AnimatedRoutes() {
         {/* Public routes */}
         <Route path="/login" element={<PageTransition><LoginPage /></PageTransition>} />
         <Route path="/signup" element={<PageTransition><SignupPage /></PageTransition>} />
+        <Route path="/privacy" element={<PageTransition><PrivacyPage /></PageTransition>} />
+        <Route path="/terms" element={<PageTransition><TermsPage /></PageTransition>} />
 
         {/* Protected app routes */}
         <Route

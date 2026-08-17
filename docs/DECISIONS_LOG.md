@@ -8,6 +8,17 @@ choices.
 
 ---
 
+## 2026-08-17 — The light landing page ships to production
+
+Scope of this pass: the PUBLIC site — LandingPage in the Saido aesthetic
+(ported faithfully from the critic-approved prototype), the font stack in
+index.html, and minimal honest /privacy + /terms pages so the footer links
+don't dead-end (both state current practice and that a formal policy is in
+preparation — founder/legal review owed). **The in-app shell (dashboard,
+rail, auth pages) stays dark for now** — restyling it to the light system
+is a deliberate separate pass, flagged for the founder to schedule, not
+smuggled into this one.
+
 ## 2026-08-16 — Founder decisions (Jesse), in order given
 
 1. **V3 direction**: Saibyl serves the AI-builder founder generation;
