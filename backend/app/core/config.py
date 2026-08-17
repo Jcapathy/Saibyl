@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str = ""
     resend_api_key: str = ""
     sentry_dsn: str = ""
+    # Crisis is shelved, not deleted (PRD_V3 §7). Off hides the surface
+    # entirely — the API answers 404, not 403 — until it returns as a paid
+    # module. Env var: CRISIS_ENABLED.
+    crisis_enabled: bool = False
 
     model_config = {"env_file": ["../.env", ".env"], "env_file_encoding": "utf-8"}
 

@@ -12,7 +12,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.core.auth import get_current_org
 from app.core.database import fetch_all, get_supabase_admin
-from app.services.intelligence.analysis_builder import get_analysis
+from app.services.intelligence.analysis_builder import (
+    build_simulation_analysis,
+    get_analysis,
+)
 
 log = structlog.get_logger()
 
@@ -62,6 +65,39 @@ async def simulation_analysis(id: str, auth: dict = Depends(get_current_org)):
         "schema_version": row["schema_version"],
         "artifact": row["artifact"],
         "generated_at": row.get("updated_at") or row.get("created_at"),
+    }
+
+
+@router.post("/simulations/{simulation_id}/analysis/rebuild")
+async def rebuild_analysis(simulation_id: str, auth: dict = Depends(get_current_org)):
+    """Recompose the artifact from the run's stored measurements.
+
+    The artifact is derived data, composed once when a run finishes. A
+    vocabulary or copy fix shipped after that moment reaches nothing already
+    composed, so every earlier artifact stays frozen with the old sentences
+    until somebody rebuilds it — which, without this route, meant paying for
+    the run again (PRD_V3 §8.2). Measurement is NOT re-run: this reads the
+    measured events the run already paid for and composes them afresh. The
+    one model call left in the path is the small objection-grouping pass,
+    not a second run.
+    """
+    _owned_simulation(simulation_id, auth["org_id"])
+    analysis = await build_simulation_analysis(simulation_id, auth["org_id"])
+    log.info(
+        "analysis_rebuilt",
+        simulation_id=simulation_id,
+        org_id=auth["org_id"],
+        objections=len(analysis.objections),
+    )
+    return {
+        "simulation_id": simulation_id,
+        "build_status": "complete",
+        "schema_version": analysis.schema_version,
+        "generated_at": analysis.generated_at,
+        "objections": len(analysis.objections),
+        "flashpoints": len(analysis.flashpoints),
+        "rounds": len(analysis.sentiment_timeline),
+        "confidence": analysis.quality.confidence,
     }
 
 

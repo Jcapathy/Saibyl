@@ -1,24 +1,16 @@
 from __future__ import annotations
 
-import asyncio
-
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from app.core.auth import get_current_org
 from app.core.database import get_supabase_admin
+from app.core.tasks import spawn
 from app.services.engine.ontology_generator import approve_ontology, refine_ontology
 from app.workers.simulation_tasks import run_generate_ontology
 
 log = structlog.get_logger()
-
-
-async def _safe_task(coro, name: str):
-    try:
-        await coro
-    except Exception:
-        log.exception("background_task_failed", task=name)
 
 router = APIRouter(tags=["ontologies"])
 
@@ -57,7 +49,7 @@ async def generate_ontology(body: GenerateOntologyBody, auth: dict = Depends(get
     if not project.data:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    asyncio.create_task(_safe_task(run_generate_ontology(body.project_id), "generate_ontology"))
+    spawn(run_generate_ontology(body.project_id), "generate_ontology")
     return {"status": "started"}
 
 

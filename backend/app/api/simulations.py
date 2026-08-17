@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import asyncio
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -9,7 +9,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.core.auth import get_current_org
+from app.core.config import settings
 from app.core.database import get_supabase_admin
+from app.core.tasks import spawn
 from app.services.engine.founder_stages import FOUNDER_STAGES, FounderStage
 from app.services.engine.personas.interview_engine import (
     interview_agent,
@@ -25,20 +27,19 @@ from app.workers.simulation_tasks import (
 log = structlog.get_logger()
 
 
-async def _safe_task(coro, name: str, simulation_id: str | None = None):
-    try:
-        await coro
-    except Exception as exc:
-        log.exception("background_task_failed", task=name)
-        if simulation_id:
-            try:
-                admin = get_supabase_admin()
-                admin.table("simulations").update({
-                    "status": "failed",
-                    "error_message": f"[{name}] {type(exc).__name__}: {exc}",
-                }).eq("id", simulation_id).execute()
-            except Exception:
-                pass
+def _mark_simulation_failed(simulation_id: str, name: str) -> Callable[[Exception], None]:
+    """`on_failure` for `spawn`: a run whose worker died must say so.
+
+    Without this the row stays `preparing`/`running` forever and the user
+    watches a spinner for a failure that was logged and never surfaced.
+    """
+    def _mark(exc: Exception) -> None:
+        get_supabase_admin().table("simulations").update({
+            "status": "failed",
+            "error_message": f"[{name}] {type(exc).__name__}: {exc}",
+        }).eq("id", simulation_id).execute()
+    return _mark
+
 
 router = APIRouter(tags=["simulations"])
 
@@ -131,6 +132,15 @@ class PersonaInterviewBody(BaseModel):
 async def create_simulation(body: CreateSimulationBody, auth: dict = Depends(get_current_org)):
     """Create a new simulation."""
     log.info("create_simulation", name=body.name, project_id=body.project_id, org_id=auth["org_id"])
+
+    # Crisis is shelved, not deleted (PRD_V3 §7): the Literal above still
+    # accepts the value so the code stays, and this flag alone decides whether
+    # the surface exists. 404 rather than 403 — a hidden surface must not
+    # confirm itself by refusing — and checked before any lookup so a request
+    # for it touches nothing.
+    if body.lens == "crisis" and not settings.crisis_enabled:
+        raise HTTPException(status_code=404, detail="Not available.")
+
     admin = get_supabase_admin()
 
     # Verify project belongs to org
@@ -403,7 +413,10 @@ async def prepare_simulation(id: str, auth: dict = Depends(get_current_org)):
     if not sim.data:
         raise HTTPException(status_code=404, detail="Simulation not found")
 
-    asyncio.create_task(_safe_task(run_prepare_agents(id), "prepare_agents", simulation_id=id))
+    spawn(
+        run_prepare_agents(id), "prepare_agents",
+        on_failure=_mark_simulation_failed(id, "prepare_agents"),
+    )
     return {"status": "started"}
 
 
@@ -563,7 +576,10 @@ async def start_simulation(
     # function — V1's A/B ran variant B never. Arenas replaced it: a run's
     # variants live in `simulation_variants`, and `run_simulation` executes all
     # of them.
-    asyncio.create_task(_safe_task(run_simulation(id), "run_simulation", simulation_id=id))
+    spawn(
+        run_simulation(id), "run_simulation",
+        on_failure=_mark_simulation_failed(id, "run_simulation"),
+    )
     return {"status": "started"}
 
 
