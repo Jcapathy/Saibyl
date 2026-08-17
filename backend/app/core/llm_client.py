@@ -3,15 +3,19 @@
 # llm_complete(messages, model=None, temperature=0.7, max_tokens=4096,
 #              response_format=None) -> str
 # llm_fast(messages, temperature=0.7, max_tokens=4096) -> str
+# llm_vision(prompt, images, *, media_type="image/png", system=None,
+#            temperature=0.3, max_tokens=4096) -> str
 # llm_structured(messages, schema: Type[BaseModel], model=None) -> BaseModel
 # llm_stream(messages, model=None) -> AsyncGenerator[str, None]
 # ─────────────────────────────────────────────────────────
 from __future__ import annotations
 
+import base64
 from collections.abc import AsyncGenerator
 from typing import Any
 
 import structlog
+from anthropic import AsyncAnthropic
 from litellm import acompletion
 from pydantic import BaseModel
 
@@ -34,6 +38,28 @@ def _record(resolved: str, usage: Any) -> None:
             model=resolved,
             input_tokens=getattr(usage, "prompt_tokens", 0) or 0,
             output_tokens=getattr(usage, "completion_tokens", 0) or 0,
+            cache_read_tokens=getattr(usage, "cache_read_input_tokens", 0) or 0,
+            cache_write_tokens=getattr(usage, "cache_creation_input_tokens", 0) or 0,
+        )
+    except Exception:
+        logger.exception("llm_usage_hook_failed", model=resolved)
+
+
+def _record_anthropic(resolved: str, usage: Any) -> None:
+    """`_record` for the Anthropic SDK's usage field names.
+
+    The SDK reports `input_tokens`/`output_tokens` where litellm reports
+    `prompt_tokens`/`completion_tokens`. Both land in the same ledger row shape,
+    so a vision call is attributed by the ambient `usage_context` and priced by
+    `model_pricing` exactly like every other call.
+    """
+    if usage is None:
+        return
+    try:
+        record_llm_call(
+            model=resolved,
+            input_tokens=getattr(usage, "input_tokens", 0) or 0,
+            output_tokens=getattr(usage, "output_tokens", 0) or 0,
             cache_read_tokens=getattr(usage, "cache_read_input_tokens", 0) or 0,
             cache_write_tokens=getattr(usage, "cache_creation_input_tokens", 0) or 0,
         )
@@ -115,6 +141,92 @@ async def llm_fast(
     )
     _record(resolved, usage)
     return response.choices[0].message.content
+
+
+# A single image above this base64 size is rejected rather than downscaled:
+# callers render the screenshots and control their dimensions, so an oversized
+# image is a caller bug to fix at the source, not something to quietly degrade
+# by recompressing here. The ceiling sits under Anthropic's 5MB per-image limit
+# with margin for the JSON envelope around it.
+_MAX_IMAGE_B64_CHARS = 4_500_000
+
+
+async def llm_vision(
+    prompt: str,
+    images: list[bytes],
+    *,
+    media_type: str = "image/png",
+    system: str | None = None,
+    temperature: float = 0.3,
+    max_tokens: int = 4096,
+) -> str:
+    """Send images plus a text prompt to the vision-capable main model.
+
+    Images become Anthropic content blocks ahead of the text block, base64
+    encoded here — callers pass raw bytes.
+
+    This talks to the Anthropic SDK directly rather than through litellm:
+    litellm's OpenAI→Anthropic message conversion recognises only
+    `image_url`-style content parts and silently DROPS Anthropic-native image
+    blocks (verified against litellm 1.82.6, `anthropic_messages_pt`). A vision
+    call whose images vanish still returns 200 with a fluent hallucination —
+    the worst possible failure for a critic that claims to have looked at the
+    page — so the images go on the wire in Anthropic's own format, with no
+    conversion layer that can drop them. Retries stay with the SDK's built-in
+    backoff, the same posture `llm_complete` takes with litellm's.
+    """
+    if settings.llm_provider != "anthropic":
+        # The payload below is Anthropic's wire format. Routing it to another
+        # provider would not error — the images would be ignored — so refuse
+        # loudly instead of degrading silently.
+        raise NotImplementedError(
+            f"llm_vision supports only the 'anthropic' provider; configured provider "
+            f"is '{settings.llm_provider}'. Add a provider-specific image payload "
+            "before routing vision calls elsewhere."
+        )
+    if not images:
+        raise ValueError("llm_vision requires at least one image")
+
+    content: list[dict[str, Any]] = []
+    for index, image in enumerate(images):
+        data = base64.b64encode(image).decode("ascii")
+        if len(data) > _MAX_IMAGE_B64_CHARS:
+            raise ValueError(
+                f"Image {index} is {len(data):,} characters as base64, over the "
+                f"{_MAX_IMAGE_B64_CHARS:,} limit — resize or compress it before "
+                "calling llm_vision (callers control image size)."
+            )
+        content.append({
+            "type": "image",
+            "source": {"type": "base64", "media_type": media_type, "data": data},
+        })
+    content.append({"type": "text", "text": prompt})
+
+    # Ledger name keeps the provider prefix ("anthropic/…") like every other
+    # call site; model_pricing normalizes it away when pricing.
+    resolved = _resolve_model(None)
+    extra: dict[str, Any] = {}
+    if system is not None:
+        extra["system"] = system
+
+    client = AsyncAnthropic(api_key=_api_key())
+    response = await client.messages.create(
+        model=settings.llm_model,
+        messages=[{"role": "user", "content": content}],
+        temperature=temperature,
+        max_tokens=max_tokens,
+        **extra,
+    )
+    usage = response.usage
+    logger.info(
+        "llm_vision",
+        model=resolved,
+        images=len(images),
+        prompt_tokens=getattr(usage, "input_tokens", 0),
+        completion_tokens=getattr(usage, "output_tokens", 0),
+    )
+    _record_anthropic(resolved, usage)
+    return "".join(block.text for block in response.content if block.type == "text")
 
 
 async def llm_structured(

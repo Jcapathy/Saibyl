@@ -1,0 +1,451 @@
+"""Website capture and vision: the evidence pipeline can't lie about what it saw.
+
+No live browser and no network anywhere in this file. Four claims:
+
+**The module imports where Playwright is absent.** The dev venv and CI carry no
+browser runtime — only the Docker image does — so `services/website/capture`
+must import cleanly everywhere, and a real capture attempt without the runtime
+must fail with install guidance, not an ImportError mid-request.
+
+**The SSRF guard runs before any fetch, and again after redirects.** The server
+fetches URLs founders type. Every rejection below arrives as the guard's
+HTTPException *without any fake browser installed* — if capture ever fetched
+(or imported Playwright) before validating, these tests would see a
+WebsiteCaptureError instead. The redirect test pins the classic bypass: a
+public hostname that lands on a private address.
+
+**The captured evidence is faithful.** DOM text is capped with a note in
+`meta` — a report must never judge half a page as the whole page silently —
+and an endless page is clipped, noted, rather than rendered into an image no
+model accepts.
+
+**`llm_vision` puts the images on the wire, or refuses.** litellm's message
+conversion silently drops Anthropic-native image blocks, which is why
+`llm_vision` speaks to the Anthropic SDK directly — so the payload it builds
+is asserted block by block, an oversized image is rejected before any call,
+and a non-Anthropic provider is a loud NotImplementedError rather than a
+vision call that quietly saw nothing.
+"""
+from __future__ import annotations
+
+import base64
+import importlib
+import socket
+import sys
+from types import SimpleNamespace
+
+import pytest
+from fastapi import HTTPException
+
+from app.core import llm_client, security
+from app.services.website import capture as capture_mod
+from app.services.website.capture import (
+    DOM_TEXT_MAX_CHARS,
+    MAX_SCREENSHOT_HEIGHT_PX,
+    WebsiteCapture,
+    WebsiteCaptureError,
+    capture_website,
+)
+
+_PUBLIC_IP = "93.184.216.34"
+
+
+# ---------------------------------------------------------------------------
+# DNS and Playwright stand-ins
+# ---------------------------------------------------------------------------
+
+def _resolving(mapping: dict[str, str]):
+    """A getaddrinfo that answers only from `mapping` — no resolver, no network."""
+
+    def fake_getaddrinfo(host, *_args, **_kwargs):
+        addr = mapping.get(host)
+        if addr is None:
+            raise socket.gaierror(f"unmapped host in test: {host}")
+        return [(2, 1, 6, "", (addr, 0))]
+
+    return fake_getaddrinfo
+
+
+class _FakePlaywrightError(Exception):
+    pass
+
+
+class _FakePlaywrightTimeoutError(_FakePlaywrightError):
+    pass
+
+
+class _FakePage:
+    def __init__(self, spec: dict, viewport: dict, calls: list):
+        self._spec = spec
+        self._viewport = viewport
+        self._calls = calls
+        self.url: str | None = None
+
+    async def goto(self, url, timeout=None, wait_until=None):
+        self._calls.append(("goto", self._viewport["width"], url, timeout, wait_until))
+        raises = self._spec.get("goto_raises")
+        if raises is not None:
+            raise raises
+        self.url = self._spec.get("final_url", url)
+
+    async def title(self):
+        return self._spec.get("title", "")
+
+    async def evaluate(self, script: str):
+        # Keyed on marker substrings the module guarantees in its script constants.
+        if "querySelectorAll('meta')" in script:
+            return dict(self._spec.get("meta", {}))
+        if "innerText" in script:
+            return self._spec.get("dom_text", "")
+        if "scrollHeight" in script:
+            return self._spec.get("page_height", 900)
+        raise AssertionError(f"unexpected evaluate script: {script!r}")
+
+    async def screenshot(self, **kwargs):
+        self._calls.append(("screenshot", self._viewport["width"], kwargs))
+        return f"png-{self._viewport['width']}".encode()
+
+
+class _FakeContext:
+    def __init__(self, page: _FakePage):
+        self._page = page
+        self.closed = False
+
+    async def new_page(self):
+        return self._page
+
+    async def close(self):
+        self.closed = True
+
+
+class _FakeBrowser:
+    def __init__(self, spec: dict, calls: list):
+        self._spec = spec
+        self._calls = calls
+        self.closed = False
+
+    async def new_context(self, **kwargs):
+        self._calls.append(("new_context", kwargs))
+        return _FakeContext(_FakePage(self._spec, kwargs["viewport"], self._calls))
+
+    async def close(self):
+        self.closed = True
+
+
+class _FakeAsyncPlaywright:
+    """What `async_playwright()` returns: an async context manager."""
+
+    def __init__(self, browser: _FakeBrowser):
+        self._browser = browser
+
+    async def __aenter__(self):
+        async def launch(**_kwargs):
+            return self._browser
+
+        return SimpleNamespace(chromium=SimpleNamespace(launch=launch))
+
+    async def __aexit__(self, *_exc):
+        return False
+
+
+def _install_fake_playwright(monkeypatch, spec: dict) -> tuple[list, _FakeBrowser]:
+    """Patch the lazy-import seam with a browserless Playwright stand-in."""
+    calls: list = []
+    browser = _FakeBrowser(spec, calls)
+    module = SimpleNamespace(
+        async_playwright=lambda: _FakeAsyncPlaywright(browser),
+        Error=_FakePlaywrightError,
+        TimeoutError=_FakePlaywrightTimeoutError,
+    )
+    monkeypatch.setattr(capture_mod, "_import_playwright", lambda: module)
+    return calls, browser
+
+
+def _block_playwright(monkeypatch):
+    """Make `import playwright` fail even where someone installed it locally."""
+    for name in [m for m in list(sys.modules) if m == "playwright" or m.startswith("playwright.")]:
+        monkeypatch.delitem(sys.modules, name, raising=False)
+    monkeypatch.setitem(sys.modules, "playwright", None)
+
+
+# ---------------------------------------------------------------------------
+# Claim 1: importable, and clearly failing, without a browser runtime
+# ---------------------------------------------------------------------------
+
+def test_the_module_imports_where_playwright_is_absent(monkeypatch):
+    _block_playwright(monkeypatch)
+    monkeypatch.delitem(sys.modules, "app.services.website.capture", raising=False)
+    module = importlib.import_module("app.services.website.capture")
+    assert callable(module.capture_website)
+
+
+async def test_a_capture_without_playwright_fails_with_install_guidance(monkeypatch):
+    monkeypatch.setattr(
+        security.socket, "getaddrinfo", _resolving({"acme.example": _PUBLIC_IP})
+    )
+    _block_playwright(monkeypatch)
+    with pytest.raises(WebsiteCaptureError) as exc:
+        await capture_website("https://acme.example/")
+    assert "playwright install" in str(exc.value)
+
+
+# ---------------------------------------------------------------------------
+# Claim 2: the SSRF guard, before any fetch and after redirects
+# ---------------------------------------------------------------------------
+# None of these installs the fake browser: reaching the render path at all
+# would surface as a WebsiteCaptureError, so the HTTPException below is also
+# proof of ordering — validate first, fetch second.
+
+async def test_a_loopback_literal_is_rejected():
+    with pytest.raises(HTTPException) as exc:
+        await capture_website("http://127.0.0.1/admin")
+    assert exc.value.status_code == 400
+
+
+async def test_a_private_ip_literal_is_rejected():
+    with pytest.raises(HTTPException) as exc:
+        await capture_website("http://10.0.0.5/")
+    assert exc.value.status_code == 400
+
+
+@pytest.mark.parametrize("url", ["file:///etc/passwd", "ftp://acme.example/x", "javascript:alert(1)"])
+async def test_a_non_http_scheme_is_rejected(url):
+    with pytest.raises(HTTPException) as exc:
+        await capture_website(url)
+    assert "http or https" in exc.value.detail
+
+
+async def test_a_hostname_resolving_to_a_private_address_is_rejected(monkeypatch):
+    monkeypatch.setattr(
+        security.socket, "getaddrinfo", _resolving({"internal.corp": "192.168.1.10"})
+    )
+    with pytest.raises(HTTPException) as exc:
+        await capture_website("https://internal.corp/")
+    assert exc.value.status_code == 400
+
+
+async def test_a_hostname_resolving_to_the_metadata_range_is_rejected(monkeypatch):
+    monkeypatch.setattr(
+        security.socket, "getaddrinfo", _resolving({"metadata.example": "169.254.169.254"})
+    )
+    with pytest.raises(HTTPException):
+        await capture_website("https://metadata.example/")
+
+
+async def test_a_redirect_landing_on_a_private_address_is_rejected(monkeypatch):
+    """The founder's URL is public; the site 302s somewhere internal."""
+    monkeypatch.setattr(
+        security.socket,
+        "getaddrinfo",
+        _resolving({"good.example": _PUBLIC_IP, "internal.example": "10.0.0.5"}),
+    )
+    _install_fake_playwright(monkeypatch, {"final_url": "http://internal.example/"})
+    with pytest.raises(HTTPException) as exc:
+        await capture_website("https://good.example/")
+    assert exc.value.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# Claim 3: the captured evidence is faithful
+# ---------------------------------------------------------------------------
+
+async def test_a_capture_returns_the_rendered_evidence(monkeypatch):
+    monkeypatch.setattr(
+        security.socket, "getaddrinfo", _resolving({"acme.example": _PUBLIC_IP})
+    )
+    calls, browser = _install_fake_playwright(monkeypatch, {
+        "title": "Acme — Ship faster",
+        "meta": {"description": "Acme ships things.", "og:title": "Acme"},
+        "dom_text": "Welcome to Acme.",
+        "page_height": 1200,
+    })
+
+    result = await capture_website("https://acme.example/", timeout_s=45)
+
+    assert isinstance(result, WebsiteCapture)
+    assert result.url == result.final_url == "https://acme.example/"
+    assert result.title == "Acme — Ship faster"
+    assert result.dom_text == "Welcome to Acme."
+    assert result.meta["description"] == "Acme ships things."
+    assert result.meta["og:title"] == "Acme"
+
+    # One pass per viewport, in order, each with the caller's timeout in ms.
+    goto_calls = [c for c in calls if c[0] == "goto"]
+    assert [c[1] for c in goto_calls] == [1440, 390]
+    assert all(c[3] == 45_000 for c in goto_calls)
+
+    # Each viewport photographed full-page (the page fits under the cap) and
+    # each screenshot is the one its own context produced.
+    assert result.screenshot_desktop == b"png-1440"
+    assert result.screenshot_mobile == b"png-390"
+    shot_calls = [c for c in calls if c[0] == "screenshot"]
+    assert all(c[2].get("full_page") is True for c in shot_calls)
+
+    context_calls = [c for c in calls if c[0] == "new_context"]
+    assert context_calls[1][1].get("is_mobile") is True
+    assert browser.closed
+
+
+async def test_dom_text_is_capped_with_a_note_in_meta(monkeypatch):
+    monkeypatch.setattr(
+        security.socket, "getaddrinfo", _resolving({"acme.example": _PUBLIC_IP})
+    )
+    original_chars = DOM_TEXT_MAX_CHARS + 5_000
+    _install_fake_playwright(monkeypatch, {"dom_text": "x" * original_chars})
+
+    result = await capture_website("https://acme.example/")
+
+    assert len(result.dom_text) == DOM_TEXT_MAX_CHARS
+    note = result.meta["dom_text_truncated"]
+    assert str(DOM_TEXT_MAX_CHARS) in note
+    assert str(original_chars) in note
+
+
+async def test_an_endless_page_is_clipped_not_shot_in_full(monkeypatch):
+    monkeypatch.setattr(
+        security.socket, "getaddrinfo", _resolving({"acme.example": _PUBLIC_IP})
+    )
+    calls, _browser = _install_fake_playwright(monkeypatch, {"page_height": 25_000})
+
+    result = await capture_website("https://acme.example/")
+
+    shot_calls = [c for c in calls if c[0] == "screenshot"]
+    for _, width, kwargs in shot_calls:
+        assert "full_page" not in kwargs
+        assert kwargs["clip"] == {
+            "x": 0,
+            "y": 0,
+            "width": width,
+            "height": MAX_SCREENSHOT_HEIGHT_PX,
+        }
+    assert "screenshot_desktop_truncated" in result.meta
+    assert "screenshot_mobile_truncated" in result.meta
+
+
+async def test_a_navigation_failure_reads_like_a_sentence_not_a_trace(monkeypatch):
+    monkeypatch.setattr(
+        security.socket, "getaddrinfo", _resolving({"nope.example": _PUBLIC_IP})
+    )
+    _install_fake_playwright(monkeypatch, {
+        "goto_raises": _FakePlaywrightError(
+            "net::ERR_NAME_NOT_RESOLVED at https://nope.example/\n    at Frame.goto (...)"
+        ),
+    })
+    with pytest.raises(WebsiteCaptureError) as exc:
+        await capture_website("https://nope.example/")
+    message = str(exc.value)
+    assert "could not be found" in message
+    assert "net::" not in message
+    assert "Frame.goto" not in message
+
+
+async def test_a_timeout_names_the_budget_it_exhausted(monkeypatch):
+    monkeypatch.setattr(
+        security.socket, "getaddrinfo", _resolving({"slow.example": _PUBLIC_IP})
+    )
+    _install_fake_playwright(monkeypatch, {
+        "goto_raises": _FakePlaywrightTimeoutError("Timeout 30000ms exceeded."),
+    })
+    with pytest.raises(WebsiteCaptureError) as exc:
+        await capture_website("https://slow.example/", timeout_s=30)
+    assert "30 seconds" in str(exc.value)
+
+
+# ---------------------------------------------------------------------------
+# Claim 4: llm_vision puts the images on the wire, or refuses
+# ---------------------------------------------------------------------------
+
+def _fake_anthropic(monkeypatch) -> list[dict]:
+    """Replace the SDK client; return the list of messages.create payloads."""
+    created: list[dict] = []
+
+    class _Messages:
+        async def create(self, **kwargs):
+            created.append(kwargs)
+            return SimpleNamespace(
+                content=[SimpleNamespace(type="text", text="a verdict")],
+                usage=SimpleNamespace(
+                    input_tokens=321,
+                    output_tokens=45,
+                    cache_read_input_tokens=0,
+                    cache_creation_input_tokens=0,
+                ),
+            )
+
+    class _Client:
+        def __init__(self, api_key=None):
+            self.api_key = api_key
+            self.messages = _Messages()
+
+    monkeypatch.setattr(llm_client, "AsyncAnthropic", _Client)
+    return created
+
+
+async def test_llm_vision_builds_anthropic_image_blocks_ahead_of_the_text(monkeypatch):
+    created = _fake_anthropic(monkeypatch)
+
+    out = await llm_client.llm_vision(
+        "What is weak about this page?",
+        [b"desktop-png", b"mobile-png"],
+        media_type="image/png",
+        system="You are a critic.",
+    )
+
+    assert out == "a verdict"
+    call = created[0]
+    content = call["messages"][0]["content"]
+    assert [block["type"] for block in content] == ["image", "image", "text"]
+    assert content[0]["source"] == {
+        "type": "base64",
+        "media_type": "image/png",
+        "data": base64.b64encode(b"desktop-png").decode(),
+    }
+    assert content[1]["source"]["data"] == base64.b64encode(b"mobile-png").decode()
+    assert content[2]["text"] == "What is weak about this page?"
+    assert call["system"] == "You are a critic."
+    assert call["temperature"] == 0.3
+    assert call["max_tokens"] == 4096
+
+
+async def test_llm_vision_records_usage_through_the_same_ledger(monkeypatch):
+    _fake_anthropic(monkeypatch)
+    recorded: list[dict] = []
+    monkeypatch.setattr(llm_client, "record_llm_call", lambda **kw: recorded.append(kw))
+
+    await llm_client.llm_vision("look", [b"img"])
+
+    assert recorded[0]["input_tokens"] == 321
+    assert recorded[0]["output_tokens"] == 45
+    # Provider-prefixed like every litellm call site; model_pricing strips it.
+    assert recorded[0]["model"].startswith("anthropic/")
+
+
+async def test_llm_vision_rejects_an_oversized_image_before_calling_the_model(monkeypatch):
+    created = _fake_anthropic(monkeypatch)
+    too_big = b"\x00" * 3_400_000  # ~4.53M chars as base64, over the 4.5M cap
+
+    with pytest.raises(ValueError) as exc:
+        await llm_client.llm_vision("look", [too_big])
+
+    assert "resize" in str(exc.value)
+    assert created == []
+
+
+async def test_llm_vision_refuses_non_anthropic_providers_loudly(monkeypatch):
+    """The payload is Anthropic wire format; other providers would ignore the
+    images and return a fluent answer about a page they never saw."""
+    created = _fake_anthropic(monkeypatch)
+    monkeypatch.setattr(llm_client.settings, "llm_provider", "openai")
+
+    with pytest.raises(NotImplementedError) as exc:
+        await llm_client.llm_vision("look", [b"img"])
+
+    assert "openai" in str(exc.value)
+    assert created == []
+
+
+async def test_llm_vision_requires_at_least_one_image(monkeypatch):
+    created = _fake_anthropic(monkeypatch)
+    with pytest.raises(ValueError):
+        await llm_client.llm_vision("look", [])
+    assert created == []

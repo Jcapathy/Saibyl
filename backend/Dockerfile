@@ -32,6 +32,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN useradd -m -s /bin/bash appuser
 
 COPY --chown=appuser:appuser --from=builder /app/.venv .venv
+
+# Chromium for Playwright (website capture, PRD V3 §4a). Installed here, as
+# root, at a fixed shared path: Playwright's default download location is
+# per-user (~/.cache), so leaving installation to runtime would mean `appuser`
+# re-downloading a browser measured in hundreds of MB on every container start.
+# Baking it into the image at a root-owned path — before USER appuser — makes
+# it a one-time build cost; `--with-deps` adds the shared libraries chromium
+# needs on a slim image, and the chmod lets the non-root runtime user read and
+# execute what root installed. Placed before the app/ COPY so code changes
+# don't invalidate this layer.
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN /app/.venv/bin/playwright install --with-deps chromium && chmod -R a+rX /ms-playwright
+
 COPY --chown=appuser:appuser app/ app/
 COPY --chown=appuser:appuser scripts/ scripts/
 COPY --chown=appuser:appuser data/ data/

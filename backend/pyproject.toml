@@ -35,6 +35,11 @@ dependencies = [
     "Jinja2>=3.1.0",
     "sentry-sdk[fastapi]>=2.0.0",
     "cryptography>=42.0.0",
+    # Renders founder-supplied URLs for Website Intelligence (PRD V3 §4a).
+    # This is the driver only — the chromium binary is installed in the Docker
+    # image (see Dockerfile), and `services/website/capture.py` imports it
+    # lazily, so environments without a browser still import the app.
+    "playwright>=1.49.0",
 ]
 
 [project.optional-dependencies]
