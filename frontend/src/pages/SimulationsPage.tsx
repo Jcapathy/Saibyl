@@ -34,15 +34,15 @@ const STATUS_FILTERS = ['all', ...SIMULATION_STATUSES] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];
 
 const STATUS_COLOR: Record<string, string> = {
-  draft:     '#8B5CF6',
-  preparing: '#F59E0B',
-  ready:     '#2563EB',
-  running:   '#2563EB',
-  analyzing: '#F59E0B',
-  complete:  '#22C55E',
-  completed: '#22C55E',
-  stopped:   '#5A6578',
-  failed:    '#EF4444',
+  draft:     '#6a4fe0',
+  preparing: '#b45309',
+  ready:     '#286cf0',
+  running:   '#286cf0',
+  analyzing: '#b45309',
+  complete:  '#0e7d55',
+  completed: '#0e7d55',
+  stopped:   '#60718e',
+  failed:    '#d92d3c',
 };
 
 const PLATFORM_MAP: Record<string, string> = {
@@ -98,7 +98,7 @@ function formatAgentCount(n: number | null | undefined): string {
 }
 
 function statusDot(status: string, pulse = false): ReactElement {
-  const color = STATUS_COLOR[status] ?? '#5A6578';
+  const color = STATUS_COLOR[status] ?? '#60718e';
   return (
     <span
       className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${pulse ? 'animate-pulse' : ''}`}
@@ -271,20 +271,20 @@ export default function SimulationsPage() {
     return (
       <div className="p-6 max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-6">
-          <div className="h-7 w-40 bg-white/[0.05] rounded animate-pulse" />
-          <div className="h-9 w-36 bg-white/[0.05] rounded-lg animate-pulse" />
+          <div className="h-7 w-40 bg-[#14294a]/[0.06] rounded animate-pulse" />
+          <div className="h-9 w-36 bg-[#14294a]/[0.06] rounded-lg animate-pulse" />
         </div>
-        <div className="bg-[#111827] border border-[#1E293B] rounded-2xl overflow-hidden">
+        <div className="bg-white border border-saibyl-border rounded-2xl overflow-hidden">
           {Array.from({ length: 5 }).map((_, i) => (
             <div
               key={i}
-              className="flex items-center gap-4 px-5 py-4 border-b border-[#1E293B] last:border-b-0"
+              className="flex items-center gap-4 px-5 py-4 border-b border-saibyl-border last:border-b-0"
             >
-              <div className="h-4 w-4 bg-white/[0.04] rounded animate-pulse" />
-              <div className="h-4 w-48 bg-white/[0.04] rounded animate-pulse" />
-              <div className="h-4 w-20 bg-white/[0.04] rounded animate-pulse ml-auto" />
-              <div className="h-4 w-16 bg-white/[0.04] rounded animate-pulse" />
-              <div className="h-4 w-24 bg-white/[0.04] rounded animate-pulse" />
+              <div className="h-4 w-4 bg-[#14294a]/[0.04] rounded animate-pulse" />
+              <div className="h-4 w-48 bg-[#14294a]/[0.04] rounded animate-pulse" />
+              <div className="h-4 w-20 bg-[#14294a]/[0.04] rounded animate-pulse ml-auto" />
+              <div className="h-4 w-16 bg-[#14294a]/[0.04] rounded animate-pulse" />
+              <div className="h-4 w-24 bg-[#14294a]/[0.04] rounded animate-pulse" />
             </div>
           ))}
         </div>
@@ -297,17 +297,17 @@ export default function SimulationsPage() {
     return (
       <div className="p-6 max-w-6xl mx-auto">
         <div className="flex flex-col items-center justify-center py-28 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-[#C9A227]/10 flex items-center justify-center mb-5">
-            <FlaskConical className="w-8 h-8 text-[#C9A227]" />
+          <div className="w-16 h-16 rounded-2xl bg-saibyl-blue/10 flex items-center justify-center mb-5">
+            <FlaskConical className="w-8 h-8 text-saibyl-blue" />
           </div>
-          <p className="text-[#E8ECF2] font-semibold text-lg mb-1">No runs yet</p>
-          <p className="text-[#5A6578] text-sm mb-8 max-w-sm">
+          <p className="text-saibyl-ink font-semibold text-lg mb-1">No runs yet</p>
+          <p className="text-saibyl-muted text-sm mb-8 max-w-sm">
             Start one and you&rsquo;ll see what people say about your product before
             you spend anything putting it in front of them.
           </p>
           <Link
             to="/app/simulations/new"
-            className="inline-flex items-center gap-2 bg-[#C9A227] text-[#0A0F1C] font-semibold px-5 py-2.5 rounded-lg hover:bg-[#D4AF37] transition-colors text-sm"
+            className="inline-flex items-center gap-2 bg-saibyl-blue text-white font-semibold px-5 py-2.5 rounded-lg hover:bg-saibyl-gold-hover transition-colors text-sm"
           >
             <Plus className="w-4 h-4" /> Start your first run
           </Link>
@@ -324,14 +324,14 @@ export default function SimulationsPage() {
       {/* ---- Page Header ---- */}
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="font-extrabold text-[22px] text-[#E8ECF2]">Your runs</h1>
-          <p className="text-xs text-[#5A6578] mt-0.5 font-mono">
+          <h1 className="font-extrabold text-[22px] text-saibyl-ink">Your runs</h1>
+          <p className="text-xs text-saibyl-muted mt-0.5 font-mono">
             {total} in total &middot; {runningCount} going now &middot; {completeCount} finished
           </p>
         </div>
         <Link
           to="/app/simulations/new"
-          className="inline-flex items-center gap-2 bg-[#C9A227] text-[#0A0F1C] font-semibold px-4 py-2 rounded-lg hover:bg-[#D4AF37] transition-colors text-sm"
+          className="inline-flex items-center gap-2 bg-saibyl-blue text-white font-semibold px-4 py-2 rounded-lg hover:bg-saibyl-gold-hover transition-colors text-sm"
         >
           <Plus className="w-4 h-4" /> New run
         </Link>
@@ -341,13 +341,13 @@ export default function SimulationsPage() {
       <div className="flex items-center gap-4 mb-4 flex-wrap">
         {/* Search */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5A6578]" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-saibyl-muted" />
           <input
             type="text"
             placeholder="Search your runs…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="bg-white/[0.03] border border-[#1E293B] rounded-lg pl-9 pr-4 py-2 text-sm text-[#E8ECF2] placeholder:text-[#5A6578] focus:outline-none focus:border-[#8B5CF6]/50 transition-colors w-64"
+            className="bg-white border border-saibyl-border-light rounded-xl pl-9 pr-4 py-2 text-sm text-saibyl-ink placeholder:text-saibyl-muted/70 focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20 transition-colors w-64"
           />
         </div>
 
@@ -362,8 +362,8 @@ export default function SimulationsPage() {
                 onClick={() => setStatusFilter(f)}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                   active
-                    ? 'bg-white/[0.08] text-[#E8ECF2]'
-                    : 'text-[#5A6578] hover:text-[#8B97A8]'
+                    ? 'bg-[#14294a]/[0.06] text-saibyl-ink'
+                    : 'text-saibyl-muted hover:text-saibyl-silver'
                 }`}
               >
                 {f !== 'all' && statusDot(f)}
@@ -384,12 +384,12 @@ export default function SimulationsPage() {
             exit={{ opacity: 0, height: 0 }}
             className="overflow-hidden mb-4"
           >
-            <div className="bg-[#8B5CF6]/10 border border-[#8B5CF6]/20 rounded-xl px-4 py-2 flex items-center gap-3">
-              <span className="text-sm text-[#E8ECF2] font-medium">
+            <div className="bg-[#8b73ee]/10 border border-[#8b73ee]/25 rounded-xl px-4 py-2 flex items-center gap-3">
+              <span className="text-sm text-saibyl-ink font-medium">
                 {selected.size} selected
               </span>
               <button
-                className="inline-flex items-center gap-1.5 text-xs text-[#8B97A8] hover:text-[#E8ECF2] px-2 py-1 rounded transition-colors"
+                className="inline-flex items-center gap-1.5 text-xs text-saibyl-silver hover:text-saibyl-ink px-2 py-1 rounded transition-colors"
                 onClick={() => {
                   // TODO: Export selected simulations
                 }}
@@ -397,7 +397,7 @@ export default function SimulationsPage() {
                 <Download className="w-3.5 h-3.5" /> Export
               </button>
               <button
-                className="inline-flex items-center gap-1.5 text-xs text-[#8B97A8] hover:text-[#E8ECF2] px-2 py-1 rounded transition-colors"
+                className="inline-flex items-center gap-1.5 text-xs text-saibyl-silver hover:text-saibyl-ink px-2 py-1 rounded transition-colors"
                 onClick={() => {
                   // TODO: Archive selected simulations
                 }}
@@ -405,7 +405,7 @@ export default function SimulationsPage() {
                 <Archive className="w-3.5 h-3.5" /> Archive
               </button>
               <button
-                className="inline-flex items-center gap-1.5 text-xs text-[#EF4444] hover:bg-[#EF4444]/10 px-2 py-1 rounded transition-colors"
+                className="inline-flex items-center gap-1.5 text-xs text-saibyl-negative hover:bg-saibyl-negative/10 px-2 py-1 rounded transition-colors"
                 onClick={() => handleDelete(Array.from(selected))}
               >
                 <Trash2 className="w-3.5 h-3.5" /> Delete
@@ -416,16 +416,16 @@ export default function SimulationsPage() {
       </AnimatePresence>
 
       {/* ---- Data Table ---- */}
-      <div className="bg-[#111827] border border-[#1E293B] rounded-2xl overflow-hidden">
+      <div className="bg-white border border-saibyl-border rounded-2xl overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-[#1E293B]">
+            <tr className="border-b border-saibyl-border">
               <th className="w-10 px-4 py-3">
                 <input
                   type="checkbox"
                   checked={selected.size === filteredSims.length && filteredSims.length > 0}
                   onChange={toggleSelectAll}
-                  className="accent-[#8B5CF6] w-3.5 h-3.5 cursor-pointer"
+                  className="accent-[#8b73ee] w-3.5 h-3.5 cursor-pointer"
                 />
               </th>
               {(
@@ -440,15 +440,15 @@ export default function SimulationsPage() {
               ).map(([field, label], i) => (
                 <th
                   key={i}
-                  className={`text-left px-4 py-3 text-[10px] font-medium tracking-widest uppercase text-[#5A6578] ${
-                    field ? 'cursor-pointer select-none hover:text-[#8B97A8]' : ''
+                  className={`text-left px-4 py-3 text-[10px] font-medium tracking-widest uppercase text-saibyl-muted ${
+                    field ? 'cursor-pointer select-none hover:text-saibyl-silver' : ''
                   }`}
                   onClick={() => field && toggleSort(field as SortField)}
                 >
                   <span className="inline-flex items-center gap-1">
                     {label}
                     {field && sortField === field && (
-                      <ArrowUpDown className="w-3 h-3 text-[#8B5CF6]" />
+                      <ArrowUpDown className="w-3 h-3 text-[#6a4fe0]" />
                     )}
                   </span>
                 </th>
@@ -458,19 +458,19 @@ export default function SimulationsPage() {
           <tbody>
             {filteredSims.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-center py-12 text-[#5A6578] text-sm">
+                <td colSpan={7} className="text-center py-12 text-saibyl-muted text-sm">
                   Nothing matches what you have filtered to.
                 </td>
               </tr>
             ) : (
               filteredSims.map((sim) => {
                 const ns = normalizeStatus(sim.status);
-                const color = STATUS_COLOR[sim.status] ?? '#5A6578';
+                const color = STATUS_COLOR[sim.status] ?? '#60718e';
                 return (
                   <tr
                     key={sim.id}
-                    className={`border-b border-[#1E293B] last:border-b-0 hover:bg-white/[0.02] transition-colors cursor-pointer ${
-                      selected.has(sim.id) ? 'bg-[#8B5CF6]/5' : ''
+                    className={`border-b border-saibyl-border last:border-b-0 hover:bg-[#14294a]/[0.02] transition-colors cursor-pointer ${
+                      selected.has(sim.id) ? 'bg-[#8b73ee]/5' : ''
                     }`}
                     onClick={(e) => {
                       /* don't navigate when clicking checkbox or actions */
@@ -489,7 +489,7 @@ export default function SimulationsPage() {
                         type="checkbox"
                         checked={selected.has(sim.id)}
                         onChange={() => toggleSelect(sim.id)}
-                        className="accent-[#8B5CF6] w-3.5 h-3.5 cursor-pointer"
+                        className="accent-[#8b73ee] w-3.5 h-3.5 cursor-pointer"
                       />
                     </td>
 
@@ -504,9 +504,9 @@ export default function SimulationsPage() {
                         name and when it started — both of which are already on
                         this row and are both real. */}
                     <td className="px-4 py-3">
-                      <div className="font-medium text-[#E8ECF2]">{sim.name}</div>
+                      <div className="font-medium text-saibyl-ink">{sim.name}</div>
                       {sim.prediction_goal && (
-                        <div className="text-[11px] text-[#5A6578] mt-0.5 line-clamp-1 max-w-md">
+                        <div className="text-[11px] text-saibyl-muted mt-0.5 line-clamp-1 max-w-md">
                           {sim.prediction_goal}
                         </div>
                       )}
@@ -533,19 +533,19 @@ export default function SimulationsPage() {
                           {sim.platforms.map((p) => (
                             <span
                               key={p}
-                              className="bg-white/[0.04] rounded px-1.5 py-0.5 text-[10px] font-mono text-[#8B97A8]"
+                              className="bg-[#14294a]/[0.04] rounded px-1.5 py-0.5 text-[10px] font-mono text-saibyl-silver"
                             >
                               {PLATFORM_MAP[p] ?? p}
                             </span>
                           ))}
                         </div>
                       ) : (
-                        <span className="text-[#5A6578]">&mdash;</span>
+                        <span className="text-saibyl-muted">&mdash;</span>
                       )}
                     </td>
 
                     {/* Agents */}
-                    <td className="px-4 py-3 font-mono text-xs text-[#8B97A8]">
+                    <td className="px-4 py-3 font-mono text-xs text-saibyl-silver">
                       {formatAgentCount(sim.agent_count)}
                     </td>
 
@@ -555,7 +555,7 @@ export default function SimulationsPage() {
                         here would be one request per row, most of them 404. */}
 
                     {/* Created */}
-                    <td className="px-4 py-3 font-mono text-xs text-[#5A6578] whitespace-nowrap">
+                    <td className="px-4 py-3 font-mono text-xs text-saibyl-muted whitespace-nowrap">
                       {formatDistanceToNow(new Date(sim.created_at), { addSuffix: true })}
                     </td>
 
@@ -566,17 +566,17 @@ export default function SimulationsPage() {
                           e.stopPropagation();
                           setOpenMenu(openMenu === sim.id ? null : sim.id);
                         }}
-                        className="p-1.5 rounded-lg hover:bg-white/[0.06] text-[#5A6578] hover:text-[#E8ECF2] transition-colors"
+                        className="p-1.5 rounded-lg hover:bg-[#14294a]/[0.04] text-saibyl-muted hover:text-saibyl-ink transition-colors"
                       >
                         <MoreHorizontal className="w-4 h-4" />
                       </button>
 
                       {openMenu === sim.id && (
                         <div
-                          className="absolute right-4 top-10 z-50 w-40 bg-[#1E293B] border border-[#2A3545] rounded-xl shadow-xl py-1 text-xs"
+                          className="absolute right-4 top-10 z-50 w-40 bg-white border border-saibyl-border-light rounded-xl shadow-xl py-1 text-xs"
                         >
                           <button
-                            className="w-full text-left px-3 py-2 text-[#E8ECF2] hover:bg-white/[0.06] transition-colors"
+                            className="w-full text-left px-3 py-2 text-saibyl-ink hover:bg-[#14294a]/[0.04] transition-colors"
                             onClick={(e) => {
                               e.stopPropagation();
                               navigate(`/app/simulations/${sim.id}`);
@@ -585,7 +585,7 @@ export default function SimulationsPage() {
                             Open it
                           </button>
                           <button
-                            className="w-full text-left px-3 py-2 text-[#8B97A8] hover:bg-white/[0.06] transition-colors"
+                            className="w-full text-left px-3 py-2 text-saibyl-silver hover:bg-[#14294a]/[0.04] transition-colors"
                             onClick={(e) => {
                               e.stopPropagation();
                               // TODO: Duplicate simulation
@@ -594,7 +594,7 @@ export default function SimulationsPage() {
                             Duplicate
                           </button>
                           <button
-                            className="w-full text-left px-3 py-2 text-[#8B97A8] hover:bg-white/[0.06] transition-colors"
+                            className="w-full text-left px-3 py-2 text-saibyl-silver hover:bg-[#14294a]/[0.04] transition-colors"
                             onClick={(e) => {
                               e.stopPropagation();
                               // TODO: Archive simulation
@@ -603,7 +603,7 @@ export default function SimulationsPage() {
                             Archive
                           </button>
                           <button
-                            className="w-full text-left px-3 py-2 text-[#EF4444] hover:bg-[#EF4444]/10 transition-colors"
+                            className="w-full text-left px-3 py-2 text-saibyl-negative hover:bg-saibyl-negative/10 transition-colors"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleDelete([sim.id]);
@@ -624,14 +624,14 @@ export default function SimulationsPage() {
 
       {/* ---- Pagination ---- */}
       <div className="flex items-center justify-between mt-4">
-        <p className="text-xs text-[#5A6578] font-mono">
+        <p className="text-xs text-saibyl-muted font-mono">
           Showing {pageStart}&ndash;{pageEnd} of {total}
         </p>
         <div className="flex items-center gap-1">
           <button
             disabled={page <= 1}
             onClick={() => goToPage((p) => p - 1)}
-            className="px-3 py-1.5 rounded-lg border border-[#1E293B] text-xs text-[#8B97A8] hover:bg-white/[0.04] disabled:opacity-30 transition-colors"
+            className="px-3 py-1.5 rounded-lg border border-saibyl-border text-xs text-saibyl-silver hover:bg-[#14294a]/[0.04] disabled:opacity-30 transition-colors"
           >
             Previous
           </button>
@@ -641,8 +641,8 @@ export default function SimulationsPage() {
               onClick={() => goToPage(p)}
               className={`px-2.5 py-1.5 rounded-lg text-xs font-mono transition-colors ${
                 p === page
-                  ? 'bg-white/[0.08] text-[#E8ECF2]'
-                  : 'text-[#5A6578] hover:text-[#8B97A8]'
+                  ? 'bg-[#14294a]/[0.06] text-saibyl-ink'
+                  : 'text-saibyl-muted hover:text-saibyl-silver'
               }`}
             >
               {p}
@@ -651,7 +651,7 @@ export default function SimulationsPage() {
           <button
             disabled={page >= totalPages}
             onClick={() => goToPage((p) => p + 1)}
-            className="px-3 py-1.5 rounded-lg border border-[#1E293B] text-xs text-[#8B97A8] hover:bg-white/[0.04] disabled:opacity-30 transition-colors"
+            className="px-3 py-1.5 rounded-lg border border-saibyl-border text-xs text-saibyl-silver hover:bg-[#14294a]/[0.04] disabled:opacity-30 transition-colors"
           >
             Next
           </button>

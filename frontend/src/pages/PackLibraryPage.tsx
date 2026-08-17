@@ -191,7 +191,7 @@ export default function PackLibraryPage() {
               return (
               <div
                 key={pack.id}
-                className={`px-5 py-4 ${i > 0 ? 'border-t border-white/[0.04]' : ''}`}
+                className={`px-5 py-4 ${i > 0 ? 'border-t border-saibyl-border' : ''}`}
               >
                 <div className="flex items-center justify-between gap-4">
                   {editingId === pack.id ? (
@@ -205,7 +205,7 @@ export default function PackLibraryPage() {
                           if (e.key === 'Enter') void commitRename(pack.id);
                           if (e.key === 'Escape') setEditingId(null);
                         }}
-                        className="flex-1 min-w-0 rounded-lg bg-[#0B1120] border border-white/[0.08] px-3 py-1.5 text-[14px] text-saibyl-platinum focus:outline-none focus:ring-1 focus:ring-saibyl-gold/50"
+                        className="flex-1 min-w-0 rounded-lg bg-white border border-saibyl-border-light px-3 py-1.5 text-[14px] text-saibyl-ink placeholder:text-saibyl-muted/70 focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20"
                       />
                       <button
                         onClick={() => void commitRename(pack.id)}

@@ -76,14 +76,14 @@ export default function ObjectionMap({
                   )}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline justify-between gap-3">
-                      <span className="text-[14px] font-semibold text-saibyl-platinum group-hover:text-white transition-colors">
+                      <span className="text-[14px] font-semibold text-saibyl-platinum group-hover:text-saibyl-gold transition-colors">
                         {objection.label}
                       </span>
                       <span className="text-[11px] font-mono text-saibyl-gold whitespace-nowrap">
                         {objection.load_bearing_score.toFixed(1)}
                       </span>
                     </div>
-                    <div className="h-1.5 bg-saibyl-void rounded-full mt-1.5 overflow-hidden">
+                    <div className="h-1.5 bg-[#14294a]/[0.06] rounded-full mt-1.5 overflow-hidden">
                       <div
                         className="h-full bg-saibyl-gold rounded-full"
                         style={{
@@ -129,7 +129,7 @@ export default function ObjectionMap({
                             >
                               {groupLabel(cohort)}
                             </span>
-                            <div className="flex-1 h-1.5 bg-saibyl-void rounded-full overflow-hidden">
+                            <div className="flex-1 h-1.5 bg-[#14294a]/[0.06] rounded-full overflow-hidden">
                               <div
                                 className="h-full bg-saibyl-insight-violet rounded-full"
                                 style={{ width: `${Math.min(share * 100, 100)}%` }}

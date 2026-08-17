@@ -52,7 +52,7 @@ const PLATFORM_NAMES: Record<string, string> = {
 const INK = '#1a1a1a';
 const MUTED = '#666';
 const RULE = '#e0e0e0';
-const BRAND = '#8B5CF6';
+const BRAND = '#8b73ee';
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
@@ -253,8 +253,8 @@ export default function ReportPrintPage() {
             }
 
             @media screen {
-              body { background: #f5f5f5; }
-              .print-page { max-width: 800px; margin: 0 auto; background: white; box-shadow: 0 2px 20px rgba(0,0,0,0.1); }
+              body { background: #f8fbff; }
+              .print-page { max-width: 800px; margin: 0 auto; background: white; box-shadow: 0 12px 30px rgba(52,96,164,0.12); }
             }
           `,
         }}
@@ -263,7 +263,7 @@ export default function ReportPrintPage() {
       <div
         className="print-page"
         style={{
-          fontFamily: "'Aktiv Grotesk', system-ui, sans-serif",
+          fontFamily: "Manrope, system-ui, sans-serif",
           color: INK,
           background: '#ffffff',
           maxWidth: 800,
@@ -364,7 +364,7 @@ export default function ReportPrintPage() {
                 fontSize: 11,
                 color: MUTED,
                 lineHeight: 1.7,
-                borderLeft: '3px solid #C9A227',
+                borderLeft: '3px solid #286cf0',
                 paddingLeft: 12,
               }}
             >
@@ -843,7 +843,7 @@ const centeredStyle: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   minHeight: '100vh',
-  fontFamily: "'Aktiv Grotesk', system-ui, sans-serif",
+  fontFamily: "Manrope, system-ui, sans-serif",
   color: MUTED,
   background: '#fff',
 };

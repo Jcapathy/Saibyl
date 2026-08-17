@@ -84,7 +84,7 @@ const TIPS = [
     body: 'Combining different persona packs (e.g. "Tech Workers" + "Policy Analysts") creates realistic cross-demographic debates. The friction between groups is where the best insights live.',
   },
   {
-    title: 'Use A/B testing for narrative comparison',
+    title: 'Test more than one version of your message',
     body: 'Write more than one version of the same pitch and the room reacts to each of them from scratch — so the only thing that differed is your wording, not who happened to be listening. The report names a winner only when the evidence actually separates them.',
   },
   {
@@ -124,7 +124,7 @@ const FAQ = [
     a: 'Yes. Once the report is written you can ask it follow-up questions, and it answers from what was actually said in the run rather than from general knowledge.',
   },
   {
-    q: 'What is A/B testing?',
+    q: 'What is a message test?',
     a: 'Put two or more versions of the same message in front of one shared room. Everyone reacts to every version, so the comparison is like for like — and when the versions are too close to call, the report says so instead of picking one.',
   },
 ];
@@ -166,12 +166,12 @@ export default function GuidePage() {
                 className="glass rounded-2xl p-6 relative overflow-hidden group"
               >
                 {/* Step number watermark */}
-                <span className="absolute top-3 right-4 text-[48px] font-display font-extrabold text-white/[0.03] select-none leading-none">
+                <span className="absolute top-3 right-4 text-[48px] font-display font-extrabold text-[#14294a]/[0.05] select-none leading-none">
                   {s.num}
                 </span>
 
                 <div className="flex items-center gap-3 mb-3">
-                  <div className={`w-9 h-9 rounded-xl bg-white/[0.04] flex items-center justify-center ${s.color}`}>
+                  <div className={`w-9 h-9 rounded-xl bg-[#14294a]/[0.04] flex items-center justify-center ${s.color}`}>
                     <s.Icon className="w-4.5 h-4.5" />
                   </div>
                   <h3 className="text-[15px] font-semibold text-saibyl-platinum">{s.title}</h3>
@@ -219,7 +219,7 @@ export default function GuidePage() {
           <div className="glass rounded-2xl overflow-hidden">
             <table className="w-full text-[13px]">
               <thead>
-                <tr className="border-b border-white/[0.06]">
+                <tr className="border-b border-saibyl-border">
                   <th className="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-saibyl-muted font-medium">Factor</th>
                   <th className="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-saibyl-muted font-medium">Faster</th>
                   <th className="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-saibyl-muted font-medium">Slower</th>
@@ -233,7 +233,7 @@ export default function GuidePage() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={stagger(i)}
-                    className="border-b border-white/[0.03] last:border-0"
+                    className="border-b border-saibyl-border last:border-0"
                   >
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2">
@@ -342,7 +342,7 @@ export default function GuidePage() {
         >
           <Link
             to="/app/home"
-            className="inline-flex items-center gap-2 px-8 py-3 rounded-xl bg-[#C9A227] text-[#0A0F1C] font-semibold text-[15px] hover:bg-[#D4AF37] transition-all hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(201,162,39,0.3)]"
+            className="inline-flex items-center gap-2 px-8 py-3 rounded-xl bg-saibyl-blue text-white font-semibold text-[15px] hover:bg-[#1e5ad9] transition-all hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(40,108,240,0.3)]"
           >
             <FlaskConical className="w-4 h-4" />
             Add your first product

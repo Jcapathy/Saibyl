@@ -182,9 +182,18 @@ export function renderedStrings(file: SourceFile): string[] {
     if (value?.trim()) out.push(value.trim());
   }
 
-  // String and template literals assigned to something that reads like copy.
+  /*
+    String and template literals assigned to something that reads like copy.
+
+    `title`, `q` and `a` are here because GuidePage declares its tips and FAQ
+    as data arrays (`{ title: …, body: … }`, `{ q: …, a: … }`) and renders
+    them through one map — `body:` was scanned and `title:`/`q:` were not, so
+    "A/B testing" shipped in two rendered strings under a green jargon test.
+    Found during the 2026-08-17 restyle, the third instance of this class
+    (after `label=` attributes and entity-bearing sentences).
+  */
   const copyish =
-    /\b(label|headline|body|blurb|ask|question|help|consequence|reason|busyLabel|text|summary|hint|verdict)\s*:\s*(?:'([^']{4,})'|"([^"]{4,})"|`([^`]{4,})`)/g;
+    /\b(label|headline|body|blurb|ask|question|help|consequence|reason|busyLabel|text|summary|hint|verdict|title|q|a)\s*:\s*(?:'([^']{4,})'|"([^"]{4,})"|`([^`]{4,})`)/g;
   for (const match of code.matchAll(copyish)) {
     const value = match[2] ?? match[3] ?? match[4];
     if (value?.trim()) out.push(value.trim());

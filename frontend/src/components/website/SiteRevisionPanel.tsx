@@ -189,7 +189,7 @@ export default function SiteRevisionPanel({
 
       {/* ── The way in ── */}
       {revision === null && (
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+        <div className="rounded-xl border border-saibyl-border bg-white p-5">
           <p className="text-[14px] font-medium text-saibyl-platinum">Fix it</p>
           <p className="text-[12.5px] text-saibyl-muted mt-1 leading-relaxed">
             Have Saibyl draft the improved page &mdash; the reviewers score it

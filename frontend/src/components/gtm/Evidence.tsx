@@ -28,8 +28,8 @@ export function Fact({ label, value }: { label: string; value: string | null | u
   if (!shown) return null;
   return (
     <div>
-      <dt className="text-[10px] uppercase tracking-widest text-[#5A6578]">{label}</dt>
-      <dd className="text-[13px] text-[#E8ECF2] mt-0.5">{shown}</dd>
+      <dt className="text-[10px] uppercase tracking-widest text-saibyl-muted">{label}</dt>
+      <dd className="text-[13px] text-saibyl-ink mt-0.5">{shown}</dd>
     </div>
   );
 }
@@ -40,12 +40,12 @@ export function FactList({ label, values }: { label: string; values: string[] | 
   if (!shown) return null;
   return (
     <div>
-      <dt className="text-[10px] uppercase tracking-widest text-[#5A6578]">{label}</dt>
+      <dt className="text-[10px] uppercase tracking-widest text-saibyl-muted">{label}</dt>
       <dd className="flex flex-wrap gap-1.5 mt-1">
         {shown.map((value) => (
           <span
             key={value}
-            className="rounded-md bg-white/[0.05] px-2 py-0.5 text-[11px] text-[#8B97A8]"
+            className="rounded-md bg-[#14294a]/[0.04] px-2 py-0.5 text-[11px] text-saibyl-silver"
           >
             {value}
           </span>
@@ -73,7 +73,7 @@ export function SourceLink({
       target="_blank"
       rel="noopener noreferrer"
       title={url}
-      className={`inline-flex items-baseline gap-1 text-[#2563EB] hover:text-[#8B5CF6] hover:underline break-all transition-colors ${className}`}
+      className={`inline-flex items-baseline gap-1 text-saibyl-blue hover:text-[#6a4fe0] hover:underline break-all transition-colors ${className}`}
     >
       {text}
       <ExternalLink className="w-3 h-3 shrink-0 self-center" />
@@ -93,7 +93,7 @@ export function SourceLink({
 export function EvidenceList({ evidence }: { evidence: EvidenceItem[] }) {
   if (evidence.length === 0) {
     return (
-      <p className="text-[12px] text-[#8B97A8] leading-relaxed">
+      <p className="text-[12px] text-saibyl-silver leading-relaxed">
         No quotes were saved for this company. The page below was returned by the search
         and named them, but nothing on it stated anything we could check &mdash; which is
         why the details above are mostly blank. Open the page yourself before acting on
@@ -107,16 +107,16 @@ export function EvidenceList({ evidence }: { evidence: EvidenceItem[] }) {
       {evidence.map((item, i) => (
         <li
           key={`${item.field}-${item.source_url}-${i}`}
-          className="rounded-xl border border-[#1E293B] bg-white/[0.02] p-3.5"
+          className="rounded-xl border border-saibyl-border bg-white p-3.5"
         >
-          <p className="text-[10px] uppercase tracking-widest text-[#5A6578] mb-1.5">
+          <p className="text-[10px] uppercase tracking-widest text-saibyl-muted mb-1.5">
             {EVIDENCE_FIELD_COPY[item.field] ?? item.field.replace(/_/g, ' ')}
           </p>
           <blockquote className="flex gap-2">
-            <Quote className="w-3.5 h-3.5 text-[#5A6578] shrink-0 mt-0.5" />
-            <p className="text-[13px] text-[#E8ECF2] leading-relaxed italic">{item.quote}</p>
+            <Quote className="w-3.5 h-3.5 text-saibyl-muted shrink-0 mt-0.5" />
+            <p className="text-[13px] text-saibyl-ink leading-relaxed italic">{item.quote}</p>
           </blockquote>
-          <p className="text-[11px] mt-2 pl-[22px]">
+          <p className="font-mono text-[11px] mt-2 pl-[22px]">
             <SourceLink url={item.source_url} />
           </p>
         </li>

@@ -31,7 +31,7 @@ import {
  */
 
 const quietBtn =
-  'inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-white/[0.12] text-saibyl-platinum text-[13px] hover:bg-white/[0.05] transition-colors';
+  'inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-saibyl-border-light text-saibyl-platinum text-[13px] hover:bg-[#14294a]/[0.04] transition-colors';
 
 /* ------------------------------------------------------------------ */
 /*  Small pieces                                                       */
@@ -48,8 +48,8 @@ function Shot({
   failed?: boolean;
 }) {
   return (
-    <figure className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
-      <figcaption className="px-3 py-2 text-[11px] font-medium uppercase tracking-wider text-saibyl-silver border-b border-white/[0.06]">
+    <figure className="rounded-xl border border-saibyl-border bg-white overflow-hidden">
+      <figcaption className="px-3 py-2 text-[11px] font-medium uppercase tracking-wider text-saibyl-silver border-b border-saibyl-border">
         {label}
       </figcaption>
       {url ? (
@@ -249,7 +249,7 @@ export default function SiteRevision({
 
   const headerTone =
     delta === null || delta === 0
-      ? 'border-white/[0.06] bg-white/[0.02]'
+      ? 'border-saibyl-border bg-white'
       : delta > 0
         ? 'border-saibyl-positive/30 bg-saibyl-positive/[0.07]'
         : 'border-saibyl-negative/30 bg-saibyl-negative/[0.07]';
@@ -322,7 +322,7 @@ export default function SiteRevision({
         )}
 
         {deltas.length > 0 && (
-          <ul className="mt-4 pt-3 border-t border-white/[0.08] space-y-1.5">
+          <ul className="mt-4 pt-3 border-t border-saibyl-border space-y-1.5">
             {deltas.map(({ key, before: b, after: a }) => {
               const d = b !== null && a !== null ? a - b : null;
               return (
@@ -408,7 +408,7 @@ export default function SiteRevision({
 
       {/* ── Do it yourself instead ── */}
       {prompts.length > 0 && (
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+        <div className="rounded-xl border border-saibyl-border bg-white p-4">
           <p className="text-[13.5px] font-medium text-saibyl-platinum">
             Prefer to fix it yourself?
           </p>
@@ -419,9 +419,9 @@ export default function SiteRevision({
             {prompts.map((prompt, i) => (
               <details
                 key={`${prompt.title}-${i}`}
-                className="rounded-lg border border-white/[0.06] bg-white/[0.02]"
+                className="rounded-lg border border-saibyl-border bg-saibyl-elevated"
               >
-                <summary className="cursor-pointer select-none px-3 py-2.5 text-[12.5px] font-medium text-saibyl-platinum hover:text-saibyl-white">
+                <summary className="cursor-pointer select-none px-3 py-2.5 text-[12.5px] font-medium text-saibyl-platinum hover:text-saibyl-blue">
                   {prompt.title}
                 </summary>
                 <div className="px-3 pb-3">
@@ -430,7 +430,7 @@ export default function SiteRevision({
                       {prompt.scope}
                     </p>
                   )}
-                  <pre className="mt-2 rounded-md border border-white/[0.06] bg-[#0B1120] p-3 font-mono text-[11.5px] text-saibyl-platinum leading-relaxed whitespace-pre-wrap break-words overflow-x-auto">
+                  <pre className="mt-2 rounded-md border border-saibyl-border-light bg-white p-3 font-mono text-[11.5px] text-saibyl-platinum leading-relaxed whitespace-pre-wrap break-words overflow-x-auto">
                     {prompt.prompt}
                   </pre>
                   <div className="mt-2">

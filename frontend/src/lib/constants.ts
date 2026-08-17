@@ -19,13 +19,16 @@ export function formatPlatforms(platforms: string[]): string {
 
 /* ── Chart color system ──────────────────────────────────────────── */
 
-/** Semantic chart colors — used consistently across all report charts */
+/** Semantic chart colors — used consistently across all report charts.
+    Light-ground palette: each value doubles as a bar fill on white and as
+    occasional small text (sentimentBarColor feeds an 11px readout), so every
+    value holds ≥4.5:1 on white. */
 export const CHART_COLORS = {
-  subjectA: '#8B5CF6',   // Purple — Primary entity
-  subjectB: '#2563EB',   // Cyan — Secondary entity
-  neutral:  '#D4A84B',   // Gold — Moderate / Undecided
-  positive: '#34D399',   // Green — Positive movement
-  negative: '#F87171',   // Red — Negative movement
+  subjectA: '#6a4fe0',   // Violet — Primary entity
+  subjectB: '#286cf0',   // Blue — Secondary entity
+  neutral:  '#b45309',   // Amber — Moderate / Undecided
+  positive: '#0e7d55',   // Green — Positive movement
+  negative: '#d92d3c',   // Red — Negative movement
 } as const;
 
 /** Ordered palette for bar/line charts with multiple series */
@@ -35,7 +38,7 @@ export const CHART_PALETTE = [
   CHART_COLORS.neutral,
   CHART_COLORS.positive,
   CHART_COLORS.negative,
-  '#8B5CF6', // Light purple — overflow series
+  '#8b73ee', // Light violet — overflow series
 ];
 
 /** High-contrast print-safe palette (same order as CHART_PALETTE) */
@@ -54,11 +57,11 @@ export const PLATFORM_COLORS: Record<string, string> = {
   tiktok:        '#EE1D52',              // TikTok pink
   youtube:       '#FF0000',              // YouTube red
   facebook:      '#1877F2',              // Facebook blue
-  threads:       '#000000',              // Threads black
-  hacker_news:   '#8B5CF6',              // Light purple
-  discord:       '#A78BFA',              // Violet
+  threads:       '#14294a',              // Threads — ink, not pure black
+  hacker_news:   '#8b73ee',              // Light violet
+  discord:       '#6a4fe0',              // Violet
   news_comments: CHART_COLORS.positive,  // Green
-  custom:        '#94A3B8',              // Slate
+  custom:        '#60718e',              // Slate
 };
 
 /** Resolve a platform color by platform key or display name */

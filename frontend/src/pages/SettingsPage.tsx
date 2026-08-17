@@ -104,9 +104,9 @@ function getNextPlan(current: string): string | null {
   return PLAN_ORDER[idx + 1];
 }
 
-const cardClass = 'bg-[#111827] border border-[#1E293B] rounded-2xl';
+const cardClass = 'bg-white border border-saibyl-border rounded-2xl';
 const goldBtnClass =
-  'bg-[#C9A227] text-[#0A0F1C] px-5 py-2.5 rounded-xl font-semibold text-[13px] hover:bg-[#D4AF37] transition-colors';
+  'bg-saibyl-blue text-white px-5 py-2.5 rounded-xl font-semibold text-[13px] hover:bg-[#1e5ad9] transition-colors';
 
 /* ------------------------------------------------------------------ */
 /*  Plan & credits                                                     */
@@ -166,7 +166,7 @@ function BillingTab() {
     }
   };
 
-  if (loading) return <p className="text-[#5A6578] py-8">Loading…</p>;
+  if (loading) return <p className="text-saibyl-muted py-8">Loading…</p>;
 
   const planKey = resolvePlan(billing?.plan);
   const price = PLAN_PRICE[planKey] ?? 'Custom';
@@ -175,21 +175,21 @@ function BillingTab() {
 
   return (
     <div className="space-y-6">
-      <div className={`${cardClass} p-6`}>
+      <div className="rounded-2xl border border-saibyl-blue/45 bg-saibyl-blue/[0.05] p-6">
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div>
-            <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#C9A227]">
+            <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-saibyl-blue">
               Your plan
             </span>
-            <h2 className="font-semibold text-[26px] text-[#E8ECF2] capitalize mt-1">
+            <h2 className="font-semibold text-[26px] text-saibyl-ink capitalize mt-1">
               {planKey}
             </h2>
-            <p className="font-mono text-[15px] text-[#8B97A8] mt-1">
+            <p className="font-mono tabular-nums text-[15px] text-saibyl-silver mt-1">
               {price}
               {price !== 'Custom' && <span className="text-[13px]">/mo</span>}
             </p>
             {agentCap && (
-              <p className="text-[13px] text-[#5A6578] mt-2">
+              <p className="text-[13px] text-saibyl-muted mt-2">
                 Up to {agentCap} people in the room per run
               </p>
             )}
@@ -198,7 +198,7 @@ function BillingTab() {
           <div className="flex flex-wrap gap-3 items-start">
             <button
               onClick={openPortal}
-              className="border border-[#1E293B] text-[#8B97A8] px-4 py-2.5 rounded-xl text-[13px] hover:text-[#E8ECF2] hover:border-[#334155] transition"
+              className="border border-saibyl-border-light text-saibyl-silver px-4 py-2.5 rounded-xl text-[13px] hover:text-saibyl-ink hover:border-saibyl-blue/40 transition"
             >
               {leaving ? 'Opening…' : 'Manage billing'}
             </button>
@@ -209,13 +209,13 @@ function BillingTab() {
             )}
           </div>
         </div>
-        <p className="text-[11px] text-[#5A6578] mt-4 leading-relaxed">
+        <p className="text-[11px] text-saibyl-muted mt-4 leading-relaxed">
           Payments, cards, receipts and cancellation are all handled in Stripe.
           We never see your card.
         </p>
       </div>
 
-      {error && <p className="text-[13px] text-[#EF4444]">{error}</p>}
+      {error && <p className="text-[13px] text-saibyl-negative">{error}</p>}
 
       <CreditTopUp balance={credits} />
       <ValueCase />
@@ -234,18 +234,18 @@ function AccountTab() {
     <div className="space-y-6">
       <div className={`${cardClass} p-6 space-y-4`}>
         <div>
-          <p className="text-[12px] text-[#5A6578]">Signed in as</p>
-          <p className="text-[15px] text-[#E8ECF2] mt-0.5">{user?.email ?? '—'}</p>
+          <p className="text-[12px] text-saibyl-muted">Signed in as</p>
+          <p className="text-[15px] text-saibyl-ink mt-0.5">{user?.email ?? '—'}</p>
         </div>
         {org?.name && (
           <div>
-            <p className="text-[12px] text-[#5A6578]">Workspace</p>
-            <p className="text-[15px] text-[#E8ECF2] mt-0.5">{org.name}</p>
+            <p className="text-[12px] text-saibyl-muted">Workspace</p>
+            <p className="text-[15px] text-saibyl-ink mt-0.5">{org.name}</p>
           </div>
         )}
         <button
           onClick={logout}
-          className="border border-[#1E293B] text-[#8B97A8] px-4 py-2.5 rounded-xl text-[13px] hover:text-[#EF4444] hover:border-[#EF4444]/30 transition"
+          className="border border-saibyl-border-light text-saibyl-silver px-4 py-2.5 rounded-xl text-[13px] hover:text-saibyl-negative hover:border-saibyl-negative/30 transition"
         >
           Sign out
         </button>
@@ -255,14 +255,14 @@ function AccountTab() {
           needs their password changed can do it; a nav item that promises it
           and does nothing is what this replaces. */}
       <div className={`${cardClass} p-6`}>
-        <h3 className="text-[15px] font-medium text-[#E8ECF2]">
+        <h3 className="text-[15px] font-medium text-saibyl-ink">
           Password and account deletion
         </h3>
-        <p className="text-[13px] text-[#8B97A8] mt-1.5 leading-relaxed max-w-xl">
+        <p className="text-[13px] text-saibyl-silver mt-1.5 leading-relaxed max-w-xl">
           Both are handled by email rather than in the app. Write to{' '}
           <a
             href="mailto:info@saidolabs.com"
-            className="text-[#C9A227] hover:underline"
+            className="text-saibyl-blue hover:underline"
           >
             info@saidolabs.com
           </a>{' '}

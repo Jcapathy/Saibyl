@@ -4,8 +4,8 @@ import api from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
 import type { Objective } from '@/lib/analysis';
 
-const GOLD = '#C9A227';
-const BLUE = '#2563EB';
+const GOLD = '#286cf0';
+const BLUE = '#286cf0';
 
 interface ObjectiveOption {
   value: Objective;
@@ -125,7 +125,7 @@ export default function VariantSetup({
 
   if (!editable) {
     return (
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+      <div className="rounded-2xl border border-saibyl-border bg-saibyl-elevated p-5">
         <p className="text-[12px] text-saibyl-silver">
           This run has already started, so the wording is locked. The whole
           claim of the comparison is that the only thing that differed was the
@@ -148,7 +148,7 @@ export default function VariantSetup({
             setObjective(e.target.value as Objective | '');
             setSaved(false);
           }}
-          className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-[13px] text-saibyl-pearl"
+          className="w-full rounded-xl bg-white border border-saibyl-border-light px-3 py-2 text-[13px] text-saibyl-ink focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20"
         >
           <option value="">Nothing in particular — just how people react</option>
           {objectives.map((opt) => (
@@ -169,12 +169,12 @@ export default function VariantSetup({
         {variants.map((variant, i) => (
           <div
             key={i}
-            className="rounded-2xl border border-white/10 bg-white/5 p-4"
+            className="rounded-2xl border border-saibyl-border bg-saibyl-elevated p-4"
           >
             <div className="flex items-center gap-2 mb-2">
               <span
                 className="px-2 py-0.5 rounded text-[10px] font-semibold"
-                style={{ backgroundColor: `${BLUE}1A`, color: '#9CB4E8' }}
+                style={{ backgroundColor: `${BLUE}1A`, color: '#1e5ad9' }}
               >
                 {String.fromCharCode(65 + i)}
               </span>
@@ -187,12 +187,12 @@ export default function VariantSetup({
                   next[i] = { ...variant, label: e.target.value };
                   update(next);
                 }}
-                className="flex-1 bg-transparent text-[13px] text-saibyl-pearl placeholder:text-saibyl-muted outline-none"
+                className="flex-1 bg-transparent text-[13px] text-saibyl-ink placeholder:text-saibyl-muted/70 outline-none"
               />
               <button
                 type="button"
                 onClick={() => update(variants.filter((_, j) => j !== i))}
-                className="text-saibyl-muted hover:text-red-400"
+                className="text-saibyl-muted hover:text-saibyl-negative"
                 aria-label={`Remove version ${String.fromCharCode(65 + i)}`}
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -208,7 +208,7 @@ export default function VariantSetup({
                 next[i] = { ...variant, content: e.target.value };
                 update(next);
               }}
-              className="w-full rounded-xl bg-black/20 border border-white/10 px-3 py-2 text-[12px] text-saibyl-silver placeholder:text-saibyl-muted outline-none resize-y"
+              className="w-full rounded-xl bg-white border border-saibyl-border-light px-3 py-2 text-[12px] text-saibyl-ink placeholder:text-saibyl-muted/70 focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20 resize-y"
             />
           </div>
         ))}
@@ -233,7 +233,7 @@ export default function VariantSetup({
           className="rounded-xl border px-3 py-2"
           style={{ borderColor: `${GOLD}33`, backgroundColor: `${GOLD}0D` }}
         >
-          <p className="text-[11px] leading-relaxed" style={{ color: GOLD }}>
+          <p className="text-[11px] leading-relaxed" style={{ color: '#1e5ad9' }}>
             {filled} versions means the room does this {filled} times over. The
             same people react to each one from scratch, so this run costs about
             {' '}{filled}&times; what a single message costs. You&rsquo;ll see the exact
@@ -243,14 +243,14 @@ export default function VariantSetup({
       )}
 
       {filled === 1 && (
-        <p className="text-[11px] text-amber-400/90">
+        <p className="text-[11px] text-saibyl-warning">
           One version on its own is not a comparison &mdash; there is nothing to
           compare it against. Add a second, or delete it and the run goes ahead
           with a single message.
         </p>
       )}
 
-      {error && <p className="text-[12px] text-red-400">{error}</p>}
+      {error && <p className="text-[12px] text-saibyl-negative">{error}</p>}
 
       <div className="flex items-center gap-3">
         <button
@@ -258,7 +258,7 @@ export default function VariantSetup({
           onClick={save}
           disabled={saving || filled === 1}
           className="px-4 py-2 rounded-xl text-[12px] font-semibold disabled:opacity-40"
-          style={{ backgroundColor: GOLD, color: '#0A0F1C' }}
+          style={{ backgroundColor: GOLD, color: '#ffffff' }}
         >
           {saving ? 'Saving…' : 'Save these versions'}
         </button>

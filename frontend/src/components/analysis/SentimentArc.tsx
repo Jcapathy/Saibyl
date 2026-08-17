@@ -236,9 +236,9 @@ export default function SentimentArc({
                   y="1"
                   width="12"
                   height="10"
-                  fill="#22C55E"
+                  fill="#2fbf8a"
                   fillOpacity="0.5"
-                  stroke="#22C55E"
+                  stroke="#2fbf8a"
                 />
               </svg>
               above the line — they warmed to it
@@ -253,25 +253,25 @@ export default function SentimentArc({
                     patternUnits="userSpaceOnUse"
                     patternTransform="rotate(45)"
                   >
-                    <line x1="0" y1="0" x2="0" y2="4" stroke="#EF4444" strokeWidth="1.2" />
+                    <line x1="0" y1="0" x2="0" y2="4" stroke="#ff6e79" strokeWidth="1.2" />
                   </pattern>
                 </defs>
-                <rect x="1" y="1" width="12" height="10" fill="#111827" stroke="#EF4444" />
+                <rect x="1" y="1" width="12" height="10" fill="#ffffff" stroke="#ff6e79" />
                 <rect x="1" y="1" width="12" height="10" fill="url(#arc-legend-hatch)" />
               </svg>
               below the line — they cooled on it
             </span>
             <span className="flex items-center gap-1.5">
               <svg width="14" height="12" aria-hidden="true">
-                <line x1="7" y1="1" x2="7" y2="11" stroke="#E8ECF2" strokeWidth="1.5" />
-                <line x1="2" y1="1" x2="12" y2="1" stroke="#E8ECF2" strokeWidth="1.5" />
-                <line x1="2" y1="11" x2="12" y2="11" stroke="#E8ECF2" strokeWidth="1.5" />
+                <line x1="7" y1="1" x2="7" y2="11" stroke="#14294a" strokeWidth="1.5" />
+                <line x1="2" y1="1" x2="12" y2="1" stroke="#14294a" strokeWidth="1.5" />
+                <line x1="2" y1="11" x2="12" y2="11" stroke="#14294a" strokeWidth="1.5" />
               </svg>
               the range around the figure
             </span>
           </div>
 
-          <ul className="mt-2 space-y-1 text-[10px] text-saibyl-muted/80 leading-relaxed">
+          <ul className="mt-2 space-y-1 text-[10px] text-saibyl-muted leading-relaxed">
             <li>
               The scale is always −1 to +1, so a small move looks small. That is deliberate — a
               run that never left ±0.05 should not look like one that swung to −0.9.

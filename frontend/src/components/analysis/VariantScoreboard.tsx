@@ -1,9 +1,9 @@
 import { AlertTriangle, Radio, Scale, Trophy } from 'lucide-react';
 import type { VariantScore, VariantScoreboard } from '@/lib/analysis';
 
-const GOLD = '#C9A227'; // Sovereign Gold
-const BLUE = '#2563EB'; // Signal Blue
-const VIOLET = '#8B5CF6'; // Insight Violet
+const GOLD = '#286cf0'; // legacy accent name — the Signal Blue accent
+const BLUE = '#1e5ad9'; // the darker blue — safe as text on the light ground
+const VIOLET = '#6a4fe0'; // Insight Violet, text-safe variant
 
 const OBJECTIVE_LABELS: Record<string, string> = {
   clicks: 'Would click',
@@ -50,7 +50,7 @@ export default function VariantScoreboardPanel({
   return (
     <div className="mb-8">
       <div className="flex items-baseline justify-between mb-3 gap-4 flex-wrap">
-        <h2 className="text-sm font-semibold text-saibyl-pearl">
+        <h2 className="text-sm font-semibold text-saibyl-ink">
           Which message won
         </h2>
         <span className="text-[11px] text-saibyl-muted">
@@ -66,7 +66,7 @@ export default function VariantScoreboardPanel({
         style={
           scoreboard.winner_variant_key
             ? { borderColor: `${GOLD}33`, backgroundColor: `${GOLD}0D` }
-            : { borderColor: '#ffffff1a', backgroundColor: '#ffffff08' }
+            : { borderColor: '#264f8b24', backgroundColor: '#f3f7fd' }
         }
       >
         {scoreboard.winner_variant_key ? (
@@ -97,7 +97,7 @@ export default function VariantScoreboardPanel({
         "nobody split".
       */}
       {scoreboard.paired && (
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 mb-4">
+        <div className="rounded-xl border border-saibyl-border bg-saibyl-elevated px-4 py-3 mb-4">
           <p className="text-[11px] font-mono uppercase tracking-widest text-saibyl-muted mb-1.5">
             How we decided
           </p>
@@ -118,7 +118,7 @@ export default function VariantScoreboardPanel({
           {scoreboard.unpaired_verdict &&
             scoreboard.unpaired_winner_variant_key !==
               scoreboard.winner_variant_key && (
-              <p className="text-[11px] leading-relaxed text-saibyl-muted mt-2 pt-2 border-t border-white/[0.06]">
+              <p className="text-[11px] leading-relaxed text-saibyl-muted mt-2 pt-2 border-t border-saibyl-border">
                 The way we used to work this out treated each message as though a
                 different set of people had seen it. That way, this run would have
                 read: <span className="italic">{scoreboard.unpaired_verdict}</span>
@@ -168,20 +168,20 @@ function VariantRow({
       style={
         isWinner
           ? { borderColor: `${GOLD}4D`, backgroundColor: `${GOLD}0A` }
-          : { borderColor: '#ffffff14', backgroundColor: '#ffffff05' }
+          : { borderColor: '#264f8b24', backgroundColor: '#ffffff' }
       }
     >
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[11px] text-saibyl-muted">#{rank}</span>
-            <span className="text-[13px] font-semibold text-saibyl-pearl">
+            <span className="text-[13px] font-semibold text-saibyl-ink">
               {variant.label || `Version ${variant.variant_key.toUpperCase()}`}
             </span>
             {isWinner && (
               <span
                 className="px-2 py-0.5 rounded text-[10px] font-semibold"
-                style={{ backgroundColor: `${GOLD}1A`, color: GOLD }}
+                style={{ backgroundColor: `${GOLD}1A`, color: BLUE }}
               >
                 Leads
               </span>
@@ -195,7 +195,7 @@ function VariantRow({
         </div>
 
         <div className="text-right shrink-0">
-          <div className="text-xl font-semibold text-saibyl-pearl tabular-nums">
+          <div className="text-xl font-semibold text-saibyl-ink tabular-nums">
             {silent ? '—' : pct(rate.mean)}
           </div>
           <div className="text-[10px] text-saibyl-muted">
@@ -252,7 +252,7 @@ function VariantRow({
           <Flags variant={variant} offMessageThreshold={offMessageThreshold} />
 
           {variant.by_archetype.length > 0 && (
-            <div className="mt-4 pt-3 border-t border-white/5">
+            <div className="mt-4 pt-3 border-t border-saibyl-border">
               <p className="text-[10px] text-saibyl-muted mb-2">
                 Who it wins and who it loses
               </p>
@@ -261,7 +261,7 @@ function VariantRow({
                   <span
                     key={slice.archetype}
                     className="px-2 py-0.5 rounded text-[10px]"
-                    style={{ backgroundColor: `${BLUE}14`, color: '#9CB4E8' }}
+                    style={{ backgroundColor: `${BLUE}14`, color: BLUE }}
                     title={`${slice.agent_count} people, ${slice.event_count} posts and replies`}
                   >
                     {slice.archetype} · {pct(slice.objective_rate.mean)}
@@ -371,7 +371,7 @@ function Flags({
       {variant.viral_but_off_message && (
         <Flag
           kind="warning"
-          color={GOLD}
+          color="#b45309"
           title="It spreads, but not as you wrote it"
           body={`People pass it on and change what it says on the way — fewer than ${pct(offMessageThreshold)} of them repeat it accurately. It will travel as a message you did not write.`}
         />
@@ -447,7 +447,7 @@ function Stat({
             ? 'text-saibyl-muted italic text-[12px]'
             : 'text-[12px] tabular-nums'
         }
-        style={unmeasured ? undefined : { color: accent ?? '#E8EAF0' }}
+        style={unmeasured ? undefined : { color: accent ?? '#14294a' }}
       >
         {value}
       </div>

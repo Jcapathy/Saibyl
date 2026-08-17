@@ -8,13 +8,13 @@ import { TERMINAL_STATUSES } from '@/lib/constants';
 import api from '@/lib/api';
 
 const PLATFORM_STYLES: Record<string, { bg: string; text: string; dot: string }> = {
-  Twitter:   { bg: 'bg-[#C9A227]/15', text: 'text-[#C9A227]',  dot: '#C9A227' },
-  Reddit:    { bg: 'bg-[#2563EB]/15', text: 'text-[#2563EB]',  dot: '#2563EB' },
-  TikTok:    { bg: 'bg-[#8B5CF6]/15', text: 'text-[#8B5CF6]',  dot: '#8B5CF6' },
-  Instagram: { bg: 'bg-[#8B5CF6]/15', text: 'text-[#8B5CF6]',  dot: '#8B5CF6' },
-  Facebook:  { bg: 'bg-[#C9A227]/15', text: 'text-[#C9A227]',  dot: '#C9A227' },
-  LinkedIn:  { bg: 'bg-[#2563EB]/15', text: 'text-[#2563EB]',  dot: '#2563EB' },
-  YouTube:   { bg: 'bg-[#EF4444]/15', text: 'text-[#EF4444]',  dot: '#EF4444' },
+  Twitter:   { bg: 'bg-[#286cf0]/10', text: 'text-[#1e5ad9]',  dot: '#286cf0' },
+  Reddit:    { bg: 'bg-[#286cf0]/10', text: 'text-[#1e5ad9]',  dot: '#286cf0' },
+  TikTok:    { bg: 'bg-[#8b73ee]/10', text: 'text-[#6a4fe0]',  dot: '#8b73ee' },
+  Instagram: { bg: 'bg-[#8b73ee]/10', text: 'text-[#6a4fe0]',  dot: '#8b73ee' },
+  Facebook:  { bg: 'bg-[#286cf0]/10', text: 'text-[#1e5ad9]',  dot: '#286cf0' },
+  LinkedIn:  { bg: 'bg-[#286cf0]/10', text: 'text-[#1e5ad9]',  dot: '#286cf0' },
+  YouTube:   { bg: 'bg-[#ff6e79]/15', text: 'text-[#d92d3c]',  dot: '#ff6e79' },
 };
 
 /* ── Event Card ── */
@@ -27,7 +27,7 @@ function EventCard({ evt }: { evt: SimulationStreamEvent }) {
       initial={{ opacity: 0, x: 12 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.18 }}
-      className="rounded-xl bg-white/[0.03] border border-white/[0.04] p-3 text-xs"
+      className="rounded-xl bg-white border border-saibyl-border p-3 text-xs"
     >
       <div className="flex items-center justify-between mb-1.5">
         <span className="font-medium text-saibyl-platinum text-[12px] truncate max-w-[120px]">
@@ -108,7 +108,7 @@ export default function SimulationRunPage() {
   return (
     <div className="h-screen flex flex-col bg-saibyl-void overflow-hidden">
       {/* Top bar */}
-      <div className="bg-saibyl-deep border-b border-white/[0.04] px-6 py-3 flex items-center justify-between shrink-0">
+      <div className="bg-saibyl-deep border-b border-saibyl-border px-6 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-4">
           <h1 className="text-[15px] font-bold text-saibyl-platinum">Watching it happen</h1>
           <AnimatePresence mode="wait">
@@ -204,8 +204,8 @@ export default function SimulationRunPage() {
         </div>
 
         {/* Right panel — live event feed */}
-        <div className="w-[300px] bg-saibyl-deep border-l border-white/[0.04] flex flex-col shrink-0">
-          <div className="px-4 py-3 border-b border-white/[0.04]">
+        <div className="w-[300px] bg-saibyl-deep border-l border-saibyl-border flex flex-col shrink-0">
+          <div className="px-4 py-3 border-b border-saibyl-border">
             <h2 className="text-[12px] font-semibold text-saibyl-platinum uppercase tracking-widest">As it happens</h2>
           </div>
           <div ref={feedRef} className="flex-1 overflow-y-auto p-3 space-y-2">

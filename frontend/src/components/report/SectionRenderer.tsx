@@ -172,9 +172,9 @@ function TableChart({ table, printMode, headline: headlineProp }: TableChartProp
   });
 
   const colors = printMode ? PRINT_PALETTE : CHART_PALETTE;
-  const textColor = printMode ? '#374151' : '#8B97A8';
-  const gridColor = printMode ? '#e5e7eb' : '#1E293B';
-  const bg = printMode ? '#f9fafb' : '#0D1424';
+  const textColor = printMode ? '#374151' : '#60718e';
+  const gridColor = printMode ? '#e5e7eb' : 'rgba(99,139,202,0.18)';
+  const bg = printMode ? '#f9fafb' : '#ffffff';
 
   // Check if any numeric columns represent sentiment — use semantic coloring
   const useSentimentColors = numericCols.length === 1 && isSentimentHeader(headers[numericCols[0]]);
@@ -200,11 +200,11 @@ function TableChart({ table, printMode, headline: headlineProp }: TableChartProp
           <BarChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 4 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
             <XAxis dataKey="name" tick={{ fontSize: 11, fill: textColor }} axisLine={{ stroke: gridColor }} tickLine={false} />
-            <YAxis tick={{ fontSize: 11, fill: textColor, fontFamily: "'JetBrains Mono', monospace" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 11, fill: textColor, fontFamily: "'DM Mono', monospace" }} axisLine={false} tickLine={false} />
             <Tooltip
               contentStyle={printMode
                 ? { background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 12 }
-                : { background: '#111827', border: '1px solid #1E293B', borderRadius: 8, fontSize: 12, color: '#E8ECF2' }
+                : { background: '#ffffff', border: '1px solid #264f8b24', borderRadius: 8, fontSize: 12, color: '#14294a', boxShadow: '0 12px 30px rgba(52,96,164,.12)' }
               }
             />
             {numericCols.length > 1 && <Legend wrapperStyle={{ fontSize: 11, color: textColor }} />}
@@ -279,7 +279,7 @@ function ChartHeadline({ text, printMode }: { text: string; printMode?: boolean 
       style={{
         fontWeight: 700,
         fontSize: 14,
-        color: printMode ? '#111827' : '#E8ECF2',
+        color: printMode ? '#111827' : '#14294a',
         marginBottom: 8,
         lineHeight: 1.4,
       }}
@@ -291,11 +291,11 @@ function ChartHeadline({ text, printMode }: { text: string; printMode?: boolean 
 
 /** Styled HTML table for data that can't be charted, or as a companion to charts */
 function MarkdownTable({ table, printMode, compact }: { table: ParsedTable; printMode?: boolean; compact?: boolean }) {
-  const borderColor = printMode ? '#e5e7eb' : '#1E293B';
-  const headerBg = printMode ? '#f3f4f6' : '#0D1424';
-  const cellBg = printMode ? '#ffffff' : '#111827';
-  const textColor = printMode ? '#374151' : '#8B97A8';
-  const headerTextColor = printMode ? '#111827' : '#E8ECF2';
+  const borderColor = printMode ? '#e5e7eb' : '#264f8b24';
+  const headerBg = printMode ? '#f3f4f6' : '#eef4fc';
+  const cellBg = printMode ? '#ffffff' : '#ffffff';
+  const textColor = printMode ? '#374151' : '#44587a';
+  const headerTextColor = printMode ? '#111827' : '#14294a';
   const fontSize = compact ? 11 : 13;
 
   return (
@@ -312,7 +312,7 @@ function MarkdownTable({ table, printMode, compact }: { table: ParsedTable; prin
                   background: headerBg,
                   color: headerTextColor,
                   fontWeight: 600,
-                  fontFamily: "'JetBrains Mono', monospace",
+                  fontFamily: "'DM Mono', monospace",
                   fontSize: compact ? 10 : 11,
                   textTransform: 'uppercase',
                   letterSpacing: '0.05em',
@@ -334,7 +334,7 @@ function MarkdownTable({ table, printMode, compact }: { table: ParsedTable; prin
                     padding: compact ? '5px 12px' : '8px 14px',
                     background: cellBg,
                     color: textColor,
-                    fontFamily: ci > 0 ? "'JetBrains Mono', monospace" : 'inherit',
+                    fontFamily: ci > 0 ? "'DM Mono', monospace" : 'inherit',
                     borderBottom: ri < table.rows.length - 1 ? `1px solid ${borderColor}` : undefined,
                   }}
                 >
@@ -374,7 +374,7 @@ export default function SectionRenderer({ content, printMode, className }: Secti
         return (
           <div
             key={i}
-            className={printMode ? 'print-prose' : 'prose prose-sm prose-invert max-w-none'}
+            className={printMode ? 'print-prose' : 'prose prose-sm max-w-none'}
             style={printMode ? {
               fontSize: 'inherit',
               lineHeight: 'inherit',

@@ -738,7 +738,7 @@ export default function ReportViewerPage() {
               </button>
             </div>
             <div className="bg-saibyl-surface border border-saibyl-border rounded-2xl p-6 mb-6">
-              <div className="prose prose-sm prose-invert max-w-none">
+              <div className="prose prose-sm max-w-none">
                 <ReactMarkdown>
                   {report.full_markdown ||
                     report.sections
@@ -787,7 +787,7 @@ export default function ReportViewerPage() {
         <button
           onClick={() => setChatOpen(true)}
           className="fixed bottom-6 right-6 z-40 flex items-center gap-2 px-4 py-3 rounded-full text-white font-semibold text-[13px] shadow-lg transition-transform hover:scale-105"
-          style={{ background: 'linear-gradient(135deg, #8B5CF6, #2563EB)' }}
+          style={{ background: 'linear-gradient(135deg, #8b73ee, #286cf0)' }}
         >
           <MessageCircle className="w-5 h-5" />
           Ask about this run

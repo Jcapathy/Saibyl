@@ -101,8 +101,8 @@ export default function ComparisonPage() {
                       onClick={() => toggleSim(sim.id)}
                       className={`w-full text-left p-3 rounded-xl border transition-all ${
                         isSelected
-                          ? 'border-saibyl-gold/50 bg-saibyl-gold/10'
-                          : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12]'
+                          ? 'border-saibyl-gold/50 bg-saibyl-blue/[0.06]'
+                          : 'border-saibyl-border bg-white hover:border-saibyl-border-light'
                       }`}
                     >
                       <div className="flex items-center justify-between">
@@ -152,18 +152,18 @@ export default function ComparisonPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-[13px]">
                 <thead>
-                  <tr className="border-b border-white/[0.06]">
+                  <tr className="border-b border-saibyl-border">
                     <th className="text-left py-3 pr-4 text-saibyl-muted font-medium">&nbsp;</th>
                     {result.simulations.map((s) => (
                       <th key={s.simulation_id} className="text-center py-3 px-3 text-saibyl-platinum font-medium">{s.name}</th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/[0.04]">
+                <tbody className="divide-y divide-saibyl-border">
                   <tr>
                     <td className="py-3 pr-4 text-saibyl-muted">Posts and replies</td>
                     {result.simulations.map((s) => (
-                      <td key={s.simulation_id} className="text-center py-3 px-3 text-saibyl-platinum font-mono">{s.total_events}</td>
+                      <td key={s.simulation_id} className="text-center py-3 px-3 text-saibyl-platinum font-mono tabular-nums">{s.total_events}</td>
                     ))}
                   </tr>
                   <tr>
@@ -174,7 +174,7 @@ export default function ComparisonPage() {
                       </span>
                     </td>
                     {result.simulations.map((s) => (
-                      <td key={s.simulation_id} className={`text-center py-3 px-3 font-mono ${s.avg_sentiment === null ? 'text-saibyl-muted' : s.avg_sentiment > 0.2 ? 'text-saibyl-positive' : s.avg_sentiment < -0.2 ? 'text-saibyl-negative' : 'text-saibyl-muted'}`}>
+                      <td key={s.simulation_id} className={`text-center py-3 px-3 font-mono tabular-nums ${s.avg_sentiment === null ? 'text-saibyl-muted' : s.avg_sentiment > 0.2 ? 'text-saibyl-positive' : s.avg_sentiment < -0.2 ? 'text-saibyl-negative' : 'text-saibyl-muted'}`}>
                         {s.avg_sentiment === null ? <span title="Nothing in this run could be measured, so it cannot be compared on this row.">not measured</span> : s.avg_sentiment.toFixed(3)}
                       </td>
                     ))}
@@ -182,7 +182,7 @@ export default function ComparisonPage() {
                   <tr>
                     <td className="py-3 pr-4 text-saibyl-muted">People in the room</td>
                     {result.simulations.map((s) => (
-                      <td key={s.simulation_id} className="text-center py-3 px-3 text-saibyl-platinum font-mono">{s.agent_count}</td>
+                      <td key={s.simulation_id} className="text-center py-3 px-3 text-saibyl-platinum font-mono tabular-nums">{s.agent_count}</td>
                     ))}
                   </tr>
                   <tr>

@@ -183,8 +183,8 @@ export default function FounderLensStep({
                 onClick={() => selectStage(spec)}
                 className={`text-left p-4 rounded-xl border transition-all duration-200 ${
                   selected
-                    ? 'border-saibyl-gold/50 bg-saibyl-gold/10'
-                    : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12]'
+                    ? 'border-saibyl-blue/45 bg-saibyl-blue/[0.07]'
+                    : 'border-saibyl-border bg-white hover:border-saibyl-border-light'
                 }`}
               >
                 <span
@@ -201,7 +201,7 @@ export default function FounderLensStep({
 
       {stage && (
         <>
-          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+          <div className="rounded-xl border border-saibyl-border bg-[#14294a]/[0.04] p-4">
             <p className="text-[11px] font-medium text-saibyl-muted uppercase tracking-wide mb-2">
               Bring
             </p>
@@ -265,8 +265,8 @@ export default function FounderLensStep({
                     }}
                     className={`w-full text-left p-4 rounded-xl border transition-all ${
                       selected
-                        ? 'border-saibyl-gold/50 bg-saibyl-gold/10'
-                        : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12]'
+                        ? 'border-saibyl-blue/45 bg-saibyl-blue/[0.07]'
+                        : 'border-saibyl-border bg-white hover:border-saibyl-border-light'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-3">
@@ -286,7 +286,7 @@ export default function FounderLensStep({
                     </p>
                     <div className="flex items-center gap-3 mt-2">
                       {p.profile.gaps.length > 0 && (
-                        <span className="text-[10px] text-saibyl-gold/80">
+                        <span className="text-[10px] text-saibyl-gold">
                           {p.profile.gaps.length} thing
                           {p.profile.gaps.length === 1 ? '' : 's'} your documents never say
                         </span>

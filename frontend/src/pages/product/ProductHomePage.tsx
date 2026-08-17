@@ -26,7 +26,7 @@ function Attention({ line, productId }: { line: AttentionLine; productId: string
     <>
       <span
         className={`mt-[0.42rem] w-1.5 h-1.5 rounded-full shrink-0 ${
-          line.weight === 'high' ? 'bg-saibyl-gold' : 'bg-white/20'
+          line.weight === 'high' ? 'bg-saibyl-gold' : 'bg-[#14294a]/20'
         }`}
       />
       <span
@@ -101,7 +101,7 @@ function ProductCard({ product }: { product: ProductState }) {
         </p>
       )}
 
-      <div className="mt-4 pt-4 border-t border-white/[0.06]">
+      <div className="mt-4 pt-4 border-t border-saibyl-border">
         {product.attention.length > 0 ? (
           <div className="space-y-2">
             {product.attention.map((line) => (
@@ -122,7 +122,7 @@ function ProductCard({ product }: { product: ProductState }) {
 
         <Link
           to={nextStep.href}
-          className="inline-flex items-center gap-1.5 mt-4 px-4 py-1.5 rounded-lg border border-white/[0.12] text-[12.5px] text-saibyl-platinum hover:bg-white/[0.05] transition-colors"
+          className="inline-flex items-center gap-1.5 mt-4 px-4 py-1.5 rounded-lg border border-saibyl-border-light text-[12.5px] text-saibyl-platinum hover:bg-[#14294a]/[0.04] transition-colors"
         >
           {nextStep.number}. {nextStep.label} — {nextStep.blurb}
         </Link>

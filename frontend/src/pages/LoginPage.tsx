@@ -7,14 +7,14 @@ import { supabase } from '@/lib/supabase';
 
 /* ── Particle data for the brand panel ── */
 const PARTICLES: { x: string; y: string; color: string; duration: string; delay: string }[] = [
-  { x: '12%', y: '18%', color: '#8B5CF6', duration: '14s', delay: '0s' },
-  { x: '78%', y: '24%', color: '#2563EB', duration: '18s', delay: '-3s' },
-  { x: '34%', y: '65%', color: '#8B5CF6', duration: '16s', delay: '-7s' },
-  { x: '88%', y: '72%', color: '#2563EB', duration: '20s', delay: '-2s' },
-  { x: '22%', y: '85%', color: '#8B5CF6', duration: '15s', delay: '-5s' },
-  { x: '62%', y: '42%', color: '#2563EB', duration: '17s', delay: '-9s' },
-  { x: '48%', y: '12%', color: '#8B5CF6', duration: '19s', delay: '-4s' },
-  { x: '92%', y: '52%', color: '#2563EB', duration: '13s', delay: '-6s' },
+  { x: '12%', y: '18%', color: '#8b73ee', duration: '14s', delay: '0s' },
+  { x: '78%', y: '24%', color: '#286cf0', duration: '18s', delay: '-3s' },
+  { x: '34%', y: '65%', color: '#8b73ee', duration: '16s', delay: '-7s' },
+  { x: '88%', y: '72%', color: '#286cf0', duration: '20s', delay: '-2s' },
+  { x: '22%', y: '85%', color: '#8b73ee', duration: '15s', delay: '-5s' },
+  { x: '62%', y: '42%', color: '#286cf0', duration: '17s', delay: '-9s' },
+  { x: '48%', y: '12%', color: '#8b73ee', duration: '19s', delay: '-4s' },
+  { x: '92%', y: '52%', color: '#286cf0', duration: '13s', delay: '-6s' },
 ];
 
 const NODE_POSITIONS = [
@@ -22,9 +22,19 @@ const NODE_POSITIONS = [
   [22, 85], [62, 42], [48, 12], [92, 52],
 ] as const;
 
+/* ── Paper ground with the landing page's radial washes ── */
+const PAPER_WASH =
+  'radial-gradient(circle at 87% 1%, rgba(127,184,255,.19), transparent 22rem), radial-gradient(circle at 2% 26%, rgba(143,119,245,.10), transparent 26rem), #f8fbff';
+
+/* ── Brand mark — gradient square, Playfair "S" ── */
+const BRAND_MARK_STYLE = {
+  background: 'linear-gradient(135deg, #2f75ef 5%, #705ee3 95%)',
+  boxShadow: 'inset 0 1px rgba(255,255,255,.4), 0 5px 14px rgba(75,98,221,.28)',
+} as const;
+
 /* ── Shared input class ── */
 const INPUT_CLASS =
-  'w-full px-4 py-[0.6875rem] rounded-[10px] border border-white/[0.06] bg-white/[0.025] text-[#E8ECF2] text-sm placeholder:text-[#94A3B8]/40 outline-none transition-all duration-200 focus:border-[rgba(139,92,246,0.5)] focus:shadow-[0_0_0_3px_rgba(139,92,246,0.1),0_0_20px_rgba(139,92,246,0.05)] focus:bg-white/[0.04]';
+  'w-full px-3.5 py-2.5 rounded-xl border border-saibyl-border-light bg-white text-[14px] text-saibyl-ink placeholder:text-saibyl-muted/70 outline-none transition-all duration-200 focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20';
 
 /* ── Stats data ── */
 /* The stats bar was four claims and three of them were false.
@@ -81,15 +91,18 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 min-h-screen">
+    <div
+      className="grid grid-cols-1 lg:grid-cols-2 min-h-screen bg-saibyl-paper"
+      style={{ background: PAPER_WASH }}
+    >
       {/* ═══════════════════════════════════════════════════
           LEFT PANEL — Brand
          ═══════════════════════════════════════════════════ */}
-      <div className="hidden lg:flex relative flex-col justify-center px-16 xl:px-20 bg-[#0A0F1C] overflow-hidden">
+      <div className="hidden lg:flex relative flex-col justify-center px-16 xl:px-20 overflow-hidden">
         {/* Radial gradient accents */}
         <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-[20%] left-[10%] w-[60%] h-[60%] rounded-full bg-[radial-gradient(ellipse,rgba(139,92,246,0.08)_0%,transparent_70%)]" />
-          <div className="absolute bottom-[10%] right-[5%] w-[50%] h-[50%] rounded-full bg-[radial-gradient(ellipse,rgba(0,212,255,0.06)_0%,transparent_70%)]" />
+          <div className="absolute top-[20%] left-[10%] w-[60%] h-[60%] rounded-full bg-[radial-gradient(ellipse,rgba(40,108,240,0.07)_0%,transparent_70%)]" />
+          <div className="absolute bottom-[10%] right-[5%] w-[50%] h-[50%] rounded-full bg-[radial-gradient(ellipse,rgba(139,115,238,0.06)_0%,transparent_70%)]" />
         </div>
 
         {/* Particle animation */}
@@ -103,13 +116,13 @@ export default function LoginPage() {
               backgroundColor: p.color,
               animationDuration: p.duration,
               animationDelay: p.delay,
-              opacity: 0.6,
+              opacity: 0.5,
             }}
           />
         ))}
 
         {/* Connection lines SVG */}
-        <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ opacity: 0.06 }}>
+        <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ opacity: 0.07 }}>
           {NODE_POSITIONS.map(([x1, y1], i) =>
             NODE_POSITIONS.slice(i + 1).map(([x2, y2], j) => (
               <line
@@ -118,7 +131,7 @@ export default function LoginPage() {
                 y1={`${y1}%`}
                 x2={`${x2}%`}
                 y2={`${y2}%`}
-                stroke="#8B5CF6"
+                stroke="#8b73ee"
                 strokeWidth="1"
               />
             )),
@@ -129,7 +142,13 @@ export default function LoginPage() {
         <div className="relative z-10">
           {/* Logo lockup */}
           <div className="flex items-center gap-3 mb-10">
-            <img src="/logo-mark.svg" alt="" className="w-12 h-12" />
+            <div
+              aria-hidden="true"
+              className="w-8 h-8 rounded-[9px] flex items-center justify-center shrink-0"
+              style={BRAND_MARK_STYLE}
+            >
+              <span className="font-serif font-bold text-white text-[19px] leading-none">S</span>
+            </div>
             <span
               className="text-gradient-brand font-extrabold text-[1.75rem]"
               style={{ letterSpacing: '-0.03em' }}
@@ -140,20 +159,20 @@ export default function LoginPage() {
 
           {/* Trust line */}
           <div className="flex items-center gap-2 mb-6">
-            <span className="block w-[6px] h-[6px] rounded-full bg-emerald-400 animate-pulse-dot" />
-            <span className="text-sm text-[#8B97A8]">
+            <span className="block w-[6px] h-[6px] rounded-full bg-saibyl-green animate-pulse-dot" />
+            <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-saibyl-muted">
               Buyer intelligence for founders
             </span>
           </div>
 
           {/* Tagline */}
-          <h1 className="text-[2.75rem] font-bold tracking-tight leading-[1.1] text-white mb-5">
+          <h1 className="text-[2.75rem] font-extrabold tracking-tight leading-[1.1] text-saibyl-ink mb-5">
             Test your startup{' '}
-            <span className="text-gradient-brand">on a synthetic market.</span>
+            <em className="font-serif italic text-saibyl-violet">on a synthetic market.</em>
           </h1>
 
           {/* Subtitle */}
-          <p className="text-[#8B97A8] text-base leading-relaxed max-w-md mb-12">
+          <p className="text-saibyl-silver text-base leading-relaxed max-w-md mb-12">
             A room of AI buyers built from your own material reads your pitch.
             Every number traces to what a buyer said.
           </p>
@@ -161,16 +180,16 @@ export default function LoginPage() {
           {/* Stats row */}
           <div className="grid grid-cols-4 gap-6">
             {STATS.map((s) => (
-              <div key={s.label}>
+              <div key={s.label} className="glass rounded-xl px-4 py-3">
                 <div
-                  className="text-gradient-brand text-2xl font-bold"
-                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  className="text-saibyl-blue text-2xl font-bold"
+                  style={{ fontFamily: "'DM Mono', monospace" }}
                 >
                   {s.value}
                 </div>
                 <div
-                  className="text-[#8B97A8] text-[10px] uppercase tracking-widest mt-1"
-                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  className="text-saibyl-muted text-[10px] uppercase tracking-widest mt-1"
+                  style={{ fontFamily: "'DM Mono', monospace" }}
                 >
                   {s.label}
                 </div>
@@ -183,16 +202,22 @@ export default function LoginPage() {
       {/* ═══════════════════════════════════════════════════
           RIGHT PANEL — Form
          ═══════════════════════════════════════════════════ */}
-      <div className="flex items-center justify-center bg-[#0D1424] lg:border-l lg:border-[#1E293B] px-6 py-12">
+      <div className="flex items-center justify-center lg:border-l lg:border-saibyl-border px-6 py-12">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-          className="w-full max-w-[400px]"
+          className="w-full max-w-[440px] glass rounded-2xl p-8 sm:p-9 shadow-[0_18px_40px_rgba(52,96,164,0.08)]"
         >
           {/* Mobile logo — only on small screens */}
           <div className="flex lg:hidden items-center justify-center gap-2.5 mb-10">
-            <img src="/logo-mark.svg" alt="" className="w-9 h-9" />
+            <div
+              aria-hidden="true"
+              className="w-8 h-8 rounded-[9px] flex items-center justify-center shrink-0"
+              style={BRAND_MARK_STYLE}
+            >
+              <span className="font-serif font-bold text-white text-[19px] leading-none">S</span>
+            </div>
             <span
               className="text-gradient-brand font-extrabold text-xl"
               style={{ letterSpacing: '-0.03em' }}
@@ -202,8 +227,8 @@ export default function LoginPage() {
           </div>
 
           {/* Header */}
-          <h2 className="text-2xl font-bold text-white mb-1">Welcome back</h2>
-          <p className="text-sm text-[#8B97A8] mb-8">
+          <h2 className="text-2xl font-extrabold tracking-tight text-saibyl-ink mb-1">Welcome back</h2>
+          <p className="text-sm text-saibyl-muted mb-8">
             Sign in to access your intelligence dashboard
           </p>
 
@@ -212,10 +237,10 @@ export default function LoginPage() {
             <motion.div
               initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-6 flex items-start gap-3 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20"
+              className="mb-6 flex items-start gap-3 px-4 py-3 rounded-xl bg-saibyl-rose/10 border border-saibyl-negative/25"
             >
-              <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
-              <span className="text-sm text-red-400">{error}</span>
+              <AlertCircle className="w-4 h-4 text-saibyl-negative mt-0.5 shrink-0" />
+              <span className="text-sm text-saibyl-negative">{error}</span>
             </motion.div>
           )}
 
@@ -223,7 +248,7 @@ export default function LoginPage() {
           <button
             type="button"
             onClick={handleGoogleSSO}
-            className="w-full flex items-center justify-center gap-3 px-4 py-[0.6875rem] rounded-[10px] border border-white/[0.12] bg-transparent text-sm font-medium text-[#E8ECF2] transition-all duration-200 hover:bg-white/[0.04] hover:border-white/[0.18]"
+            className="w-full flex items-center justify-center gap-3 px-4 py-2.5 rounded-xl border border-saibyl-border-light bg-white text-sm font-semibold text-saibyl-ink transition-all duration-200 hover:border-saibyl-blue/40 hover:bg-saibyl-paper"
           >
             {/* Google "G" icon */}
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -249,14 +274,14 @@ export default function LoginPage() {
 
           {/* Divider */}
           <div className="flex items-center gap-4 my-6">
-            <div className="flex-1 h-px bg-white/[0.06]" />
+            <div className="flex-1 h-px bg-saibyl-border" />
             <span
-              className="text-[11px] text-[#8B97A8] uppercase"
-              style={{ fontFamily: "'JetBrains Mono', monospace" }}
+              className="text-[11px] text-saibyl-muted uppercase tracking-[0.18em]"
+              style={{ fontFamily: "'DM Mono', monospace" }}
             >
               or
             </span>
-            <div className="flex-1 h-px bg-white/[0.06]" />
+            <div className="flex-1 h-px bg-saibyl-border" />
           </div>
 
           {/* Login form */}
@@ -264,8 +289,8 @@ export default function LoginPage() {
             {/* Email */}
             <div>
               <label
-                className="block text-[11px] font-medium text-[#8B97A8] uppercase tracking-wider mb-2"
-                style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                className="block text-[11px] font-medium text-saibyl-muted uppercase tracking-wider mb-2"
+                style={{ fontFamily: "'DM Mono', monospace" }}
               >
                 Email
               </label>
@@ -285,15 +310,15 @@ export default function LoginPage() {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label
-                  className="block text-[11px] font-medium text-[#8B97A8] uppercase tracking-wider"
-                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  className="block text-[11px] font-medium text-saibyl-muted uppercase tracking-wider"
+                  style={{ fontFamily: "'DM Mono', monospace" }}
                 >
                   Password
                 </label>
                 {/* TODO: Wire to password reset flow */}
                 <button
                   type="button"
-                  className="text-[11px] text-[#C9A227] hover:text-[#D4AF37] transition-colors"
+                  className="text-[11px] font-semibold text-saibyl-blue hover:text-saibyl-gold-hover transition-colors"
                 >
                   Forgot password?
                 </button>
@@ -312,7 +337,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8B97A8] hover:text-[#E8ECF2] transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-saibyl-muted hover:text-saibyl-ink transition-colors"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -324,7 +349,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-[0.6875rem] rounded-[10px] bg-[#C9A227] text-[#0A0F1C] text-sm font-semibold transition-all duration-200 hover:bg-[#D4AF37] hover:shadow-[0_4px_20px_rgba(201,162,39,0.3)] hover:-translate-y-[1px] disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none flex items-center justify-center gap-2"
+              className="w-full py-2.5 rounded-xl bg-saibyl-blue text-white text-sm font-extrabold transition-all duration-200 hover:bg-saibyl-gold-hover hover:shadow-[0_6px_18px_rgba(40,108,240,0.30)] hover:-translate-y-[1px] disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>
@@ -356,11 +381,11 @@ export default function LoginPage() {
           </form>
 
           {/* Signup link */}
-          <p className="mt-6 text-center text-sm text-[#8B97A8]">
+          <p className="mt-6 text-center text-sm text-saibyl-muted">
             Don&apos;t have an account?{' '}
             <Link
               to="/signup"
-              className="text-[#C9A227] hover:text-[#D4AF37] hover:underline transition-colors font-medium"
+              className="text-saibyl-blue hover:text-saibyl-gold-hover hover:underline transition-colors font-semibold"
             >
               Start free
             </Link>

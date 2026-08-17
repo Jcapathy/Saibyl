@@ -1,7 +1,8 @@
 import { ShieldAlert } from 'lucide-react';
 import type { AdversarialDisclosure } from '@/lib/analysis';
 
-const ACCENT = '#C9A227'; // Sovereign Gold
+const ACCENT = '#286cf0'; // Signal Blue — fills, borders, icons
+const ACCENT_TEXT = '#1e5ad9'; // darker blue — text on the tinted ground
 
 const ROLE_LABELS: Record<string, string> = {
   incumbent_employee: 'Works for what they already use',
@@ -45,7 +46,7 @@ export default function AdversarialNotice({
       <div className="flex items-start gap-3">
         <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0" style={{ color: ACCENT }} />
         <div className="min-w-0">
-          <p className="text-[13px] font-semibold" style={{ color: ACCENT }}>
+          <p className="text-[13px] font-semibold" style={{ color: ACCENT_TEXT }}>
             People who&rsquo;ll argue against you — {adversarial.agents_total} of them
           </p>
 
@@ -59,7 +60,7 @@ export default function AdversarialNotice({
                 <span
                   key={role}
                   className="px-2 py-0.5 rounded text-[10px]"
-                  style={{ backgroundColor: `${ACCENT}1A`, color: ACCENT }}
+                  style={{ backgroundColor: `${ACCENT}1A`, color: ACCENT_TEXT }}
                 >
                   {ROLE_LABELS[role] ?? role.replace(/_/g, ' ')} · {count}
                 </span>

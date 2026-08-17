@@ -208,7 +208,7 @@ export default function MarketingPage() {
                   `/app/simulations/new${projectFilter ? `?project=${projectFilter}` : ''}`,
                 )
               }
-              className="px-5 py-2 rounded-lg bg-[#C9A227] text-[#0A0F1C] font-medium text-sm transition-all hover:bg-[#D4AF37] hover:-translate-y-0.5 shrink-0"
+              className="px-5 py-2 rounded-lg bg-saibyl-blue text-white font-medium text-sm transition-all hover:bg-saibyl-gold-hover hover:-translate-y-0.5 shrink-0"
             >
               New run →
             </button>

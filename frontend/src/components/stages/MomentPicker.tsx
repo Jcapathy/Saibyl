@@ -89,8 +89,8 @@ export default function MomentPicker({
               onClick={() => onChange(option.id)}
               className={`px-3.5 py-1.5 rounded-lg border text-[12.5px] transition-colors ${
                 active
-                  ? 'border-saibyl-gold/50 bg-saibyl-gold/10 text-saibyl-white'
-                  : 'border-white/[0.08] bg-white/[0.02] text-saibyl-muted hover:border-white/[0.16] hover:text-saibyl-platinum'
+                  ? 'border-saibyl-blue/45 bg-saibyl-blue/[0.07] text-saibyl-ink'
+                  : 'border-saibyl-border bg-white text-saibyl-muted hover:border-saibyl-border-light hover:text-saibyl-platinum'
               }`}
             >
               {option.label}

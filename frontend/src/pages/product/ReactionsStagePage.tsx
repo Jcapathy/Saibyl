@@ -171,7 +171,7 @@ export default function ReactionsStagePage() {
               {objections.map((row) => (
                 <li
                   key={row.objection_key}
-                  className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3.5"
+                  className="rounded-xl border border-saibyl-border bg-white px-4 py-3.5"
                 >
                   <div className="flex items-baseline justify-between gap-3">
                     <p className="text-[13.5px] text-saibyl-platinum">{row.label}</p>

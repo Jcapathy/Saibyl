@@ -192,20 +192,20 @@ export default function ProspectsPage() {
     return (
       <div className="p-6 max-w-5xl mx-auto">
         <div className="flex flex-col items-center justify-center py-28 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-[#C9A227]/10 flex items-center justify-center mb-5">
-            <Building2 className="w-8 h-8 text-[#C9A227]" />
+          <div className="w-16 h-16 rounded-2xl bg-saibyl-gold/10 flex items-center justify-center mb-5">
+            <Building2 className="w-8 h-8 text-saibyl-gold" />
           </div>
-          <p className="text-[#E8ECF2] font-semibold text-lg mb-1.5">
+          <p className="text-saibyl-ink font-semibold text-lg mb-1.5">
             No companies found yet
           </p>
-          <p className="text-[#8B97A8] text-[13px] mb-8 max-w-md leading-relaxed">
+          <p className="text-saibyl-silver text-[13px] mb-8 max-w-md leading-relaxed">
             You have described who your buyers are. The next step is to go and find real
             companies that look like them &mdash; we search the web and bring back what we
             can point at a source for.
           </p>
           <Link
             to="/app/prospects/discover"
-            className="inline-flex items-center gap-2 rounded-lg bg-[#C9A227] px-5 py-2.5 text-sm font-semibold text-[#0A0F1C] hover:bg-[#D4AF37] transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg bg-saibyl-gold px-5 py-2.5 text-sm font-semibold text-white hover:bg-saibyl-gold-hover transition-colors"
           >
             <Search className="w-4 h-4" /> Find companies
           </Link>
@@ -219,8 +219,8 @@ export default function ProspectsPage() {
       {/* ---- Header ---- */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="font-extrabold text-[22px] text-[#E8ECF2]">Companies</h1>
-          <p className="text-xs text-[#5A6578] mt-0.5">
+          <h1 className="font-extrabold text-[22px] text-saibyl-ink">Companies</h1>
+          <p className="text-xs text-saibyl-muted mt-0.5">
             Real companies that look like the buyers you described. Every one of them has a
             page behind it you can open.
           </p>
@@ -228,13 +228,13 @@ export default function ProspectsPage() {
         <div className="flex items-center gap-2">
           <Link
             to="/app/prospects/settings"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-[#1E293B] px-3 py-2 text-[12px] text-[#8B97A8] hover:text-[#E8ECF2] hover:bg-white/[0.04] transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-saibyl-border px-3 py-2 text-[12px] text-saibyl-silver hover:text-saibyl-ink hover:bg-[#14294a]/[0.04] transition-colors"
           >
             <Settings2 className="w-3.5 h-3.5" /> Data settings
           </Link>
           <Link
             to="/app/prospects/discover"
-            className="inline-flex items-center gap-2 rounded-lg bg-[#C9A227] px-4 py-2 text-sm font-semibold text-[#0A0F1C] hover:bg-[#D4AF37] transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg bg-saibyl-gold px-4 py-2 text-sm font-semibold text-white hover:bg-saibyl-gold-hover transition-colors"
           >
             <Search className="w-4 h-4" /> Find companies
           </Link>
@@ -250,7 +250,7 @@ export default function ProspectsPage() {
           run={shownRun}
           action={
             runs.length > 1 && !runFilter ? (
-              <p className="text-[11px] text-[#5A6578]">
+              <p className="text-[11px] text-saibyl-muted">
                 Your most recent search, of {runs.length}. Pick another below to see just
                 what it found.
               </p>
@@ -263,26 +263,26 @@ export default function ProspectsPage() {
       {everSearched && (
         <div className="flex items-end gap-3 flex-wrap">
           <form onSubmit={submitSearch} className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5A6578]" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-saibyl-muted" />
             <input
               type="text"
               value={searchDraft}
               onChange={(e) => setSearchDraft(e.target.value)}
               placeholder="Search by company name…"
-              className="w-64 rounded-lg border border-[#1E293B] bg-white/[0.03] py-2 pl-9 pr-4 text-sm text-[#E8ECF2] placeholder:text-[#5A6578] focus:border-[#8B5CF6]/50 focus:outline-none transition-colors"
+              className="w-64 rounded-lg border border-saibyl-border-light bg-white py-2 pl-9 pr-4 text-sm text-saibyl-ink placeholder:text-saibyl-muted/70 focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20 transition-colors"
             />
           </form>
 
           {runs.length > 1 && (
             <label className="block">
-              <span className="block text-[10px] uppercase tracking-widest text-[#5A6578] mb-1">
+              <span className="block text-[10px] uppercase tracking-widest text-saibyl-muted mb-1">
                 From which search
               </span>
               <select
                 value={runFilter}
                 onChange={(e) => patchParams({ discovery_run_id: e.target.value })}
-                className="rounded-lg border border-[#1E293B] bg-[#0B1120] px-3 py-2 text-[13px] text-[#E8ECF2] focus:outline-none focus:ring-1 focus:ring-[#8B5CF6]/50"
-                style={{ colorScheme: 'dark' }}
+                className="rounded-lg border border-saibyl-border-light bg-white px-3 py-2 text-[13px] text-saibyl-ink focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20"
+                style={{ colorScheme: 'light' }}
               >
                 <option value="">Every search</option>
                 {runs.map((run) => (
@@ -297,14 +297,14 @@ export default function ProspectsPage() {
 
           {buyerTypes.length > 1 && (
             <label className="block">
-              <span className="block text-[10px] uppercase tracking-widest text-[#5A6578] mb-1">
+              <span className="block text-[10px] uppercase tracking-widest text-saibyl-muted mb-1">
                 Which kind of buyer
               </span>
               <select
                 value={archetypeFilter}
                 onChange={(e) => patchParams({ archetype_id: e.target.value })}
-                className="rounded-lg border border-[#1E293B] bg-[#0B1120] px-3 py-2 text-[13px] text-[#E8ECF2] focus:outline-none focus:ring-1 focus:ring-[#8B5CF6]/50"
-                style={{ colorScheme: 'dark' }}
+                className="rounded-lg border border-saibyl-border-light bg-white px-3 py-2 text-[13px] text-saibyl-ink focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20"
+                style={{ colorScheme: 'light' }}
               >
                 <option value="">Every kind</option>
                 {buyerTypes.map((type) => (
@@ -323,7 +323,7 @@ export default function ProspectsPage() {
                 setSearchDraft('');
                 patchParams({ discovery_run_id: '', archetype_id: '', search: '' });
               }}
-              className="pb-2 text-[12px] text-[#8B97A8] hover:text-[#E8ECF2] transition-colors"
+              className="pb-2 text-[12px] text-saibyl-silver hover:text-saibyl-ink transition-colors"
             >
               Clear
             </button>
@@ -332,8 +332,8 @@ export default function ProspectsPage() {
       )}
 
       {error && (
-        <div className="rounded-xl border border-[#EF4444]/25 bg-[#EF4444]/[0.07] p-4">
-          <p className="text-[12px] text-[#EF4444] leading-relaxed whitespace-pre-wrap">
+        <div className="rounded-xl border border-saibyl-negative/25 bg-saibyl-rose/[0.08] p-4">
+          <p className="text-[12px] text-saibyl-negative leading-relaxed whitespace-pre-wrap">
             {error}
           </p>
         </div>
@@ -343,17 +343,17 @@ export default function ProspectsPage() {
       {loading ? (
         <div className="space-y-2">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-28 rounded-2xl bg-white/[0.03] animate-pulse" />
+            <div key={i} className="h-28 rounded-2xl bg-[#14294a]/[0.04] animate-pulse" />
           ))}
         </div>
       ) : candidates.length === 0 ? (
-        <div className="rounded-2xl border border-[#1E293B] bg-[#111827] p-8 text-center">
-          <p className="text-[13px] text-[#E8ECF2]">
+        <div className="rounded-2xl border border-saibyl-border bg-white p-8 text-center">
+          <p className="text-[13px] text-saibyl-ink">
             {filtered
               ? 'No companies match what you asked for'
               : 'There are no companies saved'}
           </p>
-          <p className="text-[12px] text-[#5A6578] mt-1.5 leading-relaxed max-w-md mx-auto">
+          <p className="text-[12px] text-saibyl-muted mt-1.5 leading-relaxed max-w-md mx-auto">
             {filtered
               ? 'Try clearing the filters, or run a wider search.'
               : 'The searches above say what happened. If one of them found companies and this is still empty, they may have been deleted from your data settings.'}
@@ -361,7 +361,7 @@ export default function ProspectsPage() {
         </div>
       ) : (
         <>
-          <p className="text-[11px] text-[#5A6578]">
+          <p className="text-[11px] text-saibyl-muted">
             {knownTotal} {knownTotal === 1 ? 'company' : 'companies'}
             {filtered ? ' matching your filters' : ''} &middot; strongest match first
           </p>
@@ -379,7 +379,7 @@ export default function ProspectsPage() {
       {/* ---- Pagination ---- */}
       {totalPages > 1 && !loading && (
         <div className="flex items-center justify-between">
-          <p className="font-mono text-xs text-[#5A6578]">
+          <p className="font-mono text-xs text-saibyl-muted">
             Page {page} of {totalPages}
             {total === null && ' (count unavailable)'}
           </p>
@@ -388,7 +388,7 @@ export default function ProspectsPage() {
               type="button"
               disabled={page <= 1}
               onClick={() => patchParams({ page: String(page - 1) }, false)}
-              className="inline-flex items-center gap-1 rounded-lg border border-[#1E293B] px-3 py-1.5 text-xs text-[#8B97A8] hover:bg-white/[0.04] disabled:opacity-30 transition-colors"
+              className="inline-flex items-center gap-1 rounded-lg border border-saibyl-border px-3 py-1.5 text-xs text-saibyl-silver hover:bg-[#14294a]/[0.04] disabled:opacity-30 transition-colors"
             >
               <ChevronLeft className="w-3.5 h-3.5" /> Previous
             </button>
@@ -396,7 +396,7 @@ export default function ProspectsPage() {
               type="button"
               disabled={page >= totalPages}
               onClick={() => patchParams({ page: String(page + 1) }, false)}
-              className="inline-flex items-center gap-1 rounded-lg border border-[#1E293B] px-3 py-1.5 text-xs text-[#8B97A8] hover:bg-white/[0.04] disabled:opacity-30 transition-colors"
+              className="inline-flex items-center gap-1 rounded-lg border border-saibyl-border px-3 py-1.5 text-xs text-saibyl-silver hover:bg-[#14294a]/[0.04] disabled:opacity-30 transition-colors"
             >
               Next <ChevronRight className="w-3.5 h-3.5" />
             </button>
@@ -442,11 +442,11 @@ function CandidateRow({
   return (
     <Link
       to={`/app/prospects/${candidate.id}`}
-      className="block rounded-2xl border border-[#1E293B] bg-[#111827] p-4 hover:border-[#8B5CF6]/40 hover:bg-white/[0.02] transition-colors"
+      className="block rounded-2xl border border-saibyl-border bg-white p-4 hover:border-saibyl-violet/40 hover:bg-saibyl-blue/[0.03] transition-colors"
     >
       <div className="flex items-start gap-3">
         <span
-          className="mt-0.5 shrink-0 font-mono text-[11px] text-[#5A6578] w-7"
+          className="mt-0.5 shrink-0 font-mono text-[11px] text-saibyl-muted w-7"
           title="Where this sits in the order we put them in. It is a position in a list, not a score."
         >
           {position}.
@@ -454,16 +454,16 @@ function CandidateRow({
 
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2 flex-wrap">
-            <h3 className="text-[14px] font-medium text-[#E8ECF2]">{candidate.company_name}</h3>
-            {domain && <span className="font-mono text-[11px] text-[#5A6578]">{domain}</span>}
+            <h3 className="text-[14px] font-medium text-saibyl-ink">{candidate.company_name}</h3>
+            {domain && <span className="font-mono text-[11px] text-saibyl-muted">{domain}</span>}
           </div>
 
           {oneLiner && (
-            <p className="text-[12px] text-[#8B97A8] mt-1 leading-relaxed">{oneLiner}</p>
+            <p className="text-[12px] text-saibyl-silver mt-1 leading-relaxed">{oneLiner}</p>
           )}
 
           {facts.length > 0 && (
-            <p className="text-[11px] text-[#5A6578] mt-1.5">{facts.join(' · ')}</p>
+            <p className="text-[11px] text-saibyl-muted mt-1.5">{facts.join(' · ')}</p>
           )}
 
           {tooling && (
@@ -471,7 +471,7 @@ function CandidateRow({
               {tooling.map((tool) => (
                 <span
                   key={tool}
-                  className="rounded-md bg-[#8B5CF6]/10 px-2 py-0.5 text-[10px] text-[#A78BFA]"
+                  className="rounded-md bg-saibyl-violet/10 px-2 py-0.5 text-[10px] text-[#6a4fe0]"
                 >
                   uses {tool}
                 </span>
@@ -479,9 +479,9 @@ function CandidateRow({
             </div>
           )}
 
-          <div className="flex items-center gap-3 mt-2.5 flex-wrap text-[10px] text-[#5A6578]">
+          <div className="flex items-center gap-3 mt-2.5 flex-wrap text-[10px] text-saibyl-muted">
             {present(candidate.archetype_label) && (
-              <span className="rounded-md bg-white/[0.04] px-2 py-0.5">
+              <span className="rounded-md bg-[#14294a]/[0.04] px-2 py-0.5">
                 {candidate.archetype_label}
               </span>
             )}
@@ -495,7 +495,7 @@ function CandidateRow({
               </span>
             )}
             {candidate.contact_count > 0 && (
-              <span className="inline-flex items-center gap-1 text-[#8B97A8]">
+              <span className="inline-flex items-center gap-1 text-saibyl-silver">
                 <Users className="w-3 h-3" />
                 {candidate.contact_count}{' '}
                 {candidate.contact_count === 1 ? 'person' : 'people'}

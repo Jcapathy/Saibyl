@@ -76,7 +76,7 @@ function Finding({
   measured?: boolean;
 }) {
   return (
-    <li className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+    <li className="rounded-lg border border-saibyl-border bg-saibyl-elevated p-3">
       <div className="flex flex-wrap items-center gap-2">
         <SeverityChip severity={finding.severity} />
         {finding.region && (
@@ -87,7 +87,7 @@ function Finding({
       </div>
       {finding.quote &&
         (measured ? (
-          <p className="mt-2 rounded-md border border-white/[0.06] bg-[#0B1120] px-2.5 py-2 font-mono text-[11.5px] text-saibyl-platinum leading-relaxed">
+          <p className="mt-2 rounded-md border border-saibyl-border-light bg-white px-2.5 py-2 font-mono text-[11.5px] text-saibyl-platinum leading-relaxed">
             {finding.quote}
           </p>
         ) : (
@@ -124,7 +124,7 @@ export function DimensionCard({ dimension }: { dimension: SiteDimension }) {
   const rest = ordered.slice(VISIBLE_FINDINGS);
 
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+    <div className="rounded-xl border border-saibyl-border bg-white p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[13.5px] font-medium text-saibyl-platinum">
@@ -294,7 +294,7 @@ export default function SiteCritique({
             {maturity !== null && (
               <span
                 title="Where the look sits on a seven-level ladder: 1 is untouched defaults, 7 is a look nobody could mistake for another site."
-                className="inline-flex items-center px-2 py-0.5 rounded-full border border-white/[0.12] bg-white/[0.04] text-[10.5px] font-medium text-saibyl-silver"
+                className="inline-flex items-center px-2 py-0.5 rounded-full border border-saibyl-border-light bg-[#14294a]/[0.04] text-[10.5px] font-medium text-saibyl-silver"
               >
                 Design maturity: level {maturity} of 7
               </span>

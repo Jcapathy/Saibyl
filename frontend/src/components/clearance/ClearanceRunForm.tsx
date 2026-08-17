@@ -52,7 +52,7 @@ const TIERS: TierChoice[] = [
 ];
 
 const inputBase =
-  'w-full rounded-lg bg-[#0B1120] border border-white/[0.08] px-3 py-2.5 text-[13.5px] text-saibyl-platinum placeholder-saibyl-muted/40 focus:outline-none focus:ring-1 focus:ring-saibyl-gold/50';
+  'w-full rounded-xl bg-white border border-saibyl-border-light px-3 py-2.5 text-[13.5px] text-saibyl-ink placeholder:text-saibyl-muted/70 focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20';
 
 export default function ClearanceRunForm({
   products,
@@ -146,8 +146,8 @@ export default function ClearanceRunForm({
             id="clearance-product"
             value={productId}
             onChange={(e) => setProductId(e.target.value)}
-            className="w-full rounded-lg border border-white/[0.08] bg-[#0B1120] px-3 py-2.5 text-[13.5px] text-saibyl-platinum focus:outline-none focus:ring-1 focus:ring-saibyl-gold/50"
-            style={{ colorScheme: 'dark' }}
+            className="w-full rounded-xl border border-saibyl-border-light bg-white px-3 py-2.5 text-[13.5px] text-saibyl-ink focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20"
+            style={{ colorScheme: 'light' }}
           >
             <option value="">None — just checking</option>
             {products.map((p) => (
@@ -208,7 +208,7 @@ export default function ClearanceRunForm({
                 className={`text-left p-3 rounded-lg border transition-all ${
                   selected
                     ? 'border-saibyl-gold/50 bg-saibyl-gold/10'
-                    : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12]'
+                    : 'border-saibyl-border bg-white hover:border-saibyl-border-light'
                 }`}
               >
                 <span

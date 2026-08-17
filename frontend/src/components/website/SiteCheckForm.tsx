@@ -28,7 +28,7 @@ import type { SiteCheck } from './types';
  */
 
 const inputBase =
-  'w-full rounded-lg bg-[#0B1120] border border-white/[0.08] px-3 py-2.5 text-[13.5px] text-saibyl-platinum placeholder-saibyl-muted/40 focus:outline-none focus:ring-1 focus:ring-saibyl-gold/50';
+  'w-full rounded-xl bg-white border border-saibyl-border-light px-3 py-2.5 text-[13.5px] text-saibyl-ink placeholder:text-saibyl-muted/70 focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20';
 
 export default function SiteCheckForm({
   productId,
@@ -91,7 +91,7 @@ export default function SiteCheckForm({
   }
 
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 space-y-4">
+    <div className="rounded-xl border border-saibyl-border bg-white p-5 space-y-4">
       <div>
         <label
           htmlFor="site-check-url"

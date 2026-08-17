@@ -109,14 +109,14 @@ const SIDE_LABEL_MIN_BAND = 90;
    the point of the exercise is that a reader can check them against a
    greyscale conversion without chasing a class name. */
 
-const INK = '#E8ECF2'; // saibyl-platinum — whiskers and printed values
-const INK_SOFT = '#8B97A8'; // saibyl-silver — axis numbers, the trend line
-const INK_MUTED = '#5A6578'; // saibyl-muted — captions
-const GRID = '#1E293B'; // saibyl-border
-const ZERO_RULE = '#2A3A55'; // saibyl-border-light
-const SURFACE = '#111827'; // saibyl-surface — the halo colour and the hollow fill
-const UP = '#22C55E'; // saibyl-positive
-const DOWN = '#EF4444'; // saibyl-negative
+const INK = '#14294a'; // saibyl-ink — whiskers and printed values
+const INK_SOFT = '#44587a'; // saibyl-silver — axis numbers, the trend line
+const INK_MUTED = '#60718e'; // saibyl-muted — captions
+const GRID = 'rgba(99,139,202,0.18)'; // hairline grid on the light ground
+const ZERO_RULE = 'rgba(99,139,202,0.45)'; // the zero line, one step louder than the grid
+const SURFACE = '#ffffff'; // saibyl-surface — the halo colour and the hollow fill
+const UP = '#2fbf8a'; // saibyl-green — fills only, never text
+const DOWN = '#ff6e79'; // saibyl-rose — fills only, never text
 
 /**
  * The rendered width of the container, in real pixels.
@@ -514,9 +514,9 @@ export default function SentimentArcPlot({ slots }: { slots: ArcSlot[] }) {
                 // keyboard user's only indicator on `:focus-visible` matching
                 // an SVG `<g>`, and the ring lands on the slot-sized hit rect,
                 // which is the right shape for it anyway.
-                className={`focus-visible:[&>rect]:fill-[rgba(255,255,255,0.07)] ${
+                className={`focus-visible:[&>rect]:fill-[rgba(20,41,74,0.07)] ${
                   interactive
-                    ? 'cursor-pointer hover:[&>rect]:fill-[rgba(255,255,255,0.05)]'
+                    ? 'cursor-pointer hover:[&>rect]:fill-[rgba(20,41,74,0.04)]'
                     : ''
                 }`}
               >

@@ -22,7 +22,7 @@ export default function NewProductPage() {
   const [error, setError] = useState('');
 
   const inputBase =
-    'w-full rounded-lg bg-[#0B1120] border border-white/[0.08] px-3 py-2.5 text-[13.5px] text-saibyl-platinum placeholder-saibyl-muted/40 focus:outline-none focus:ring-1 focus:ring-saibyl-gold/50';
+    'w-full rounded-xl bg-white border border-saibyl-border-light px-3 py-2.5 text-[13.5px] text-saibyl-ink placeholder:text-saibyl-muted/70 focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20';
 
   async function create() {
     const trimmed = name.trim();

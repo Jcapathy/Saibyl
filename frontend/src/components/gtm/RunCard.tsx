@@ -61,22 +61,22 @@ export function QueryList({ queries }: { queries: DiscoveryQuery[] }) {
         const copy = ANGLE_COPY[angle as DiscoveryQuery['angle']];
         return (
           <div key={angle}>
-            <p className="text-[12px] font-medium text-[#E8ECF2]">
+            <p className="text-[12px] font-medium text-saibyl-ink">
               {copy?.label ?? angle.replace(/_/g, ' ')}
             </p>
             {copy && (
-              <p className="text-[11px] text-[#5A6578] mt-0.5 leading-relaxed">{copy.hint}</p>
+              <p className="text-[11px] text-saibyl-muted mt-0.5 leading-relaxed">{copy.hint}</p>
             )}
             <ul className="mt-2 space-y-1.5">
               {group.map((query, i) => (
                 <li
                   key={`${query.archetype_id}-${query.angle}-${i}`}
-                  className="rounded-lg border border-[#1E293B] bg-white/[0.02] px-3 py-2"
+                  className="rounded-lg border border-saibyl-border bg-white px-3 py-2"
                 >
-                  <p className="font-mono text-[12px] text-[#E8ECF2] break-words">
+                  <p className="font-mono text-[12px] text-saibyl-ink break-words">
                     {query.query}
                   </p>
-                  <p className="text-[10px] text-[#5A6578] mt-1">
+                  <p className="text-[10px] text-saibyl-muted mt-1">
                     Looking for {query.archetype_label || 'your buyers'}
                     {query.derived_from.length > 0 && (
                       <>
@@ -111,7 +111,7 @@ export function RunCard({
 
   return (
     <div
-      className="rounded-2xl border bg-[#111827] p-5"
+      className="rounded-2xl border bg-white p-5"
       style={{ borderColor: `${color}33` }}
     >
       <div className="flex items-start justify-between gap-4">
@@ -126,7 +126,7 @@ export function RunCard({
             <p className="text-[14px] font-medium" style={{ color }}>
               {shown.headline}
             </p>
-            <p className="text-[12px] text-[#8B97A8] mt-1 leading-relaxed max-w-2xl">
+            <p className="text-[12px] text-saibyl-silver mt-1 leading-relaxed max-w-2xl">
               {shown.detail}
             </p>
           </div>
@@ -138,7 +138,7 @@ export function RunCard({
             "this is never coming back". */}
         {validDate && (
           <p
-            className="text-[11px] font-mono text-[#5A6578] whitespace-nowrap shrink-0"
+            className="text-[11px] font-mono text-saibyl-muted whitespace-nowrap shrink-0"
             title={started.toLocaleString()}
           >
             {formatDistanceToNow(started, { addSuffix: true })}
@@ -149,13 +149,13 @@ export function RunCard({
       {/* The provider's own words on a failure. Shown verbatim rather than
           summarised — it is the only thing that says which vendor broke. */}
       {run.error && (
-        <p className="mt-3 rounded-lg bg-white/[0.03] px-3 py-2 font-mono text-[11px] text-[#8B97A8] break-words">
+        <p className="mt-3 rounded-lg bg-[#14294a]/[0.04] px-3 py-2 font-mono text-[11px] text-saibyl-silver break-words">
           {run.error}
         </p>
       )}
 
       {run.purged_at && (
-        <p className="mt-3 text-[11px] text-[#F59E0B] leading-relaxed">
+        <p className="mt-3 text-[11px] text-saibyl-warning leading-relaxed">
           The companies from this search were deleted when you cleared your saved
           companies. This record is kept because it holds what the search cost, which is
           not information about anybody.
@@ -178,8 +178,8 @@ export function RunCard({
 function Counter({ label, value }: { label: string; value: string | number }) {
   return (
     <div>
-      <dt className="text-[10px] uppercase tracking-widest text-[#5A6578]">{label}</dt>
-      <dd className="font-mono text-[13px] text-[#E8ECF2] mt-0.5">{value}</dd>
+      <dt className="text-[10px] uppercase tracking-widest text-saibyl-muted">{label}</dt>
+      <dd className="font-mono text-[13px] text-saibyl-ink mt-0.5">{value}</dd>
     </div>
   );
 }

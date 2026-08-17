@@ -28,7 +28,7 @@ import type { CandidateDeleteResult, CandidateDetail } from '@/types';
  * cell reads as data.
  */
 
-const cardClass = 'rounded-2xl border border-[#1E293B] bg-[#111827]';
+const cardClass = 'rounded-2xl border border-saibyl-border bg-white';
 
 export default function ProspectDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -85,9 +85,9 @@ export default function ProspectDetailPage() {
   if (loading) {
     return (
       <div className="p-6 max-w-3xl mx-auto space-y-4">
-        <div className="h-8 w-56 rounded bg-white/[0.05] animate-pulse" />
-        <div className="h-40 rounded-2xl bg-white/[0.03] animate-pulse" />
-        <div className="h-64 rounded-2xl bg-white/[0.03] animate-pulse" />
+        <div className="h-8 w-56 rounded bg-[#14294a]/[0.05] animate-pulse" />
+        <div className="h-40 rounded-2xl bg-[#14294a]/[0.04] animate-pulse" />
+        <div className="h-64 rounded-2xl bg-[#14294a]/[0.04] animate-pulse" />
       </div>
     );
   }
@@ -96,10 +96,10 @@ export default function ProspectDetailPage() {
     return (
       <div className="p-6 max-w-3xl mx-auto">
         <div className={`${cardClass} p-6`}>
-          <h1 className="text-[15px] font-medium text-[#E8ECF2]">
+          <h1 className="text-[15px] font-medium text-saibyl-ink">
             {present(deleted.company_name) ?? 'That company'} has been deleted
           </h1>
-          <p className="text-[12px] text-[#8B97A8] mt-2 leading-relaxed">
+          <p className="text-[12px] text-saibyl-silver mt-2 leading-relaxed">
             The record is gone, not hidden &mdash; the rows were deleted.
             {deleted.contacts_deleted > 0 && (
               <>
@@ -112,7 +112,7 @@ export default function ProspectDetailPage() {
           </p>
           <Link
             to="/app/prospects"
-            className="mt-4 inline-block text-[12px] text-[#C9A227] hover:underline"
+            className="mt-4 inline-block text-[12px] text-saibyl-gold hover:underline"
           >
             Back to all companies
           </Link>
@@ -124,13 +124,13 @@ export default function ProspectDetailPage() {
   if (error && !candidate) {
     return (
       <div className="p-6 max-w-3xl mx-auto">
-        <div className="rounded-2xl border border-[#EF4444]/25 bg-[#EF4444]/[0.07] p-6">
-          <p className="text-[13px] text-[#EF4444] leading-relaxed whitespace-pre-wrap">
+        <div className="rounded-2xl border border-saibyl-negative/25 bg-saibyl-rose/[0.08] p-6">
+          <p className="text-[13px] text-saibyl-negative leading-relaxed whitespace-pre-wrap">
             {error}
           </p>
           <Link
             to="/app/prospects"
-            className="mt-4 inline-block text-[12px] text-[#8B97A8] hover:text-[#E8ECF2]"
+            className="mt-4 inline-block text-[12px] text-saibyl-silver hover:text-saibyl-ink"
           >
             Back to all companies
           </Link>
@@ -159,14 +159,14 @@ export default function ProspectDetailPage() {
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="inline-flex items-center gap-1.5 text-[12px] text-[#5A6578] hover:text-[#E8ECF2] transition-colors mb-3"
+          className="inline-flex items-center gap-1.5 text-[12px] text-saibyl-muted hover:text-saibyl-ink transition-colors mb-3"
         >
           <ArrowLeft className="w-3.5 h-3.5" /> Back
         </button>
 
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="min-w-0">
-            <h1 className="font-extrabold text-[22px] text-[#E8ECF2]">
+            <h1 className="font-extrabold text-[22px] text-saibyl-ink">
               {candidate.company_name}
             </h1>
             {domain && (
@@ -178,7 +178,7 @@ export default function ProspectDetailPage() {
               </p>
             )}
             {oneLiner && (
-              <p className="text-[13px] text-[#8B97A8] mt-2 leading-relaxed max-w-2xl">
+              <p className="text-[13px] text-saibyl-silver mt-2 leading-relaxed max-w-2xl">
                 {oneLiner}
               </p>
             )}
@@ -188,7 +188,7 @@ export default function ProspectDetailPage() {
             type="button"
             onClick={remove}
             disabled={deleting}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-[#1E293B] px-3 py-2 text-[12px] text-[#8B97A8] hover:border-[#EF4444]/40 hover:text-[#EF4444] disabled:opacity-40 transition-colors shrink-0"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-saibyl-border px-3 py-2 text-[12px] text-saibyl-silver hover:border-saibyl-negative/40 hover:text-saibyl-negative disabled:opacity-40 transition-colors shrink-0"
           >
             {deleting ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -201,19 +201,19 @@ export default function ProspectDetailPage() {
       </div>
 
       {error && (
-        <div className="rounded-xl border border-[#EF4444]/25 bg-[#EF4444]/[0.07] p-4">
-          <p className="text-[12px] text-[#EF4444] whitespace-pre-wrap">{error}</p>
+        <div className="rounded-xl border border-saibyl-negative/25 bg-saibyl-rose/[0.08] p-4">
+          <p className="text-[12px] text-saibyl-negative whitespace-pre-wrap">{error}</p>
         </div>
       )}
 
       {/* ---- Where this came from. First, because it is what makes the rest
               worth reading. ---- */}
       <section className={`${cardClass} p-5`}>
-        <h2 className="text-[13px] font-medium text-[#E8ECF2]">Where this came from</h2>
+        <h2 className="text-[13px] font-medium text-saibyl-ink">Where this came from</h2>
         <p className="text-[12px] mt-2">
           <SourceLink url={candidate.source_url} label={candidate.source_title} />
         </p>
-        <p className="text-[11px] text-[#5A6578] mt-1.5">
+        <p className="text-[11px] text-saibyl-muted mt-1.5">
           {validRetrieved ? (
             <span title={retrieved.toLocaleString()}>
               Read {formatDistanceToNow(retrieved, { addSuffix: true })}. Pages change &mdash;
@@ -227,8 +227,8 @@ export default function ProspectDetailPage() {
 
       {/* ---- What a source actually said ---- */}
       <section className={`${cardClass} p-5`}>
-        <h2 className="text-[13px] font-medium text-[#E8ECF2]">What the page said</h2>
-        <p className="text-[11px] text-[#5A6578] mt-1 mb-3 leading-relaxed">
+        <h2 className="text-[13px] font-medium text-saibyl-ink">What the page said</h2>
+        <p className="text-[11px] text-saibyl-muted mt-1 mb-3 leading-relaxed">
           Every line below was quoted from a page we retrieved, and checked to appear on it
           word for word. Anything we could not quote is not here at all &mdash; we would
           rather leave a gap than fill it in.
@@ -242,7 +242,7 @@ export default function ProspectDetailPage() {
         present(candidate.hq_location) ||
         presentList(candidate.incumbent_tooling)) && (
         <section className={`${cardClass} p-5`}>
-          <h2 className="text-[13px] font-medium text-[#E8ECF2] mb-3">The company</h2>
+          <h2 className="text-[13px] font-medium text-saibyl-ink mb-3">The company</h2>
           <dl className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Fact label="Industry" value={candidate.industry} />
             <Fact label="Size" value={candidate.employee_count_range} />
@@ -259,15 +259,15 @@ export default function ProspectDetailPage() {
       {/* ---- Why it was put in front of you ---- */}
       {reasons && (
         <section className={`${cardClass} p-5`}>
-          <h2 className="text-[13px] font-medium text-[#E8ECF2]">Why we thought of you</h2>
+          <h2 className="text-[13px] font-medium text-saibyl-ink">Why we thought of you</h2>
           <ul className="mt-2.5 space-y-1.5">
             {reasons.map((reason) => (
-              <li key={reason} className="text-[12px] text-[#8B97A8] leading-relaxed">
+              <li key={reason} className="text-[12px] text-saibyl-silver leading-relaxed">
                 &mdash; {reason}
               </li>
             ))}
           </ul>
-          <p className="text-[10px] text-[#5A6578] mt-3 leading-relaxed">
+          <p className="text-[10px] text-saibyl-muted mt-3 leading-relaxed">
             These are claims, not findings. Check them against the quotes above.
           </p>
         </section>
@@ -276,12 +276,12 @@ export default function ProspectDetailPage() {
       {/* ---- The ordering, explained rather than scored ---- */}
       {components.length > 0 && (
         <section className={`${cardClass} p-5`}>
-          <h2 className="text-[13px] font-medium text-[#E8ECF2]">
+          <h2 className="text-[13px] font-medium text-saibyl-ink">
             Why it sits where it does in your list
           </h2>
-          <p className="text-[11px] text-[#5A6578] mt-1 mb-3.5 leading-relaxed">
+          <p className="text-[11px] text-saibyl-muted mt-1 mb-3.5 leading-relaxed">
             We put companies in an order so you know which to open first. These are the
-            things that decided it. This is an <strong className="text-[#8B97A8]">order</strong>,
+            things that decided it. This is an <strong className="text-saibyl-silver">order</strong>,
             not a score &mdash; it says look at this one before that one, and nothing about
             how likely they are to buy. Nobody has measured that yet.
           </p>
@@ -291,15 +291,15 @@ export default function ProspectDetailPage() {
               return (
                 <li key={name}>
                   <p
-                    className={`text-[12px] ${zero ? 'text-[#5A6578]' : 'text-[#E8ECF2]'}`}
+                    className={`text-[12px] ${zero ? 'text-saibyl-muted' : 'text-saibyl-ink'}`}
                   >
                     {SCORE_COMPONENT_COPY[name] ?? name.replace(/_/g, ' ')}
-                    {zero && <span className="text-[#5A6578]"> &mdash; nothing matched</span>}
+                    {zero && <span className="text-saibyl-muted"> &mdash; nothing matched</span>}
                   </p>
                   {!zero && (
-                    <div className="mt-1 h-1 rounded-full bg-white/[0.05] overflow-hidden">
+                    <div className="mt-1 h-1 rounded-full bg-[#14294a]/[0.06] overflow-hidden">
                       <div
-                        className="h-full rounded-full bg-[#8B5CF6]/60"
+                        className="h-full rounded-full bg-saibyl-violet/60"
                         style={{ width: `${Math.min(100, Math.max(0, value * 100))}%` }}
                       />
                     </div>
@@ -314,11 +314,11 @@ export default function ProspectDetailPage() {
       {/* ---- People. Only ever here when the org opted in. ---- */}
       {candidate.contacts.length > 0 && (
         <section className={`${cardClass} p-5`}>
-          <h2 className="flex items-center gap-2 text-[13px] font-medium text-[#E8ECF2]">
-            <Users className="w-3.5 h-3.5 text-[#8B97A8]" />
+          <h2 className="flex items-center gap-2 text-[13px] font-medium text-saibyl-ink">
+            <Users className="w-3.5 h-3.5 text-saibyl-silver" />
             People at this company
           </h2>
-          <p className="text-[11px] text-[#5A6578] mt-1 mb-3 leading-relaxed">
+          <p className="text-[11px] text-saibyl-muted mt-1 mb-3 leading-relaxed">
             Public professional information only &mdash; name, role, employer, and a public
             profile page. No email addresses and no phone numbers are collected or stored.
             Each one names the page it came from and when it was read.
@@ -327,11 +327,11 @@ export default function ProspectDetailPage() {
             {candidate.contacts.map((contact) => (
               <li
                 key={contact.id}
-                className="rounded-xl border border-[#1E293B] bg-white/[0.02] p-3.5"
+                className="rounded-xl border border-saibyl-border bg-saibyl-elevated p-3.5"
               >
-                <p className="text-[13px] text-[#E8ECF2]">{contact.full_name}</p>
+                <p className="text-[13px] text-saibyl-ink">{contact.full_name}</p>
                 {(present(contact.role_title) || present(contact.employer)) && (
-                  <p className="text-[12px] text-[#8B97A8] mt-0.5">
+                  <p className="text-[12px] text-saibyl-silver mt-0.5">
                     {[present(contact.role_title), present(contact.employer)]
                       .filter(Boolean)
                       .join(' · ')}
@@ -342,7 +342,7 @@ export default function ProspectDetailPage() {
                     <SourceLink url={contact.public_profile_url} label="Public profile" />
                   )}
                   <SourceLink url={contact.source_url} label="Where we found them" />
-                  <span className="text-[#5A6578]">
+                  <span className="text-saibyl-muted">
                     read{' '}
                     {Number.isFinite(new Date(contact.retrieved_at).getTime())
                       ? formatDistanceToNow(new Date(contact.retrieved_at), { addSuffix: true })
@@ -357,16 +357,16 @@ export default function ProspectDetailPage() {
 
       {/* ---- Traceability back to the audience and the search ---- */}
       <section className={`${cardClass} p-5`}>
-        <h2 className="text-[13px] font-medium text-[#E8ECF2] mb-3">How we found them</h2>
+        <h2 className="text-[13px] font-medium text-saibyl-ink mb-3">How we found them</h2>
         <dl className="space-y-3">
           <Fact label="Matched this kind of buyer" value={candidate.archetype_label} />
           {angle && <Fact label="By looking for" value={angle.label} />}
           {present(candidate.query) && (
             <div>
-              <dt className="text-[10px] uppercase tracking-widest text-[#5A6578]">
+              <dt className="text-[10px] uppercase tracking-widest text-saibyl-muted">
                 The search we ran
               </dt>
-              <dd className="mt-0.5 font-mono text-[12px] text-[#E8ECF2] break-words">
+              <dd className="mt-0.5 font-mono text-[12px] text-saibyl-ink break-words">
                 {candidate.query}
               </dd>
             </div>
@@ -374,7 +374,7 @@ export default function ProspectDetailPage() {
         </dl>
         <Link
           to={`/app/prospects?discovery_run_id=${candidate.discovery_run_id}`}
-          className="mt-3.5 inline-block text-[12px] text-[#C9A227] hover:underline"
+          className="mt-3.5 inline-block text-[12px] text-saibyl-gold hover:underline"
         >
           See everything that search found
         </Link>

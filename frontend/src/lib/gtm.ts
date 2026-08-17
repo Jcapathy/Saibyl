@@ -292,12 +292,14 @@ export function describeRun(run: DiscoveryRun, now: number = Date.now()): RunPre
 }
 
 /** The palette a tone maps to. Kept beside the tones so the two cannot drift. */
+/* Light-ground values: RunCard paints headline text and icons from these
+   directly, so each must hold ≥4.5:1 on a white card. */
 export const TONE_COLOR: Record<RunTone, string> = {
-  positive: '#22C55E',
-  negative: '#EF4444',
-  warning: '#F59E0B',
-  neutral: '#8B97A8',
-  active: '#2563EB',
+  positive: '#0e7d55',
+  negative: '#d92d3c',
+  warning: '#b45309',
+  neutral: '#60718e',
+  active: '#286cf0',
 };
 
 /* ── Money ──────────────────────────────────────────────────────────── */

@@ -119,16 +119,16 @@ export default function CreditTopUp({
   }, [active, onPurchased]);
 
   return (
-    <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6">
+    <div className="rounded-2xl border border-saibyl-border bg-white p-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-[17px] font-semibold text-[#E8ECF2]">Add credits</h3>
+        <h3 className="text-[17px] font-semibold text-saibyl-ink">Add credits</h3>
         {balance !== null && (
-          <span className="text-[12px] text-[#8B97A8]">
+          <span className="text-[12px] text-saibyl-silver tabular-nums">
             You have {balance.toLocaleString()} now
           </span>
         )}
       </div>
-      <p className="text-[13px] text-[#8B97A8] mt-1.5 leading-relaxed max-w-xl">
+      <p className="text-[13px] text-saibyl-silver mt-1.5 leading-relaxed max-w-xl">
         A one-off payment, not a plan. Nothing renews, nothing is cancelled
         later, and the credits do not expire. Use this to try the product before
         deciding whether a monthly plan is worth it.
@@ -152,33 +152,33 @@ export default function CreditTopUp({
                   }}
                   className={`px-4 py-2.5 rounded-xl border text-left transition-colors ${
                     isActive
-                      ? 'border-[#C9A227]/50 bg-[#C9A227]/10'
-                      : 'border-white/[0.08] bg-white/[0.02] hover:border-white/[0.16]'
+                      ? 'border-saibyl-blue/50 bg-saibyl-blue/10'
+                      : 'border-saibyl-border bg-white hover:border-saibyl-border-light'
                   }`}
                 >
                   <span
-                    className={`block text-[15px] font-semibold ${
-                      isActive ? 'text-[#E8ECF2]' : 'text-[#C6D0DE]'
+                    className={`block text-[15px] font-semibold tabular-nums ${
+                      isActive ? 'text-saibyl-ink' : 'text-saibyl-silver'
                     }`}
                   >
                     ${q.amount_usd.toFixed(0)}
                   </span>
-                  <span className="block text-[11px] text-[#8B97A8] mt-0.5">
+                  <span className="block text-[11px] text-saibyl-muted mt-0.5 tabular-nums">
                     {q.credits.toLocaleString()} credits
                   </span>
                 </button>
               );
             })}
 
-            <label className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/[0.08] bg-white/[0.02] focus-within:border-[#C9A227]/50">
-              <span className="text-[15px] text-[#8B97A8]">$</span>
+            <label className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-saibyl-border-light bg-white focus-within:border-saibyl-blue focus-within:ring-2 focus-within:ring-saibyl-blue/20">
+              <span className="text-[15px] text-saibyl-silver">$</span>
               <input
                 inputMode="decimal"
                 value={custom}
                 onChange={(e) => setCustom(e.target.value)}
                 placeholder="Other"
                 aria-label="A different amount, in dollars"
-                className="w-20 bg-transparent text-[15px] text-[#E8ECF2] placeholder-[#5A6578] outline-none"
+                className="w-20 bg-transparent text-[15px] text-saibyl-ink placeholder:text-saibyl-muted/70 focus:outline-none tabular-nums"
               />
             </label>
           </div>
@@ -192,14 +192,14 @@ export default function CreditTopUp({
       )}
 
       {error && (
-        <p className="mt-4 text-[12.5px] text-[#EF4444] leading-relaxed">{error}</p>
+        <p className="mt-4 text-[12.5px] text-saibyl-negative leading-relaxed">{error}</p>
       )}
 
       <div className="mt-5">
         {sending ? (
           <span
             aria-live="polite"
-            className="inline-block px-5 py-2.5 rounded-xl bg-[#C9A227]/70 text-[#0A0F1C] font-semibold text-[13px]"
+            className="inline-block px-5 py-2.5 rounded-xl bg-saibyl-blue/70 text-white font-semibold text-[13px]"
           >
             Opening payment&hellip;
           </span>
@@ -207,20 +207,20 @@ export default function CreditTopUp({
           <button
             type="button"
             onClick={buy}
-            className="px-5 py-2.5 rounded-xl bg-[#C9A227] text-[#0A0F1C] font-semibold text-[13px] hover:bg-[#D4AF37] transition-colors"
+            className="px-5 py-2.5 rounded-xl bg-saibyl-blue text-white font-semibold text-[13px] tabular-nums hover:bg-[#1e5ad9] transition-colors"
           >
             Add ${active.amount_usd.toFixed(2)} of credits
           </button>
         ) : (
           /* Never a grey button: no amount is chosen, so the screen says that
              rather than presenting a control that does nothing. */
-          <p className="text-[12.5px] text-[#8B97A8]">
+          <p className="text-[12.5px] text-saibyl-silver">
             Pick an amount above, or type your own.
           </p>
         )}
       </div>
 
-      <p className="text-[11px] text-[#5A6578] mt-3 leading-relaxed">
+      <p className="text-[11px] text-saibyl-muted mt-3 leading-relaxed">
         Card payment handled by Stripe. We never see your card details.
       </p>
     </div>

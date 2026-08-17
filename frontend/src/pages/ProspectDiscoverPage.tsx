@@ -37,9 +37,9 @@ import type { DiscoveryEstimate, DiscoveryRun, Project } from '@/types';
  * to fix here: the remedy is on the audience, and the message says which fields.
  */
 
-const cardClass = 'rounded-2xl border border-[#1E293B] bg-[#111827]';
+const cardClass = 'rounded-2xl border border-saibyl-border bg-white';
 const selectClass =
-  'w-full rounded-lg bg-[#0B1120] border border-white/[0.08] px-3 py-2 text-[13px] text-[#E8ECF2] focus:outline-none focus:ring-1 focus:ring-[#8B5CF6]/50';
+  'w-full rounded-lg bg-white border border-saibyl-border-light px-3 py-2 text-[13px] text-saibyl-ink focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20';
 
 export default function ProspectDiscoverPage() {
   const navigate = useNavigate();
@@ -231,7 +231,7 @@ export default function ProspectDiscoverPage() {
   if (run) {
     return (
       <div className="p-6 max-w-3xl mx-auto space-y-5">
-        <h1 className="font-extrabold text-[22px] text-[#E8ECF2]">The search has finished</h1>
+        <h1 className="font-extrabold text-[22px] text-saibyl-ink">The search has finished</h1>
         <RunCard
           run={run}
           action={
@@ -239,7 +239,7 @@ export default function ProspectDiscoverPage() {
               {run.candidates_found > 0 && (
                 <Link
                   to={`/app/prospects?discovery_run_id=${run.id}`}
-                  className="inline-flex items-center gap-2 rounded-lg bg-[#C9A227] px-4 py-2 text-[13px] font-semibold text-[#0A0F1C] hover:bg-[#D4AF37] transition-colors"
+                  className="inline-flex items-center gap-2 rounded-lg bg-saibyl-gold px-4 py-2 text-[13px] font-semibold text-white hover:bg-saibyl-gold-hover transition-colors"
                 >
                   See the {run.candidates_found === 1 ? 'company' : `${run.candidates_found} companies`}
                 </Link>
@@ -251,13 +251,13 @@ export default function ProspectDiscoverPage() {
                   setRefusal('');
                   setStartError('');
                 }}
-                className="text-[12px] text-[#8B97A8] hover:text-[#E8ECF2] transition-colors"
+                className="text-[12px] text-saibyl-silver hover:text-saibyl-ink transition-colors"
               >
                 Run another search
               </button>
               <Link
                 to="/app/prospects"
-                className="text-[12px] text-[#8B97A8] hover:text-[#E8ECF2] transition-colors"
+                className="text-[12px] text-saibyl-silver hover:text-saibyl-ink transition-colors"
               >
                 Back to all companies
               </Link>
@@ -267,7 +267,7 @@ export default function ProspectDiscoverPage() {
 
         {run.queries.length > 0 && (
           <section className={`${cardClass} p-5`}>
-            <h2 className="text-[13px] font-medium text-[#E8ECF2] mb-3">What we searched for</h2>
+            <h2 className="text-[13px] font-medium text-saibyl-ink mb-3">What we searched for</h2>
             <QueryList queries={run.queries} />
           </section>
         )}
@@ -282,12 +282,12 @@ export default function ProspectDiscoverPage() {
         <button
           type="button"
           onClick={() => navigate('/app/prospects')}
-          className="inline-flex items-center gap-1.5 text-[12px] text-[#5A6578] hover:text-[#E8ECF2] transition-colors mb-3"
+          className="inline-flex items-center gap-1.5 text-[12px] text-saibyl-muted hover:text-saibyl-ink transition-colors mb-3"
         >
           <ArrowLeft className="w-3.5 h-3.5" /> All companies
         </button>
-        <h1 className="font-extrabold text-[22px] text-[#E8ECF2]">Find companies to sell to</h1>
-        <p className="text-[13px] text-[#8B97A8] mt-1.5 leading-relaxed max-w-2xl">
+        <h1 className="font-extrabold text-[22px] text-saibyl-ink">Find companies to sell to</h1>
+        <p className="text-[13px] text-saibyl-silver mt-1.5 leading-relaxed max-w-2xl">
           You told us who your buyers are. Now we go and search the web for real companies
           that look like them. You will see every search we are about to run, and what it
           costs, before anything happens.
@@ -296,16 +296,16 @@ export default function ProspectDiscoverPage() {
 
       {/* 1 — which audience */}
       <section className={`${cardClass} p-5 space-y-4`}>
-        <h2 className="text-[13px] font-medium text-[#E8ECF2]">Which buyers are we looking for?</h2>
+        <h2 className="text-[13px] font-medium text-saibyl-ink">Which buyers are we looking for?</h2>
 
         {projects.length > 1 && (
           <label className="block">
-            <span className="block text-[12px] text-[#8B97A8] mb-1.5">Product</span>
+            <span className="block text-[12px] text-saibyl-silver mb-1.5">Product</span>
             <select
               value={projectId}
               onChange={(e) => setParam({ project_id: e.target.value, icp_profile_id: '' })}
               className={selectClass}
-              style={{ colorScheme: 'dark' }}
+              style={{ colorScheme: 'light' }}
             >
               <option value="">Choose a product…</option>
               {projects.map((project) => (
@@ -319,22 +319,22 @@ export default function ProspectDiscoverPage() {
 
         {projectId && (
           <label className="block">
-            <span className="block text-[12px] text-[#8B97A8] mb-1.5">Your buyers</span>
+            <span className="block text-[12px] text-saibyl-silver mb-1.5">Your buyers</span>
             {profilesLoading ? (
-              <div className="h-9 rounded-lg bg-white/[0.04] animate-pulse" />
+              <div className="h-9 rounded-lg bg-[#14294a]/[0.04] animate-pulse" />
             ) : profiles.length === 0 ? (
               <div className="rounded-xl border border-[#F59E0B]/25 bg-[#F59E0B]/[0.06] p-4">
-                <p className="text-[12px] text-[#F59E0B]">
+                <p className="text-[12px] text-saibyl-warning">
                   We have not worked out who buys this one yet
                 </p>
-                <p className="text-[11px] text-[#8B97A8] mt-1.5 leading-relaxed">
+                <p className="text-[11px] text-saibyl-silver mt-1.5 leading-relaxed">
                   We cannot search for companies that look like your buyers until we know who
                   your buyers are. Open the product and do that first &mdash; Saibyl reads
                   what you have uploaded and tells you who it thinks will buy this.
                 </p>
                 <Link
                   to={`/app/projects/${projectId}`}
-                  className="inline-block mt-2.5 text-[12px] text-[#C9A227] hover:underline"
+                  className="inline-block mt-2.5 text-[12px] text-saibyl-gold hover:underline"
                 >
                   Open this product
                 </Link>
@@ -344,7 +344,7 @@ export default function ProspectDiscoverPage() {
                 value={profileId}
                 onChange={(e) => setParam({ icp_profile_id: e.target.value })}
                 className={selectClass}
-                style={{ colorScheme: 'dark' }}
+                style={{ colorScheme: 'light' }}
               >
                 {profiles.map((profile) => (
                   <option key={profile.id} value={profile.id}>
@@ -357,11 +357,11 @@ export default function ProspectDiscoverPage() {
         )}
 
         {selectedProfile && buyerCount > 0 && (
-          <p className="text-[11px] text-[#5A6578]">
+          <p className="text-[11px] text-saibyl-muted">
             {buyerCount} {buyerCount === 1 ? 'kind' : 'kinds'} of buyer in this audience.{' '}
             <Link
               to={`/app/projects/${selectedProfile.project_id}`}
-              className="text-[#8B97A8] hover:text-[#E8ECF2] underline"
+              className="text-saibyl-silver hover:text-saibyl-ink underline"
             >
               Review them
             </Link>{' '}
@@ -374,8 +374,8 @@ export default function ProspectDiscoverPage() {
       {profileId && (
         <section className={`${cardClass} p-5 space-y-4`}>
           <div>
-            <h2 className="text-[13px] font-medium text-[#E8ECF2]">How wide should we cast?</h2>
-            <p className="text-[11px] text-[#5A6578] mt-1 leading-relaxed">
+            <h2 className="text-[13px] font-medium text-saibyl-ink">How wide should we cast?</h2>
+            <p className="text-[11px] text-saibyl-muted mt-1 leading-relaxed">
               More searches cover more of your audience and cost more. Fewer is cheaper and
               narrower &mdash; neither is wrong, and you can run this again.
             </p>
@@ -389,26 +389,26 @@ export default function ProspectDiscoverPage() {
               step={1}
               value={maxQueries}
               onChange={(e) => setMaxQueries(Number(e.target.value))}
-              className="flex-1 accent-[#C9A227]"
+              className="flex-1 accent-[#286cf0]"
             />
-            <span className="font-mono text-[13px] text-[#E8ECF2] w-24 text-right">
+            <span className="font-mono text-[13px] text-saibyl-ink w-24 text-right">
               up to {maxQueries}
             </span>
           </div>
 
           {estimateLoading && (
-            <p className="flex items-center gap-2 text-[12px] text-[#5A6578]">
+            <p className="flex items-center gap-2 text-[12px] text-saibyl-muted">
               <Loader2 className="w-3.5 h-3.5 animate-spin" /> Working out the searches…
             </p>
           )}
 
           {estimateError && !estimateLoading && (
             <div className="rounded-xl border border-[#F59E0B]/25 bg-[#F59E0B]/[0.06] p-4">
-              <p className="flex items-center gap-2 text-[12px] text-[#F59E0B]">
+              <p className="flex items-center gap-2 text-[12px] text-saibyl-warning">
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                 We could not prepare this search
               </p>
-              <p className="text-[11px] text-[#8B97A8] mt-1.5 leading-relaxed whitespace-pre-wrap">
+              <p className="text-[11px] text-saibyl-silver mt-1.5 leading-relaxed whitespace-pre-wrap">
                 {estimateError}
               </p>
             </div>
@@ -416,10 +416,10 @@ export default function ProspectDiscoverPage() {
 
           {estimate && !estimateLoading && (
             <>
-              <div className="rounded-xl border border-[#1E293B] bg-white/[0.02] px-4 py-3">
-                <p className="text-[13px] text-[#E8ECF2]">
+              <div className="rounded-xl border border-saibyl-border bg-saibyl-elevated px-4 py-3">
+                <p className="text-[13px] text-saibyl-ink">
                   {compiled} {compiled === 1 ? 'search' : 'searches'} for{' '}
-                  <span className="font-mono text-[#C9A227]">
+                  <span className="font-mono text-saibyl-gold">
                     {formatCredits(estimate.budget.credits_required)}
                   </span>{' '}
                   credits
@@ -427,11 +427,11 @@ export default function ProspectDiscoverPage() {
                 {/* The server's sentence, with the real balance in it. Not
                     re-written here: it is the one place the numbers the charge
                     is actually made from are stated. */}
-                <p className="text-[11px] text-[#8B97A8] mt-1 leading-relaxed">
+                <p className="text-[11px] text-saibyl-silver mt-1 leading-relaxed">
                   {estimate.budget.message}
                 </p>
                 {estimate.budget.allowed && estimate.budget.balance_share_pct > 30 && (
-                  <p className="text-[11px] text-[#F59E0B] mt-1.5">
+                  <p className="text-[11px] text-saibyl-warning mt-1.5">
                     That is {Math.round(estimate.budget.balance_share_pct)}% of what you have
                     left.
                   </p>
@@ -440,10 +440,10 @@ export default function ProspectDiscoverPage() {
 
               {compiled > 0 && (
                 <div>
-                  <h3 className="text-[12px] font-medium text-[#E8ECF2] mb-1">
+                  <h3 className="text-[12px] font-medium text-saibyl-ink mb-1">
                     Exactly what we will search for
                   </h3>
-                  <p className="text-[11px] text-[#5A6578] mb-3 leading-relaxed">
+                  <p className="text-[11px] text-saibyl-muted mb-3 leading-relaxed">
                     These are the real searches, word for word. Nothing else gets sent.
                   </p>
                   <QueryList queries={estimate.queries} />
@@ -459,11 +459,11 @@ export default function ProspectDiscoverPage() {
         <section className="space-y-3">
           {refusal && (
             <div className="rounded-xl border border-[#F59E0B]/30 bg-[#F59E0B]/[0.07] p-4">
-              <p className="text-[13px] font-medium text-[#F59E0B]">
+              <p className="text-[13px] font-medium text-saibyl-warning">
                 Nothing was spent
               </p>
-              <p className="text-[12px] text-[#8B97A8] mt-1.5 leading-relaxed">{refusal}</p>
-              <p className="text-[11px] text-[#5A6578] mt-2 leading-relaxed">
+              <p className="text-[12px] text-saibyl-silver mt-1.5 leading-relaxed">{refusal}</p>
+              <p className="text-[11px] text-saibyl-muted mt-2 leading-relaxed">
                 We check your balance before the first search, so no credits left your
                 account and no searches ran. Move the slider down to run a smaller search,
                 or top up and come back.
@@ -472,8 +472,8 @@ export default function ProspectDiscoverPage() {
           )}
 
           {startError && (
-            <div className="rounded-xl border border-[#EF4444]/25 bg-[#EF4444]/[0.07] p-4">
-              <p className="text-[12px] text-[#EF4444] leading-relaxed whitespace-pre-wrap">
+            <div className="rounded-xl border border-saibyl-negative/25 bg-saibyl-rose/[0.08] p-4">
+              <p className="text-[12px] text-saibyl-negative leading-relaxed whitespace-pre-wrap">
                 {startError}
               </p>
             </div>
@@ -484,7 +484,7 @@ export default function ProspectDiscoverPage() {
               type="button"
               onClick={start}
               disabled={starting || !estimate.budget.allowed}
-              className="inline-flex items-center gap-2 rounded-xl bg-[#C9A227] px-5 py-2.5 text-[13px] font-semibold text-[#0A0F1C] hover:bg-[#D4AF37] disabled:opacity-40 transition-colors"
+              className="inline-flex items-center gap-2 rounded-xl bg-saibyl-gold px-5 py-2.5 text-[13px] font-semibold text-white hover:bg-saibyl-gold-hover disabled:opacity-40 transition-colors"
             >
               {starting ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -496,7 +496,7 @@ export default function ProspectDiscoverPage() {
                 : `Run ${compiled} ${compiled === 1 ? 'search' : 'searches'} for ${formatCredits(estimate.budget.credits_required)} credits`}
             </button>
             {starting && (
-              <p className="text-[11px] text-[#8B97A8] leading-relaxed max-w-sm">
+              <p className="text-[11px] text-saibyl-silver leading-relaxed max-w-sm">
                 This takes a couple of minutes and runs while this page is open. Companies
                 are saved as each search finishes, so closing the tab loses the summary but
                 not the results.
@@ -506,7 +506,7 @@ export default function ProspectDiscoverPage() {
                 sentence above is the server's and carries the numbers; this
                 just connects it to the control it disables. */}
             {!estimate.budget.allowed && !starting && (
-              <p className="text-[11px] text-[#F59E0B] leading-relaxed max-w-sm">
+              <p className="text-[11px] text-saibyl-warning leading-relaxed max-w-sm">
                 You do not have the credits for this one. Nothing has been spent &mdash;
                 drag the slider down for a smaller search, or top up.
               </p>
@@ -517,11 +517,11 @@ export default function ProspectDiscoverPage() {
 
       {profileId && estimate && compiled === 0 && !estimateLoading && (
         <div className="rounded-xl border border-[#F59E0B]/25 bg-[#F59E0B]/[0.06] p-4">
-          <p className="flex items-center gap-2 text-[12px] text-[#F59E0B]">
+          <p className="flex items-center gap-2 text-[12px] text-saibyl-warning">
             <Radar className="w-3.5 h-3.5 shrink-0" />
             There is not enough here to search on
           </p>
-          <p className="text-[11px] text-[#8B97A8] mt-1.5 leading-relaxed">
+          <p className="text-[11px] text-saibyl-silver mt-1.5 leading-relaxed">
             None of your buyers has enough detail to build a search from. Open the audience
             and fill in what they do for a living, the tools they already use, or what they
             complain about &mdash; any one of those is enough.

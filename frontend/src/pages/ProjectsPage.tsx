@@ -98,7 +98,7 @@ export default function ProjectsPage() {
         <h1 className="text-2xl font-bold text-saibyl-platinum">Your products</h1>
         <button
           onClick={() => setShowModal(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#C9A227] text-white font-medium text-sm transition-all hover:bg-[#B08D1F] hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(201,162,39,0.25)]"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-saibyl-gold text-white font-medium text-sm transition-all hover:bg-saibyl-gold-hover hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(40,108,240,0.25)]"
         >
           + New product
         </button>
@@ -107,7 +107,7 @@ export default function ProjectsPage() {
       {deleteError && (
         <div
           role="alert"
-          className="mb-4 rounded-xl border border-red-500/25 bg-red-500/[0.07] px-4 py-3 text-sm text-red-300"
+          className="mb-4 rounded-xl border border-saibyl-negative/25 bg-saibyl-rose/[0.08] px-4 py-3 text-sm text-saibyl-negative"
         >
           {deleteError}
         </div>
@@ -136,7 +136,7 @@ export default function ProjectsPage() {
               setLoading(true);
               fetchProjects();
             }}
-            className="bg-saibyl-gold text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-[#B08D1F] transition"
+            className="bg-saibyl-gold text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-saibyl-gold-hover transition"
           >
             Try again
           </button>
@@ -150,7 +150,7 @@ export default function ProjectsPage() {
           </div>
           <p className="text-saibyl-platinum font-medium mb-1">No products yet</p>
           <p className="text-saibyl-muted text-sm mb-6">One product for each thing you are trying to sell</p>
-          <button onClick={() => setShowModal(true)} className="bg-saibyl-gold text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-[#4B4FDE] transition">
+          <button onClick={() => setShowModal(true)} className="bg-saibyl-gold text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-saibyl-gold-hover transition">
             Create your first product
           </button>
         </div>
@@ -166,14 +166,14 @@ export default function ProjectsPage() {
             >
               <Link
                 to={`/app/projects/${p.id}`}
-                className="block bg-saibyl-deep rounded-2xl p-5 border border-white/[0.05] hover:border-saibyl-gold/20 hover:bg-saibyl-elevated transition-all"
+                className="block bg-saibyl-deep rounded-2xl p-5 border border-saibyl-border hover:border-saibyl-gold/20 hover:bg-saibyl-elevated transition-all"
               >
                 <div className="w-9 h-9 rounded-xl bg-saibyl-gold/10 flex items-center justify-center mb-4 group-hover:bg-saibyl-gold/15 transition-colors">
                   <svg className="w-[18px] h-[18px] text-saibyl-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
                   </svg>
                 </div>
-                <h3 className="font-semibold text-saibyl-platinum mb-1 group-hover:text-white transition-colors">{p.name}</h3>
+                <h3 className="font-semibold text-saibyl-platinum mb-1 group-hover:text-saibyl-ink transition-colors">{p.name}</h3>
                 {/* Only when there is one. "No description" is filler standing in
                     for something nobody wrote, and it reads as a fact about the
                     product rather than an absence of one. */}
@@ -215,7 +215,7 @@ export default function ProjectsPage() {
                   }
                 }}
                 disabled={deletingId === p.id}
-                className="absolute top-3 right-3 w-7 h-7 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 bg-white/[0.04] hover:bg-red-500/20 text-saibyl-muted hover:text-red-400 transition-all"
+                className="absolute top-3 right-3 w-7 h-7 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 bg-[#14294a]/[0.04] hover:bg-saibyl-rose/15 text-saibyl-muted hover:text-saibyl-negative transition-all"
                 title="Delete this product"
               >
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -234,7 +234,7 @@ export default function ProjectsPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 bg-[#14294a]/30 backdrop-blur-sm flex items-center justify-center z-50 p-4"
             onClick={(e) => e.target === e.currentTarget && setShowModal(false)}
           >
             <motion.div
@@ -245,7 +245,7 @@ export default function ProjectsPage() {
               role="dialog"
               aria-modal="true"
               aria-labelledby="new-product-heading"
-              className="glass rounded-2xl p-6 w-full max-w-md border border-white/[0.08] shadow-[0_0_60px_rgba(0,0,0,0.5)]"
+              className="glass rounded-2xl p-6 w-full max-w-md border border-saibyl-border-light shadow-[0_24px_60px_rgba(52,96,164,0.18)]"
             >
               <h2
                 id="new-product-heading"
@@ -261,7 +261,7 @@ export default function ProjectsPage() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Acme Invoicing"
-                    className="w-full bg-white/[0.04] border border-white/[0.07] rounded-xl px-4 py-2.5 text-saibyl-platinum placeholder-saibyl-muted/40 focus:outline-none focus:ring-2 focus:ring-saibyl-gold/50 transition text-sm"
+                    className="w-full bg-white border border-saibyl-border-light rounded-xl px-4 py-2.5 text-saibyl-ink placeholder:text-saibyl-muted/70 focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20 transition text-sm"
                   />
                 </div>
                 <div>
@@ -273,13 +273,13 @@ export default function ProjectsPage() {
                     onChange={(e) => setDescription(e.target.value)}
                     rows={3}
                     placeholder="What does it do, in one line?"
-                    className="w-full bg-white/[0.04] border border-white/[0.07] rounded-xl px-4 py-2.5 text-saibyl-platinum placeholder-saibyl-muted/40 focus:outline-none focus:ring-2 focus:ring-saibyl-gold/50 transition text-sm resize-none"
+                    className="w-full bg-white border border-saibyl-border-light rounded-xl px-4 py-2.5 text-saibyl-ink placeholder:text-saibyl-muted/70 focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20 transition text-sm resize-none"
                   />
                 </div>
                 {createError && (
                   <p
                     role="alert"
-                    className="rounded-xl border border-red-500/25 bg-red-500/[0.07] px-4 py-3 text-sm text-red-300"
+                    className="rounded-xl border border-saibyl-negative/25 bg-saibyl-rose/[0.08] px-4 py-3 text-sm text-saibyl-negative"
                   >
                     {createError}
                   </p>
@@ -295,7 +295,7 @@ export default function ProjectsPage() {
                   <button
                     type="submit"
                     disabled={creating}
-                    className="bg-saibyl-gold text-white px-5 py-2 rounded-xl text-sm font-medium hover:bg-[#4B4FDE] disabled:opacity-50 transition"
+                    className="bg-saibyl-gold text-white px-5 py-2 rounded-xl text-sm font-medium hover:bg-saibyl-gold-hover disabled:opacity-50 transition"
                   >
                     {creating ? 'Creating…' : 'Create product'}
                   </button>

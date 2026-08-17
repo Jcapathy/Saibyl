@@ -10,9 +10,9 @@ import type { ClearanceStatus, RiskTier } from './types';
  */
 
 const RISK_STYLES: Record<RiskTier, string> = {
-  GREEN: 'border-saibyl-positive/40 bg-saibyl-positive/10 text-saibyl-positive',
-  YELLOW: 'border-saibyl-warning/40 bg-saibyl-warning/10 text-saibyl-warning',
-  RED: 'border-saibyl-negative/40 bg-saibyl-negative/10 text-saibyl-negative',
+  GREEN: 'border-saibyl-green/40 bg-saibyl-green/10 text-saibyl-positive',
+  YELLOW: 'border-[#f59e0b]/40 bg-[#f59e0b]/10 text-saibyl-warning',
+  RED: 'border-saibyl-rose/40 bg-saibyl-rose/10 text-saibyl-negative',
 };
 
 const RISK_WORDS: Record<RiskTier, string> = {
@@ -34,10 +34,10 @@ export function RiskChip({ risk }: { risk: RiskTier }) {
 /* ------------------------------------------------------------------ */
 
 const STATUS_STYLES: Record<ClearanceStatus, string> = {
-  queued: 'border-white/[0.12] bg-white/[0.04] text-saibyl-silver',
+  queued: 'border-saibyl-border-light bg-[#14294a]/[0.04] text-saibyl-silver',
   running: 'border-saibyl-gold/40 bg-saibyl-gold/10 text-saibyl-gold',
-  complete: 'border-saibyl-positive/40 bg-saibyl-positive/10 text-saibyl-positive',
-  failed: 'border-saibyl-negative/40 bg-saibyl-negative/10 text-saibyl-negative',
+  complete: 'border-saibyl-green/40 bg-saibyl-green/10 text-saibyl-positive',
+  failed: 'border-saibyl-rose/40 bg-saibyl-rose/10 text-saibyl-negative',
 };
 
 const STATUS_WORDS: Record<ClearanceStatus, string> = {

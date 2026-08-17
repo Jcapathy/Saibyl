@@ -98,7 +98,7 @@ export default function GroupBreakdown({
                 </span>
               </div>
 
-              <div className="relative h-2.5 bg-saibyl-void rounded-full">
+              <div className="relative h-2.5 bg-[#14294a]/[0.06] rounded-full">
                 {/* Midpoint marker: without it a bar length is unreadable on a
                     scale that runs from -1 to +1. */}
                 <div className="absolute left-1/2 top-0 bottom-0 w-px bg-saibyl-border" />

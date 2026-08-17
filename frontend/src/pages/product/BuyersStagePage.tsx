@@ -97,7 +97,7 @@ export default function BuyersStagePage() {
               return (
                 <li
                   key={row.id}
-                  className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3.5"
+                  className="rounded-xl border border-saibyl-border bg-white px-4 py-3.5"
                 >
                   <div className="flex items-baseline justify-between gap-3">
                     <Link

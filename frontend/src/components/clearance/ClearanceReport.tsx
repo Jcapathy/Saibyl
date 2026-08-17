@@ -112,19 +112,19 @@ const BANNER_READINGS: Record<RiskTier, string> = {
 const TM_STATUS: Record<TrademarkStatus, { word: string; cls: string }> = {
   CLEAR_ON_SEARCH: {
     word: 'Nothing conflicting turned up',
-    cls: 'border-saibyl-positive/40 bg-saibyl-positive/10 text-saibyl-positive',
+    cls: 'border-saibyl-green/40 bg-saibyl-green/10 text-saibyl-positive',
   },
   CONFLICTS_FOUND: {
     word: 'Conflicts found',
-    cls: 'border-saibyl-negative/40 bg-saibyl-negative/10 text-saibyl-negative',
+    cls: 'border-saibyl-rose/40 bg-saibyl-rose/10 text-saibyl-negative',
   },
   NEEDS_REVIEW: {
     word: 'Needs a closer look',
-    cls: 'border-saibyl-warning/40 bg-saibyl-warning/10 text-saibyl-warning',
+    cls: 'border-[#f59e0b]/40 bg-[#f59e0b]/10 text-saibyl-warning',
   },
   NOT_SEARCHED: {
     word: 'Not searched',
-    cls: 'border-white/[0.12] bg-white/[0.04] text-saibyl-silver',
+    cls: 'border-saibyl-border-light bg-[#14294a]/[0.04] text-saibyl-silver',
   },
 };
 
@@ -163,7 +163,7 @@ export default function ClearanceReport({ artifact }: { artifact: ClearanceArtif
             : ''}
         </p>
         {artifact.assumptions.length > 0 && (
-          <div className="mt-3 pt-3 border-t border-white/[0.06]">
+          <div className="mt-3 pt-3 border-t border-saibyl-border">
             <p className="text-[11px] text-saibyl-muted">What we assumed:</p>
             <ul className="mt-1 space-y-0.5">
               {artifact.assumptions.map((a) => (
@@ -227,7 +227,7 @@ export default function ClearanceReport({ artifact }: { artifact: ClearanceArtif
             {tm.conflicts.map((c) => (
               <li
                 key={`${c.mark}-${c.serial_or_reg}`}
-                className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4"
+                className="rounded-xl border border-saibyl-border bg-white p-4"
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[13.5px] font-medium text-saibyl-platinum">
@@ -276,7 +276,7 @@ export default function ClearanceReport({ artifact }: { artifact: ClearanceArtif
             {pat.closest_art.map((art) => (
               <li
                 key={art.number}
-                className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4"
+                className="rounded-xl border border-saibyl-border bg-white p-4"
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-[12px] text-saibyl-gold">
@@ -295,7 +295,7 @@ export default function ClearanceReport({ artifact }: { artifact: ClearanceArtif
                   <Field name="Filed" value={formatDate(art.filed)} />
                   <Field name="Priority" value={formatDate(art.priority)} />
                 </dl>
-                <div className="mt-3 pt-3 border-t border-white/[0.06] space-y-2">
+                <div className="mt-3 pt-3 border-t border-saibyl-border space-y-2">
                   <div>
                     <p className="text-[11px] font-medium text-saibyl-silver uppercase tracking-wider">
                       What the claims require
@@ -336,7 +336,7 @@ export default function ClearanceReport({ artifact }: { artifact: ClearanceArtif
             {pend.notable_pending.map((p) => (
               <li
                 key={p.app}
-                className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3"
+                className="rounded-xl border border-saibyl-border bg-white px-4 py-3"
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-[12px] text-saibyl-gold">{p.app}</span>
@@ -443,7 +443,7 @@ export default function ClearanceReport({ artifact }: { artifact: ClearanceArtif
             {artifact.watch_list.map((w) => (
               <li
                 key={w.target}
-                className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3"
+                className="rounded-xl border border-saibyl-border bg-white px-4 py-3"
               >
                 <p className="text-[13px] text-saibyl-platinum">{w.target}</p>
                 <p className="text-[12px] text-saibyl-muted mt-0.5 leading-relaxed">
@@ -467,7 +467,7 @@ export default function ClearanceReport({ artifact }: { artifact: ClearanceArtif
           <div className="mt-3 overflow-x-auto">
             <table className="w-full text-left text-[12px]">
               <thead>
-                <tr className="border-b border-white/[0.08] text-saibyl-muted">
+                <tr className="border-b border-saibyl-border-light text-saibyl-muted">
                   <th className="py-1.5 pr-4 font-medium">Track</th>
                   <th className="py-1.5 pr-4 font-medium">Query</th>
                   <th className="py-1.5 font-medium text-right">Hits</th>
@@ -477,7 +477,7 @@ export default function ClearanceReport({ artifact }: { artifact: ClearanceArtif
                 {artifact.queries_run.map((q, i) => (
                   <tr
                     key={`${q.track}-${q.query}-${i}`}
-                    className="border-b border-white/[0.04]"
+                    className="border-b border-saibyl-border"
                   >
                     <td className="py-1.5 pr-4 text-saibyl-muted whitespace-nowrap">
                       {TRACK_WORDS[q.track] ?? q.track}
@@ -485,7 +485,7 @@ export default function ClearanceReport({ artifact }: { artifact: ClearanceArtif
                     <td className="py-1.5 pr-4 text-saibyl-silver font-mono text-[11.5px]">
                       {q.query}
                     </td>
-                    <td className="py-1.5 text-right text-saibyl-platinum font-mono">
+                    <td className="py-1.5 text-right text-saibyl-platinum font-mono tabular-nums">
                       {q.hits.toLocaleString()}
                     </td>
                   </tr>
@@ -516,7 +516,7 @@ export default function ClearanceReport({ artifact }: { artifact: ClearanceArtif
       </Section>
 
       {/* ── The disclaimer — on every report, never omitted ── */}
-      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+      <div className="rounded-xl border border-saibyl-border bg-white p-4">
         <p className="text-[11.5px] text-saibyl-muted leading-relaxed">
           {artifact.disclaimer || FALLBACK_DISCLAIMER}
         </p>

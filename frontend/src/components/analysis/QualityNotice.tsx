@@ -2,9 +2,17 @@ import { Info } from 'lucide-react';
 import { CONFIDENCE_COPY, type QualityBlock } from '@/lib/analysis';
 
 const ACCENT: Record<QualityBlock['confidence'], string> = {
-  low: '#F59E0B',
-  moderate: '#2563EB',
-  high: '#22C55E',
+  low: '#f59e0b',
+  moderate: '#286cf0',
+  high: '#2fbf8a',
+};
+
+/* The darker text-safe variant of each accent — the bright fill hues above do
+   not hold 4.5:1 on the light ground, so headings never use them directly. */
+const ACCENT_TEXT: Record<QualityBlock['confidence'], string> = {
+  low: '#b45309',
+  moderate: '#1e5ad9',
+  high: '#0e7d55',
 };
 
 /**
@@ -30,7 +38,10 @@ export default function QualityNotice({ quality }: { quality: QualityBlock }) {
       <div className="flex items-start gap-3">
         <Info className="w-4 h-4 mt-0.5 shrink-0" style={{ color: accent }} />
         <div className="min-w-0">
-          <p className="text-[13px] font-semibold" style={{ color: accent }}>
+          <p
+            className="text-[13px] font-semibold"
+            style={{ color: ACCENT_TEXT[quality.confidence] }}
+          >
             {quality.confidence === 'low'
               ? 'Treat this as a rough read'
               : quality.confidence === 'moderate'

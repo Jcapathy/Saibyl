@@ -391,10 +391,10 @@ export default function SimulationDetailPage() {
     {
       value: sim.agent_count == null ? '—' : String(sim.agent_count),
       label: 'People in the room',
-      color: '#C9A227',
+      color: '#286cf0',
     },
-    { value: String(sim.max_rounds), label: 'Rounds', color: '#8B5CF6' },
-    { value: String(sim.platforms?.length ?? 0), label: 'Platforms', color: '#10B981' },
+    { value: String(sim.max_rounds), label: 'Rounds', color: '#6a4fe0' },
+    { value: String(sim.platforms?.length ?? 0), label: 'Platforms', color: '#0e7d55' },
   ];
 
   const isIdle = IDLE_STATUSES.includes(sim.status);
@@ -504,7 +504,7 @@ export default function SimulationDetailPage() {
               {!variantShortfall && (
                 <button
                   onClick={handleRunNow}
-                  className="px-8 py-3 rounded-xl bg-[#C9A227] text-[#0A0F1C] font-semibold text-sm transition-all hover:bg-[#D4AF37] hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(201,162,39,0.3)] shrink-0"
+                  className="px-8 py-3 rounded-xl bg-saibyl-blue text-white font-semibold text-sm transition-all hover:bg-saibyl-gold-hover hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(40,108,240,0.20)] shrink-0"
                 >
                   Start the run →
                 </button>
@@ -612,7 +612,7 @@ export default function SimulationDetailPage() {
                 after you have launched. */}
             <Link
               to={`/app/simulations/${id}/report`}
-              className="px-6 py-2.5 rounded-xl bg-[#C9A227] text-[#0A0F1C] font-semibold text-sm hover:bg-[#D4AF37] transition-all hover:-translate-y-0.5 shrink-0"
+              className="px-6 py-2.5 rounded-xl bg-saibyl-blue text-white font-semibold text-sm hover:bg-saibyl-gold-hover transition-all hover:-translate-y-0.5 shrink-0"
             >
               Read what they said →
             </Link>
@@ -641,9 +641,9 @@ export default function SimulationDetailPage() {
             {events.slice().reverse().map((evt, i) => {
               const content = String(evt.content || '');
               const sentiment = Number((evt.metadata as Record<string, unknown>)?.sentiment || 0);
-              const sentColor = sentiment > 0.2 ? 'border-saibyl-positive/30' : sentiment < -0.2 ? 'border-saibyl-negative/30' : 'border-white/[0.04]';
+              const sentColor = sentiment > 0.2 ? 'border-saibyl-positive/30' : sentiment < -0.2 ? 'border-saibyl-negative/30' : 'border-saibyl-border';
               return (
-                <div key={i} className={`p-3 rounded-lg bg-white/[0.02] border-l-2 ${sentColor}`}>
+                <div key={i} className={`p-3 rounded-lg bg-[#14294a]/[0.02] border-l-2 ${sentColor}`}>
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-saibyl-gold/15 text-saibyl-gold">{String(evt.platform)}</span>
                     <span className="text-[10px] font-mono text-saibyl-muted">R{String(evt.round_number)}</span>
@@ -669,8 +669,8 @@ export default function SimulationDetailPage() {
             <select
               value={selectedAgentId}
               onChange={(e) => setSelectedAgentId(e.target.value)}
-              className="flex-shrink-0 w-48 rounded-lg px-3 py-2 text-[13px] bg-[#0B1120] border border-white/[0.08] text-saibyl-platinum focus:outline-none focus:ring-2 focus:ring-saibyl-gold/50"
-              style={{ colorScheme: 'dark' }}
+              className="flex-shrink-0 w-48 rounded-xl px-3 py-2 text-[13px] bg-white border border-saibyl-border-light text-saibyl-ink focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20"
+              style={{ colorScheme: 'light' }}
             >
               <option value="">Ask the first five</option>
               {agents.map((a) => (
@@ -685,12 +685,12 @@ export default function SimulationDetailPage() {
               onChange={(e) => setInterviewPrompt(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleInterview()}
               placeholder="e.g. What would make you buy this?"
-              className="flex-1 rounded-lg px-4 py-2 text-[13px] bg-[#0B1120] border border-white/[0.08] text-saibyl-platinum placeholder-saibyl-muted/50 focus:outline-none focus:ring-2 focus:ring-saibyl-gold/50"
+              className="flex-1 rounded-xl px-4 py-2 text-[13px] bg-white border border-saibyl-border-light text-saibyl-ink placeholder:text-saibyl-muted/70 focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20"
             />
             <button
               onClick={handleInterview}
               disabled={interviewLoading || !interviewPrompt.trim()}
-              className="px-5 py-2 rounded-lg bg-saibyl-gold text-white text-[13px] font-medium hover:bg-[#4B4FDE] disabled:opacity-50 transition-all"
+              className="px-5 py-2 rounded-lg bg-saibyl-gold text-white text-[13px] font-medium hover:bg-saibyl-gold-hover disabled:opacity-50 transition-all"
             >
               {interviewLoading ? 'Asking…' : 'Ask'}
             </button>
@@ -698,7 +698,7 @@ export default function SimulationDetailPage() {
           {interviewResponses.length > 0 && (
             <div className="space-y-3 max-h-[400px] overflow-y-auto">
               {interviewResponses.map((r, i) => (
-                <div key={i} className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
+                <div key={i} className="p-3 rounded-lg bg-saibyl-elevated border border-saibyl-border">
                   <div className="flex items-center gap-2 mb-1.5">
                     <span className="text-[12px] font-medium text-saibyl-platinum">{r.agent}</span>
                     <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-saibyl-gold/15 text-saibyl-gold">{r.persona}</span>
@@ -755,7 +755,7 @@ export default function SimulationDetailPage() {
                     value={actualSentiment}
                     onChange={(e) => setActualSentiment(e.target.value)}
                     placeholder="e.g. 0.4"
-                    className="w-full rounded-lg px-3 py-2 text-[13px] bg-[#0B1120] border border-white/[0.08] text-saibyl-platinum placeholder-saibyl-muted/50 focus:outline-none focus:ring-2 focus:ring-saibyl-gold/50"
+                    className="w-full rounded-xl px-3 py-2 text-[13px] bg-white border border-saibyl-border-light text-saibyl-ink placeholder:text-saibyl-muted/70 focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20"
                   />
                   <p className="text-[11px] text-saibyl-muted/80 mt-1.5 leading-relaxed">
                     Your own read, as a number from &minus;1 to 1. &minus;1 is everyone
@@ -773,7 +773,7 @@ export default function SimulationDetailPage() {
                     value={actualNotes}
                     onChange={(e) => setActualNotes(e.target.value)}
                     placeholder="e.g. 40 signups, but three people asked about the price"
-                    className="w-full rounded-lg px-3 py-2 text-[13px] bg-[#0B1120] border border-white/[0.08] text-saibyl-platinum placeholder-saibyl-muted/50 focus:outline-none focus:ring-2 focus:ring-saibyl-gold/50"
+                    className="w-full rounded-xl px-3 py-2 text-[13px] bg-white border border-saibyl-border-light text-saibyl-ink placeholder:text-saibyl-muted/70 focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20"
                   />
                   <p className="text-[11px] text-saibyl-muted/80 mt-1.5 leading-relaxed">
                     Optional. Anything you write here goes into the write-up of what
@@ -822,20 +822,20 @@ export default function SimulationDetailPage() {
           ) : (
             <div className="space-y-4">
               <div className="grid grid-cols-3 gap-4">
-                <div className="text-center p-4 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                <div className="text-center p-4 rounded-xl bg-saibyl-elevated border border-saibyl-border">
                   <div className="text-2xl font-display font-bold text-saibyl-gold">{(accuracyResult.accuracy_score * 100).toFixed(1)}%</div>
                   <div className="text-[11px] text-saibyl-muted mt-1">How close we got</div>
                 </div>
-                <div className="text-center p-4 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                <div className="text-center p-4 rounded-xl bg-saibyl-elevated border border-saibyl-border">
                   <div className="text-2xl font-display font-bold text-saibyl-blue">{accuracyResult.predicted_sentiment.toFixed(3)}</div>
                   <div className="text-[11px] text-saibyl-muted mt-1">What we said would happen</div>
                 </div>
-                <div className="text-center p-4 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                <div className="text-center p-4 rounded-xl bg-saibyl-elevated border border-saibyl-border">
                   <div className="text-2xl font-display font-bold text-saibyl-positive">{accuracyResult.actual_sentiment.toFixed(3)}</div>
                   <div className="text-[11px] text-saibyl-muted mt-1">What you told us happened</div>
                 </div>
               </div>
-              <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+              <div className="p-4 rounded-xl bg-saibyl-elevated border border-saibyl-border">
                 <h3 className="text-[12px] font-medium text-saibyl-platinum mb-2">What we got right and wrong</h3>
                 <p className="text-[13px] text-saibyl-muted leading-relaxed whitespace-pre-wrap">{accuracyResult.analysis}</p>
               </div>
@@ -859,7 +859,7 @@ export default function SimulationDetailPage() {
             ['Rounds', String(sim.max_rounds)],
             ['Messages tested', String(sim.variants ?? 1)],
           ].map(([label, value]) => (
-            <div key={label} className="flex items-start gap-4 py-1.5 border-b border-white/[0.03] last:border-0">
+            <div key={label} className="flex items-start gap-4 py-1.5 border-b border-saibyl-border last:border-0">
               <dt className="w-40 shrink-0 text-saibyl-muted text-[12px]">{label}</dt>
               <dd className="text-saibyl-platinum text-[13px]">{value}</dd>
             </div>

@@ -44,8 +44,8 @@ const FOUNDER_STAGES: readonly FounderStage[] = [
 const STEPS = ['Setup', 'Where', 'Who reacts', 'Your buyers', 'Size', 'Review'];
 const LAST_STEP = STEPS.length - 1;
 
-const inputClass = 'w-full rounded-xl px-4 py-3 text-[14px] text-saibyl-platinum placeholder-saibyl-muted/50 focus:outline-none focus:ring-2 focus:ring-saibyl-gold/50 focus:border-transparent transition';
-const inputBg = 'bg-[#0B1120] border border-white/[0.08]';
+const inputClass = 'w-full rounded-xl px-4 py-3 text-[14px] text-saibyl-ink placeholder:text-saibyl-muted/70 focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20 transition';
+const inputBg = 'bg-white border border-saibyl-border-light';
 
 /**
  * `pre_launch_positioning` → `Pre launch positioning`.
@@ -255,12 +255,12 @@ export default function NewSimulationPage() {
           {STEPS.map((label, i) => (
             <div key={label} className="flex items-center">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-mono font-bold transition-colors ${
-                i < step ? 'bg-saibyl-positive text-white' : i === step ? 'bg-saibyl-gold text-white' : 'bg-white/[0.04] text-saibyl-muted'
+                i < step ? 'bg-saibyl-positive text-white' : i === step ? 'bg-saibyl-gold text-white' : 'bg-[#14294a]/[0.04] text-saibyl-muted'
               }`}>
                 {i < step ? '✓' : i + 1}
               </div>
-              <span className={`ml-1.5 text-[13px] hidden sm:inline ${i <= step ? 'text-saibyl-platinum' : 'text-saibyl-muted/50'}`}>{label}</span>
-              {i < STEPS.length - 1 && <div className={`w-8 h-px mx-2 ${i < step ? 'bg-saibyl-positive/40' : 'bg-white/[0.06]'}`} />}
+              <span className={`ml-1.5 text-[13px] hidden sm:inline ${i <= step ? 'text-saibyl-platinum' : 'text-saibyl-muted'}`}>{label}</span>
+              {i < STEPS.length - 1 && <div className={`w-8 h-px mx-2 ${i < step ? 'bg-saibyl-positive/40' : 'bg-saibyl-border'}`} />}
             </div>
           ))}
         </div>
@@ -298,7 +298,7 @@ export default function NewSimulationPage() {
               <div>
                 <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-2">Product</label>
                 {projects.length === 0 ? (
-                  <div className={`${inputClass} ${inputBg} text-saibyl-muted/50`}>
+                  <div className={`${inputClass} ${inputBg} text-saibyl-muted`}>
                     Nothing here yet — <button onClick={() => navigate('/app/projects')} className="text-saibyl-gold hover:underline">add your product first</button>
                   </div>
                 ) : (
@@ -307,11 +307,11 @@ export default function NewSimulationPage() {
                       value={projectId}
                       onChange={(e) => setProjectId(e.target.value)}
                       className={`${inputClass} ${inputBg} appearance-none cursor-pointer`}
-                      style={{ colorScheme: 'dark' }}
+                      style={{ colorScheme: 'light' }}
                     >
-                      <option value="" className="bg-[#0B1120] text-saibyl-muted">Choose a product…</option>
+                      <option value="" className="bg-white text-saibyl-muted">Choose a product…</option>
                       {projects.map((p) => (
-                        <option key={p.id} value={p.id} className="bg-[#0B1120] text-saibyl-platinum">{p.name}</option>
+                        <option key={p.id} value={p.id} className="bg-white text-saibyl-platinum">{p.name}</option>
                       ))}
                     </select>
                     <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-saibyl-muted">
@@ -329,7 +329,7 @@ export default function NewSimulationPage() {
                   placeholder="In your own words. e.g. 'If I launch this on Reddit and Hacker News at $49 a month, what will solo founders object to — the price, the fact that it needs my API key, or that they could wire this up themselves?'"
                   className={`${inputClass} ${inputBg} resize-none`}
                 />
-                <p className="text-[11px] text-saibyl-muted/50 mt-1.5">{predictionGoal.length} characters</p>
+                <p className="text-[11px] text-saibyl-muted mt-1.5">{predictionGoal.length} characters</p>
               </div>
             </div>
           )}
@@ -352,8 +352,8 @@ export default function NewSimulationPage() {
                       onClick={() => togglePlatform(p.id)}
                       className={`text-left p-4 rounded-xl border transition-all duration-200 ${
                         selected
-                          ? 'border-saibyl-gold/50 bg-saibyl-gold/10'
-                          : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12]'
+                          ? 'border-saibyl-blue/45 bg-saibyl-blue/[0.07]'
+                          : 'border-saibyl-border bg-white hover:border-saibyl-border-light'
                       }`}
                     >
                       <div className="flex items-center justify-between">
@@ -403,8 +403,8 @@ export default function NewSimulationPage() {
                         onClick={() => togglePack(pack.id)}
                         className={`text-left p-4 rounded-xl border transition-all duration-200 ${
                           selected
-                            ? 'border-saibyl-gold/50 bg-saibyl-gold/10'
-                            : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12]'
+                            ? 'border-saibyl-blue/45 bg-saibyl-blue/[0.07]'
+                            : 'border-saibyl-border bg-white hover:border-saibyl-border-light'
                         }`}
                       >
                         <div className="flex items-center justify-between mb-1">
@@ -413,7 +413,7 @@ export default function NewSimulationPage() {
                         </div>
                         <p className="text-[11px] text-saibyl-muted leading-relaxed">{pack.description}</p>
                         <div className="flex items-center gap-2 mt-2">
-                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/[0.04] text-saibyl-muted">{pack.category}</span>
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#14294a]/[0.04] text-saibyl-muted">{pack.category}</span>
                           <span className="text-[10px] text-saibyl-muted">
                             {pack.archetype_count === 1
                               ? '1 kind of person'
@@ -426,7 +426,7 @@ export default function NewSimulationPage() {
                 </div>
               )}
               {/* ── Audiences this org already worked out and kept ── */}
-              <div className="mt-6 pt-6 border-t border-white/[0.04]">
+              <div className="mt-6 pt-6 border-t border-saibyl-border">
                 <div className="flex items-baseline justify-between mb-1">
                   <h3 className="text-[14px] font-medium text-saibyl-platinum">
                     Audiences you&rsquo;ve saved
@@ -464,8 +464,8 @@ export default function NewSimulationPage() {
                           onClick={() => togglePack(pack.id)}
                           className={`text-left p-4 rounded-xl border transition-all duration-200 ${
                             selected
-                              ? 'border-saibyl-gold/50 bg-saibyl-gold/10'
-                              : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12]'
+                              ? 'border-saibyl-blue/45 bg-saibyl-blue/[0.07]'
+                              : 'border-saibyl-border bg-white hover:border-saibyl-border-light'
                           }`}
                         >
                           <div className="flex items-center justify-between gap-2 mb-1">
@@ -493,7 +493,7 @@ export default function NewSimulationPage() {
 
               {/* Custom Persona Modal */}
               {showCustomModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#14294a]/40 backdrop-blur-sm">
                   <motion.div
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -536,7 +536,7 @@ export default function NewSimulationPage() {
                       <button
                         onClick={handleCreateCustomPack}
                         disabled={creatingCustom || !customName.trim() || !customDesc.trim()}
-                        className="px-6 py-2.5 rounded-xl bg-[#C9A227] text-[#0A0F1C] font-medium text-sm disabled:opacity-50 transition-all hover:bg-[#D4AF37] hover:-translate-y-0.5"
+                        className="px-6 py-2.5 rounded-xl bg-saibyl-gold text-white font-medium text-sm disabled:opacity-50 transition-all hover:bg-saibyl-gold-hover hover:-translate-y-0.5"
                       >
                         {creatingCustom ? 'Building…' : 'Build this group'}
                       </button>
@@ -594,7 +594,7 @@ export default function NewSimulationPage() {
                   value={timezone}
                   onChange={(e) => setTimezone(e.target.value)}
                   className={`${inputClass} ${inputBg} appearance-none`}
-                  style={{ colorScheme: 'dark' }}
+                  style={{ colorScheme: 'light' }}
                 >
                   {['America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'UTC', 'Europe/London', 'Europe/Berlin', 'Asia/Tokyo', 'Asia/Shanghai'].map((tz) => (
                     <option key={tz} value={tz} className="bg-saibyl-deep text-saibyl-platinum">{tz}</option>
@@ -658,7 +658,7 @@ export default function NewSimulationPage() {
                 )
                   .filter(([, value]) => value !== '')
                   .map(([label, value]) => (
-                    <div key={label} className="flex items-start gap-4 py-2 border-b border-white/[0.04] last:border-0">
+                    <div key={label} className="flex items-start gap-4 py-2 border-b border-saibyl-border last:border-0">
                       <span className="text-[13px] text-saibyl-muted w-36 shrink-0">{label}</span>
                       <span className="text-[13px] text-saibyl-platinum flex-1">{value}</span>
                     </div>
@@ -680,7 +680,7 @@ export default function NewSimulationPage() {
           )}
 
           {/* ── Navigation ── */}
-          <div className="flex justify-between mt-8 pt-5 border-t border-white/[0.04]">
+          <div className="flex justify-between mt-8 pt-5 border-t border-saibyl-border">
             <button
               onClick={() => setStep((s) => s - 1)}
               disabled={step === 0}
@@ -692,7 +692,7 @@ export default function NewSimulationPage() {
               <button
                 onClick={() => setStep((s) => s + 1)}
                 disabled={!canNext()}
-                className="bg-saibyl-gold text-white px-6 py-2.5 rounded-xl text-[14px] font-medium hover:bg-[#4B4FDE] disabled:opacity-30 transition-all"
+                className="bg-saibyl-gold text-white px-6 py-2.5 rounded-xl text-[14px] font-medium hover:bg-saibyl-gold-hover disabled:opacity-30 transition-all"
               >
                 Next →
               </button>
@@ -710,7 +710,7 @@ export default function NewSimulationPage() {
                 <button
                   onClick={handleSubmit}
                   disabled={submitting || !!quoteError}
-                  className="px-8 py-2.5 rounded-xl bg-saibyl-gold text-saibyl-void font-semibold text-[14px] disabled:opacity-50 transition-all hover:bg-saibyl-gold-hover hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(201,162,39,0.3)]"
+                  className="px-8 py-2.5 rounded-xl bg-saibyl-gold text-saibyl-void font-semibold text-[14px] disabled:opacity-50 transition-all hover:bg-saibyl-gold-hover hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(40,108,240,0.3)]"
                 >
                   {submitting ? 'Starting…' : 'Start this run →'}
                 </button>

@@ -10,20 +10,30 @@ import { supabase } from '@/lib/supabase';
 /* ------------------------------------------------------------------ */
 
 const PARTICLES = [
-  { top: '12%', left: '18%', dur: '14s', delay: '0s', color: '#8B5CF6' },
-  { top: '28%', left: '72%', dur: '18s', delay: '-4s', color: '#2563EB' },
-  { top: '55%', left: '25%', dur: '16s', delay: '-8s', color: '#8B5CF6' },
-  { top: '70%', left: '65%', dur: '20s', delay: '-2s', color: '#2563EB' },
-  { top: '85%', left: '40%', dur: '15s', delay: '-6s', color: '#8B5CF6' },
-  { top: '40%', left: '85%', dur: '17s', delay: '-10s', color: '#2563EB' },
-  { top: '18%', left: '50%', dur: '19s', delay: '-3s', color: '#8B5CF6' },
-  { top: '62%', left: '10%', dur: '13s', delay: '-7s', color: '#2563EB' },
+  { top: '12%', left: '18%', dur: '14s', delay: '0s', color: '#8b73ee' },
+  { top: '28%', left: '72%', dur: '18s', delay: '-4s', color: '#286cf0' },
+  { top: '55%', left: '25%', dur: '16s', delay: '-8s', color: '#8b73ee' },
+  { top: '70%', left: '65%', dur: '20s', delay: '-2s', color: '#286cf0' },
+  { top: '85%', left: '40%', dur: '15s', delay: '-6s', color: '#8b73ee' },
+  { top: '40%', left: '85%', dur: '17s', delay: '-10s', color: '#286cf0' },
+  { top: '18%', left: '50%', dur: '19s', delay: '-3s', color: '#8b73ee' },
+  { top: '62%', left: '10%', dur: '13s', delay: '-7s', color: '#286cf0' },
 ];
 
 const CONNECTION_NODES = [
   [18, 12], [72, 28], [25, 55], [65, 70],
   [40, 85], [85, 40], [50, 18], [10, 62],
 ] as const;
+
+/* ── Paper ground with the landing page's radial washes ── */
+const PAPER_WASH =
+  'radial-gradient(circle at 87% 1%, rgba(127,184,255,.19), transparent 22rem), radial-gradient(circle at 2% 26%, rgba(143,119,245,.10), transparent 26rem), #f8fbff';
+
+/* ── Brand mark — gradient square, Playfair "S" ── */
+const BRAND_MARK_STYLE = {
+  background: 'linear-gradient(135deg, #2f75ef 5%, #705ee3 95%)',
+  boxShadow: 'inset 0 1px rgba(255,255,255,.4), 0 5px 14px rgba(75,98,221,.28)',
+} as const;
 
 /* The stats bar was four claims and three of them were false.
 
@@ -40,7 +50,7 @@ const CONNECTION_NODES = [
 const STATS: { value: string; label: string }[] = [];
 
 const INPUT_CLASS =
-  'w-full px-4 py-[0.6875rem] rounded-[10px] border border-white/[0.06] bg-white/[0.025] text-[#E8ECF2] text-sm placeholder:text-[#94A3B8]/40 outline-none transition-all duration-200 focus:border-[rgba(139,92,246,0.5)] focus:shadow-[0_0_0_3px_rgba(139,92,246,0.1),0_0_20px_rgba(139,92,246,0.05)] focus:bg-white/[0.04]';
+  'w-full px-3.5 py-2.5 rounded-xl border border-saibyl-border-light bg-white text-[14px] text-saibyl-ink placeholder:text-saibyl-muted/70 outline-none transition-all duration-200 focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20';
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -55,11 +65,13 @@ function calcStrength(pw: string): number {
   return s;
 }
 
+/* Strength colours double as bar fill and label text, so every value here
+   must hold ≥4.5:1 on white — status-tier darks, not bright fills. */
 function strengthMeta(score: number) {
-  if (score <= 1) return { color: '#EF4444', label: 'Weak' };
-  if (score === 2) return { color: '#F59E0B', label: 'Fair' };
-  if (score === 3) return { color: '#EAB308', label: 'Good' };
-  return { color: '#22C55E', label: 'Strong' };
+  if (score <= 1) return { color: '#d92d3c', label: 'Weak' };
+  if (score === 2) return { color: '#b45309', label: 'Fair' };
+  if (score === 3) return { color: '#a16207', label: 'Good' };
+  return { color: '#0e7d55', label: 'Strong' };
 }
 
 /* ------------------------------------------------------------------ */
@@ -115,15 +127,18 @@ export default function SignupPage() {
   /* ================================================================ */
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 min-h-screen">
+    <div
+      className="grid grid-cols-1 lg:grid-cols-2 min-h-screen bg-saibyl-paper"
+      style={{ background: PAPER_WASH }}
+    >
       {/* ============================================================ */}
       {/*  LEFT PANEL — Brand                                          */}
       {/* ============================================================ */}
-      <div className="hidden lg:flex relative flex-col justify-center items-center bg-[#0A0F1C] overflow-hidden px-12 py-16">
+      <div className="hidden lg:flex relative flex-col justify-center items-center overflow-hidden px-12 py-16">
         {/* Radial gradients */}
         <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-[-20%] left-[-10%] w-[70%] h-[70%] rounded-full bg-[radial-gradient(ellipse,rgba(139,92,246,0.08)_0%,transparent_65%)]" />
-          <div className="absolute bottom-[-15%] right-[-10%] w-[60%] h-[60%] rounded-full bg-[radial-gradient(ellipse,rgba(0,212,255,0.06)_0%,transparent_65%)]" />
+          <div className="absolute top-[-20%] left-[-10%] w-[70%] h-[70%] rounded-full bg-[radial-gradient(ellipse,rgba(40,108,240,0.07)_0%,transparent_65%)]" />
+          <div className="absolute bottom-[-15%] right-[-10%] w-[60%] h-[60%] rounded-full bg-[radial-gradient(ellipse,rgba(139,115,238,0.06)_0%,transparent_65%)]" />
         </div>
 
         {/* Particles */}
@@ -155,9 +170,9 @@ export default function SignupPage() {
                 y1={`${y1}%`}
                 x2={`${next[0]}%`}
                 y2={`${next[1]}%`}
-                stroke="#8B5CF6"
+                stroke="#8b73ee"
                 strokeWidth="0.5"
-                opacity="0.06"
+                opacity="0.07"
               />
             );
           })}
@@ -167,7 +182,13 @@ export default function SignupPage() {
         <div className="relative z-10 max-w-lg space-y-10">
           {/* Logo lockup */}
           <div className="flex items-center gap-3">
-            <img src="/logo-mark.svg" alt="" className="w-12 h-12" />
+            <div
+              aria-hidden="true"
+              className="w-8 h-8 rounded-[9px] flex items-center justify-center shrink-0"
+              style={BRAND_MARK_STYLE}
+            >
+              <span className="font-serif font-bold text-white text-[19px] leading-none">S</span>
+            </div>
             <span
               className="text-gradient-brand font-extrabold text-[1.75rem]"
               style={{ letterSpacing: '-0.03em' }}
@@ -179,22 +200,22 @@ export default function SignupPage() {
           {/* Trust line */}
           <div className="flex items-center gap-2">
             <span className="relative flex h-[6px] w-[6px]">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-[6px] w-[6px] bg-green-500" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-saibyl-green opacity-75" />
+              <span className="relative inline-flex rounded-full h-[6px] w-[6px] bg-saibyl-green" />
             </span>
-            <span className="text-sm text-[#8B97A8]">
+            <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-saibyl-muted">
               Buyer intelligence for founders
             </span>
           </div>
 
           {/* Tagline */}
-          <h2 className="text-[2.75rem] font-bold leading-[1.1] tracking-tight text-white">
+          <h2 className="text-[2.75rem] font-extrabold leading-[1.1] tracking-tight text-saibyl-ink">
             Test your startup{' '}
-            <span className="text-gradient-brand">on a synthetic market.</span>
+            <em className="font-serif italic text-saibyl-violet">on a synthetic market.</em>
           </h2>
 
           {/* Subtitle */}
-          <p className="text-[#8B97A8] text-base leading-relaxed">
+          <p className="text-saibyl-silver text-base leading-relaxed">
             A room of AI buyers built from your own material reads your pitch —
             before you go live.
           </p>
@@ -202,16 +223,16 @@ export default function SignupPage() {
           {/* Stats row */}
           <div className="grid grid-cols-4 gap-4 pt-4">
             {STATS.map((s) => (
-              <div key={s.label} className="text-center">
+              <div key={s.label} className="glass rounded-xl px-3 py-3 text-center">
                 <p
-                  className="text-gradient-brand font-mono text-lg font-bold"
-                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  className="text-saibyl-blue font-mono text-lg font-bold"
+                  style={{ fontFamily: "'DM Mono', monospace" }}
                 >
                   {s.value}
                 </p>
                 <p
-                  className="text-[#8B97A8] text-[10px] uppercase tracking-wider mt-1"
-                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  className="text-saibyl-muted text-[10px] uppercase tracking-wider mt-1"
+                  style={{ fontFamily: "'DM Mono', monospace" }}
                 >
                   {s.label}
                 </p>
@@ -224,16 +245,22 @@ export default function SignupPage() {
       {/* ============================================================ */}
       {/*  RIGHT PANEL — Form                                          */}
       {/* ============================================================ */}
-      <div className="flex flex-col items-center justify-center bg-[#0D1424] lg:border-l lg:border-[#1E293B] px-6 py-12">
+      <div className="flex flex-col items-center justify-center lg:border-l lg:border-saibyl-border px-6 py-12">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="w-full max-w-[400px]"
+          className="w-full max-w-[440px] glass rounded-2xl p-8 sm:p-9 shadow-[0_18px_40px_rgba(52,96,164,0.08)]"
         >
           {/* Mobile-only logo */}
           <div className="flex lg:hidden items-center justify-center gap-2 mb-8">
-            <img src="/logo-mark.svg" alt="" className="w-9 h-9" />
+            <div
+              aria-hidden="true"
+              className="w-8 h-8 rounded-[9px] flex items-center justify-center shrink-0"
+              style={BRAND_MARK_STYLE}
+            >
+              <span className="font-serif font-bold text-white text-[19px] leading-none">S</span>
+            </div>
             <span
               className="text-gradient-brand font-extrabold text-xl"
               style={{ letterSpacing: '-0.03em' }}
@@ -243,10 +270,10 @@ export default function SignupPage() {
           </div>
 
           {/* Header */}
-          <h1 className="text-2xl font-bold text-white mb-1">
+          <h1 className="text-2xl font-extrabold tracking-tight text-saibyl-ink mb-1">
             Create your account
           </h1>
-          <p className="text-sm text-[#8B97A8] mb-8">
+          <p className="text-sm text-saibyl-muted mb-8">
             Start simulating in minutes
           </p>
 
@@ -255,7 +282,7 @@ export default function SignupPage() {
             <motion.div
               initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-6 flex items-start gap-3 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm"
+              className="mb-6 flex items-start gap-3 px-4 py-3 rounded-xl bg-saibyl-rose/10 border border-saibyl-negative/25 text-saibyl-negative text-sm"
             >
               <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
               <span>{error}</span>
@@ -266,7 +293,7 @@ export default function SignupPage() {
           <button
             type="button"
             onClick={handleGoogleSSO}
-            className="w-full flex items-center justify-center gap-3 px-4 py-[0.6875rem] rounded-[10px] border border-white/[0.12] bg-transparent text-[#E8ECF2] text-sm font-medium transition-all duration-200 hover:bg-white/[0.04] hover:border-white/[0.2]"
+            className="w-full flex items-center justify-center gap-3 px-4 py-2.5 rounded-xl border border-saibyl-border-light bg-white text-saibyl-ink text-sm font-semibold transition-all duration-200 hover:border-saibyl-blue/40 hover:bg-saibyl-paper"
           >
             {/* Google "G" icon */}
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -292,14 +319,14 @@ export default function SignupPage() {
 
           {/* Divider */}
           <div className="flex items-center gap-4 my-6">
-            <div className="flex-1 h-px bg-white/[0.06]" />
+            <div className="flex-1 h-px bg-saibyl-border" />
             <span
-              className="text-[11px] text-[#8B97A8] uppercase"
-              style={{ fontFamily: "'JetBrains Mono', monospace" }}
+              className="text-[11px] text-saibyl-muted uppercase tracking-[0.18em]"
+              style={{ fontFamily: "'DM Mono', monospace" }}
             >
               or
             </span>
-            <div className="flex-1 h-px bg-white/[0.06]" />
+            <div className="flex-1 h-px bg-saibyl-border" />
           </div>
 
           {/* Form */}
@@ -307,13 +334,13 @@ export default function SignupPage() {
             {/* Organization */}
             <div>
               <label
-                className="block text-[11px] font-medium text-[#8B97A8] uppercase tracking-wider mb-1.5"
-                style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                className="block text-[11px] font-medium text-saibyl-muted uppercase tracking-wider mb-1.5"
+                style={{ fontFamily: "'DM Mono', monospace" }}
               >
                 Organization
               </label>
               <div className="relative">
-                <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94A3B8]/50 pointer-events-none" />
+                <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-saibyl-muted/60 pointer-events-none" />
                 <input
                   type="text"
                   name="org_name"
@@ -330,8 +357,8 @@ export default function SignupPage() {
             {/* Email */}
             <div>
               <label
-                className="block text-[11px] font-medium text-[#8B97A8] uppercase tracking-wider mb-1.5"
-                style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                className="block text-[11px] font-medium text-saibyl-muted uppercase tracking-wider mb-1.5"
+                style={{ fontFamily: "'DM Mono', monospace" }}
               >
                 Email
               </label>
@@ -350,8 +377,8 @@ export default function SignupPage() {
             {/* Password */}
             <div>
               <label
-                className="block text-[11px] font-medium text-[#8B97A8] uppercase tracking-wider mb-1.5"
-                style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                className="block text-[11px] font-medium text-saibyl-muted uppercase tracking-wider mb-1.5"
+                style={{ fontFamily: "'DM Mono', monospace" }}
               >
                 Password
               </label>
@@ -370,7 +397,7 @@ export default function SignupPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#94A3B8]/50 hover:text-[#94A3B8] transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-saibyl-muted hover:text-saibyl-ink transition-colors"
                   tabIndex={-1}
                 >
                   {showPassword ? (
@@ -391,7 +418,7 @@ export default function SignupPage() {
                         className="h-1 flex-1 rounded-full transition-colors duration-200"
                         style={{
                           backgroundColor:
-                            i < pwStrength ? pwColor : 'rgba(255,255,255,0.06)',
+                            i < pwStrength ? pwColor : 'rgba(20,41,74,0.10)',
                         }}
                       />
                     ))}
@@ -410,7 +437,7 @@ export default function SignupPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-[0.6875rem] rounded-[10px] bg-[#C9A227] text-[#0A0F1C] text-sm font-semibold transition-all duration-200 hover:bg-[#D4AF37] hover:shadow-[0_4px_20px_rgba(201,162,39,0.3)] hover:-translate-y-[1px] disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none flex items-center justify-center gap-2"
+              className="w-full py-2.5 rounded-xl bg-saibyl-blue text-white text-sm font-extrabold transition-all duration-200 hover:bg-saibyl-gold-hover hover:shadow-[0_6px_18px_rgba(40,108,240,0.30)] hover:-translate-y-[1px] disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none flex items-center justify-center gap-2"
             >
               {loading && (
                 <svg
@@ -438,26 +465,26 @@ export default function SignupPage() {
           </form>
 
           {/* Sign in link */}
-          <p className="mt-6 text-center text-sm text-[#8B97A8]">
+          <p className="mt-6 text-center text-sm text-saibyl-muted">
             Already have an account?{' '}
             <Link
               to="/login"
-              className="text-[#C9A227] hover:text-[#D4AF37] transition-colors font-medium"
+              className="text-saibyl-blue hover:text-saibyl-gold-hover transition-colors font-semibold"
             >
               Sign in
             </Link>
           </p>
 
           {/* Terms */}
-          <p className="mt-4 text-center text-[11px] text-[#8B97A8]/60 leading-relaxed">
+          <p className="mt-4 text-center text-[11px] text-saibyl-muted leading-relaxed">
             By creating an account, you agree to our{' '}
             {/* TODO: Replace with actual Terms of Service URL */}
-            <a href="#" className="text-[#C9A227]/80 hover:text-[#C9A227] transition-colors">
+            <a href="#" className="text-saibyl-blue hover:text-saibyl-gold-hover transition-colors">
               Terms of Service
             </a>{' '}
             and{' '}
             {/* TODO: Replace with actual Privacy Policy URL */}
-            <a href="#" className="text-[#C9A227]/80 hover:text-[#C9A227] transition-colors">
+            <a href="#" className="text-saibyl-blue hover:text-saibyl-gold-hover transition-colors">
               Privacy Policy
             </a>
           </p>

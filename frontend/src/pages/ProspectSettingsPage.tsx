@@ -31,7 +31,7 @@ import type { GtmPurgeResult, GtmSettings, GtmSettingsUpdate } from '@/types';
  * would silently destroy records they still needed.
  */
 
-const cardClass = 'rounded-2xl border border-[#1E293B] bg-[#111827]';
+const cardClass = 'rounded-2xl border border-saibyl-border bg-white';
 const PURGE_PHRASE = 'DELETE';
 
 export default function ProspectSettingsPage() {
@@ -118,41 +118,41 @@ export default function ProspectSettingsPage() {
       <div>
         <Link
           to="/app/prospects"
-          className="inline-flex items-center gap-1.5 text-[12px] text-[#5A6578] hover:text-[#E8ECF2] transition-colors mb-3"
+          className="inline-flex items-center gap-1.5 text-[12px] text-saibyl-muted hover:text-saibyl-ink transition-colors mb-3"
         >
           <ArrowLeft className="w-3.5 h-3.5" /> All companies
         </Link>
-        <h1 className="font-extrabold text-[22px] text-[#E8ECF2]">Data settings</h1>
-        <p className="text-[13px] text-[#8B97A8] mt-1.5 leading-relaxed max-w-2xl">
+        <h1 className="font-extrabold text-[22px] text-saibyl-ink">Data settings</h1>
+        <p className="text-[13px] text-saibyl-silver mt-1.5 leading-relaxed max-w-2xl">
           What Saibyl is allowed to collect when it searches for companies, and how to
           delete what it has collected.
         </p>
       </div>
 
       {loading ? (
-        <div className="h-56 rounded-2xl bg-white/[0.03] animate-pulse" />
+        <div className="h-56 rounded-2xl bg-[#14294a]/[0.04] animate-pulse" />
       ) : unreadable ? (
         /* A 503. Deliberately not rendered as "off" — the org may well have this
            on, and showing a switch in the off position would be a lie the
            founder would act on. */
         <section className="rounded-2xl border border-[#F59E0B]/30 bg-[#F59E0B]/[0.06] p-5">
-          <p className="flex items-center gap-2 text-[13px] font-medium text-[#F59E0B]">
+          <p className="flex items-center gap-2 text-[13px] font-medium text-saibyl-warning">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             We cannot tell you what this is set to
           </p>
-          <p className="text-[12px] text-[#8B97A8] mt-2 leading-relaxed">
+          <p className="text-[12px] text-saibyl-silver mt-2 leading-relaxed">
             The setting could not be read just now. We are not showing you a switch,
             because we would have to guess which way it points &mdash; and guessing
             &ldquo;off&rdquo; at a setting that is actually on is exactly the mistake worth
             avoiding here. Reload in a moment.
           </p>
-          <p className="mt-2.5 rounded-lg bg-white/[0.04] px-3 py-2 font-mono text-[11px] text-[#8B97A8] break-words">
+          <p className="mt-2.5 rounded-lg bg-[#14294a]/[0.04] px-3 py-2 font-mono text-[11px] text-saibyl-silver break-words">
             {unreadable}
           </p>
         </section>
       ) : loadError ? (
-        <div className="rounded-2xl border border-[#EF4444]/25 bg-[#EF4444]/[0.07] p-5">
-          <p className="text-[12px] text-[#EF4444] leading-relaxed whitespace-pre-wrap">
+        <div className="rounded-2xl border border-saibyl-negative/25 bg-saibyl-rose/[0.08] p-5">
+          <p className="text-[12px] text-saibyl-negative leading-relaxed whitespace-pre-wrap">
             {loadError}
           </p>
         </div>
@@ -161,10 +161,10 @@ export default function ProspectSettingsPage() {
           <section className={`${cardClass} p-5`}>
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <h2 className="text-[14px] font-medium text-[#E8ECF2]">
+                <h2 className="text-[14px] font-medium text-saibyl-ink">
                   Also find named people at these companies
                 </h2>
-                <p className="text-[12px] text-[#8B97A8] mt-1.5 leading-relaxed">
+                <p className="text-[12px] text-saibyl-silver mt-1.5 leading-relaxed">
                   {/* The server writes this sentence so the policy lives in one
                       place rather than being re-stated by every client. */}
                   {settings.note}
@@ -173,8 +173,8 @@ export default function ProspectSettingsPage() {
               <span
                 className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-medium ${
                   enabled
-                    ? 'bg-[#22C55E]/10 text-[#22C55E]'
-                    : 'bg-white/[0.05] text-[#8B97A8]'
+                    ? 'bg-saibyl-green/10 text-saibyl-positive'
+                    : 'bg-[#14294a]/[0.05] text-saibyl-silver'
                 }`}
               >
                 {enabled ? 'On' : 'Off'}
@@ -182,16 +182,16 @@ export default function ProspectSettingsPage() {
             </div>
 
             {saveError && (
-              <p className="mt-3 rounded-lg border border-[#EF4444]/25 bg-[#EF4444]/[0.07] px-3 py-2 text-[12px] text-[#EF4444]">
+              <p className="mt-3 rounded-lg border border-saibyl-negative/25 bg-saibyl-rose/[0.08] px-3 py-2 text-[12px] text-saibyl-negative">
                 {saveError}
               </p>
             )}
 
             {enabled ? (
               <div className="mt-4 space-y-3">
-                <div className="rounded-xl border border-[#1E293B] bg-white/[0.02] p-4">
-                  <p className="text-[12px] text-[#E8ECF2]">While this is on</p>
-                  <ul className="mt-2 space-y-1.5 text-[11px] text-[#8B97A8] leading-relaxed">
+                <div className="rounded-xl border border-saibyl-border bg-saibyl-elevated p-4">
+                  <p className="text-[12px] text-saibyl-ink">While this is on</p>
+                  <ul className="mt-2 space-y-1.5 text-[11px] text-saibyl-silver leading-relaxed">
                     <li>
                       &mdash; Saibyl stores names, job titles and employers of real people,
                       each with the public page it came from and when it was read.
@@ -211,12 +211,12 @@ export default function ProspectSettingsPage() {
                   type="button"
                   onClick={() => setEnabled(false)}
                   disabled={saving}
-                  className="inline-flex items-center gap-2 rounded-lg border border-[#1E293B] px-4 py-2 text-[12px] text-[#8B97A8] hover:text-[#E8ECF2] hover:bg-white/[0.04] disabled:opacity-40 transition-colors"
+                  className="inline-flex items-center gap-2 rounded-lg border border-saibyl-border px-4 py-2 text-[12px] text-saibyl-silver hover:text-saibyl-ink hover:bg-[#14294a]/[0.04] disabled:opacity-40 transition-colors"
                 >
                   {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                   Stop collecting people
                 </button>
-                <p className="text-[11px] text-[#5A6578] leading-relaxed">
+                <p className="text-[11px] text-saibyl-muted leading-relaxed">
                   Turning this off stops future collection. It does not delete what has
                   already been collected &mdash; that is the separate, irreversible action
                   below.
@@ -227,11 +227,11 @@ export default function ProspectSettingsPage() {
                 <button
                   type="button"
                   onClick={() => setConfirmingEnable(true)}
-                  className="rounded-lg border border-[#1E293B] px-4 py-2 text-[12px] text-[#8B97A8] hover:text-[#E8ECF2] hover:bg-white/[0.04] transition-colors"
+                  className="rounded-lg border border-saibyl-border px-4 py-2 text-[12px] text-saibyl-silver hover:text-saibyl-ink hover:bg-[#14294a]/[0.04] transition-colors"
                 >
                   Turn this on&hellip;
                 </button>
-                <p className="text-[11px] text-[#5A6578] mt-2.5 leading-relaxed">
+                <p className="text-[11px] text-saibyl-muted mt-2.5 leading-relaxed">
                   Finding companies works with this off, and finds exactly as much. This
                   only adds named people to those same companies.
                 </p>
@@ -240,11 +240,11 @@ export default function ProspectSettingsPage() {
               /* Not a bare toggle. What changes is a legal position, and the
                  person clicking is the one it changes for. */
               <div className="mt-4 rounded-xl border border-[#F59E0B]/30 bg-[#F59E0B]/[0.06] p-4">
-                <p className="flex items-center gap-2 text-[12px] font-medium text-[#F59E0B]">
+                <p className="flex items-center gap-2 text-[12px] font-medium text-saibyl-warning">
                   <ShieldAlert className="w-4 h-4 shrink-0" />
                   Read this before you turn it on
                 </p>
-                <div className="mt-2.5 space-y-2 text-[12px] text-[#8B97A8] leading-relaxed">
+                <div className="mt-2.5 space-y-2 text-[12px] text-saibyl-silver leading-relaxed">
                   <p>
                     Saibyl will start storing information about <strong>real, named
                     people</strong> &mdash; their name, their job title, their employer, and
@@ -259,7 +259,7 @@ export default function ProspectSettingsPage() {
                     Saibyl saves keeps the page it came from and the time it was read, so
                     you can answer.
                   </p>
-                  <p className="text-[#5A6578]">
+                  <p className="text-saibyl-muted">
                     You do not need this to find companies. Company discovery is complete
                     without it.
                   </p>
@@ -270,9 +270,9 @@ export default function ProspectSettingsPage() {
                     type="checkbox"
                     checked={acknowledged}
                     onChange={(e) => setAcknowledged(e.target.checked)}
-                    className="mt-0.5 w-3.5 h-3.5 accent-[#C9A227] cursor-pointer shrink-0"
+                    className="mt-0.5 w-3.5 h-3.5 accent-[#286cf0] cursor-pointer shrink-0"
                   />
-                  <span className="text-[12px] text-[#E8ECF2] leading-relaxed">
+                  <span className="text-[12px] text-saibyl-ink leading-relaxed">
                     I understand this stores information about named people, and that I am
                     responsible for it.
                   </span>
@@ -283,7 +283,7 @@ export default function ProspectSettingsPage() {
                     type="button"
                     onClick={() => setEnabled(true)}
                     disabled={!acknowledged || saving}
-                    className="inline-flex items-center gap-2 rounded-lg bg-[#C9A227] px-4 py-2 text-[12px] font-semibold text-[#0A0F1C] hover:bg-[#D4AF37] disabled:opacity-40 transition-colors"
+                    className="inline-flex items-center gap-2 rounded-lg bg-saibyl-gold px-4 py-2 text-[12px] font-semibold text-white hover:bg-saibyl-gold-hover disabled:opacity-40 transition-colors"
                   >
                     {saving ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -299,7 +299,7 @@ export default function ProspectSettingsPage() {
                       setAcknowledged(false);
                     }}
                     disabled={saving}
-                    className="text-[12px] text-[#8B97A8] hover:text-[#E8ECF2] disabled:opacity-40 transition-colors"
+                    className="text-[12px] text-saibyl-silver hover:text-saibyl-ink disabled:opacity-40 transition-colors"
                   >
                     Leave it off
                   </button>
@@ -311,30 +311,30 @@ export default function ProspectSettingsPage() {
       )}
 
       {/* ---- Purge ---- */}
-      <section className="rounded-2xl border border-[#EF4444]/25 bg-[#EF4444]/[0.04] p-5">
-        <h2 className="flex items-center gap-2 text-[14px] font-medium text-[#E8ECF2]">
-          <Trash2 className="w-4 h-4 text-[#EF4444]" />
+      <section className="rounded-2xl border border-saibyl-negative/25 bg-saibyl-rose/[0.05] p-5">
+        <h2 className="flex items-center gap-2 text-[14px] font-medium text-saibyl-ink">
+          <Trash2 className="w-4 h-4 text-saibyl-negative" />
           Delete every company and person
         </h2>
-        <p className="text-[12px] text-[#8B97A8] mt-2 leading-relaxed">
+        <p className="text-[12px] text-saibyl-silver mt-2 leading-relaxed">
           Deletes every company Saibyl has found for you and every named person saved with
           them. The rows are deleted, not hidden or flagged &mdash; there is nothing to
           restore afterwards and no undo.
         </p>
-        <p className="text-[11px] text-[#5A6578] mt-2 leading-relaxed">
+        <p className="text-[11px] text-saibyl-muted mt-2 leading-relaxed">
           Your searches themselves are kept: they record what each one cost and how many
           searches it ran, which is your billing record, and none of it is information about
           anybody.
         </p>
 
         {purged ? (
-          <div className="mt-4 rounded-xl border border-[#1E293B] bg-white/[0.03] p-4">
-            <p className="flex items-center gap-2 text-[12px] font-medium text-[#E8ECF2]">
-              <Check className="w-3.5 h-3.5 text-[#22C55E]" />
+          <div className="mt-4 rounded-xl border border-saibyl-border bg-saibyl-elevated p-4">
+            <p className="flex items-center gap-2 text-[12px] font-medium text-saibyl-ink">
+              <Check className="w-3.5 h-3.5 text-saibyl-positive" />
               Deleted
             </p>
             {/* Exactly what went, from the server's own count. */}
-            <p className="text-[12px] text-[#8B97A8] mt-1.5 leading-relaxed">
+            <p className="text-[12px] text-saibyl-silver mt-1.5 leading-relaxed">
               {purged.candidates_deleted}{' '}
               {purged.candidates_deleted === 1 ? 'company' : 'companies'} and{' '}
               {purged.contacts_deleted}{' '}
@@ -347,13 +347,13 @@ export default function ProspectSettingsPage() {
         ) : (
           <div className="mt-4 space-y-3">
             {purgeError && (
-              <p className="rounded-lg border border-[#EF4444]/25 bg-[#EF4444]/[0.07] px-3 py-2 text-[12px] text-[#EF4444]">
+              <p className="rounded-lg border border-saibyl-negative/25 bg-saibyl-rose/[0.08] px-3 py-2 text-[12px] text-saibyl-negative">
                 {purgeError}
               </p>
             )}
             <label className="block">
-              <span className="block text-[12px] text-[#8B97A8] mb-1.5">
-                Type <span className="font-mono text-[#E8ECF2]">{PURGE_PHRASE}</span> to
+              <span className="block text-[12px] text-saibyl-silver mb-1.5">
+                Type <span className="font-mono text-saibyl-ink">{PURGE_PHRASE}</span> to
                 confirm
               </span>
               <input
@@ -361,14 +361,14 @@ export default function ProspectSettingsPage() {
                 value={purgePhrase}
                 onChange={(e) => setPurgePhrase(e.target.value)}
                 autoComplete="off"
-                className="w-48 rounded-lg border border-white/[0.08] bg-[#0B1120] px-3 py-2 font-mono text-[13px] text-[#E8ECF2] focus:outline-none focus:ring-1 focus:ring-[#EF4444]/50"
+                className="w-48 rounded-lg border border-saibyl-border-light bg-white px-3 py-2 font-mono text-[13px] text-saibyl-ink placeholder:text-saibyl-muted/70 focus:outline-none focus:border-saibyl-negative focus:ring-2 focus:ring-saibyl-negative/20"
               />
             </label>
             <button
               type="button"
               onClick={purge}
               disabled={purgePhrase !== PURGE_PHRASE || purging}
-              className="inline-flex items-center gap-2 rounded-lg bg-[#EF4444] px-4 py-2 text-[12px] font-semibold text-white hover:bg-[#DC2626] disabled:opacity-30 transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg bg-saibyl-negative px-4 py-2 text-[12px] font-semibold text-white hover:opacity-90 disabled:opacity-30 transition-opacity"
             >
               {purging ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />

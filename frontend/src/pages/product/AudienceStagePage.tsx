@@ -323,7 +323,7 @@ export default function AudienceStagePage() {
             {pending.map((item, i) => (
               <div
                 key={`${item.file.name}-${i}`}
-                className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4"
+                className="rounded-xl border border-saibyl-border bg-saibyl-elevated p-4"
               >
                 <p className="text-[13px] text-saibyl-platinum truncate mb-2.5">
                   {item.file.name}
@@ -346,7 +346,7 @@ export default function AudienceStagePage() {
                         className={`text-left p-3 rounded-lg border transition-all ${
                           selected
                             ? 'border-saibyl-gold/50 bg-saibyl-gold/10'
-                            : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12]'
+                            : 'border-saibyl-border bg-white hover:border-saibyl-border-light'
                         }`}
                       >
                         <span
@@ -452,7 +452,7 @@ export default function AudienceStagePage() {
           id="site-check"
           className={`scroll-mt-6 ${
             documents.length > 0 || checks.length > 0 || activeCheck !== null
-              ? 'mt-6 pt-5 border-t border-white/[0.06]'
+              ? 'mt-6 pt-5 border-t border-saibyl-border'
               : 'mt-3'
           }`}
         >
@@ -513,7 +513,7 @@ export default function AudienceStagePage() {
                       </span>
                       <SiteStatusChip status={status} />
                       {typeof score === 'number' && (
-                        <span className="font-mono text-[11.5px] text-saibyl-muted">
+                        <span className="font-mono tabular-nums text-[11.5px] text-saibyl-muted">
                           {Math.round(score)}/100
                         </span>
                       )}
@@ -633,7 +633,7 @@ export default function AudienceStagePage() {
               {profile.profile.archetypes.map((archetype) => (
                 <li
                   key={archetype.id}
-                  className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3"
+                  className="rounded-xl border border-saibyl-border bg-saibyl-elevated px-4 py-3"
                 >
                   <p className="text-[13.5px] text-saibyl-platinum">
                     {archetype.label || 'Unnamed buyer'}

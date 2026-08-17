@@ -52,7 +52,7 @@ import {
  */
 
 const inputBase =
-  'w-full rounded-lg bg-[#0B1120] border border-white/[0.08] px-3 py-2 text-[13px] text-saibyl-platinum placeholder-saibyl-muted/40 focus:outline-none focus:ring-1 focus:ring-saibyl-gold/50';
+  'w-full rounded-xl bg-white border border-saibyl-border-light px-3 py-2 text-[13px] text-saibyl-ink placeholder:text-saibyl-muted/70 focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20';
 
 /** One value per line. Blank lines are dropped rather than stored as empties. */
 function parseLines(value: string): string[] {
@@ -87,7 +87,7 @@ function Labelled({
     <div>
       <label className="block text-[12px] text-saibyl-silver mb-1.5">{question}</label>
       {children}
-      {hint && <p className="text-[10px] text-saibyl-muted/70 mt-1">{hint}</p>}
+      {hint && <p className="text-[10px] text-saibyl-muted mt-1">{hint}</p>}
     </div>
   );
 }
@@ -120,7 +120,7 @@ function Detail({ label, value }: { label: string; value: string }) {
   if (!value.trim()) return null;
   return (
     <p className="text-[12px] text-saibyl-muted leading-relaxed">
-      <span className="text-saibyl-muted/60">{label} </span>
+      <span className="text-saibyl-muted">{label} </span>
       <span className="text-saibyl-silver">{value}</span>
     </p>
   );
@@ -144,7 +144,7 @@ function BuyerCard({
   const patch = (fields: Partial<ICPArchetype>) => onChange({ ...archetype, ...fields });
 
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+    <div className="rounded-xl border border-saibyl-border bg-white p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[14px] font-medium text-saibyl-platinum">
@@ -253,7 +253,7 @@ function BuyerCard({
                 value={archetype.seniority}
                 onChange={(e) => patch({ seniority: e.target.value as Seniority })}
                 className={inputBase}
-                style={{ colorScheme: 'dark' }}
+                style={{ colorScheme: 'light' }}
               >
                 {(Object.keys(SENIORITY_LABELS) as Seniority[]).map((key) => (
                   <option key={key} value={key}>
@@ -269,7 +269,7 @@ function BuyerCard({
                   patch({ budget_authority: e.target.value as BudgetAuthority })
                 }
                 className={inputBase}
-                style={{ colorScheme: 'dark' }}
+                style={{ colorScheme: 'light' }}
               >
                 {(Object.keys(BUDGET_AUTHORITY_LABELS) as BudgetAuthority[]).map((key) => (
                   <option key={key} value={key}>
@@ -283,7 +283,7 @@ function BuyerCard({
                 value={archetype.switching_cost}
                 onChange={(e) => patch({ switching_cost: e.target.value as SwitchingCost })}
                 className={inputBase}
-                style={{ colorScheme: 'dark' }}
+                style={{ colorScheme: 'light' }}
               >
                 {(Object.keys(SWITCHING_COST_LABELS) as SwitchingCost[]).map((key) => (
                   <option key={key} value={key}>
@@ -479,7 +479,7 @@ export default function AudienceReview({
   };
 
   return (
-    <div className="rounded-xl border border-saibyl-gold/20 bg-white/[0.015] p-5 space-y-5">
+    <div className="rounded-xl border border-saibyl-gold/20 bg-white p-5 space-y-5">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h3 className="text-[15px] font-medium text-saibyl-platinum">
@@ -522,7 +522,7 @@ export default function AudienceReview({
               </li>
             ))}
           </ul>
-          <p className="text-[10px] text-saibyl-muted/70 mt-2 leading-relaxed">
+          <p className="text-[10px] text-saibyl-muted mt-2 leading-relaxed">
             We left these blank instead of guessing. Filling them in below makes the
             answers sharper, but it works without them.
           </p>
@@ -558,7 +558,7 @@ export default function AudienceReview({
             {draft.adversarial.map((adv) => (
               <div
                 key={adv.id}
-                className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3"
+                className="rounded-xl border border-saibyl-border bg-white px-4 py-3"
               >
                 <p className="text-[13px] text-saibyl-platinum">{adv.label}</p>
                 {adv.core_argument && (
@@ -567,7 +567,7 @@ export default function AudienceReview({
                   </p>
                 )}
                 {adv.competitor_name && (
-                  <p className="text-[10px] text-saibyl-muted/80 mt-1.5">
+                  <p className="text-[10px] text-saibyl-muted mt-1.5">
                     Mentions {adv.competitor_name}, because {adv.grounded_in.length} document
                     {adv.grounded_in.length === 1 ? '' : 's'} you uploaded named them.
                   </p>
@@ -575,7 +575,7 @@ export default function AudienceReview({
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-saibyl-muted/70 mt-2 leading-relaxed">
+          <p className="text-[10px] text-saibyl-muted mt-2 leading-relaxed">
             These are people happy with what they already use. They&rsquo;re shown here but
             can&rsquo;t be edited — a rival is only ever named because one of your own
             uploads named them, and that link isn&rsquo;t something to retype.
@@ -623,7 +623,7 @@ export default function AudienceReview({
           {saving ? (
             <span
               aria-live="polite"
-              className="flex items-center gap-2 px-5 py-2 rounded-xl bg-saibyl-gold/70 text-saibyl-void font-semibold text-[13px]"
+              className="flex items-center gap-2 px-5 py-2 rounded-xl bg-saibyl-gold text-saibyl-void font-semibold text-[13px]"
             >
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
               Saving&hellip;

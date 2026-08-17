@@ -16,9 +16,9 @@ import { formatSigned, type ObjectionSummary } from '@/lib/analysis';
 import Panel, { NoData } from '@/components/analysis/Panel';
 
 const TONE_COLOR: Record<'good' | 'bad' | 'neutral', string> = {
-  good: '#22C55E',
-  bad: '#EF4444',
-  neutral: '#94A3B8',
+  good: '#0e7d55',
+  bad: '#d92d3c',
+  neutral: '#60718e',
 };
 
 /* ------------------------------------------------------------------ */
@@ -30,7 +30,7 @@ function DeltaRow({ delta }: { delta: ObjectionDelta }) {
   const color = TONE_COLOR[tone];
 
   return (
-    <div className="py-3 border-b border-white/[0.04] last:border-0">
+    <div className="py-3 border-b border-saibyl-border last:border-0">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[13px] text-saibyl-platinum font-medium">{delta.label}</p>
@@ -60,7 +60,7 @@ function DeltaRow({ delta }: { delta: ObjectionDelta }) {
             not a small result — it is not a result. Saying so here is what
             stops "34% to 31%" being read as progress. */}
         {!delta.significant && delta.verdict !== 'unchanged' && (
-          <span className="text-saibyl-gold/80">
+          <span className="text-saibyl-warning">
             {' '}
             The two rooms overlap too much to call this a real change.
           </span>
@@ -95,12 +95,12 @@ function ResultPanel({ result }: { result: InoculationResult }) {
           : `${result.assets_effective} of the ${result.assets_tested} things you tested measurably moved the objection ${result.assets_effective === 1 ? 'it was' : 'they were'} written against.`
       }
     >
-      <div className="mb-4 pb-3 border-b border-white/[0.06] text-[12px] text-saibyl-muted">
+      <div className="mb-4 pb-3 border-b border-saibyl-border text-[12px] text-saibyl-muted">
         How the room felt overall: {formatSigned(result.headline_before.mean)} →{' '}
         {formatSigned(result.headline_after.mean)}
         {result.headline_before.lower <= result.headline_after.upper &&
           result.headline_after.lower <= result.headline_before.upper && (
-            <span className="text-saibyl-gold/80">
+            <span className="text-saibyl-warning">
               {' '}
               — too small a move to call. Something you wrote can kill one objection without
               shifting the overall mood, and that is still worth having.
@@ -115,7 +115,7 @@ function ResultPanel({ result }: { result: InoculationResult }) {
       )}
 
       {untargeted.length > 0 && (
-        <div className="mt-5 pt-4 border-t border-white/[0.06]">
+        <div className="mt-5 pt-4 border-t border-saibyl-border">
           <p className="text-[11px] text-saibyl-muted uppercase tracking-wide mb-2">
             Objections nothing was written against
           </p>
@@ -310,14 +310,14 @@ export default function InoculationWorkbench({
                         className={`w-full text-left p-4 rounded-xl border transition-all ${
                           isSelected
                             ? 'border-saibyl-gold/50 bg-saibyl-gold/10'
-                            : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12]'
+                            : 'border-saibyl-border bg-white hover:border-saibyl-border-light'
                         }`}
                       >
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-[13px] font-medium text-saibyl-platinum truncate">
                             {asset.title}
                           </span>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.04] text-saibyl-muted whitespace-nowrap">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#14294a]/[0.04] text-saibyl-muted whitespace-nowrap">
                             {ASSET_TYPE_LABELS[asset.asset_type] ?? asset.asset_type}
                           </span>
                         </div>
@@ -337,7 +337,7 @@ export default function InoculationWorkbench({
             ))}
           </div>
 
-          <div className="mt-5 pt-4 border-t border-white/[0.06]">
+          <div className="mt-5 pt-4 border-t border-saibyl-border">
             <button
               type="button"
               onClick={resimulate}

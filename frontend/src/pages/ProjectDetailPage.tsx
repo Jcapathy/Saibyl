@@ -321,9 +321,9 @@ export default function ProjectDetailPage() {
         {projectError && (
           <div
             role="alert"
-            className="mb-6 rounded-xl border border-red-500/25 bg-red-500/[0.07] p-4"
+            className="mb-6 rounded-xl border border-saibyl-negative/25 bg-saibyl-rose/[0.08] p-4"
           >
-            <p className="text-sm text-red-300">{projectError}</p>
+            <p className="text-sm text-saibyl-negative">{projectError}</p>
             <Link
               to="/app/projects"
               className="inline-flex items-center gap-1.5 mt-3 px-3.5 py-1.5 rounded-lg bg-saibyl-gold text-saibyl-void text-[12px] font-semibold hover:bg-saibyl-gold-hover transition-colors"
@@ -351,7 +351,7 @@ export default function ProjectDetailPage() {
                 key={key}
                 type="button"
                 onClick={() => navigate(to)}
-                className="group text-left rounded-2xl border border-white/[0.12] bg-white/[0.03] p-5 transition-all hover:border-saibyl-gold/45 hover:bg-white/[0.06] hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-saibyl-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-saibyl-void"
+                className="group text-left rounded-2xl border border-saibyl-border-light bg-white p-5 transition-all hover:border-saibyl-gold/45 hover:bg-saibyl-blue/[0.04] hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-saibyl-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-saibyl-void"
               >
                 <div className="flex items-center gap-2.5 mb-1.5">
                   <Icon className="w-4 h-4 text-saibyl-gold shrink-0" />
@@ -428,7 +428,7 @@ export default function ProjectDetailPage() {
                 <button
                   onClick={handleUpload}
                   disabled={uploading || pending.length === 0}
-                  className="bg-saibyl-gold text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-[#4B4FDE] disabled:opacity-50 transition-colors shrink-0"
+                  className="bg-saibyl-gold text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-saibyl-gold-hover disabled:opacity-50 transition-colors shrink-0"
                 >
                   {uploading ? 'Uploading...' : 'Upload'}
                 </button>
@@ -443,7 +443,7 @@ export default function ProjectDetailPage() {
                   {pending.map((item, i) => (
                     <div
                       key={`${item.file.name}-${i}`}
-                      className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4"
+                      className="rounded-xl border border-saibyl-border bg-white p-4"
                     >
                       <p className="text-[13px] text-saibyl-platinum truncate mb-2.5">
                         {item.file.name}
@@ -460,7 +460,7 @@ export default function ProjectDetailPage() {
                               className={`text-left p-3 rounded-lg border transition-all ${
                                 selected
                                   ? 'border-saibyl-gold/50 bg-saibyl-gold/10'
-                                  : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12]'
+                                  : 'border-saibyl-border bg-white hover:border-saibyl-border-light'
                               }`}
                             >
                               <span
@@ -523,7 +523,7 @@ export default function ProjectDetailPage() {
             ) : (
               <div className="glass rounded-2xl overflow-hidden">
                 {documents.map((doc, i) => (
-                  <div key={doc.id} className={`flex items-center justify-between px-5 py-3 ${i > 0 ? 'border-t border-white/[0.04]' : ''}`}>
+                  <div key={doc.id} className={`flex items-center justify-between px-5 py-3 ${i > 0 ? 'border-t border-saibyl-border' : ''}`}>
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-8 h-8 rounded-lg bg-saibyl-gold/10 flex items-center justify-center text-[11px] font-mono text-saibyl-gold uppercase shrink-0">
                         {doc.file_type}
@@ -541,7 +541,7 @@ export default function ProjectDetailPage() {
                               className={`text-[10px] px-1.5 py-0.5 rounded ${
                                 doc.material_kind === 'competitor'
                                   ? 'bg-saibyl-gold/15 text-saibyl-gold'
-                                  : 'bg-white/[0.05] text-saibyl-muted'
+                                  : 'bg-[#14294a]/[0.04] text-saibyl-muted'
                               }`}
                             >
                               {MATERIAL_KIND_BADGES[doc.material_kind]}
@@ -582,7 +582,7 @@ export default function ProjectDetailPage() {
                 </div>
                 <button
                   onClick={handleRunSimulation}
-                  className="px-5 py-2 rounded-lg bg-[#C9A227] text-[#0A0F1C] font-medium text-sm transition-all hover:bg-[#D4AF37] hover:-translate-y-0.5 shrink-0"
+                  className="px-5 py-2 rounded-lg bg-saibyl-gold text-white font-medium text-sm transition-all hover:bg-saibyl-gold-hover hover:-translate-y-0.5 shrink-0"
                 >
                   Start a run →
                 </button>
@@ -602,7 +602,7 @@ export default function ProjectDetailPage() {
               </p>
               <button
                 onClick={() => navigate(`/app/prospects/discover?project_id=${id}`)}
-                className="bg-saibyl-gold text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-[#4B4FDE] shrink-0"
+                className="bg-saibyl-gold text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-saibyl-gold-hover shrink-0"
               >
                 + New search
               </button>
@@ -622,7 +622,7 @@ export default function ProjectDetailPage() {
                     </p>
                     <button
                       onClick={() => navigate(`/app/prospects/discover?project_id=${id}`)}
-                      className="bg-saibyl-gold text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-[#4B4FDE]"
+                      className="bg-saibyl-gold text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-saibyl-gold-hover"
                     >
                       Find companies
                     </button>
@@ -698,7 +698,7 @@ export default function ProjectDetailPage() {
               </p>
               <button
                 onClick={() => navigate(`/app/simulations/new?project=${id}`)}
-                className="bg-saibyl-gold text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-[#4B4FDE]"
+                className="bg-saibyl-gold text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-saibyl-gold-hover"
               >
                 + New run
               </button>
@@ -713,7 +713,7 @@ export default function ProjectDetailPage() {
                     </p>
                     <button
                       onClick={() => navigate(`/app/simulations/new?project=${id}`)}
-                      className="bg-saibyl-gold text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-[#4B4FDE]"
+                      className="bg-saibyl-gold text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-saibyl-gold-hover"
                     >
                       Start a run
                     </button>

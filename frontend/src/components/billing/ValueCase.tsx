@@ -51,11 +51,11 @@ export default function ValueCase() {
   }, []);
 
   return (
-    <section className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6">
-      <h3 className="text-[17px] font-semibold text-[#E8ECF2]">
+    <section className="rounded-2xl border border-saibyl-border bg-white p-6">
+      <h3 className="text-[17px] font-semibold text-saibyl-ink">
         What this is actually competing with
       </h3>
-      <p className="text-[13px] text-[#8B97A8] mt-1.5 leading-relaxed max-w-2xl">
+      <p className="text-[13px] text-saibyl-silver mt-1.5 leading-relaxed max-w-2xl">
         Not your other subscriptions. The campaign you are about to run, and the
         quarter you are about to spend saying the wrong thing to the right
         people.
@@ -65,12 +65,12 @@ export default function ValueCase() {
         {BENCHMARKS.map((b) => (
           <div
             key={b.href + b.stat}
-            className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4"
+            className="rounded-xl border border-saibyl-border bg-saibyl-elevated p-4"
           >
-            <p className="text-[24px] font-semibold text-[#C9A227] leading-none">
+            <p className="text-[24px] font-semibold text-saibyl-blue leading-none tabular-nums">
               {b.stat}
             </p>
-            <p className="text-[12.5px] text-[#C6D0DE] mt-2 leading-relaxed">
+            <p className="text-[12.5px] text-saibyl-silver mt-2 leading-relaxed">
               {b.claim}
             </p>
             {/* The source is shown, not footnoted. A statistic whose
@@ -80,7 +80,7 @@ export default function ValueCase() {
               href={b.href}
               target="_blank"
               rel="noreferrer noopener"
-              className="block text-[11px] text-[#8B97A8] mt-3 leading-relaxed hover:text-[#C9A227] transition-colors"
+              className="block text-[11px] text-saibyl-muted mt-3 leading-relaxed hover:text-saibyl-blue transition-colors"
             >
               {b.provenance} ↗
             </a>
@@ -88,15 +88,15 @@ export default function ValueCase() {
         ))}
       </div>
 
-      <div className="mt-5 rounded-xl border border-[#C9A227]/25 bg-[#C9A227]/[0.06] p-4">
-        <p className="text-[13.5px] text-[#E8ECF2] leading-relaxed">
+      <div className="mt-5 rounded-xl border border-saibyl-blue/25 bg-saibyl-blue/[0.06] p-4">
+        <p className="text-[13.5px] text-saibyl-ink leading-relaxed">
           Testing the message first is the cheapest thing in that list.
         </p>
-        <p className="text-[12.5px] text-[#8B97A8] mt-2 leading-relaxed max-w-2xl">
+        <p className="text-[12.5px] text-saibyl-silver mt-2 leading-relaxed max-w-2xl">
           {run && run.usd_at_topup_rate !== null ? (
             <>
               A full-size run &mdash; {run.definition} &mdash; costs you about{' '}
-              <span className="text-[#C6D0DE]">
+              <span className="text-saibyl-ink tabular-nums">
                 ${run.usd_at_topup_rate.toFixed(2)}
               </span>{' '}
               and finishes in minutes. Set that against a campaign budget and
@@ -118,7 +118,7 @@ export default function ValueCase() {
         </p>
       </div>
 
-      <p className="text-[11px] text-[#5A6578] mt-4 leading-relaxed max-w-2xl">
+      <p className="text-[11px] text-saibyl-muted mt-4 leading-relaxed max-w-2xl">
         Saibyl does not run your campaign and does not promise it will work.
         What it does is tell you what a room of your buyers argues about before
         you have paid to find out, and show you the quote behind every number so

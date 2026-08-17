@@ -60,10 +60,10 @@ export default function HeadlineStats({
     );
   const trendAccent =
     headline.trajectory === 'improving'
-      ? '#22C55E'
+      ? '#0e7d55'
       : headline.trajectory === 'declining'
-        ? '#EF4444'
-        : '#8B97A8';
+        ? '#d92d3c'
+        : '#60718e';
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -78,7 +78,7 @@ export default function HeadlineStats({
               : `Somewhere between ${formatSigned(valence.lower)} and ${formatSigned(valence.upper)}, across ${valence.n} people. +1 is loved it, −1 is hated it.`
         }
         icon={<Users className="w-4 h-4" />}
-        accent="#C9A227"
+        accent="#286cf0"
       />
       <Stat
         label="Which way it moved"
@@ -96,14 +96,14 @@ export default function HeadlineStats({
         value={`${headline.stance.oppose_pct.toFixed(0)}% against`}
         sub={`${headline.stance.support_pct.toFixed(0)}% for, ${headline.stance.undecided_pct.toFixed(0)}% undecided. ${headline.polarization_pct.toFixed(0)}% of what was said sat on the opposite side from the room's average.`}
         icon={<Split className="w-4 h-4" />}
-        accent="#2563EB"
+        accent="#286cf0"
       />
       <Stat
         label="New ground"
         value={`${headline.novel_claim_pct.toFixed(0)}%`}
         sub="How much of what was said brought up something the conversation had not already covered. The rest is people repeating each other."
         icon={<Sparkles className="w-4 h-4" />}
-        accent="#8B5CF6"
+        accent="#6a4fe0"
       />
     </div>
   );

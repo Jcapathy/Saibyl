@@ -43,7 +43,7 @@ export default function FlashpointList({
             className={`rounded-xl border p-4 ${
               flash.significant
                 ? 'border-saibyl-negative/25 bg-saibyl-negative/[0.06]'
-                : 'border-saibyl-border bg-saibyl-void'
+                : 'border-saibyl-border bg-saibyl-elevated'
             }`}
           >
             <div className="flex items-start gap-2.5">
@@ -75,7 +75,7 @@ export default function FlashpointList({
                     className={`text-[10px] px-1.5 py-0.5 rounded ${
                       flash.significant
                         ? 'bg-saibyl-negative/15 text-saibyl-negative'
-                        : 'bg-white/[0.04] text-saibyl-muted'
+                        : 'bg-[#14294a]/[0.04] text-saibyl-muted'
                     }`}
                   >
                     {flash.significant ? 'a real move' : 'too small to be sure'}

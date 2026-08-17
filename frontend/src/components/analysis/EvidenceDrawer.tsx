@@ -59,7 +59,7 @@ export default function EvidenceDrawer({
       <button
         type="button"
         aria-label="Close this panel"
-        className="flex-1 bg-black/60 backdrop-blur-sm"
+        className="flex-1 bg-[#14294a]/25 backdrop-blur-sm"
         onClick={onClose}
       />
       <div className="w-full max-w-[520px] h-full bg-saibyl-void border-l border-saibyl-border flex flex-col shadow-2xl">

@@ -186,7 +186,7 @@ export default function DashboardPage() {
                 return (
                   <li
                     key={report.id}
-                    className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-4"
+                    className="rounded-xl border border-saibyl-border bg-white p-4"
                   >
                     <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                       <div className="min-w-0">
@@ -220,7 +220,7 @@ export default function DashboardPage() {
                             type="button"
                             onClick={() => download(report, f.id)}
                             title={f.hint}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/[0.12] text-[12px] text-saibyl-platinum hover:border-saibyl-gold/40 hover:text-saibyl-gold transition-colors"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-saibyl-border-light text-[12px] text-saibyl-platinum hover:border-saibyl-gold/40 hover:text-saibyl-gold transition-colors"
                           >
                             {working[key] ? (
                               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -268,7 +268,7 @@ export default function DashboardPage() {
               <Link
                 key={to}
                 to={to}
-                className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-4 hover:border-saibyl-gold/40 transition-colors"
+                className="rounded-xl border border-saibyl-border bg-white p-4 hover:border-saibyl-gold/40 transition-colors"
               >
                 <span className="flex items-center gap-2 text-[13.5px] text-saibyl-platinum">
                   <Icon className="w-4 h-4 text-saibyl-gold shrink-0" />

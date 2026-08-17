@@ -195,7 +195,7 @@ function Slider({
                 commit((e.target as HTMLInputElement).value);
               }
             }}
-            className="w-20 rounded-lg bg-[#0B1120] border border-white/[0.08] px-2 py-1 text-right text-[13px] font-bold text-saibyl-gold focus:outline-none focus:ring-1 focus:ring-saibyl-gold/50"
+            className="w-20 rounded-lg bg-white border border-saibyl-border-light px-2 py-1 text-right text-[13px] font-bold tabular-nums text-saibyl-gold focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20"
           />
         </div>
       </div>
@@ -210,11 +210,11 @@ function Slider({
         onChange={(e) => onChange(clamp(Number(e.target.value), min, ceiling))}
         className="w-full accent-saibyl-gold"
       />
-      <div className="flex justify-between text-[10px] text-saibyl-muted/60 mt-1">
+      <div className="flex justify-between text-[10px] text-saibyl-muted mt-1">
         <span>{min}</span>
         <span>{ceiling}</span>
       </div>
-      {hint && <p className="text-[11px] text-saibyl-muted/70 mt-1.5">{hint}</p>}
+      {hint && <p className="text-[11px] text-saibyl-muted mt-1.5">{hint}</p>}
     </div>
   );
 }
@@ -415,7 +415,7 @@ export default function RunConfigurator({
               the two unable to disagree. The previous copy here — "one message
               per run for now… arrives with the Marketing lens" — was written
               before that lens shipped and was still on screen a release later. */}
-          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+          <div className="rounded-xl border border-saibyl-border bg-[#14294a]/[0.04] px-4 py-3">
             <p className="text-[11px] text-saibyl-muted uppercase tracking-wide mb-1">
               Testing more than one message
             </p>
@@ -455,15 +455,15 @@ export default function RunConfigurator({
                   onClick={() => onChange((prev) => ({ ...prev, depth }))}
                   className={`px-3 py-2 rounded-xl text-[13px] capitalize border transition-colors ${
                     shape.depth === depth
-                      ? 'border-saibyl-gold/50 bg-saibyl-gold/10 text-saibyl-platinum'
-                      : 'border-white/[0.06] bg-white/[0.02] text-saibyl-muted hover:border-white/[0.12]'
+                      ? 'border-saibyl-blue/45 bg-saibyl-blue/[0.07] text-saibyl-ink'
+                      : 'border-saibyl-border bg-white text-saibyl-muted hover:border-saibyl-border-light'
                   }`}
                 >
                   {depth}
                 </button>
               ))}
             </div>
-            <p className="text-[11px] text-saibyl-muted/70 mt-1.5">
+            <p className="text-[11px] text-saibyl-muted mt-1.5">
               This sets how many sections your written report has. Writing the
               report runs on the expensive model, so it is the one setting that
               changes the price without changing what happens in the room.
@@ -492,13 +492,13 @@ export default function RunConfigurator({
             <dl className="space-y-2 text-[13px]">
               <div className="flex justify-between gap-4">
                 <dt className="text-saibyl-muted">This run will use</dt>
-                <dd className="text-saibyl-platinum font-semibold">
+                <dd className="text-saibyl-platinum font-semibold tabular-nums">
                   {estimate.credits.toLocaleString()} credits
                 </dd>
               </div>
               <div className="flex justify-between gap-4">
                 <dt className="text-saibyl-muted">Your balance</dt>
-                <dd className="text-saibyl-silver">
+                <dd className="text-saibyl-silver tabular-nums">
                   {budget.credits_remaining.toLocaleString()} →{' '}
                   <span
                     className={
@@ -513,7 +513,7 @@ export default function RunConfigurator({
                 <dt className="text-saibyl-muted flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5" /> Estimated runtime
                 </dt>
-                <dd className="text-saibyl-silver">
+                <dd className="text-saibyl-silver tabular-nums">
                   ~{minLow}–{minHigh} minutes
                 </dd>
               </div>
@@ -524,7 +524,7 @@ export default function RunConfigurator({
               ≈ {estimate.standard_run_equivalents.toFixed(1)} standard runs&rsquo; worth of
               capacity
             </p>
-            <p className="text-[11px] text-saibyl-muted/70 mt-1">
+            <p className="text-[11px] text-saibyl-muted mt-1">
               A <strong className="text-saibyl-muted">standard run</strong> is 100 people,
               5 rounds, 2 platforms, 1 message. Bigger runs use more of your monthly
               credits — you always see the exact cost before starting.

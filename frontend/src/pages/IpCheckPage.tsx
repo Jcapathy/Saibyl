@@ -298,7 +298,7 @@ export default function IpCheckPage() {
                     className={`w-full text-left rounded-xl border p-3.5 transition-all flex flex-wrap items-center gap-x-3 gap-y-1.5 ${
                       selected?.id === row.id
                         ? 'border-saibyl-gold/50 bg-saibyl-gold/[0.06]'
-                        : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12]'
+                        : 'border-saibyl-border bg-white hover:border-saibyl-border-light'
                     }`}
                   >
                     <span className="text-[13px] text-saibyl-platinum truncate flex-1 min-w-[10rem]">
@@ -309,7 +309,7 @@ export default function IpCheckPage() {
                     </span>
                     <StatusChip status={row.status} />
                     {row.risk && <RiskChip risk={row.risk} />}
-                    <span className="text-[11px] text-saibyl-muted font-mono">
+                    <span className="text-[11px] text-saibyl-muted font-mono tabular-nums">
                       {new Date(row.created_at).toLocaleDateString(undefined, {
                         month: 'short',
                         day: 'numeric',
