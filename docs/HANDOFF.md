@@ -8,6 +8,15 @@ Still no live end-to-end run since the 2026-08-04 sweep — see §1.**
 Read this first in a new session. It is written to be read cold, with no memory
 of previous sessions.
 
+> ### ▶ 2026-08-17 — ACTIVE MISSION: the app-shell light restyle
+>
+> **If you are picking up the current work, read `docs/HANDOFF_APP_RESTYLE.md`
+> FIRST** — the founder wants everything behind the login restyled to the
+> light Saido aesthetic now live on the landing page, shipped this week,
+> with multi-agent execution pre-authorized for today. That file carries the
+> mission, the design system, the wave plan, the traps, and the definition
+> of done.
+
 > ### ▶ 2026-08-16 — V3 Phase A landed on branch `v3-prd` (not yet merged)
 >
 > The product re-aimed: **`docs/PRD_V3.md` supersedes PRD_V2** (signed off by
