@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
     resend_api_key: str = ""
+    uspto_odp_api_key: str = ""
+    uspto_tsdr_api_key: str = ""
     sentry_dsn: str = ""
     # Crisis is shelved, not deleted (PRD_V3 §7). Off hides the surface
     # entirely — the API answers 404, not 403 — until it returns as a paid
