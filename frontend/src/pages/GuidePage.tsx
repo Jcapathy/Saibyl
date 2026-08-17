@@ -143,8 +143,9 @@ export default function GuidePage() {
         >
           <h1 className="text-h1 text-saibyl-white mb-2">Getting Started</h1>
           <p className="text-[15px] text-saibyl-muted leading-relaxed max-w-2xl">
-            Know the conversation before it happens. Saibyl simulates how real people will react to any topic —
-            in minutes, at a fraction of the cost of focus groups, ad testing, or polling.
+            Find out what buyers will object to before you launch. Saibyl builds a room of AI buyers from
+            your material and shows you what they push back on — in minutes, at a fraction of the cost of
+            focus groups, ad testing, or polling.
           </p>
         </motion.div>
 

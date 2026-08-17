@@ -142,20 +142,20 @@ export default function LoginPage() {
           <div className="flex items-center gap-2 mb-6">
             <span className="block w-[6px] h-[6px] rounded-full bg-emerald-400 animate-pulse-dot" />
             <span className="text-sm text-[#8B97A8]">
-              Predictive intelligence for decision-makers
+              Buyer intelligence for founders
             </span>
           </div>
 
           {/* Tagline */}
           <h1 className="text-[2.75rem] font-bold tracking-tight leading-[1.1] text-white mb-5">
-            Know the conversation{' '}
-            <span className="text-gradient-brand">before it happens.</span>
+            Test your startup{' '}
+            <span className="text-gradient-brand">on a synthetic market.</span>
           </h1>
 
           {/* Subtitle */}
           <p className="text-[#8B97A8] text-base leading-relaxed max-w-md mb-12">
-            Simulate public reactions across 12 platforms, with an audience built
-            from your own material. Every number traces to what an agent said.
+            A room of AI buyers built from your own material reads your pitch.
+            Every number traces to what a buyer said.
           </p>
 
           {/* Stats row */}

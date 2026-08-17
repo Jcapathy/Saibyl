@@ -123,7 +123,7 @@ export default function ReportPrintPage() {
     if (simulation?.name) {
       document.title = `${simulation.name} — Saibyl Report`;
       return () => {
-        document.title = 'Saibyl — Know the Conversation Before It Happens';
+        document.title = 'Saibyl — Find out what buyers will object to, before you launch';
       };
     }
   }, [simulation?.name]);

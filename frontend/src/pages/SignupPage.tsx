@@ -183,20 +183,20 @@ export default function SignupPage() {
               <span className="relative inline-flex rounded-full h-[6px] w-[6px] bg-green-500" />
             </span>
             <span className="text-sm text-[#8B97A8]">
-              Predictive intelligence for decision-makers
+              Buyer intelligence for founders
             </span>
           </div>
 
           {/* Tagline */}
           <h2 className="text-[2.75rem] font-bold leading-[1.1] tracking-tight text-white">
-            Know the conversation{' '}
-            <span className="text-gradient-brand">before it happens.</span>
+            Test your startup{' '}
+            <span className="text-gradient-brand">on a synthetic market.</span>
           </h2>
 
           {/* Subtitle */}
           <p className="text-[#8B97A8] text-base leading-relaxed">
-            Simulate public reactions across 12 platforms, with an audience built
-            from your own material — before you go live.
+            A room of AI buyers built from your own material reads your pitch —
+            before you go live.
           </p>
 
           {/* Stats row */}
