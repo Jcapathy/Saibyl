@@ -14,6 +14,7 @@
 # standard_run_credits() -> int
 # clearance_credits(tier) -> int
 # website_check_credits() -> int
+# website_revision_credits() -> int
 # CREDITS_PER_USD, TIER_CREDIT_GRANTS, STANDARD_RUN, CLEARANCE_PRICING
 # ─────────────────────────────────────────────────────────
 """Run cost estimation, credit accounting, and budget enforcement.
@@ -1158,3 +1159,32 @@ WEBSITE_CHECK_COGS_USD = Decimal("0.35")
 def website_check_credits() -> int:
     """Credits one website check charges: COGS at the target margin — 1,750."""
     return _clearance_price_credits(WEBSITE_CHECK_COGS_USD)
+
+
+# ---------------------------------------------------------------------------
+# Page revision (PRD_V3 §4d) — one fixed price per revision
+# ---------------------------------------------------------------------------
+
+# ⚠ PROVISIONAL COGS, estimated rather than measured — the same standing as the
+# clearance and website-check constants above, and the same PRD §8
+# recalibration rule applies: no page revision has ever written to the
+# `llm_usage` ledger, so this is constructed from the work one revision does,
+# not from measured rows. §4e is explicit that these stages must be profiled
+# from measured `llm_usage` on live runs, not from estimates (remember the
+# platform-count inflation bug — measure first). **Re-derive after the first
+# live revisions.**
+#
+# The capture re-fetch and the storage writes are compute rounding error, so
+# COGS is LLM-only, sized to the loop's own ceilings (revise → re-judge,
+# up to 3 rounds):
+#
+#   up to 3 generation calls, each writing a whole page at the
+#   32K output ceiling                                              ≈ $0.75
+#   up to 18 vision judge calls (the six-critic panel re-scoring
+#   each round's rendered page)                                     ≈ $0.25
+WEBSITE_REVISION_COGS_USD = Decimal("1.00")
+
+
+def website_revision_credits() -> int:
+    """Credits one page revision charges: COGS at the target margin — 5,000."""
+    return _clearance_price_credits(WEBSITE_REVISION_COGS_USD)

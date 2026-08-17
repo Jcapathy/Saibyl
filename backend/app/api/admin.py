@@ -76,7 +76,41 @@ async def list_design_gallery(
     for row in result.data or []:
         org = row.pop("organizations", None) or {}
         items.append({**row, "organization_name": org.get("name")})
+
+    # Each item's latest complete revision, when one exists — one batched
+    # query, not one per item. `revision` is None until a revision lands; the
+    # feed becomes before/after-ready the moment one does, without the reader
+    # joining anything.
+    revision_by_snapshot: dict[str, dict] = {}
+    snapshot_ids = [item["snapshot_id"] for item in items if item.get("snapshot_id")]
+    if snapshot_ids:
+        revision_rows = (
+            admin.table("page_revisions")
+            .select("id, snapshot_id, scores_after, screenshot_desktop_path, created_at")
+            .eq("status", "complete")
+            .in_("snapshot_id", snapshot_ids)
+            .order("created_at", desc=True)
+            .execute()
+        ).data or []
+        for rev in revision_rows:
+            # Newest first, so the first row seen per snapshot is the latest.
+            revision_by_snapshot.setdefault(rev["snapshot_id"], rev)
+    for item in items:
+        item["revision"] = _revision_summary(
+            revision_by_snapshot.get(item.get("snapshot_id"))
+        )
     return {"items": items, "total": result.count, "limit": limit, "offset": offset}
+
+
+def _revision_summary(revision: dict | None) -> dict | None:
+    """The three fields a before/after card needs, or None when there is no after."""
+    if not revision:
+        return None
+    return {
+        "id": revision["id"],
+        "overall_after": (revision.get("scores_after") or {}).get("overall"),
+        "screenshot_desktop_path": revision.get("screenshot_desktop_path"),
+    }
 
 
 @router.get("/design-gallery/{item_id}")
@@ -99,4 +133,21 @@ async def get_design_gallery_item(
         )
     row = rows[0]
     org = row.pop("organizations", None) or {}
-    return {**row, "organization_name": org.get("name")}
+
+    revision = None
+    if row.get("snapshot_id"):
+        revision_rows = (
+            admin.table("page_revisions")
+            .select("id, snapshot_id, scores_after, screenshot_desktop_path, created_at")
+            .eq("status", "complete")
+            .eq("snapshot_id", row["snapshot_id"])
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        ).data or []
+        revision = revision_rows[0] if revision_rows else None
+    return {
+        **row,
+        "organization_name": org.get("name"),
+        "revision": _revision_summary(revision),
+    }
