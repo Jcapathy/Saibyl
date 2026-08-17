@@ -126,8 +126,12 @@ _DISTIL_MAX_TOKENS = 900
 # would put the analyst's framing in the founder's mouth. `idea_brief` clears
 # the bar both of those fail: the guided idea form's answers are the founder's
 # own description of their product, composed into a document rather than
-# uploaded as one (PRD_V3 §3).
-_SUBJECT_MATERIAL_KINDS = frozenset({"own", "idea_brief"})
+# uploaded as one (PRD_V3 §3). The two website kinds clear it the same way:
+# the page is the founder's own published words, fetched rather than uploaded
+# (PRD_V3 §4c — the audience must react to the page itself).
+_SUBJECT_MATERIAL_KINDS = frozenset(
+    {"own", "idea_brief", "website_url", "website_html"}
+)
 
 # Statuses persisted on `subject_briefs.status`. Kept in step with the CHECK
 # constraint in migration 028.

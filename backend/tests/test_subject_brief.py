@@ -201,7 +201,9 @@ def test_only_the_founders_own_material_may_describe_the_subject():
     pins: everything in this set is the founder speaking about their own
     product.
     """
-    assert sb._SUBJECT_MATERIAL_KINDS == frozenset({"own", "idea_brief"})
+    assert sb._SUBJECT_MATERIAL_KINDS == frozenset(
+        {"own", "idea_brief", "website_url", "website_html"}
+    )
 
 
 def test_competitor_and_market_documents_are_not_subject_material():

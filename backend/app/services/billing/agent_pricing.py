@@ -13,6 +13,7 @@
 # deduct_credits(org_id, credits) -> None
 # standard_run_credits() -> int
 # clearance_credits(tier) -> int
+# website_check_credits() -> int
 # CREDITS_PER_USD, TIER_CREDIT_GRANTS, STANDARD_RUN, CLEARANCE_PRICING
 # ─────────────────────────────────────────────────────────
 """Run cost estimation, credit accounting, and budget enforcement.
@@ -1132,3 +1133,28 @@ def clearance_credits(tier: str) -> int:
         return CLEARANCE_PRICING[tier]
     except KeyError:
         raise ValueError(f"Unknown clearance tier: {tier!r}") from None
+
+
+# ---------------------------------------------------------------------------
+# Website check (PRD_V3 §4a–b) — one fixed price per check
+# ---------------------------------------------------------------------------
+
+# ⚠ PROVISIONAL COGS, estimated rather than measured — the same standing as the
+# clearance constants above, and the same PRD §8 recalibration rule applies: no
+# website check has ever written to the `llm_usage` ledger, so this is
+# constructed from the work one check does, not from measured rows. §4e is
+# explicit that these stages must be profiled from measured `llm_usage` on live
+# runs, not from estimates (remember the platform-count inflation bug — measure
+# first). **Re-derive after the first live checks.**
+#
+# The fetch and the screenshots are compute rounding error, so COGS is
+# LLM-only:
+#
+#   five vision critics, each judging both screenshots + DOM text    ≈ $0.30
+#   one composition pass over the five verdicts                      ≈ $0.05
+WEBSITE_CHECK_COGS_USD = Decimal("0.35")
+
+
+def website_check_credits() -> int:
+    """Credits one website check charges: COGS at the target margin — 1,750."""
+    return _clearance_price_credits(WEBSITE_CHECK_COGS_USD)
