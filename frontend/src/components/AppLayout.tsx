@@ -8,6 +8,7 @@ import {
   Clock,
   MessageSquare,
   Search,
+  ShieldCheck,
   Users,
   Settings,
   LogOut,
@@ -17,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import api from '@/lib/api';
+import { IP_CHECK_NAME } from '@/components/clearance/types';
 
 interface CreditBalance {
   balance: number;
@@ -52,6 +54,10 @@ const coreNav: NavItem[] = [
      export surface - every report, and three ways to take each one out - so it
      has a reason to exist and therefore a link. Named for what it holds. */
   { path: '/app/dashboard', label: 'Your reports', Icon: FileText },
+  /* "Is this even mine to build?" — the USPTO clearance tab (PRD §11). Global
+     rather than inside a product because a founder checks an idea before it is
+     a product; the run form associates one optionally. */
+  { path: '/app/ip-check', label: IP_CHECK_NAME, Icon: ShieldCheck },
   { path: '/app/settings', label: 'Settings', Icon: Settings },
 ];
 

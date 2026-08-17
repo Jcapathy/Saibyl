@@ -17,6 +17,7 @@ import ComparisonPage from '@/pages/ComparisonPage';
 import LandingPage from '@/pages/LandingPage';
 import DashboardPage from '@/pages/DashboardPage';
 import GuidePage from '@/pages/GuidePage';
+import IpCheckPage from '@/pages/IpCheckPage';
 import LoginPage from '@/pages/LoginPage';
 import MarketingPage from '@/pages/MarketingPage';
 import NewSimulationPage from '@/pages/NewSimulationPage';
@@ -77,6 +78,7 @@ function AnimatedRoutes() {
             <Route path="messages" element={<MessagesStagePage />} />
           </Route>
           <Route path="dashboard" element={<PageTransition><DashboardPage /></PageTransition>} />
+          <Route path="ip-check" element={<PageTransition><IpCheckPage /></PageTransition>} />
           <Route path="guide" element={<PageTransition><GuidePage /></PageTransition>} />
           <Route path="projects" element={<PageTransition><ProjectsPage /></PageTransition>} />
           <Route path="projects/:id" element={<PageTransition><ProjectDetailPage /></PageTransition>} />
