@@ -1,6 +1,12 @@
 # Saibyl V2 — Product Requirements
 
-**Saido Labs LLC** · Version 2.0 · Status: in build (Phase 0 complete)
+> **Superseded by `PRD_V3.md` (signed off 2026-08-16).** V2's engineering —
+> the measurement substrate, audience construction, matched swarms, cost model
+> and verification gates — carries forward and is referenced by V3. V2's
+> *product framing* (three-lens positioning, crisis PR at launch, Stripe tiers
+> on the critical path) does not. Where the two conflict, V3 wins.
+
+**Saido Labs LLC** · Version 2.0 · Status: superseded (was: in build, Phases 0–2 complete, Phase 3 built)
 
 > Saibyl tells you how the market will react to what you're about to say — and what to say instead.
 
