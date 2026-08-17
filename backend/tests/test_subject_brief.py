@@ -188,15 +188,20 @@ def test_the_runner_hands_every_arena_the_same_subject():
 # 2. Competitor material can never become the subject
 # ---------------------------------------------------------------------------
 
-def test_only_own_material_may_describe_the_subject():
+def test_only_the_founders_own_material_may_describe_the_subject():
     """DECISIONS §7, as a constant rather than a convention.
 
     The `competitor` label exists to license a competitor's *name* in an
     adversarial agent's mouth. Letting it describe the subject would put a
     competitor's positioning in front of every agent as the founder's own
     product — the inverse of the guardrail, arrived at from the other side.
+
+    `idea_brief` is the founder's own description composed from the guided
+    idea form (PRD_V3 §3), so its presence keeps the guarantee this test
+    pins: everything in this set is the founder speaking about their own
+    product.
     """
-    assert sb._SUBJECT_MATERIAL_KINDS == frozenset({"own"})
+    assert sb._SUBJECT_MATERIAL_KINDS == frozenset({"own", "idea_brief"})
 
 
 def test_competitor_and_market_documents_are_not_subject_material():

@@ -123,8 +123,11 @@ _DISTIL_MAX_TOKENS = 900
 # the exact failure DECISIONS §7's labelling rule exists to prevent. `market` is
 # absent for the weaker version of the same reason: category context is not a
 # description of this team's product, and a brief built from an analyst report
-# would put the analyst's framing in the founder's mouth.
-_SUBJECT_MATERIAL_KINDS = frozenset({"own"})
+# would put the analyst's framing in the founder's mouth. `idea_brief` clears
+# the bar both of those fail: the guided idea form's answers are the founder's
+# own description of their product, composed into a document rather than
+# uploaded as one (PRD_V3 §3).
+_SUBJECT_MATERIAL_KINDS = frozenset({"own", "idea_brief"})
 
 # Statuses persisted on `subject_briefs.status`. Kept in step with the CHECK
 # constraint in migration 028.

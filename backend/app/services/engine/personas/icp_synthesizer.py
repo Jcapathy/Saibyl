@@ -283,13 +283,21 @@ def gather_material(project_id: str) -> ProjectMaterial:
     excluded: list[dict[str, Any]] = []
     unconfirmed_competitors: list[str] = []
     ready: dict[str, list[dict[str, Any]]] = {"own": [], "competitor": [], "market": []}
+    idea_brief_ids: set[str] = set()
 
     for doc in rows:
         # NULL predates the column and is read as 'own'. An unlabelled document
         # can never be the thing that authorises naming a competitor — and a
         # *suggested* kind is not a label, so it is recorded for confirmation
-        # and never bucketed (DECISIONS_V2 §7).
+        # and never bucketed (DECISIONS_V2 §7). An idea brief is the founder's
+        # own description of their product, composed from the guided form
+        # rather than uploaded (PRD_V3 §3) — stated here rather than left to
+        # the unknown-kind fallback below, and remembered by id because the
+        # source floor treats it differently.
         kind = doc.get("material_kind") or "own"
+        if kind == "idea_brief":
+            idea_brief_ids.add(doc["id"])
+            kind = "own"
         if kind not in ready:
             kind = "own"
         if doc.get("material_kind_suggested") == "competitor" and kind != "competitor":
@@ -343,7 +351,11 @@ def gather_material(project_id: str) -> ProjectMaterial:
 
         for doc, demand, budget in zip(docs, demands, allocation, strict=True):
             media_type = doc.get("media_type") or "document"
-            if budget < _MIN_SOURCE_CHARS:
+            # The floor exists to drop a fragment of a big upload that would
+            # arrive as noise. An idea brief is short because the form is
+            # short, and it is often the project's *only* material — dropping
+            # it below the floor would ground the synthesis in nothing at all.
+            if budget < _MIN_SOURCE_CHARS and doc["id"] not in idea_brief_ids:
                 excluded.append({
                     "document_id": doc["id"],
                     "filename": doc.get("filename"),

@@ -11,16 +11,17 @@ the pipeline module for what the other path did instead.
 """
 from __future__ import annotations
 
-import asyncio
 from datetime import UTC, datetime
+from io import BytesIO
 from typing import Literal
 
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.auth import get_current_org
 from app.core.database import get_supabase_admin
+from app.core.tasks import spawn
 from app.services.billing.storage_billing import check_storage_quota, update_org_storage_usage
 from app.services.ingestion.media_types import (
     ALL_EXTENSIONS,
@@ -31,13 +32,6 @@ from app.services.ingestion.media_types import (
 from app.workers.asset_tasks import run_ingest_document
 
 log = structlog.get_logger()
-
-
-async def _safe_task(coro, name: str):
-    try:
-        await coro
-    except Exception:
-        log.exception("background_task_failed", task=name)
 
 router = APIRouter(tags=["documents"])
 
@@ -128,13 +122,12 @@ async def store_upload(
         .execute()
     ).data[0]
 
-    # Storage metering and the asset counter are both denormalised counters
-    # updated after the upload has already succeeded, and both follow the same
-    # rule: loud and recoverable, never a 500 that tells the client its upload
-    # failed and invites a re-upload. `increment_storage` lives in migration 016
-    # and, unlike the asset-count RPCs, its signature is in the migrations — but
-    # 025 is the record of what "the application calls an RPC no migration
-    # defines" costs, so this path does not assume it resolves.
+    # Storage metering is a denormalised counter updated after the upload has
+    # already succeeded, so the rule is: loud and recoverable, never a 500 that
+    # tells the client its upload failed and invites a re-upload.
+    # `increment_storage` lives in migration 016 and its signature is in the
+    # migrations — but 025 is the record of what "the application calls an RPC
+    # no migration defines" costs, so this path does not assume it resolves.
     try:
         update_org_storage_usage(org_id, file_size)
     except Exception:
@@ -146,29 +139,7 @@ async def store_upload(
             note="document row exists; organizations.storage_bytes_used is now under-counted",
         )
 
-    # Increment project asset count.
-    #
-    # `projects.asset_count` is a denormalised counter, and the upload has
-    # already succeeded by this point: the object is in storage and the row is
-    # in `documents`. Letting an RPC failure become a 500 would tell the client
-    # its upload failed and invite a re-upload, producing a duplicate document
-    # for a wrong badge count. Logged at exception level with the ids needed to
-    # reconcile — loud and recoverable, not swallowed.
-    #
-    # This is now the only site that increments. The media path used to call the
-    # same RPC from `ingestion/asset_processor.py` **without `.execute()`**, so
-    # the request was built and never sent and media uploads never counted.
-    try:
-        admin.rpc("increment_asset_count", {"p_project_id": project_id}).execute()
-    except Exception:
-        log.exception(
-            "asset_count_increment_failed",
-            project_id=project_id,
-            document_id=doc["id"],
-            note="document row exists; projects.asset_count is now under-counted",
-        )
-
-    asyncio.create_task(_safe_task(run_ingest_document(doc["id"]), "ingest_document"))
+    spawn(run_ingest_document(doc["id"]), "ingest_document")
     log.info(
         "document_ingest_queued",
         document_id=doc["id"],
@@ -215,20 +186,6 @@ def delete_upload(document_id: str, org_id: str) -> dict:
                 note="document deleted; organizations.storage_bytes_used is now over-counted",
             )
 
-    # Decrement project asset count. Same reasoning as the upload path in
-    # reverse: the storage object and the row are already gone, so a 500 here
-    # would report a failed delete for a delete that happened, and the client's
-    # retry would 404.
-    try:
-        admin.rpc("decrement_asset_count", {"p_project_id": row["project_id"]}).execute()
-    except Exception:
-        log.exception(
-            "asset_count_decrement_failed",
-            project_id=row["project_id"],
-            document_id=document_id,
-            note="document row deleted; projects.asset_count is now over-counted",
-        )
-
     return {"detail": "Document deleted", "storage_reclaimed_bytes": reclaimed}
 
 
@@ -239,7 +196,7 @@ def delete_upload(document_id: str, org_id: str) -> dict:
 @router.post("/upload")
 async def upload_document(
     project_id: str = Query(...),
-    material_kind: Literal["own", "competitor", "market"] = Query("own"),
+    material_kind: Literal["own", "competitor", "market", "idea_brief"] = Query("own"),
     source_url: str | None = Query(None),
     file: UploadFile = File(...),
     auth: dict = Depends(get_current_org),
@@ -268,6 +225,72 @@ async def upload_document(
         file=file,
         material_kind=material_kind,
         source_url=source_url,
+    )
+
+
+class IdeaBriefForm(BaseModel):
+    """Five answers from a founder who has nothing to upload yet.
+
+    The fields mirror the guided idea form (PRD_V3 §3): the problem, who has
+    it, the solution, what those people use today, and a rough price. Each
+    answer must survive whitespace stripping — a form of five spaces is not a
+    brief — and is capped so the composed document stays a brief.
+    """
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    project_id: str
+    problem: str = Field(min_length=1, max_length=2000)
+    who: str = Field(min_length=1, max_length=2000)
+    solution: str = Field(min_length=1, max_length=2000)
+    alternatives: str = Field(min_length=1, max_length=2000)
+    price: str = Field(min_length=1, max_length=2000)
+
+
+def _compose_idea_brief(form: IdeaBriefForm) -> str:
+    """The five answers as one small markdown document, in form order."""
+    title = form.solution.splitlines()[0].strip() or "Idea brief"
+    return (
+        f"# {title}\n"
+        f"\n"
+        f"## The problem\n{form.problem}\n"
+        f"\n"
+        f"## Who has it\n{form.who}\n"
+        f"\n"
+        f"## The solution\n{form.solution}\n"
+        f"\n"
+        f"## What they use today\n{form.alternatives}\n"
+        f"\n"
+        f"## Rough price\n{form.price}\n"
+    )
+
+
+@router.post("/idea-brief")
+async def create_idea_brief(body: IdeaBriefForm, auth: dict = Depends(get_current_org)):
+    """Turn the five-field idea form into a stored document.
+
+    A founder at the idea stage has nothing to upload, and the five questions
+    are the ones every customer and investor will ask them anyway. The answers
+    are composed into markdown and stored through `store_upload`, the same
+    path every real file takes — so extraction, the subject brief and audience
+    synthesis all consume the brief without a second intake path.
+
+    `material_kind` is fixed at `idea_brief`: the brief is the founder's own
+    description of their product, and the PATCH route refuses to re-label it.
+    """
+    content = _compose_idea_brief(body).encode("utf-8")
+    upload = UploadFile(file=BytesIO(content), size=len(content), filename="idea-brief.md")
+    log.info(
+        "idea_brief_submitted",
+        project_id=body.project_id,
+        org_id=auth["org_id"],
+        bytes=len(content),
+    )
+    return await store_upload(
+        project_id=body.project_id,
+        org_id=auth["org_id"],
+        file=upload,
+        material_kind="idea_brief",
     )
 
 
@@ -344,6 +367,11 @@ class DocumentUpdate(BaseModel):
     make a body that omits it a 200 that changed nothing, and the caller cannot
     tell that apart from a confirmed decision — which is the one thing this
     field must never be ambiguous about.
+
+    `idea_brief` is deliberately absent. That kind records provenance — the
+    document was composed from the guided idea form, not uploaded — and
+    provenance is not a label a later decision can assign or take away. The
+    route below refuses the other direction too.
     """
 
     material_kind: Literal["own", "competitor", "market"]
@@ -398,6 +426,19 @@ async def update_document(
     if not current.data:
         raise HTTPException(status_code=404, detail="Document not found")
     row = current.data[0]
+
+    # An idea brief was composed from the guided form, not uploaded, and it is
+    # always the founder's own description of their product. Re-labelling it as
+    # competitor or market material would put generated text where only an
+    # upload may stand; the body's Literal already refuses the other direction.
+    if row.get("material_kind") == "idea_brief":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "This document is your idea brief. It always counts as your own "
+                "material and cannot be re-labelled."
+            ),
+        )
 
     # NULL is read as `own` everywhere downstream, so it is reported as `own`
     # here too rather than as a second value meaning the same thing.
