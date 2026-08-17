@@ -75,6 +75,29 @@ of previous sessions.
 > website checks are 1,750 credits (PROVISIONAL — recalibrate from llm_usage
 > per §8). The shared OneDrive `.venv` fought `uv sync` with file locks —
 > local work now uses `UV_PROJECT_ENVIRONMENT=C:\Users\jcapa\.venvs\saibyl-v3`.
+>
+> ### ▶ 2026-08-16 (same night) — design-intelligence augmentation (PRD §4b²)
+>
+> Founder-directed, distilled from Jack Roberts' three playbooks + the
+> styles.refero.design DESIGN.md model: style census at capture, a sixth
+> reference-anchored "The look" critic (founder names a site they admire;
+> findings carry BOTH measured values), design-DNA extraction (a DESIGN.md
+> the founder pastes into their coding tool, + 1–7 maturity level), and the
+> **design_gallery** table with platform-admin routes gated on
+> `ADMIN_ORGANIZATION_ID` (set it in Render env to the Saido Labs org id to
+> enable; empty = routes hidden). Migration 036 must be applied BEFORE the
+> deploy that writes it.
+>
+> **🚩 FLAGGED, DELIBERATELY NOT BUILT (the founder's explicit sequencing):**
+> 1. **The before/after showcase** — public thumbnails of user-created sites
+>    in a before/after display on the Saibyl site. The design_gallery is its
+>    substrate (screenshots + scores + DNA already persist per check). When
+>    built, it REQUIRES per-user consent to display their site publicly —
+>    do not ship it without a consent field and an opt-in flow.
+> 2. **Winners-vs-losers competitive sweep** (Jack's Level 6): scrape ~10
+>    winning + 10 losing competitors in the founder's niche, diff what
+>    winners share, output an evidenced blueprint — a natural COMPREHENSIVE-
+>    tier paid feature on the website check.
 
 > ### ▶ If you are the overnight build session, read `docs/AUTONOMOUS_BUILD.md` instead.
 >

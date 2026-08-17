@@ -123,6 +123,31 @@ plus an overall gauntlet score. Findings land in `simulation_analysis` with
 evidence pointers like every other number in the product — **no rendered value
 without an artifact field** (the V2 Phase 1+ integrity gate applies).
 
+### 4b². Design intelligence augmentation (added 2026-08-16, founder-directed)
+
+Distilled from Jack Roberts' evaluation playbook and the styles.refero.design
+DESIGN.md model, and wired onto 4b:
+
+- **Style census** — deterministic computed-style aggregation at capture time
+  (fonts/weights, letter-spacing, palette frequencies, radius and shadow
+  vocabularies, spacing histogram + base unit). The census is the receipt for
+  every design claim.
+- **Sixth critic: "The look"** — judges the design *system*. Absolute mode
+  checks the slop tells (default-font stack is an automatic finding, palette
+  coherence, radius vocabulary size, elevation ladder, spacing rhythm, one
+  asset family). Reference mode: the founder names **a site they admire**;
+  both sites' censuses are measured against each other and findings carry
+  both values ("Your body letter-spacing: 0em. Theirs: -0.011em.").
+- **Design DNA** — every check extracts a refero-shaped DESIGN.md artifact
+  (characterization line, token tables with roles, do/don'ts, agent-prompt
+  guide) the founder can paste into their coding tool, plus a 1–7 design
+  maturity level (score = highest level whose signature the site exhibits).
+- **The design gallery** — every check's DNA, census, screenshots, and scores
+  persist as a `design_gallery` row. Platform-admin routes (`/api/admin/…`,
+  gated on `ADMIN_ORGANIZATION_ID`) read the cross-org feed. Strategic
+  substrate for the future before/after showcase — flagged in HANDOFF, not
+  built.
+
 ### 4c. Audience reaction (Phase B)
 
 The synthetic market (existing swarm engine, Founder lens, adversarial cohort
