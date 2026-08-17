@@ -41,6 +41,19 @@ choices.
 
 ## 2026-08-16 — Engineering decisions (session), the load-bearing ones
 
+- **Phase C rides the inoculation machinery unmodified** rather than growing
+  a parallel re-run path: the revised page files as an asset (under the top
+  objection, `disclosure` type, 700-char prompt window — three documented
+  compromises) and `create_resimulation` does what it already does. The
+  right future shape (a `page` asset kind with a nullable objection and a
+  page-sized window) is named in `room_run.py`; widening the machinery is a
+  deliberate later change, not a tonight change.
+- **The revision's "before" is the check the founder already read** — the
+  delta is measured against the number that ordered the fix, not a fresh
+  re-judge of the original (which could drift and flatter the revision).
+- **Room-run creation is free; starting it charges** — inherited from the
+  machinery's own billing posture and kept: the founder decides the spend.
+
 - **Trademark honesty over fake coverage**: no public word-mark search API
   exists, so Track A reports NOT_SEARCHED + the official link rather than
   pretending TSDR status lookups are a search. (Skill rule 4 made binding.)

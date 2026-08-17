@@ -18,6 +18,7 @@ import { useProduct, useStage } from '@/components/stages/useProduct';
 import { SiteStatusChip } from '@/components/website/chips';
 import SiteCheckForm from '@/components/website/SiteCheckForm';
 import SiteCritique from '@/components/website/SiteCritique';
+import SiteRevisionPanel from '@/components/website/SiteRevisionPanel';
 import {
   CHECK_PROGRESS,
   isCheckUnderway,
@@ -544,6 +545,15 @@ export default function AudienceStagePage() {
                   </summary>
                   <div className="mt-3">
                     <SiteCritique check={activeCheck} />
+                  </div>
+                  {/* Fix &amp; prove, per check: keyed so opening a different
+                      check gets a fresh panel, not an inherited draft. */}
+                  <div className="mt-4">
+                    <SiteRevisionPanel
+                      key={activeCheck.id}
+                      snapshotId={activeCheck.id}
+                      productId={product.id}
+                    />
                   </div>
                 </details>
               )}

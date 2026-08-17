@@ -10,6 +10,17 @@ since 2026-08-16).
 
 ---
 
+## 2026-08-16 — Phase C shipped
+
+- Migration **037_page_revisions** applied to production BEFORE the deploy.
+- Live gate: revision `6205bfbc-…` on the piaa snapshot — 3 rounds, best 2,
+  57→64 overall (credibility 42→58), HTML + screenshots stored, 7 fix
+  prompts; room-run eligibility confirmed against a real parent run
+  (creation free; starting the child run is the founder's credit action, by
+  the machinery's own design). One row backfilled after the
+  scores-shape fix (see CRITICS_LOG).
+- Revisions priced 5,000 credits (PROVISIONAL — recalibrate from llm_usage).
+
 ## 2026-08-16 — Design augmentation shipped
 
 - Migration **036_design_gallery** applied to production BEFORE the deploy

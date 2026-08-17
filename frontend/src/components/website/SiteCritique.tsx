@@ -1,4 +1,5 @@
 import { SeverityChip } from './chips';
+import { scoreText } from './score';
 import {
   dimensionWords,
   isDesignDimension,
@@ -33,12 +34,6 @@ const SEVERITY_ORDER: Record<string, number> = { critical: 0, major: 1, minor: 2
 
 /** Findings shown before the rest fold away. */
 const VISIBLE_FINDINGS = 3;
-
-function scoreText(score: number): string {
-  if (score >= 75) return 'text-saibyl-positive';
-  if (score >= 50) return 'text-saibyl-warning';
-  return 'text-saibyl-negative';
-}
 
 function bannerTone(score: number): string {
   if (score >= 75) return 'border-saibyl-positive/30 bg-saibyl-positive/[0.07]';
@@ -115,7 +110,9 @@ function Finding({
 /*  One dimension                                                      */
 /* ------------------------------------------------------------------ */
 
-function DimensionCard({ dimension }: { dimension: SiteDimension }) {
+/** Exported for the revision view, which renders the new page's remaining
+ *  findings through the exact card the original critique used. */
+export function DimensionCard({ dimension }: { dimension: SiteDimension }) {
   const words = dimensionWords(dimension.key);
   const measured = isDesignDimension(dimension.key);
   // Worst first: the serious finding is the one worth the founder's next hour,

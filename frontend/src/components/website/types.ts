@@ -205,3 +205,261 @@ export function maturityLevel(check: SiteCheck): number | null {
   }
   return null;
 }
+
+/* ------------------------------------------------------------------ */
+/*  The revised page                                                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * `POST /website/revision {snapshot_id}` drafts an improved page and has the
+ * same reviewers score it again. The row moves queued → generating → judging
+ * and lands on complete or failed. The backend for this is being built beside
+ * this frontend, so every reader below treats the contract as provisional:
+ * absent fields degrade to "not shown", never to a crash or a fabricated zero.
+ */
+export const REVISION_PATH = '/website/revision';
+
+/**
+ * The room-run router, in one place. The backend's spelling of this prefix is
+ * still settling — if it lands somewhere else, this constant is the only line
+ * that changes. `GET {here}/eligibility?project_id=` and `POST {here}/run`.
+ */
+export const WEBSITE_ROOM_PATH = '/website-room';
+
+export type SiteRevisionStatus =
+  | 'queued'
+  | 'generating'
+  | 'judging'
+  | 'complete'
+  | 'failed';
+
+/**
+ * Anything that is not finished counts as underway, so a status the backend
+ * adds mid-flight (a fourth working state) keeps the poll alive instead of
+ * freezing the panel on an unknown word.
+ */
+export function isRevisionUnderway(status: string | null | undefined): boolean {
+  return Boolean(status) && status !== 'complete' && status !== 'failed';
+}
+
+/** The founder's words for each leg of the draft. */
+export const REVISION_STATUS_WORDS: Record<SiteRevisionStatus, string> = {
+  queued: 'Waiting',
+  generating: 'Writing the new page',
+  judging: 'The reviewers are scoring it',
+  complete: 'Done',
+  failed: 'Did not finish',
+};
+
+export function revisionStatusWord(status: string): string {
+  return (
+    (REVISION_STATUS_WORDS as Record<string, string>)[status] ??
+    'Working on the new page'
+  );
+}
+
+/**
+ * `scores_before` / `scores_after` — `{overall, <dimension>: int}`. Typed
+ * loose because the exact keys are the judge's, not ours; the readers below
+ * pull numbers out defensively.
+ */
+export type RevisionScores = Record<string, unknown>;
+
+/** One paste-ready prompt for the founder's coding tool. */
+export interface FixPrompt {
+  title: string;
+  scope: string;
+  prompt: string;
+}
+
+/** `POST /website/revision`, `GET /website/revision/{id}` — the draft row. */
+export interface SiteRevisionRow {
+  id: string;
+  status: string;
+  snapshot_id?: string;
+  rounds?: number | null;
+  best_round?: number | null;
+  scores_before?: RevisionScores | null;
+  scores_after?: RevisionScores | null;
+  /** Same shape as a check's critique, for the page as it now reads. */
+  critique_after?: SiteCritiqueResult | null;
+  fix_prompts?: unknown;
+  error_message?: string | null;
+  created_at?: string | null;
+}
+
+/** One row of `GET /website/revision?snapshot_id=`, after normalising. */
+export interface SiteRevisionListItem {
+  id: string;
+  status: string;
+  overall_before: number | null;
+  overall_after: number | null;
+  created_at: string;
+}
+
+const OVERALL_KEYS = ['overall', 'overall_score', 'total'];
+
+function scoreOf(
+  scores: RevisionScores | null | undefined,
+  key: string,
+): number | null {
+  if (!scores) return null;
+  const value = scores[key];
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.round(n) : null;
+}
+
+/** The overall number out of a scores object, under any of its spellings. */
+export function overallScore(
+  scores: RevisionScores | null | undefined,
+): number | null {
+  for (const key of OVERALL_KEYS) {
+    const n = scoreOf(scores, key);
+    if (n !== null) return n;
+  }
+  return null;
+}
+
+export interface ScoreDelta {
+  key: string;
+  before: number | null;
+  after: number | null;
+}
+
+/**
+ * The per-dimension rows of the before/after header: every key either side
+ * carries a number for, minus the overall. Order follows the after scores —
+ * the page as it now stands — with before-only stragglers appended.
+ */
+export function scoreDeltas(
+  before: RevisionScores | null | undefined,
+  after: RevisionScores | null | undefined,
+): ScoreDelta[] {
+  const keys: string[] = [];
+  for (const source of [after, before]) {
+    if (!source) continue;
+    for (const key of Object.keys(source)) {
+      if (OVERALL_KEYS.includes(key.toLowerCase())) continue;
+      if (scoreOf(after, key) === null && scoreOf(before, key) === null) continue;
+      if (!keys.includes(key)) keys.push(key);
+    }
+  }
+  return keys.map((key) => ({
+    key,
+    before: scoreOf(before, key),
+    after: scoreOf(after, key),
+  }));
+}
+
+/**
+ * A list row as this frontend spells it, from whatever the backend sent.
+ * The listing's field names are the loosest part of the contract, so each
+ * number is probed under its plausible spellings and an unusable row (no id)
+ * is dropped rather than rendered blank.
+ */
+export function asRevisionListItem(raw: unknown): SiteRevisionListItem | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as Record<string, unknown>;
+  const id = typeof row.id === 'string' && row.id ? row.id : null;
+  if (!id) return null;
+
+  const first = (...values: unknown[]): number | null => {
+    for (const value of values) {
+      if (value === null || value === undefined || value === '') continue;
+      const n = Number(value);
+      if (Number.isFinite(n)) return Math.round(n);
+    }
+    return null;
+  };
+
+  return {
+    id,
+    status: typeof row.status === 'string' ? row.status : 'queued',
+    overall_before:
+      first(row.overall_before, row.before_overall, row.score_before) ??
+      overallScore(row.scores_before as RevisionScores | null | undefined),
+    overall_after:
+      first(row.overall_after, row.after_overall, row.score_after) ??
+      overallScore(row.scores_after as RevisionScores | null | undefined),
+    created_at: typeof row.created_at === 'string' ? row.created_at : '',
+  };
+}
+
+/** The prompt blocks off a draft row, with malformed entries dropped. */
+export function fixPrompts(row: SiteRevisionRow): FixPrompt[] {
+  const raw = row.fix_prompts;
+  if (!Array.isArray(raw)) return [];
+  const out: FixPrompt[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const p = entry as Record<string, unknown>;
+    const prompt =
+      typeof p.prompt === 'string' && p.prompt.trim()
+        ? p.prompt.trim()
+        : typeof p.text === 'string'
+          ? p.text.trim()
+          : '';
+    if (!prompt) continue;
+    out.push({
+      title:
+        typeof p.title === 'string' && p.title.trim()
+          ? p.title.trim()
+          : `Fix ${out.length + 1}`,
+      scope: typeof p.scope === 'string' ? p.scope.trim() : '',
+      prompt,
+    });
+  }
+  return out;
+}
+
+/* ------------------------------------------------------------------ */
+/*  The room run                                                       */
+/* ------------------------------------------------------------------ */
+
+/** `GET /website-room/eligibility?project_id=` — may the room read the new page? */
+export interface RoomEligibility {
+  eligible: boolean;
+  /** Why not, in the backend's own sentence, when not. */
+  reason: string;
+}
+
+export function asEligibility(body: unknown): RoomEligibility | null {
+  if (!body || typeof body !== 'object') return null;
+  const row = body as Record<string, unknown>;
+  if (typeof row.eligible !== 'boolean') return null;
+  return {
+    eligible: row.eligible,
+    reason: typeof row.reason === 'string' ? row.reason.trim() : '',
+  };
+}
+
+/**
+ * The child run's id out of `POST /website-room/run`'s reply, under whichever
+ * spelling it arrives. The simulation-flavoured keys are probed first because
+ * the id's only use is the `/app/simulations/{id}/run` surface; the bare `id`
+ * comes last since it could plausibly be some other row echoing itself.
+ */
+export function childRunId(body: unknown): string | null {
+  if (!body || typeof body !== 'object') return null;
+  const row = body as Record<string, unknown>;
+  for (const key of [
+    'child_simulation_id',
+    'simulation_id',
+    'child_run_id',
+    'run_id',
+    'child_id',
+  ]) {
+    const value = row[key];
+    if (typeof value === 'string' && value) return value;
+  }
+  for (const key of ['simulation', 'child', 'run']) {
+    const nested = row[key];
+    if (nested && typeof nested === 'object') {
+      const id = (nested as Record<string, unknown>).id;
+      if (typeof id === 'string' && id) return id;
+    }
+  }
+  const id = row.id;
+  return typeof id === 'string' && id ? id : null;
+}

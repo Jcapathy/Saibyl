@@ -11,6 +11,21 @@ your check could only have passed for the reason you think it did.*
 
 ---
 
+## 2026-08-16 — Phase C live gate (two catches)
+
+- **SDK guards are features you meet in production**: the Anthropic SDK
+  refuses non-streaming requests whose max_tokens could run ten minutes —
+  the 32K revision ceiling tripped it live. Large ceilings stream and
+  accumulate; the mocked tests could never see it.
+- **Symmetry between paired artifacts is a contract**: scores_before nested
+  its dimensions, the generator's scores_after was flat — every
+  after-dimension rendered as None. Both sides now go through one lifter
+  from full critiques. When two fields exist to be compared, derive them
+  through the same function or they will drift.
+- The gate's result, for the record: a real page improved 57→64 overall in
+  three rounds (best: 2), credibility +16, with seven verbatim-pasteable fix
+  prompts — the §5 proof-of-delta standard, live.
+
 ## 2026-08-16 — The design-augmentation live gates (three attempts, four lessons)
 
 - **Validation strictness must match the receipt's nature.** Forcing

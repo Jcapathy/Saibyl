@@ -8,6 +8,31 @@ running delta record.
 
 ---
 
+## 2026-08-16 — Phase C: fix & prove (PRD §4d)
+
+- `capture.py` gains `capture_html` — renders a provided HTML string through
+  the same screenshot/census pipeline, with every outbound request aborted
+  (a generated page must not beacon or stall on a dead CDN).
+- New `services/website/revise.py`: the gauntlet loop — generate a complete
+  self-contained page (32K streaming ceiling), render it, re-judge with the
+  six critics, iterate to a target or 3 rounds; best round wins, strictly —
+  a regression is recorded but never shipped. Fact discipline: the page's
+  own words are the only fact source; missing facts render as
+  `[OWNER: fill in]`. Plus the deterministic fix-prompt composer (one
+  paste-ready block per dimension + a rebuild-to-DNA block).
+- New `page_revisions` table (migration 037) + revision routes under
+  `/api/website` (create/status/list, HTML download, before/after screenshot
+  passthrough); revisions cost 5,000 credits (PROVISIONAL). Admin gallery
+  feed now joins the latest complete revision — before/after-ready.
+- The prove leg rides the EXISTING inoculation machinery untouched:
+  `/api/website-room` files the revised page's text as an asset on the
+  parent run's top objection and calls `create_resimulation` (same copied
+  agents = same audience); charging stays at the simulation start route.
+  Known compromises documented in `room_run.py`: one-objection filing,
+  `disclosure` asset type, the 700-char asset prompt window.
+- `llm_client.llm_vision` streams when max_tokens > 8192 — the SDK refuses
+  non-streaming ten-minute-class requests (found live).
+
 ## 2026-08-16 — Design-intelligence augmentation (PRD §4b²)
 
 - `capture_website` now collects a **style census** (deterministic

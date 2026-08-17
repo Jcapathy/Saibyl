@@ -1,4 +1,8 @@
-import type { SiteCheckStatus, SiteFindingSeverity } from './types';
+import {
+  revisionStatusWord,
+  type SiteCheckStatus,
+  type SiteFindingSeverity,
+} from './types';
 
 /**
  * The two chips of the site check, in the codebase's chip idiom — positive
@@ -57,6 +61,33 @@ export function SiteStatusChip({ status }: { status: SiteCheckStatus }) {
       className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[10.5px] font-medium ${cls}`}
     >
       {STATUS_WORDS[status] ?? status}
+    </span>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+/**
+ * The draft's chip, in the same colours as the check's: gold while the worker
+ * is on it, green when done, red when it died. Typed on `string` because the
+ * revision contract is still settling — an unknown status renders in the
+ * waiting style with the fallback words rather than throwing.
+ */
+const REVISION_STYLES: Record<string, string> = {
+  queued: 'border-white/[0.12] bg-white/[0.04] text-saibyl-silver',
+  generating: 'border-saibyl-gold/40 bg-saibyl-gold/10 text-saibyl-gold',
+  judging: 'border-saibyl-gold/40 bg-saibyl-gold/10 text-saibyl-gold',
+  complete: 'border-saibyl-positive/40 bg-saibyl-positive/10 text-saibyl-positive',
+  failed: 'border-saibyl-negative/40 bg-saibyl-negative/10 text-saibyl-negative',
+};
+
+export function RevisionStatusChip({ status }: { status: string }) {
+  const cls = REVISION_STYLES[status] ?? REVISION_STYLES.queued;
+  return (
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[10.5px] font-medium ${cls}`}
+    >
+      {revisionStatusWord(status)}
     </span>
   );
 }
