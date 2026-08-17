@@ -46,6 +46,7 @@ One engine, three founder-language jobs:
 | **Evaluate my idea** | Does this pain exist? Who pays? What kills it? | ICP synthesis → swarm → objection canonicalization *(live)* |
 | **Test my marketing** | Which message wins, for which goal? | Matched swarms + objective metrics + virality *(built; first live multi-variant run owed)* |
 | **Perfect my website** | Why doesn't my site convert, and what exactly do I change? | Page rendering → critic gauntlet → audience reaction → revised page → re-sim proof *(to build)* |
+| **Check it's clear to build** | Has someone already patented or trademarked this? | USPTO clearance: trademarks, prior art, pending landscape → tiered risk report *(to build — §11)* |
 
 What Saibyl is **not**, for now: a crisis-PR product, a billing exercise, or an
 enterprise intelligence platform. The oracle heritage stays in the DNA, not the
@@ -219,10 +220,17 @@ for the founder's explicit approval before the next. No multi-phase responses.
 | Phase | Scope | Gate |
 |---|---|---|
 | **A — Realignment & debt** | Crisis shelving (§7), tiered intake + guided form (§3), report register (§5), debt items (§8) | pytest / tsc / eslint green · an idea-stage founder completes a free run with no document |
+| **IP — Clearance tab** (§11) | Backend USPTO client (ported from the reference server), three-track search, tiered report artifact, the new tab UI, QUICK free teaser, pricing stage | a real invention description produces a STANDARD report with claim deep-reads and honest NOT_SEARCHED/blind-spot statements, and the QUICK teaser runs free end-to-end |
 | **B — Website: see & judge** | Ingestion + rendering (§4a), critic gauntlet (§4b), audience reaction (§4c), unified report | a live run against a real founder site produces a critique the founder would forward |
 | **C — Website: fix & prove** | Revised page generation, before/after, re-sim delta, paste-ready fixes (§4d), cost stages (§4e) | a re-run shows a measured improvement on a real site; paste-ready prompts apply cleanly |
 | **D — The wow gate** | Five real founder ideas end-to-end vs. §5; the overdue cold read (fresh evaluator, no docs, real browser, deployed site); first live multi-variant run | the founder reads all five reports and would pay for each — then, and only then, the first email |
 | **E — Deferred** | Stripe tiers, Crisis return, calibration (V2 §10), cohort/bootcamp deals | out of scope until D passes |
+
+Phase IP's position in the order is the founder's call; the recommendation
+is **IP before B**: it is the smaller build (HTTP APIs only — no rendering
+infra), its methodology is fully specified by the founder's skill, the USPTO
+APIs are free so margin is LLM-only, and it monetizes the Validate stage the
+idea-brief intake just opened.
 
 Standing verification gates (V2 §12) apply to every phase: `pytest`,
 `tsc --noEmit`, `eslint --quiet`, a live end-to-end run, the numeric-integrity
@@ -240,3 +248,58 @@ you think it did.**
    Gauntlet). One constant, no scattered strings.
 2. Launch email scope and the welcome offer (one free run vs. idea run +
    website run) — deferred by the founder until the product clears Phase D.
+3. Final founder-facing name for the IP clearance tab (working name: IP
+   Check). Same one-constant rule.
+
+## 11. IP clearance (added 2026-08-16, founder-supplied)
+
+A new tab: a founder submits a name, an invention description, or both, and
+gets a tiered USPTO clearance report — trademarks, granted-patent and
+published-application prior art, the pending/provisional landscape, and
+(premium) examiner-behavior intelligence. Born from the founder's own
+experience: ideas he researched turned out to have 50–100 companies with
+patents already on them. The tab answers "is this even mine to build?" —
+which makes it the natural companion to the Validate stage.
+
+**Spec of record:** the `ip-clearance-search` skill (installed at
+`~/.claude/skills/ip-clearance-search/`, source archive in
+`Saido Labs LLC/Provisional Patent MCP and Skill/`). Its methodology is the
+product's methodology: Stage-0 classification (name vs invention vs both),
+three-axis query decomposition (FUNCTION / STRUCTURE / DOMAIN) with
+patent-ese translation, Track A trademarks, Track B prior art with claim
+deep-reads, Track C pending-landscape honesty, Track D examiner behavior,
+GREEN/YELLOW/RED risk tiers, and the non-negotiable rules (never fabricate
+numbers/titles/owners; empty ≠ cleared; date-stamp everything; the
+not-legal-advice disclaimer on every output).
+
+**Architecture.** Production calls USPTO APIs directly from the backend — the
+founder's `uspto-patent-mcp` server (complete TypeScript implementation in
+the same folder, `dist/` bundle included) is the reference client: port its
+API-client patterns, the documented quirks (404 = zero hits; TSDR XML
+defaults; date-format chaos; PTAB field-name drift), `[NOT_FOUND]`
+anti-hallucination discipline, key masking, response caps, and TTL caching
+into the Python backend. Keys: `USPTO_ODP_API_KEY` + `USPTO_TSDR_API_KEY`
+(separate registrations; the founder holds both) as Render env vars —
+production traffic runs on Saibyl's keys with per-org rate limiting, and
+PatentsView is the no-key fallback. LLM usage (query decomposition, claim
+reading, report composition) goes through the tiered-model policy and
+`llm_usage` like every other stage; the USPTO APIs themselves are free, so
+margins here are LLM-only — price it accordingly in `agent_pricing.py`.
+
+**Tier mapping** (from the skill, mapped to billing): QUICK = free teaser
+(exact-name trademark check + top-10 keyword sweep, one screen); STANDARD =
+in-plan, priced per run (CPC sweep, 3–5 claim deep-reads, risk tiers, search
+record); COMPREHENSIVE = premium (assignee sweeps, continuity mapping,
+examiner behavior, watch-list).
+
+**Report discipline.** The clearance report is a first-class artifact like
+`simulation_analysis`: versioned JSON per the skill's output contract +
+`queries_run` with hit counts so any run is reproducible, rendered with the
+same evidence-pointer drill-down ethos. Every render and export carries the
+skill's disclaimer verbatim. Trademark results without a real search return
+NOT_SEARCHED, never "clear".
+
+**Data model sketch:** `clearance_runs` (org, project, item, type_hint, tier,
+status, quote/credits), `clearance_findings` (per-reference: number, title,
+owner, dates, status, risk tier, claim elements, differences), the JSON
+artifact on the run row. RLS `org_isolation` as always.
