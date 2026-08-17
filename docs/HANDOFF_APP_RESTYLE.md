@@ -1,5 +1,19 @@
 # Handoff — the app-shell light restyle
 
+> ### ✅ 2026-08-17 (later) — EXECUTED through the critic pass; ONE step owed
+>
+> Waves 0–2 are done and committed on `v3-prd` (`ac28cb4`, pushed): token
+> foundation, all pages via ten parallel agents, shared-palette remaps,
+> the tree-wide dark sweep clean, three blind critics run and their
+> agreed findings applied, screenshots read by eye at 1440/390 (including
+> data-bearing report charts via the live-run account). Gates: build,
+> eslint, vitest 16/16, backend 1,318 passed. **Owed: the founder runs
+> `git push origin v3-prd:master`** (pure fast-forward; the session's
+> permission layer declined master pushes) — then verify with the
+> discriminator in INFRA_LOG's 2026-08-17 entry and read a live
+> screenshot. Lessons and open styling debt: CRITICS_LOG 2026-08-17;
+> the in-app color law: DECISIONS_LOG 2026-08-17.
+
 **Written 2026-08-17 for a cold context window. Read this whole file before
 touching anything, then read `docs/HANDOFF.md` §2/§2a (standing rules and
 failure classes) and the five logs (`ARCHITECTURE_LOG`, `INFRA_LOG`,

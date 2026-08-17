@@ -8,6 +8,25 @@ running delta record.
 
 ---
 
+## 2026-08-17 — The app-shell light restyle, waves 1–2: pages, charts, critics
+
+- Ten parallel agents with disjoint file ownership restyled every page
+  behind the login on top of wave 0's token flip (auth re-imagined on
+  paper; rail, run setup, IP Check, website intel, dashboard/guide/
+  settings, simulations/reports/prospects). Charts retuned for a white
+  ground (SentimentArcPlot, SectionRenderer, HeadlineStats and friends):
+  rgba(99,139,202,.18) grids, ink labels, bright hues as fills only.
+- Shared palettes nobody owned were remapped centrally: `CHART_COLORS`
+  and `gtm.TONE_COLOR` now hold values that pass 4.5:1 as text on white
+  (both color text directly). `ReportExport` was on no agent's list and
+  was caught by the tree-wide sweep — the sweep is not optional.
+- Three blind visual critics reviewed the rendered screenshots; their
+  agreed findings were applied the same day (the color-grammar law now in
+  DECISIONS_LOG; details and open debt in CRITICS_LOG).
+- The jargon scanner (`src/test/source.ts`) now reads `title:`/`q:`/`a:`
+  object keys — the GuidePage data arrays were rendering "A/B testing"
+  under a green test.
+
 ## 2026-08-17 — The app-shell light restyle, wave 0: the theme foundation
 
 - The whole app behind the login moves to the landing page's light system

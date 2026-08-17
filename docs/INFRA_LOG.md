@@ -10,6 +10,26 @@ since 2026-08-16).
 
 ---
 
+## 2026-08-17 — The app-shell light restyle: built, proven, push to master OWED
+
+- Branch `v3-prd` pushed at `ac28cb4` — four commits: wave 0 (token
+  foundation), dead-landing cleanup, wave 1 (60 files, every page), the
+  critic pass. Frontend-only; no migrations; backend suite re-run anyway
+  (1,318 passed, 4 skipped).
+- **OWED (founder, one command): `git push origin v3-prd:master`** — the
+  session's permission layer declined pushes to master, so the deploy step
+  stops here despite the handoff's authorization. `origin/master`
+  (`64bc513`) is this branch's direct base, so the push is a pure
+  fast-forward; CI (gated) then Render deploys both services. The main
+  checkout's local master will need a `git pull` afterwards.
+- **Deploy discriminator, once pushed**: the served CSS bundle must
+  contain `5268e9` (the new primary-gradient stop) and must NOT contain
+  `0A0F1C` (the dark ground) — grep the CSS asset referenced by the live
+  index.html, then screenshot the live /login and read it.
+- Still owed in Render env (unchanged): `USPTO_ODP_API_KEY`,
+  `USPTO_TSDR_API_KEY` (values in repo root `.env`),
+  `ADMIN_ORGANIZATION_ID=231b7f17-d17c-4f6e-b530-f0196acd841b`.
+
 ## 2026-08-16 — Phase C shipped
 
 - Migration **037_page_revisions** applied to production BEFORE the deploy.

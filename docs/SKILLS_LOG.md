@@ -8,6 +8,26 @@ product features that began as skills.
 
 ---
 
+## 2026-08-17 — Authed-app screenshot rig (restyle proof harness)
+
+Reusable playwright scripts for reading the deployed-quality app by eye,
+kept in the session tmp this pass but worth reconstructing from this note:
+- **Login + route walk**: fill the login form with a disposable account
+  (HANDOFF_POLISH §6), wait for `**/app/**`, shoot each route at 1440 and
+  390 full-page.
+- **The scroll-container trap**: the app shell scrolls inside `<main>`, so
+  before `screenshot(full_page=True)` run JS that sets every
+  `overflow:auto` element to `visible` and `h-screen` to `auto` — otherwise
+  you capture one viewport and call it the page.
+- **CORS**: the deployed backend refuses a localhost origin; run
+  `VITE_PROXY_TARGET=https://saibyl-backend.onrender.com npx vite dev` and
+  point the app at `/api` (the proxy override added to vite.config.ts).
+- **Critic gauntlet on the shots**: three blind sub-agents with distinct
+  lenses (hierarchy/consistency; accessibility/craft; reference-anchored
+  brand coherence with the landing screenshot as ground truth), each
+  ordered to name elements and rank severity, each given a
+  strengths-to-preserve requirement.
+
 ## 2026-08-16 — Distilled methodologies (Jack Roberts research corpus)
 
 Transcripts pulled and distilled (saved in the session's tmp; distillations

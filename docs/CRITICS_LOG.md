@@ -11,6 +11,53 @@ your check could only have passed for the reason you think it did.*
 
 ---
 
+## 2026-08-17 — The app-shell restyle (waves 0–2): lessons and the critic round
+
+- **A name-stable token remap flips an app wholesale.** Keeping the dark-era
+  token NAMES (`void`, `gold`, `platinum`) and changing only their values
+  converted ~290 call sites without touching them; ten agents then only had
+  to chase hardcoded remnants. The corollary: hardcoded hexes are the debt,
+  tokens are the leverage.
+- **The jargon scanner's third blind spot, same class as the first two.**
+  GuidePage's tips/FAQ live in data arrays; the scanner read `body:` but not
+  `title:`/`q:`/`a:`, so "A/B testing" shipped in two rendered strings under
+  a green jargon test. Copy fixed (message test / versions) and the scanner
+  widened to those keys. Prior instances: `label=` attributes, entity-bearing
+  sentences. Lesson stands: every copy-carrying key the codebase invents
+  must be added to `renderedStrings` the day it is invented.
+- **Full-page screenshots of the app capture one viewport.** The shell
+  scrolls inside `<main>` (h-screen + overflow-auto), so `full_page=True`
+  sees only the fold; every below-the-fold chart went unverified until the
+  scroll containers were expanded via JS before the shot. Companion to the
+  IntersectionObserver lesson from the landing page: know what your capture
+  can actually see.
+- **Tailwind's media-strategy `dark:` variants are a sleeper.** With
+  `class="dark"` removed and no `darkMode` config, `dark:` classes bind to
+  `prefers-color-scheme` — dark-OS visitors would have gotten re-darkened
+  controls. Strip `dark:` variants when committing to one light look.
+- **CORS makes localhost → production API impossible from the browser;**
+  the dev-server proxy (server-side, origin-less) is how authed pages get
+  screenshot against the deployed backend (`VITE_PROXY_TARGET`).
+- **The critic round** (three blind reviewers on the shots: hierarchy/
+  consistency, accessibility/craft, brand-vs-landing): the shared verdict
+  was "typography coherent, color grammar not." Fixed the same day: the
+  landing's gradient-pill primary restored app-wide via one stylesheet rule;
+  stat numerals de-tinted (ink; icons carry accents); passive chips left
+  action-blue; one green "Finished" idiom; the 390px wizard overflow (the
+  one true layout bug); the wordmark corrected to mixed-case + BY SAIDO
+  LABS; "1 person" pluralized; truncated persona labels wrap; auth labels
+  a contrast tier up; signup's Terms/Privacy links pointed at the real
+  routes (they were `href="#"`).
+- **Open debt the critics named, deliberately not fixed in this pass** (IA/
+  copy/product, not styling): the credits module reading "1,500 · About 0
+  more runs" (free grant < paid-shape run price — product tension, not a
+  bug); "how they took it: 0.00" repeated on every feed item; platform
+  chips rendering "R"/"x"; sidebar labels vs page titles ("Home" → "Your
+  products", "Every run" → "Your runs"); "Start simulating in minutes" on
+  signup (verb form skirts the banned-noun scan); the audience step's four
+  upload entry points; equal-height dead air on the report's "Where they
+  were" card; money format drift on Settings ("$20" vs "$20.00").
+
 ## 2026-08-17 — A parked deliverable reads as shipped
 
 The founder approved the light redesign ("this is the look and feel of

@@ -8,6 +8,34 @@ choices.
 
 ---
 
+## 2026-08-17 — The app goes light: the in-app color law
+
+Executing the founder's order ("I love the new aesthetic and want the whole
+site to have this look"), the whole app behind the login moved to the
+landing page's light system. Decisions made in the move, so a future
+session edits inside them rather than re-deriving:
+
+1. **Token names are law, values are theme.** The `saibyl-*` tokens keep
+   their dark-era names (`void`=paper, `gold`=blue accent, `platinum`=ink)
+   so history and muscle memory survive; new code may use the honest
+   aliases (`paper`, `ink`, `blue`). Do not rename the legacy tokens —
+   ~290 call sites ride them.
+2. **Blue owns actions; color only encodes meaning.** Primary controls
+   carry the landing's blue→indigo gradient (one stylesheet rule on
+   `.bg-saibyl-gold`/`.bg-saibyl-blue`); stat numerals are ink; passive
+   chips are neutral tints. Violet is brand/emphasis, green/amber/rose are
+   semantic status. Amber is an app-only word (the landing has none) —
+   accepted deliberately: a working tool needs a caution tier.
+3. **Every text-bearing token value holds ≥4.5:1 on white and paper**;
+   bright hues (#2fbf8a, #ff6e79, #f59e0b, #8b73ee) are fills/dots only,
+   each paired with a darker text tone (#0e7d55, #d92d3c, #b45309,
+   #6a4fe0). Chip idiom: bright fill at /10, border at /40, darker
+   same-hue text.
+4. **One look, no dark mode.** `class="dark"` is gone and `dark:` variants
+   were stripped (media strategy would re-darken for dark-OS users).
+   `src/remotion/` keeps the dark brand — it is the standalone promo
+   video, not an app surface.
+
 ## 2026-08-17 — The light landing page ships to production
 
 Scope of this pass: the PUBLIC site — LandingPage in the Saido aesthetic
