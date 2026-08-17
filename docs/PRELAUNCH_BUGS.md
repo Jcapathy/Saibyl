@@ -1,0 +1,309 @@
+# Pre-launch bug register
+
+**Opened 2026-08-17.** Produced by a four-method hunt after the app-shell
+restyle: a brand-new production account walked end to end with console and
+network capture, three blind static audits (dead ends, frontend↔backend
+contract, error handling and money), and a live pipeline exercise of all five
+founder stages. Ranked by what it costs the founder who hits it.
+
+**Evidence discipline used here:** every P0 below is marked either
+**[verified]** — I reproduced it against production data or read both sides of
+the contract myself — or **[audit]** — reported by a static audit with a
+file:line I have not personally re-run. Nothing is listed on reasoning alone.
+Two independent methods (a visual critic reading pixels and a contract audit
+reading code) landed on the same defect twice; those are noted.
+
+---
+
+## What is NOT broken (checked, so nobody re-checks it)
+
+- **Migrations 026–031 are applied.** Two migration files still carry stale
+  `-- NOT APPLIED` headers, which sent an audit into a panic. All ten tables
+  (`gtm_discovery_runs`, `subject_briefs`, `credit_topups`, `persona_packs`,
+  `custom_persona_packs`, `simulation_variants`, `page_revisions`,
+  `website_snapshots`, `design_gallery`, `clearance_runs`) exist in
+  production. **Fix: delete the stale headers**, they are a trap.
+- **Signup works end to end** — a brand-new account was created, landed on
+  `/app/home`, and every empty-state page rendered with **zero console errors
+  and zero failed requests**. Empty states across home, reports, IP check,
+  settings, runs, uploads, audiences, companies, messages, guide are all
+  well-formed with working CTAs.
+- **Product creation works** (`POST /projects` → 200, product appears).
+- **Endpoint existence and method: clean.** ~60 frontend calls all resolve to
+  a real backend route with the right verb; no route shadowing.
+- **The five-stage pipeline runs.** All five founder stages cleared intake →
+  idea brief → audience synthesis → confirm → create → prepare → start with
+  200s (see §Pipeline at the bottom).
+
+---
+
+## P0 — Launch blockers
+
+### P0-1 · The flagship "prove it with the room" leg can never run **[verified]**
+`backend/app/api/website_room.py:47` gates on
+`revision.get("revision_html") or revision.get("revision_text")`.
+**Neither column exists.** `037_page_revisions.sql:56` declares `html_path`,
+and `workers/revision_tasks.py:181` writes `"html_path": paths["html"]`.
+`services/website/room_run.py:248,252` reads the same two phantom keys.
+→ Every "Prove it with the room" click returns *"That revised page hasn't
+finished building yet"* on a page that finished building. The proof-of-delta
+leg is the PRD's headline claim for the flagship.
+**Fix:** read `html_path` (and fetch the stored HTML) in `_revision_is_complete`
+and in `room_run.py`. One-line gate change plus the body fetch.
+
+### P0-2 · Every event in the run feed reads "how they took it: 0.00" **[verified]**
+`frontend/src/pages/SimulationDetailPage.tsx:643` reads
+`(evt.metadata)?.sentiment`; the backend writes a **flat `valence` column**
+(`event_measurement.py:247`).
+**Production proof:** of 2,798 measured events, **2,794 have `valence` and
+exactly 0 have `metadata.sentiment`.** Every event on every run since the
+Phase-1 rewrite has rendered 0.00.
+Two independent methods found this: a blind visual critic ("a column of
+identical zeros reads as broken placeholder data") and the contract audit.
+**Fix:** read `evt.valence`, render null as "not scored" rather than 0.00.
+
+### P0-3 · "Watch it live" shows nothing, forever **[verified]**
+Two independent causes, either alone fatal:
+1. **Nothing ever publishes simulation events.** The only `r.publish` in the
+   whole backend is `report:{report_id}:progress`
+   (`report_agent.py:840`). The bridge subscribes to `simulation:*:events`,
+   which no code writes to.
+2. **The vocabularies do not overlap.** The frontend subscribes to
+   `agent_action`, `round_start`, `round_end`, `simulation_completed`
+   (`SimulationRunPage.tsx:66-72`); the backend's `EventType` is
+   `Literal["post","comment","react","dm"]` (`base_adapter.py:55`). A third
+   vocabulary exists in `event_schema.py:47` that nothing produces.
+→ The founder clicks "A run is going now — watch it" and sits on *"Waiting for
+the first reaction…"* while a paid run executes fine server-side.
+**Fix:** publish measured events to `simulation:{id}:events` from the runner
+and align on one vocabulary (prefer the adapter's, mapped at the edge). Until
+then, the poll-only fallback should at least drive the counters.
+
+### P0-4 · The app tells a brand-new founder they have zero runs **[verified]**
+Seen on a brand-new account: sidebar shows **"Credits left 1,500"**, a **100%
+full bar**, and **"About 0 more runs — add more"** simultaneously.
+Both numbers are arithmetically correct and neither answers the question:
+`AppLayout.tsx:192` computes `floor(balance / standard_run_credits)` =
+`floor(1500 / 3014)` = **0**, but `standard_run_credits()` is the price of a
+**100-agent, 5-round** run that a free account is **capped out of configuring**
+(`TIER_CAPS["free"].max_agents = 25`). A run at the free cap costs **1,273**,
+so the grant genuinely covers **one full free run with 227 credits spare** —
+which is exactly what the landing page ("1 COMPLETE RUN · 25-PERSON ROOM") and
+`PRICING_GUIDE.md` ("1 capped") promise.
+→ The free run is the entire launch motion, and the chrome denies it on every
+page. Worse: a founder who tops up $10 (1,500 credits) still sees "About 0".
+**Fix:** `/billing/credits` must return the price of a run **at this tier's
+cap**; the sidebar divides by that. Backend already returns `caps`
+(`api/billing.py:231`) but not a tier-appropriate price, so this cannot be
+fixed frontend-only.
+
+### P0-5 · Settings tells free accounts they are on the $99/mo Founder plan **[audit]**
+`SettingsPage.tsx:85-93` — `LEGACY_PLAN_ALIAS` maps `free → 'founder'`, so a
+non-paying account renders **"Your plan: Founder · $99/mo"**, while
+`AppLayout.tsx:256` renders the raw plan **"FREE"** one panel away. Two
+surfaces, opposite answers, on the page that asks for money. Second-order: a
+**failed** `/billing/status` also lands here (`billing === null` →
+`resolvePlan(undefined)` → `'founder'`), fabricating a billing fact from an
+error.
+**Fix:** alias only genuinely legacy names; render `free` as Free with the
+grant, and render an error state when billing fails to load.
+
+### P0-6 · The quoted price is 8–14% below the price charged **[audit]**
+`run_quote.py:136-165` (`issue_quote`) and `api/billing.py:275-281`
+(`/billing/estimate-cost`, which drives the Run Configurator's live price) both
+call `estimate_simulation_cost` **without `subject_brief`**. But
+`reconcile_run_cost` charges the measured difference afterwards
+(`analysis_tasks.py:173-176`), and `max(0, …)` makes it one-way: overruns are
+charged, underruns never refunded. Executed gap for any project with uploaded
+material — the main path: free cap +93 (7.9%), standard **+278 (10.2%)**, large
+**+1,148 (14.3%)**. The founder is never told; `shortfall` appears in zero
+frontend files.
+This violates the codebase's own rule at `RunConfigurator.tsx:250`: *"the cost
+shown must be the cost charged."*
+**Fix:** thread `subject_brief` into both quote paths.
+
+### P0-7 · The flagship costs more than the entire free grant **[audit]**
+`website_check_credits()` = **1,750**; free grant = **1,500**. Website
+Intelligence is the PRD's launch headline, and a new founder fills in the form
+then gets a hard 402 *after* doing the work (`api/website.py:153-161`);
+`SiteCheckForm.tsx` never shows the price up front. Also unaffordable on the
+grant: page revision (5,000), IP check STANDARD (2,000) / COMPREHENSIVE
+(6,000). (IP check QUICK is free and is the form default, so that first click
+does work.)
+**Fix (founder's call):** raise the grant above the flagship's price, or price
+a free tier of the check, or show the price and the shortfall *before* the
+work. Add the missing test asserting the grant covers the flagship.
+
+### P0-8 · "Continue with Google" is a dead end on both auth screens **[verified]**
+`LoginPage.tsx:88-91` / `SignupPage.tsx:120-123` call
+`supabase.auth.signInWithOAuth` and **never exchange the Supabase session for
+an app JWT** (the TODO says so). `onAuthStateChange`/`getSession` appear
+nowhere in `src/`. **Production proof:** all 11 accounts are email/password;
+**zero** have a Google identity — nobody has ever completed this flow.
+It is the first and most prominent button on both pages.
+**Fix:** wire the session→JWT exchange, or remove the button until it exists.
+Removing is a 10-minute change; the button is currently the default path a new
+visitor takes.
+
+### P0-9 · Paying Growth and Agency customers are capped at 15 runs/month **[audit]**
+`stripe_service.py:37-41` — `PLAN_LIMITS` holds only `starter`/`pro`/
+`enterprise`; line 394 falls back to `starter` for every V2 tier name. Growth
+($299, paid for 19 runs) and Agency ($999, paid for 66) are both enforced at
+**15** by `api/simulations.py:503` with a bare 402. An Agency customer loses 51
+runs of paid capacity. `AppLayout.tsx:281-288` documents this exact bug as the
+reason the sidebar's counters were removed — the **display** was fixed, the
+**enforcement** was not.
+**Fix:** add `founder`/`growth`/`agency` to `PLAN_LIMITS`. (Gated behind the
+Stripe tier migration for billing, but the limit table is independent.)
+
+### P0-10 · No error boundary anywhere → any render throw is a permanent white page **[audit]**
+Zero matches for `componentDidCatch|ErrorBoundary|getDerivedStateFromError|
+errorElement` in the frontend; no `@app.exception_handler` in
+`backend/app/main.py` either. This is a **severity multiplier** on every other
+finding — and there is a live path to it: `LoginPage.tsx:76-82` casts an error
+`detail` as a string, but a FastAPI 422 returns an **array**, so
+`setError(array)` throws *"Objects are not valid as a React child"* → blank
+login page with no recovery but a manual reload.
+**Fix:** one boundary at the router root + gate `errors.ts:23`. Cheapest
+highest-value fix in this register.
+
+### P0-11 · IP Check 503s in production right now **[verified — env, not code]**
+`USPTO_ODP_API_KEY` and `USPTO_TSDR_API_KEY` are still unset in the Render
+backend env, so one of four core nav items returns an honest 503. Keys are
+probe-validated and sit in the repo root `.env`. Also owed:
+`ADMIN_ORGANIZATION_ID=231b7f17-d17c-4f6e-b530-f0196acd841b`.
+**Fix:** founder pastes three env vars into Render. No code.
+
+---
+
+## P1 — Wrong data, or controls that do nothing
+
+| # | What | Where | Consequence |
+|---|---|---|---|
+| P1-1 | Product filter silently dropped | `BuyersStagePage.tsx:142` links `?project_id=`; `ProspectsPage` never reads or forwards it | Founder sees **every** company in the workspace believing they are this product's buyers. Silently wrong beats a 404. |
+| P1-2 | Revision before/after table always empty | writer nests `{overall, dimensions:{}}` (`revision_tasks.py:215`), reader expects flat (`website/types.ts:262`) | Per-dimension deltas render as nothing. **Same bug class already fixed once** on the writer side — the reader was missed. |
+| P1-3 | "Run this again" carries nothing | `ReportViewerPage.tsx:505` writes `?clone=`; `NewSimulationPage` reads only `project`/`founder_stage` | The payoff screen's CTA drops the founder into a blank wizard. |
+| P1-4 | Four dead buttons | `SimulationsPage.tsx:392,399,587,596` — bulk Export/Archive, row Duplicate/Archive, all TODO bodies | Row items also `stopPropagation`, so clicking produces *zero* response. |
+| P1-5 | Failed list renders as authoritative empty state | `SimulationsPage.tsx:150` (no error state at all), + `NewSimulationPage`, `ProspectDiscoverPage`, `ProspectsPage` | A founder with 40 paid runs is told "No runs yet" when the request fails. `ProjectsPage.tsx` already solves this with a `loaded` flag — copy it. |
+| P1-6 | Every hand-written error fallback is dead on a 500 | `errors.ts:23` returns `err.message` before the caller's fallback | ~65 written sentences never render; founders see "Request failed with status code 500". |
+| P1-7 | Raw Python exceptions rendered to founders | `simulation_tasks.py:1009` → `SimulationDetailPage.tsx:433`, + 5 more pipelines | e.g. `[run_simulation] KeyError: 'organization_id'` in monospace. The good pattern exists (`website_tasks.py:182` `GENERIC_FAILURE_MESSAGE`). |
+| P1-8 | No axios timeout | `api/lib/api.ts:3-6` | A stalled request (cold Render backend) = permanent textless spinner on `ProtectedRoute`, the founder's first load. |
+| P1-9 | No refund on failure | every worker except GTM discovery | A free user whose only run crashes loses the entire grant; code concedes "the only remedy is a manual refund". |
+| P1-10 | Persona pack library renames/deletes 404 | FE sends row UUID (`packs.ts:25`), BE resolves slug `pack_id` (`api/packs.py:130`); list returns **both**, FE type declares only `id` | Library edits fail. Same UUID also feeds `persona_pack_ids` on a run, where a miss is swallowed — chosen audience silently dropped. |
+| P1-11 | Forgot password / org selector do nothing | `LoginPage.tsx:318`, `AppLayout.tsx:248` | Both render as live controls. Settings already documents that resets go through `info@saidolabs.com`. |
+| P1-12 | Upgrade CTA ejects to marketing and doesn't scroll | `SettingsPage.tsx:205` `to="/#pricing"`, no hash-scroll handling anywhere | The monetization CTA lands at the top of a long public page. |
+
+---
+
+## P2 — Polish, and the debt the critics named
+
+404 redirects logged-in users to the public landing page with no explanation
+(`App.tsx:115`) · three native `window.confirm` modals · `#clearance-form`
+anchor doesn't scroll (React Router intercepts) · Terms/Privacy on signup are
+`<a>` not `<Link>`, so they full-reload and discard a half-filled form ·
+`GET /api/products/<non-uuid>` returns **500** where it should 404 · money
+format drift on Settings ("$20" vs "$20.00") · platform chips render "R"/"x" ·
+sidebar labels vs page titles ("Home" → "Your products") · the audience step
+offers four entry points for one upload · `maturity_level` and GTM `excluded`/
+`delivery` fields computed by the backend and never rendered.
+
+---
+
+## The systemic root cause worth one decision
+
+**Zero `response_model=` declarations across all 23 modules in
+`backend/app/api/`.** FastAPI therefore performs no response validation
+anywhere, and the OpenAPI schema is untyped — there is no server-side contract
+for the frontend to drift *from*. P0-1, P0-2, P1-2, P1-10 are all the same
+defect wearing different clothes. Adding response models to the ~10
+highest-traffic routes converts this entire bug class from silent to loud.
+
+Second: **the test suite (1,318 backend + 16 frontend, all green) asserts the
+model is self-consistent, never that the customer-visible semantics are true.**
+No test asks what "runs left" means, whether the grant covers the flagship, or
+whether quoted equals charged. Each P0 fix below should land with the assertion
+that would have caught it.
+
+---
+
+## Fix plan
+
+**Wave 1 — stop the lying (highest value per line changed)**
+1. P0-10 error boundary + `errors.ts` fallback gate — caps the blast radius of everything else.
+2. P0-2 read `valence` — one-line, kills the "0.00" that undermines every number on screen.
+3. P0-4 tier-aware "runs left" (backend returns the capped-run price) + P0-5 plan display — the app stops contradicting itself about money.
+4. P0-11 three env vars in Render (founder, no code).
+
+**Wave 2 — the flagship works**
+5. P0-1 website-room gate reads `html_path` — restores the proof-of-delta leg.
+6. P0-3 publish simulation events + one vocabulary — restores "watch it live".
+7. P1-2 revision before/after reader, P1-10 pack identity, P1-1 product filter.
+
+**Wave 3 — money is honest**
+8. P0-6 thread `subject_brief` into both quote paths (quoted == charged).
+9. P0-7 founder's decision on the flagship vs the free grant, then the test.
+10. P0-9 `PLAN_LIMITS` tier names.
+
+**Wave 4 — dead controls and error paths**
+11. P0-8 Google button (wire or remove — recommend remove for launch).
+12. P1-4/11/12 dead buttons, P1-5 `loaded` flag across five pages, P1-6/7 error text, P1-8 axios timeout, P1-9 refund policy.
+
+**Wave 5 — the ratchets**
+13. `response_model=` on the top ~10 routes.
+14. A test per P0, and one cheap acceptance ratchet: *every query param written into a link literal must be read by the destination page* (catches P1-1 and P1-3 as a class).
+
+---
+
+## Pipeline exercise — all five founder stages
+
+Run 2026-08-17 against production at 25 agents × 3 rounds × 2 platforms, from
+the five-question idea brief through audience synthesis to a finished report.
+Five concurrent pipelines, one per founder stage.
+
+**Result: the engine is healthy. All five stages completed with zero
+problems.** Every step returned 200 — project, idea brief, ICP synthesis,
+confirm, create, prepare, start — and every run finished in 186–233s.
+
+| stage | run | objections | report | sections |
+|---|---|---:|---|---:|
+| concept_validation | complete (233s) | 25 | complete | 4 |
+| pre_launch_positioning | complete (201s) | 14 | complete | 4 |
+| launch_gtm | complete (187s) | 17 | complete | 4 |
+| growth | complete (186s) | 12 | complete | 4 |
+| fundraise | complete (186s) | 17 | complete | 4 |
+
+Each report carries an Executive Summary (5.2–5.6K chars), two
+stage-specific sections (9–11.5K each) and Strategic Implications
+(9–11.8K). Headlines carry real measured values — e.g. launch_gtm: valence
+mean 0.547 (CI 0.356–0.737, n=24), 67.6% support / 10.8% oppose, trajectory
+flat.
+
+**The founder stage genuinely drives the report.** The section titles are
+written to the stage's question, not templated:
+- concept_validation → *"Does the pain exist and is it unprompted?"*
+- pre_launch_positioning → *"Objection Gravity: What Stops the Room, and Who It Stops"*
+- launch_gtm → *"Message-Channel Fit, Objection Timing, and Pre-Launch Positioning"*
+- growth → *"Platform Dynamics and the Geography of Resistance"*
+- fundraise → *"What Readers Believed and Where the Story Lost Them"*
+
+Objections read as real buyer language — the top one on three of five runs
+was a variant of *"synthetic objections won't match real customer
+objections"*, which is the honest thing this audience would say.
+
+**Two false alarms worth recording, both caught by re-checking rather than
+reporting:**
+1. *"Strategic Implications is 0 chars"* on four of five runs — a **race**,
+   not a bug. Sections stream in as they are written; all four had 9–12K
+   chars four minutes later.
+2. *"report status=generating"* on four of five — the same race. All five
+   read `complete` on the settled poll.
+
+A third apparent failure — *"analysis returned no headline"* and *"report has
+zero sections"* on all five — was **my harness reading the wrong keys** (the
+artifact nests under `artifact`; sections have their own route). The product
+was right and the test was wrong, which is the failure mode this register
+exists to avoid asserting.
+
+**Conclusion: the defects in this register are in the UI, the money layer and
+the contracts — not in the engine.** The thing the product is sold on works,
+at every founder stage.

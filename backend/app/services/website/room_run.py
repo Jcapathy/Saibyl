@@ -249,7 +249,12 @@ def _revision_html(revision_row: dict[str, Any]) -> str:
     if inline:
         return inline
 
-    path = str(revision_row.get("revision_html") or "").strip()
+    # `html_path` first: it is the column migration 037 declares and the one
+    # `revision_tasks.py` writes. `revision_html` is PRD_V3 §4d's name for the
+    # same storage ref and is kept as a fallback, but no row carries it.
+    path = str(
+        revision_row.get("html_path") or revision_row.get("revision_html") or ""
+    ).strip()
     if not path:
         raise ValueError(NO_STORED_COPY_ERROR)
 

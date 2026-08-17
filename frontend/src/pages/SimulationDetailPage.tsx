@@ -640,15 +640,49 @@ export default function SimulationDetailPage() {
           <div className="space-y-2 max-h-[500px] overflow-y-auto">
             {events.slice().reverse().map((evt, i) => {
               const content = String(evt.content || '');
-              const sentiment = Number((evt.metadata as Record<string, unknown>)?.sentiment || 0);
-              const sentColor = sentiment > 0.2 ? 'border-saibyl-positive/30' : sentiment < -0.2 ? 'border-saibyl-negative/30' : 'border-saibyl-border';
+              /*
+                `valence`, the measured column — not `metadata.sentiment`, which
+                was written by a drift formula removed in Phase 1. Production
+                carries 2,794 measured events with a valence and **zero** with
+                `metadata.sentiment`, so this line rendered "0.00" on every
+                event of every run since that removal. An unmeasured event now
+                says so rather than claiming a neutral score: a reaction has no
+                text and is deliberately measured with a null valence.
+              */
+              const raw = (evt as Record<string, unknown>).valence;
+              const sentiment = typeof raw === 'number' ? raw : null;
+              const sentColor =
+                sentiment === null
+                  ? 'border-saibyl-border'
+                  : sentiment > 0.2
+                    ? 'border-saibyl-positive/30'
+                    : sentiment < -0.2
+                      ? 'border-saibyl-negative/30'
+                      : 'border-saibyl-border';
               return (
                 <div key={i} className={`p-3 rounded-lg bg-[#14294a]/[0.02] border-l-2 ${sentColor}`}>
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-saibyl-gold/15 text-saibyl-gold">{String(evt.platform)}</span>
                     <span className="text-[10px] font-mono text-saibyl-muted">R{String(evt.round_number)}</span>
                     <span className="text-[11px] text-saibyl-muted ml-auto">
-                      how they took it: <span className={sentiment > 0.2 ? 'text-saibyl-positive' : sentiment < -0.2 ? 'text-saibyl-negative' : 'text-saibyl-muted'}>{sentiment.toFixed(2)}</span>
+                      {sentiment === null ? (
+                        'not scored'
+                      ) : (
+                        <>
+                          how they took it:{' '}
+                          <span
+                            className={`tabular-nums ${
+                              sentiment > 0.2
+                                ? 'text-saibyl-positive'
+                                : sentiment < -0.2
+                                  ? 'text-saibyl-negative'
+                                  : 'text-saibyl-muted'
+                            }`}
+                          >
+                            {sentiment.toFixed(2)}
+                          </span>
+                        </>
+                      )}
                     </span>
                   </div>
                   <p className="text-[13px] text-saibyl-platinum leading-relaxed">{content}</p>

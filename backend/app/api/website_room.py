@@ -35,15 +35,24 @@ class RunRoomBody(BaseModel):
 def _revision_is_complete(revision: dict) -> bool:
     """Finished enough to show a room: built, and carrying its copy.
 
-    `page_revisions` (PRD_V3 §4d) stores `revision_html` as a storage ref
-    when the gauntlet finishes; a worker may instead hand the text along
-    inline. A `status` column, if the row has one, must say `complete` —
-    absent the column, carrying the copy is the completion signal.
+    **`html_path` is the column that exists.** This gate was written against
+    PRD_V3 §4d's field names (`revision_html` / `revision_text`), but
+    migration 037 declares `html_path` and `revision_tasks.py` writes it — so
+    the gate read two keys no row has ever carried and refused *every*
+    finished revision with "hasn't finished building yet". The PRD names are
+    still accepted so a worker that hands the text along inline keeps working.
+
+    A `status` column, if the row has one, must say `complete` — absent the
+    column, carrying the copy is the completion signal.
     """
     status = revision.get("status")
     if status is not None and status != "complete":
         return False
-    return bool(revision.get("revision_html") or revision.get("revision_text"))
+    return bool(
+        revision.get("html_path")
+        or revision.get("revision_html")
+        or revision.get("revision_text")
+    )
 
 
 @router.get("/eligibility")

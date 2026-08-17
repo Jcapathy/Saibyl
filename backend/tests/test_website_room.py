@@ -259,10 +259,16 @@ def _repeatable_store(**sim_overrides) -> dict:
 
 
 def _revision(**overrides) -> dict:
+    # `html_path` is the column migration 037 actually declares and the one
+    # `revision_tasks.py` writes. This fixture said `revision_html` — PRD_V3
+    # §4d's name — which is why every test passed while the live gate refused
+    # every finished revision: the fixture and the code shared one invented
+    # key, and neither matched the schema. Fixed 2026-08-17; the pin below
+    # keeps the fixture honest.
     row = {
         "id": REV,
         "snapshot_id": SNAP,
-        "revision_html": HTML_PATH,
+        "html_path": HTML_PATH,
         "rounds": 2,
         "scores_before": {"overall": 58},
         "scores_after": {"overall": 81},
@@ -402,7 +408,7 @@ async def test_launch_uses_worker_passed_text_without_touching_storage(monkeypat
 
     await room_run.launch_room_run(
         revision_row=_revision(
-            revision_html=None,
+            html_path=None,
             revision_text="<h1>New</h1><p>Copy a buyer can act on.</p>",
         ),
         snapshot_row=_snapshot(),
@@ -422,7 +428,7 @@ async def test_launch_refuses_a_page_with_no_readable_text(monkeypatch):
     with pytest.raises(ValueError, match="no readable text"):
         await room_run.launch_room_run(
             revision_row=_revision(
-                revision_html=None,
+                html_path=None,
                 revision_text="<script>x()</script><style>a{}</style>",
             ),
             snapshot_row=_snapshot(),
@@ -564,7 +570,7 @@ def test_running_a_foreign_revision_is_a_404(authed_client, monkeypatch):
 
 @pytest.mark.parametrize("revision", [
     _revision(status="revising"),
-    _revision(revision_html=None),
+    _revision(html_path=None),
 ], ids=["status-says-so", "no-stored-copy"])
 def test_an_unfinished_revision_is_refused(authed_client, monkeypatch, revision):
     _install(monkeypatch, {
@@ -672,3 +678,53 @@ def test_founder_sentences_carry_no_report_jargon(authed_client, monkeypatch):
     for sentence in sentences:
         hits = [word for word in JARGON if _pattern(word).search(sentence)]
         assert not hits, f"banned word(s) {hits} in: {sentence!r}"
+
+
+# ---------------------------------------------------------------------------
+# The seam this file's own docstring warns about
+# ---------------------------------------------------------------------------
+
+def test_the_revision_fixture_uses_columns_migration_037_declares():
+    """The fixture must be shaped like the table, not like the PRD.
+
+    This file fakes `page_revisions` "at its seam" because the table was built
+    in parallel. That is exactly how the prove leg shipped broken: the gate
+    read `revision_html` / `revision_text`, this fixture supplied
+    `revision_html`, every test passed — and **no production row has ever
+    carried either key.** Migration 037 declares `html_path` and
+    `revision_tasks.py` writes it, so a green suite was asserting a column
+    that does not exist.
+
+    The fixture is therefore pinned to the migration text. If the schema
+    moves this fails and the fixture is corrected with it; a fixture is only
+    evidence while it matches the table it stands in for.
+    """
+    from pathlib import Path
+
+    migration = (
+        Path(__file__).resolve().parents[1]
+        / "scripts" / "migrations" / "037_page_revisions.sql"
+    ).read_text(encoding="utf-8")
+
+    for column in _revision():
+        assert column in migration, (
+            f"the fixture supplies {column!r}, which 037 never declares — "
+            "the fixture is inventing a column the code will then read"
+        )
+
+
+def test_a_finished_revision_is_launchable_from_the_column_that_exists():
+    """`html_path` alone must satisfy the completion gate.
+
+    The regression test for the prove leg. A row exactly as the worker writes
+    it — storage ref in `html_path`, nothing inline — is a finished revision.
+    Before the fix this returned False for every revision ever built and the
+    founder was told the page "hasn't finished building yet".
+    """
+    assert website_room_api._revision_is_complete(
+        {"html_path": HTML_PATH, "status": "complete"}
+    )
+    assert website_room_api._revision_is_complete({"html_path": HTML_PATH})
+    # Still refused when there is genuinely no copy to show.
+    assert not website_room_api._revision_is_complete({"html_path": None})
+    assert not website_room_api._revision_is_complete({})
