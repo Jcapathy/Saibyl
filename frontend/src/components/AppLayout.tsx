@@ -106,7 +106,7 @@ function GradientAvatar({ text, size }: { text: string; size: number }) {
         width: size,
         height: size,
         fontSize: size * 0.38,
-        background: 'linear-gradient(135deg, #8B5CF6, #2563EB)',
+        background: 'linear-gradient(135deg, #8b73ee, #286cf0)',
       }}
     >
       {getInitials(text)}
@@ -116,7 +116,7 @@ function GradientAvatar({ text, size }: { text: string; size: number }) {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span className="block px-3 pt-5 pb-1.5 font-mono text-[9px] font-semibold uppercase tracking-widest text-[#5A6578] select-none">
+    <span className="block px-3 pt-5 pb-1.5 font-mono text-[9px] font-semibold uppercase tracking-widest text-saibyl-muted select-none">
       {children}
     </span>
   );
@@ -132,13 +132,13 @@ function NavLink({ item, pathname, onClick }: { item: NavItem; pathname: string;
       onClick={onClick}
       className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-all ${
         isActive
-          ? 'bg-[rgba(139,92,246,0.12)] text-[#E8ECF2]'
-          : 'text-[#8B97A8] hover:bg-white/[0.04] hover:text-[#E8ECF2]'
+          ? 'bg-[rgba(40,108,240,0.10)] text-saibyl-ink'
+          : 'text-saibyl-silver hover:bg-[#14294a]/[0.04] hover:text-saibyl-ink'
       }`}
     >
       <Icon
         className={`w-4 h-4 shrink-0 ${
-          isActive ? 'text-[#8B5CF6]' : 'text-[#5A6578]'
+          isActive ? 'text-saibyl-blue' : 'text-saibyl-muted'
         }`}
       />
       {item.label}
@@ -152,10 +152,10 @@ function UsageSkeleton() {
       {[1, 2].map((i) => (
         <div key={i} className="space-y-1">
           <div className="flex justify-between">
-            <div className="h-3 w-16 rounded bg-white/[0.06]" />
-            <div className="h-3 w-20 rounded bg-white/[0.06]" />
+            <div className="h-3 w-16 rounded bg-[#14294a]/[0.06]" />
+            <div className="h-3 w-20 rounded bg-[#14294a]/[0.06]" />
           </div>
-          <div className="h-1.5 rounded-full bg-white/[0.06]" />
+          <div className="h-1.5 rounded-full bg-[#14294a]/[0.06]" />
         </div>
       ))}
     </div>
@@ -221,9 +221,18 @@ export default function AppLayout() {
   const sidebarContent = (
     <div className="flex flex-col h-full">
       {/* Brand header */}
-      <div className="px-5 py-5 flex items-center gap-2.5 border-b border-[#1E293B]">
-        <img src="/logo-mark.svg" alt="" className="w-8 h-8" />
-        <span className="text-gradient-brand font-extrabold text-base select-none" style={{ letterSpacing: '-0.025em' }}>
+      <div className="px-5 py-5 flex items-center gap-2.5 border-b border-saibyl-border">
+        {/* The landing page's brand mark, not the dark-era logo asset. */}
+        <span
+          className="grid place-items-center w-8 h-8 rounded-[9px] text-white font-serif font-bold text-[19px] leading-none select-none"
+          style={{
+            background: 'linear-gradient(135deg, #2f75ef 5%, #705ee3 95%)',
+            boxShadow: 'inset 0 1px rgba(255,255,255,.4), 0 5px 14px rgba(75,98,221,.28)',
+          }}
+        >
+          S
+        </span>
+        <span className="text-saibyl-ink font-extrabold text-base select-none" style={{ letterSpacing: '-0.035em' }}>
           SAIBYL
         </span>
       </div>
@@ -234,14 +243,14 @@ export default function AppLayout() {
           {/* TODO: Multi-org selector */}
           <button
             type="button"
-            className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[10px] bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-colors text-left"
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[10px] bg-white border border-saibyl-border hover:border-saibyl-border-light transition-colors text-left"
           >
             <GradientAvatar text={org.name} size={28} />
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-medium text-[#E8ECF2] truncate">{org.name}</p>
-              <p className="font-mono text-[9px] uppercase tracking-widest text-[#7C6CDE]">{org.plan}</p>
+              <p className="text-[13px] font-medium text-saibyl-ink truncate">{org.name}</p>
+              <p className="font-mono text-[9px] uppercase tracking-widest text-saibyl-blue">{org.plan}</p>
             </div>
-            <ChevronDown className="w-3.5 h-3.5 text-[#5A6578] shrink-0" />
+            <ChevronDown className="w-3.5 h-3.5 text-saibyl-muted shrink-0" />
           </button>
         </div>
       )}
@@ -274,21 +283,21 @@ export default function AppLayout() {
           is charged against and what runs out. So that is what is shown, with
           what it buys next to it, because "1,317" means nothing on its own to
           someone deciding whether they can afford to click. */}
-      <div className="px-4 py-3 border-t border-[#1E293B]">
+      <div className="px-4 py-3 border-t border-saibyl-border">
         {creditsLoading ? (
           <UsageSkeleton />
         ) : credits ? (
           <>
             <div className="flex items-center justify-between text-[11px] mb-1">
-              <span className="text-[#5A6578]">Credits left</span>
-              <span className="text-[#8B97A8] font-mono">
+              <span className="text-saibyl-muted">Credits left</span>
+              <span className="text-saibyl-silver font-mono tabular-nums">
                 {credits.balance.toLocaleString()}
               </span>
             </div>
             {credits.grant > 0 && (
-              <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+              <div className="h-1.5 rounded-full bg-[#14294a]/[0.08] overflow-hidden">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#2563EB] transition-all"
+                  className="h-full rounded-full bg-gradient-to-r from-[#8b73ee] to-[#286cf0] transition-all"
                   style={{
                     width: `${Math.min((credits.balance / credits.grant) * 100, 100)}%`,
                   }}
@@ -297,7 +306,7 @@ export default function AppLayout() {
             )}
             <Link
               to="/app/settings"
-              className="block text-[10.5px] text-[#5A6578] hover:text-[#8B97A8] mt-1.5 leading-snug transition-colors"
+              className="block text-[10.5px] text-saibyl-muted hover:text-saibyl-silver mt-1.5 leading-snug transition-colors"
             >
               {credits.runs_left !== null
                 ? `About ${credits.runs_left} more ${credits.runs_left === 1 ? 'run' : 'runs'} \u2014 add more`
@@ -308,19 +317,19 @@ export default function AppLayout() {
       </div>
 
       {/* User footer */}
-      <div className="px-4 py-3 border-t border-[#1E293B]">
+      <div className="px-4 py-3 border-t border-saibyl-border">
         <div className="flex items-center gap-2.5">
           <GradientAvatar text={user?.email ?? '??'} size={32} />
           <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-medium text-[#E8ECF2] truncate">{userName}</p>
-            <p className="text-[11px] text-[#5A6578] truncate">{user?.email}</p>
+            <p className="text-[13px] font-medium text-saibyl-ink truncate">{userName}</p>
+            <p className="text-[11px] text-saibyl-muted truncate">{user?.email}</p>
           </div>
         </div>
         <button
           onClick={handleLogout}
-          className="mt-2.5 flex items-center gap-2 text-[12px] text-[#5A6578] hover:text-[#E8ECF2] transition-colors px-1 py-1 group"
+          className="mt-2.5 flex items-center gap-2 text-[12px] text-saibyl-muted hover:text-saibyl-ink transition-colors px-1 py-1 group"
         >
-          <LogOut className="w-3.5 h-3.5 group-hover:text-red-400 transition-colors" />
+          <LogOut className="w-3.5 h-3.5 group-hover:text-saibyl-negative transition-colors" />
           Sign out
         </button>
       </div>
@@ -328,10 +337,10 @@ export default function AppLayout() {
   );
 
   return (
-    <div className="flex h-screen bg-[#0A0F1C]">
+    <div className="flex h-screen bg-saibyl-paper">
       {/* Mobile toggle button */}
       <button
-        className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-[#0D1424] border border-[#1E293B] text-[#8B97A8] hover:text-[#E8ECF2] transition-colors"
+        className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-white border border-saibyl-border text-saibyl-silver hover:text-saibyl-ink shadow-sm transition-colors"
         onClick={() => setMobileOpen((o) => !o)}
       >
         {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -339,7 +348,7 @@ export default function AppLayout() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed top-0 left-0 h-screen w-[260px] bg-[#0D1424] border-r border-[#1E293B] z-40 transition-transform ${
+        className={`fixed top-0 left-0 h-screen w-[260px] bg-white/[0.78] backdrop-blur-xl border-r border-saibyl-border z-40 transition-transform ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         } lg:translate-x-0`}
       >
@@ -349,14 +358,15 @@ export default function AppLayout() {
       {/* Mobile overlay */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+          className="fixed inset-0 bg-[#14294a]/30 z-30 lg:hidden"
           onClick={() => setMobileOpen(false)}
         />
       )}
 
       {/* Main content */}
       <div className="flex-1 lg:ml-[260px] flex flex-col min-h-screen">
-        <main className="flex-1 overflow-auto">
+        {/* Mobile: clear the fixed menu toggle so page headings never sit under it. */}
+        <main className="flex-1 overflow-auto pt-12 lg:pt-0">
           <Outlet />
         </main>
       </div>

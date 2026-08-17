@@ -43,7 +43,7 @@ export function Inherited({ lines }: { lines: InheritedLine[] }) {
           className="group flex items-center gap-2 text-[12px] text-saibyl-silver hover:text-saibyl-platinum transition-colors"
         >
           <CircleCheck className="w-3.5 h-3.5 text-saibyl-positive shrink-0" />
-          <span className="underline decoration-white/15 underline-offset-2 group-hover:decoration-white/40">
+          <span className="underline decoration-[#14294a]/20 underline-offset-2 group-hover:decoration-[#14294a]/45">
             {line.label}
           </span>
         </Link>
@@ -77,13 +77,13 @@ export function Missing({
       data-stage-declares="missing"
       className={`rounded-xl border p-4 ${
         blocking
-          ? 'border-[#8B5CF6]/30 bg-[#8B5CF6]/[0.07]'
+          ? 'border-[#8b73ee]/35 bg-[#8b73ee]/[0.08]'
           : 'border-saibyl-gold/25 bg-saibyl-gold/[0.06]'
       }`}
     >
       <p
         className={`flex items-start gap-2 text-[13px] font-medium ${
-          blocking ? 'text-[#B79BF7]' : 'text-saibyl-gold'
+          blocking ? 'text-[#6a4fe0]' : 'text-saibyl-gold'
         }`}
       >
         {blocking ? (
@@ -182,12 +182,12 @@ export function Guarded({
   const classes =
     tone === 'primary'
       ? 'inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-saibyl-gold text-saibyl-void font-semibold text-[13px] hover:bg-saibyl-gold-hover transition-colors'
-      : 'inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-white/[0.12] text-saibyl-platinum text-[13px] hover:bg-white/[0.05] transition-colors';
+      : 'inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-saibyl-border-light text-saibyl-ink text-[13px] hover:bg-[#14294a]/[0.04] transition-colors';
 
   if (blockedBy) {
     return (
       <div
-        className="rounded-xl border border-[#8B5CF6]/30 bg-[#8B5CF6]/[0.07] p-4"
+        className="rounded-xl border border-[#8b73ee]/35 bg-[#8b73ee]/[0.08] p-4"
         data-guard="blocked"
       >
         <p className="text-[12px] text-saibyl-muted leading-relaxed">

@@ -8,6 +8,35 @@ running delta record.
 
 ---
 
+## 2026-08-17 — The app-shell light restyle, wave 0: the theme foundation
+
+- The whole app behind the login moves to the landing page's light system
+  (founder order: "I love the new aesthetic and want the whole site to have
+  this look"). Wave 0 is the token layer, so token-riding components flip
+  wholesale: `tailwind.config.js`'s `saibyl-*` palette keeps its dark-era
+  NAMES but now carries the light values — `void` means the paper ground
+  (#f8fbff), `gold` means the blue accent (#286cf0), `platinum` means ink
+  (#14294a). One remap converted every gold CTA/slider to blue and every
+  void surface to paper without touching the ~290 call sites.
+- Every text-bearing token value holds ≥4.5:1 on white and paper (the
+  muted tier is #60718e at 4.7:1 — the old tier failed WCAG and a critic
+  caught it). Bright hues (#2fbf8a green, #ff6e79 rose) are fills/dots
+  only; chips pair them with darker same-hue text.
+- `index.css` globals flipped (shadcn HSL vars, body, typography classes,
+  `.glass`, `.bg-grid`, gradients); fonts move Aktiv Grotesk→Manrope,
+  JetBrains Mono→DM Mono at the token level. `index.html` drops
+  `class="dark"`; `ui/button.tsx` drops its `dark:` variants (Tailwind's
+  media strategy would have re-darkened controls for dark-OS visitors).
+- Shared chrome restyled by hand where values were hardcoded: `AppLayout`
+  (glass sidebar, landing brand mark replacing the dark logo asset, mobile
+  clearance under the fixed toggle), `ProductLayout` rail, `StagePrimitives`,
+  `StatusBadge`, website chips.
+- `vite.config.ts` proxy target is now `VITE_PROXY_TARGET`-overridable so a
+  local session can screenshot authed pages against the deployed backend —
+  browser CORS forbids a localhost origin calling it directly; the
+  server-side proxy is origin-less.
+- The landing page's `.v3land` scope verified untouched by screenshot.
+
 ## 2026-08-16 — Phase C: fix & prove (PRD §4d)
 
 - `capture.py` gains `capture_html` — renders a provided HTML string through

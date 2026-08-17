@@ -16,7 +16,7 @@ import {
 const SEVERITY_STYLES: Record<SiteFindingSeverity, string> = {
   critical: 'border-saibyl-negative/40 bg-saibyl-negative/10 text-saibyl-negative',
   major: 'border-saibyl-warning/40 bg-saibyl-warning/10 text-saibyl-warning',
-  minor: 'border-white/[0.12] bg-white/[0.04] text-saibyl-muted',
+  minor: 'border-saibyl-border-light bg-[#14294a]/[0.04] text-saibyl-muted',
 };
 
 const SEVERITY_WORDS: Record<SiteFindingSeverity, string> = {
@@ -39,7 +39,7 @@ export function SeverityChip({ severity }: { severity: SiteFindingSeverity }) {
 /* ------------------------------------------------------------------ */
 
 const STATUS_STYLES: Record<SiteCheckStatus, string> = {
-  queued: 'border-white/[0.12] bg-white/[0.04] text-saibyl-silver',
+  queued: 'border-saibyl-border-light bg-[#14294a]/[0.04] text-saibyl-silver',
   capturing: 'border-saibyl-gold/40 bg-saibyl-gold/10 text-saibyl-gold',
   judging: 'border-saibyl-gold/40 bg-saibyl-gold/10 text-saibyl-gold',
   complete: 'border-saibyl-positive/40 bg-saibyl-positive/10 text-saibyl-positive',
@@ -74,7 +74,7 @@ export function SiteStatusChip({ status }: { status: SiteCheckStatus }) {
  * waiting style with the fallback words rather than throwing.
  */
 const REVISION_STYLES: Record<string, string> = {
-  queued: 'border-white/[0.12] bg-white/[0.04] text-saibyl-silver',
+  queued: 'border-saibyl-border-light bg-[#14294a]/[0.04] text-saibyl-silver',
   generating: 'border-saibyl-gold/40 bg-saibyl-gold/10 text-saibyl-gold',
   judging: 'border-saibyl-gold/40 bg-saibyl-gold/10 text-saibyl-gold',
   complete: 'border-saibyl-positive/40 bg-saibyl-positive/10 text-saibyl-positive',

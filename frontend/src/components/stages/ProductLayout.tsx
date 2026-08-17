@@ -44,8 +44,8 @@ function RailItem({
       to={stageHref(productId, stage.id)}
       className={`block rounded-xl border px-3.5 py-3 transition-colors ${
         active
-          ? 'border-saibyl-gold/40 bg-saibyl-gold/[0.08]'
-          : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.14]'
+          ? 'border-saibyl-gold/40 bg-saibyl-gold/[0.07]'
+          : 'border-saibyl-border bg-white hover:border-saibyl-border-light'
       }`}
     >
       <div className="flex items-baseline gap-2.5">
@@ -80,7 +80,7 @@ function RailItem({
       {stage.runnable !== 'ready' && (
         <p
           className={`text-[10.5px] mt-1.5 leading-snug pl-[1.4rem] ${
-            stage.runnable === 'blocked' ? 'text-[#B79BF7]' : 'text-saibyl-gold'
+            stage.runnable === 'blocked' ? 'text-[#6a4fe0]' : 'text-saibyl-gold'
           }`}
         >
           {stage.runnable === 'blocked'

@@ -4,59 +4,72 @@
 
 @layer base {
   :root {
-    --background: 222 56% 5%;
-    --foreground: 214 32% 91%;
-    --card: 220 51% 10%;
-    --card-foreground: 214 32% 91%;
-    --popover: 222 31% 11%;
-    --popover-foreground: 214 32% 91%;
-    --primary: 45 72% 47%;
+    --background: 216 100% 99%;
+    --foreground: 217 57% 18%;
+    --card: 0 0% 100%;
+    --card-foreground: 217 57% 18%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 217 57% 18%;
+    --primary: 220 87% 55%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 217 40% 18%;
-    --secondary-foreground: 214 32% 91%;
-    --muted: 217 40% 18%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 220 91% 54%;
-    --accent-foreground: 222 56% 5%;
-    --destructive: 0 84% 60%;
+    --secondary: 213 79% 96%;
+    --secondary-foreground: 217 57% 18%;
+    --muted: 213 79% 96%;
+    --muted-foreground: 218 19% 47%;
+    --accent: 220 87% 55%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 355 66% 52%;
     --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 100% / 0.06;
-    --input: 0 0% 100% / 0.06;
-    --ring: 45 72% 47%;
+    --border: 215 57% 35% / 0.14;
+    --input: 215 57% 35% / 0.14;
+    --ring: 220 87% 55%;
     --radius: 0.625rem;
   }
 
   * { border-color: hsl(var(--border)); }
 
   body {
-    background-color: #0A0F1C;
-    color: #E8ECF2;
-    font-family: 'Aktiv Grotesk', system-ui, sans-serif;
+    background-color: #f8fbff;
+    color: #14294a;
+    font-family: Manrope, 'Segoe UI', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+
+  ::selection { background: #c9dcff; color: #14294a; }
 }
 
-/* ── Sovereign palette ──
-   Obsidian and Graphite are the surfaces. Gold is the one brand accent.
-   Signal Blue and Insight Violet are the two data accents, used for series
-   and states — never for chrome, so a coloured element in the UI always
-   means something. */
+/* ── The Saido light palette ──
+   Paper is the ground, ink is the text, hairlines carry the density. Blue is
+   the one accent that means "action"; Violet and Cyan are the two data
+   accents, used for series and states — never for chrome, so a coloured
+   element in the UI always means something. Ported app-wide from the landing
+   page's system (`pages/landing.css`). */
 :root {
-  --obsidian: #0A0F1C;
-  --graphite: #111827;
-  --gold: #C9A227;
-  --gold-hover: #D4AF37;
-  --signal-blue: #2563EB;
-  --insight-violet: #8B5CF6;
+  --paper: #f8fbff;
+  --ink: #14294a;
+  --muted-ink: #60718e;
+  --line: rgba(38, 79, 139, .14);
+  --blue: #286cf0;
+  --blue-hover: #1e5ad9;
+  --violet: #8b73ee;
+  --cyan: #35c7d5;
+  --green: #2fbf8a;
+  --rose: #ff6e79;
 
-  --grad-brand: linear-gradient(135deg, #8B5CF6 0%, #2563EB 100%);
-  --grad-arc: linear-gradient(135deg, #C9A227 0%, #2563EB 100%);
-  --grad-violet: linear-gradient(135deg, #8B5CF6 0%, #C9A227 100%);
+  --grad-brand: linear-gradient(135deg, #8b73ee 0%, #286cf0 100%);
+  --grad-arc: linear-gradient(135deg, #35c7d5 0%, #286cf0 100%);
+  --grad-violet: linear-gradient(135deg, #8b73ee 0%, #35c7d5 100%);
 
   /* Retained so any straggling reference resolves in-palette. */
-  --brand-purple: #8B5CF6;
-  --brand-cyan: #2563EB;
+  --gold: #286cf0;
+  --gold-hover: #1e5ad9;
+  --obsidian: #f8fbff;
+  --graphite: #ffffff;
+  --signal-blue: #286cf0;
+  --insight-violet: #8b73ee;
+  --brand-purple: #8b73ee;
+  --brand-cyan: #35c7d5;
 }
 
 /* ── Gradient text (violet → blue brand) ── */
@@ -67,7 +80,7 @@
   background-clip: text;
 }
 
-/* ── Legacy gradient text (gold → blue) ── */
+/* ── Legacy gradient text (cyan → blue) ── */
 .text-gradient {
   background: var(--grad-arc);
   -webkit-background-clip: text;
@@ -76,12 +89,12 @@
 }
 
 /* ── Typography ── */
-.text-display { font-family: 'Aktiv Grotesk', system-ui; font-weight: 800; font-size: 3rem; letter-spacing: -0.025em; }
-.text-h1 { font-family: 'Aktiv Grotesk', system-ui; font-weight: 700; font-size: 2rem; letter-spacing: -0.02em; }
-.text-h2 { font-family: 'Aktiv Grotesk', system-ui; font-weight: 600; font-size: 1.375rem; letter-spacing: -0.01em; }
-.text-body { font-family: 'Aktiv Grotesk', system-ui; font-weight: 400; font-size: 0.9375rem; line-height: 1.7; }
-.text-small { font-family: 'Aktiv Grotesk', system-ui; font-weight: 400; font-size: 0.8125rem; color: #5A6578; }
-.text-label { font-family: 'JetBrains Mono', monospace; font-size: 0.6875rem; letter-spacing: 0.18em; text-transform: uppercase; }
+.text-display { font-family: Manrope, system-ui; font-weight: 800; font-size: 3rem; letter-spacing: -0.045em; }
+.text-h1 { font-family: Manrope, system-ui; font-weight: 800; font-size: 2rem; letter-spacing: -0.035em; }
+.text-h2 { font-family: Manrope, system-ui; font-weight: 700; font-size: 1.375rem; letter-spacing: -0.02em; }
+.text-body { font-family: Manrope, system-ui; font-weight: 400; font-size: 0.9375rem; line-height: 1.7; }
+.text-small { font-family: Manrope, system-ui; font-weight: 400; font-size: 0.8125rem; color: #60718e; }
+.text-label { font-family: 'DM Mono', ui-monospace, monospace; font-size: 0.6875rem; letter-spacing: 0.18em; text-transform: uppercase; }
 
 /* ── Animations ── */
 @keyframes breathe {
@@ -97,12 +110,12 @@
   50% { transform: translateY(-8px); }
 }
 @keyframes grid-fade {
-  0%, 100% { opacity: 0.03; }
-  50% { opacity: 0.07; }
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.7; }
 }
 @keyframes glow-pulse {
-  0%, 100% { box-shadow: 0 0 20px rgba(201,162,39,0.15); }
-  50% { box-shadow: 0 0 40px rgba(201,162,39,0.3); }
+  0%, 100% { box-shadow: 0 0 20px rgba(40,108,240,0.10); }
+  50% { box-shadow: 0 0 40px rgba(40,108,240,0.18); }
 }
 @keyframes border-spin {
   0% { --angle: 0deg; }
@@ -140,7 +153,7 @@
   white-space: pre-wrap;
 }
 .print-prose blockquote {
-  border-left: 3px solid #8B5CF6;
+  border-left: 3px solid #8b73ee;
   padding-left: 1em;
   margin: 0.8em 0;
   color: #555;
@@ -155,34 +168,34 @@
 
 .bg-grid {
   background-image:
-    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+    linear-gradient(rgba(99,139,202,0.10) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(99,139,202,0.10) 1px, transparent 1px);
   background-size: 64px 64px;
   animation: grid-fade 8s ease-in-out infinite;
 }
 
 .bg-grid-brand {
   background-image:
-    linear-gradient(rgba(139,92,246,0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(139,92,246,0.02) 1px, transparent 1px);
+    linear-gradient(rgba(139,115,238,0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(139,115,238,0.06) 1px, transparent 1px);
   background-size: 48px 48px;
 }
 
 .shimmer-border {
-  background: linear-gradient(90deg, transparent, rgba(201,162,39,0.3), transparent);
+  background: linear-gradient(90deg, transparent, rgba(40,108,240,0.22), transparent);
   background-size: 200% 100%;
   animation: shimmer 3s linear infinite;
 }
 
-/* Glass card */
+/* Glass card — the landing page's card language, app-wide. */
 .glass {
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255,255,255,0.06);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--line);
 }
 .glass-hover:hover {
-  background: rgba(17, 24, 39, 0.7);
-  border-color: rgba(201,162,39,0.25);
-  box-shadow: 0 0 30px rgba(201,162,39,0.06);
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(40, 108, 240, 0.30);
+  box-shadow: 0 12px 30px rgba(52, 96, 164, 0.10);
 }
