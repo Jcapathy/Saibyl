@@ -366,8 +366,10 @@ a room of people, and the versions of a message they were shown."""
 REPORT_SYSTEM_PROMPT = f"""\
 REPORT QUALITY STANDARD:
 This report is read by the founder who commissioned the run, and by the investors and \
-operators they forward it to. Write with the authority and precision of a McKinsey or \
-Bloomberg Intelligence analyst — and in the vocabulary below, which is not negotiable.
+operators they forward it to. Write like a sharp operator briefing a founder they respect: \
+direct, concrete, and specific about what to change and what to do next. Never academic, \
+never padded, never hedged into uselessness — and in the vocabulary below, which is not \
+negotiable.
 
 {HOUSE_STYLE}
 
@@ -852,7 +854,6 @@ async def _run_react_loop(
     prediction_goal: str,
     graph_id: str | None,
     config: ReACTConfig,
-    variant: str = "a",
     platforms: str = "",
     lens_context: str = "",
 ) -> str:
@@ -874,7 +875,7 @@ async def _run_react_loop(
     """
     resolved = config.resolved()
 
-    seed = await simulation_analytics(UUID(simulation_id), "measured_findings", variant=variant)
+    seed = await simulation_analytics(UUID(simulation_id), "measured_findings")
     evidence: list[str] = [
         f"[Measured analysis — the only source of numbers for this report]\n"
         f"{seed.summary}\n{json.dumps(seed.data, default=str)[:6000]}"
@@ -905,7 +906,7 @@ async def _run_react_loop(
         if response.strip().startswith("TOOL:"):
             tool_line = response.split("TOOL:", 1)[1].strip()
             observation = await _execute_tool(
-                tool_line, simulation_id, graph_id, variant, config
+                tool_line, simulation_id, graph_id, config
             )
             evidence.append(f"[Tool: {tool_line}]\n{observation}")
         else:
@@ -939,7 +940,6 @@ async def _execute_tool(
     tool_line: str,
     simulation_id: str,
     graph_id: str | None,
-    variant: str,
     config: ReACTConfig,
 ) -> str:
     """Parse and execute a tool call, return observation string."""
@@ -962,16 +962,14 @@ async def _execute_tool(
 
         elif tool_line.startswith("simulation_analytics"):
             atype = _extract_arg(tool_line)
-            result = await simulation_analytics(
-                UUID(simulation_id), atype, variant=variant
-            )
+            result = await simulation_analytics(UUID(simulation_id), atype)
             return f"{result.summary}\nData: {json.dumps(result.data, default=str)[:5000]}"
 
         elif tool_line.startswith("agent_interview"):
             prompt = _extract_arg(tool_line)
             if config.include_agent_interviews:
                 responses = await agent_interview_tool(
-                    UUID(simulation_id), prompt, sample_size=5, variant=variant
+                    UUID(simulation_id), prompt, sample_size=5
                 )
                 return "\n".join(
                     f"- {r.agent_username} ({r.persona_type}, sentiment: {r.sentiment_score:.2f}): {r.response[:500]}"

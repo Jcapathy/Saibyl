@@ -207,10 +207,16 @@ async def simulation_analytics(
         "measured_findings",
         "ab_comparison",
     ],
-    variant: str = "a",
+    variant: str = "all",
     platform: str | None = None,
 ) -> AnalyticsResult:
-    """Analyze simulation event data."""
+    """Analyze simulation event data.
+
+    `variant` defaults to the whole run. A matched-swarm report that filtered
+    to one arena presented whole-run statistics illustrated by one arena's
+    quotes, which reads as corroboration and is not (audit item 40). Pass a
+    single version's letter only when the caller genuinely wants one arena.
+    """
     admin = get_supabase_admin()
     sim_id = str(simulation_id)
 
@@ -373,7 +379,6 @@ async def agent_interview_tool(
     prompt: str,
     agent_filter: dict | None = None,
     sample_size: int = 5,
-    variant: str = "a",
 ) -> list[InterviewResponse]:
     """Query simulation agents for their perspective."""
     if agent_filter and "persona_type" in agent_filter:
