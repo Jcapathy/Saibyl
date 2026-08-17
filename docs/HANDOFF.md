@@ -20,16 +20,17 @@ of previous sessions.
 > the three run-setup share bugs fixed, index.html metadata moved off the V1
 > story, and deploy.yml now actually gated on the suite.
 >
-> **Ops ordering on merge — this matters:**
-> 1. Migration **033 is already applied** to production (additive; required
->    before this code serves).
-> 2. Migration **032 (drop asset_count + RPCs) is written but NOT applied —
->    apply it only after this branch is deployed and serving**, or every
->    upload/delete on the old code breaks.
+> **Ops — all complete as of 2026-08-16 (later the same day):**
+> 1. Merged to master (`6441204`), deployed, and verified serving via
+>    discriminators that only pass on the new build (new index title; the
+>    rebuild route answering auth-required instead of 404).
+> 2. Migration **033 applied before** the deploy; migration **032 applied
+>    after** it was verified serving — the ordering both headers demand.
 > 3. The Tallyhook demo org's 35 stray test credits were deducted (balance 0).
-> 4. After deploy: `POST /api/simulations/{id}/analysis/rebuild` exists — 
->    rebuild the Tallyhook run before anyone exports it (stale frozen
->    vocabulary; one small objection-grouping model call).
+> 4. Both customer-facing artifacts (**Tallyhook pre-launch** and **Parry
+>    pre-launch**) were rebuilt with the post-fix composer, so their frozen
+>    vocabulary is gone. The internal Phase 1–3 verification artifacts were
+>    left as-is on purpose — they document what those gates saw.
 >
 > The landing-page gauntlet redesign (prototype + two-round critique + 
 > CC-PROMPT 10) lives in `Saibyl Management/Saibyl Redesign/` — implementation
