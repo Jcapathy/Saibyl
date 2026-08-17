@@ -9,6 +9,13 @@ export interface FounderConfig {
   stage: string | null;
   icpProfileId: string | null;
   adversarialShare: number;
+  /**
+   * True once the founder has moved the share slider themselves. Client-side
+   * only — the submit payload picks its fields by name and never sends this.
+   * While false, picking a stage adopts that stage's default share; once true,
+   * a hand-set value is kept and the notice by the slider says so.
+   */
+  shareSetByUser: boolean;
 }
 
 /**
@@ -38,7 +45,14 @@ export default function FounderLensStep({
   projectId: string;
   platforms: string[];
   value: FounderConfig;
-  onChange: (next: FounderConfig) => void;
+  /**
+   * Takes an updater as well as a value, for the same reason `RunConfigurator`
+   * does: React treats `input` on a range as a continuous event and batches
+   * several into one commit, and a handler that spreads the `value` of the
+   * render that created it silently reverts whatever the earlier handlers in
+   * that batch set. Every writer here passes a function.
+   */
+  onChange: (update: FounderConfig | ((prev: FounderConfig) => FounderConfig)) => void;
 }) {
   const [stages, setStages] = useState<StageSpec[]>([]);
   const [profiles, setProfiles] = useState<ICPProfile[]>([]);
@@ -66,11 +80,61 @@ export default function FounderLensStep({
   const profile = profiles.find((p) => p.id === value.icpProfileId) ?? null;
 
   const selectStage = (spec: StageSpec) => {
-    // Adopt the stage's audience default. Concept validation is 0% and growth
-    // is 40%, and that difference is the substance of stage-awareness — a
-    // picker that changed the label and nothing else would be decoration.
-    onChange({ ...value, stage: spec.id, adversarialShare: spec.default_adversarial_share });
+    // Adopt the stage's audience default — concept validation is 0% and growth
+    // is 40%, and that difference is the substance of stage-awareness — but
+    // only while the founder has not set the share by hand. A hand-set value
+    // used to be silently reset here; now it is kept, and the notice by the
+    // slider says the stage default was not applied and offers it back.
+    onChange((prev) =>
+      prev.shareSetByUser
+        ? { ...prev, stage: spec.id }
+        : { ...prev, stage: spec.id, adversarialShare: spec.default_adversarial_share },
+    );
   };
+
+  /* A stage can arrive already set instead of through `selectStage` — the
+     product rail links here with the moment in the URL — and adopting the
+     stage default lives in `selectStage`. This adopts it for the pre-set case
+     once the stage list has loaded, and only while the share is untouched, so
+     it can never overwrite a hand-set value. Idempotent: after adopting, the
+     shares match and it returns early. */
+  useEffect(() => {
+    if (value.shareSetByUser || !value.stage) return;
+    const spec = stages.find((s) => s.id === value.stage);
+    if (
+      !spec ||
+      Math.round(spec.default_adversarial_share * 100) ===
+        Math.round(value.adversarialShare * 100)
+    ) {
+      return;
+    }
+    onChange((prev) =>
+      prev.shareSetByUser || prev.stage !== spec.id
+        ? prev
+        : { ...prev, adversarialShare: spec.default_adversarial_share },
+    );
+  }, [stages, value.stage, value.shareSetByUser, value.adversarialShare, onChange]);
+
+  /* The one-tap way back after `selectStage` kept a hand-set share. Taking the
+     default is also a statement that the default should follow the stage
+     again, so the hand-set flag comes off with it. */
+  const adoptStageDefault = () => {
+    const spec = stage;
+    if (!spec) return;
+    onChange((prev) => ({
+      ...prev,
+      adversarialShare: spec.default_adversarial_share,
+      shareSetByUser: false,
+    }));
+  };
+
+  /* True when a hand-set share survived a stage pick and differs from that
+     stage's default — the state the notice above the slider exists for. */
+  const keptShare =
+    value.shareSetByUser &&
+    stage !== null &&
+    Math.round(stage.default_adversarial_share * 100) !==
+      Math.round(value.adversarialShare * 100);
 
   const synthesize = async () => {
     if (!projectId) return;
@@ -84,7 +148,7 @@ export default function FounderLensStep({
         adversarial_share: value.adversarialShare,
       });
       setProfiles((prev) => [data, ...prev]);
-      onChange({ ...value, icpProfileId: data.id });
+      onChange((prev) => ({ ...prev, icpProfileId: data.id }));
       // Opened straight away rather than behind a second click: this is a
       // proposal, and a proposal nobody was shown is indistinguishable from a
       // generated blob.
@@ -197,7 +261,7 @@ export default function FounderLensStep({
                       // Reviewing an audience that is no longer selected would
                       // let a founder correct a profile the run will not use.
                       setReviewingId(next);
-                      onChange({ ...value, icpProfileId: next });
+                      onChange((prev) => ({ ...prev, icpProfileId: next }));
                     }}
                     className={`w-full text-left p-4 rounded-xl border transition-all ${
                       selected
@@ -284,18 +348,24 @@ export default function FounderLensStep({
       </div>
 
       {/* ── How much of the room argues back ──────────────────────────
-          The percentage and the slider render **only once buyers exist.**
+          The percentage and the slider render once there is anything for the
+          number to act on — a stage picked, or buyers already worked out.
 
-          They used to render either way, and picking a stage seeds this value
-          from that stage's default — so a founder with no buyers worked out yet
-          read "30%" above a sentence saying there was no share to set. The
-          sentence was the true half: the run sends `adversarial_share: 0`
-          without a profile, the API rejects a share without one outright, and
-          the ready-made packs carry nobody who argues back. The 30% was a
-          number nothing would act on, which is the one thing this product must
-          never put on screen. */}
+          The share is an input to the *build*, not only to the run:
+          `synthesize` sends `adversarial_share` to shape how much of the
+          proposed room argues back, and picking a stage seeds it from that
+          stage's default. An earlier version hid the control until a profile
+          existed, on the reasoning that the run submits a share of 0 without
+          one — true of run submit, and false of synthesis, so the invisible
+          stage default was sent at the one moment the number built anything.
+
+          With no stage picked and no buyers worked out there really is
+          nothing for it to act on — run submit sends 0 without a profile,
+          the API rejects a share without one outright, and the ready-made
+          packs carry nobody who argues back — so that state keeps the
+          sentence instead of a number nothing would act on. */}
       <div>
-        {!value.icpProfileId ? (
+        {!value.stage && !value.icpProfileId ? (
           <>
             <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-2">
               How many will push back
@@ -303,11 +373,31 @@ export default function FounderLensStep({
             <p className="text-[11px] text-saibyl-muted leading-relaxed">
               Nobody, on this run. The people who argue against you are built out of the
               documents you uploaded, and the ready-made groups above have nobody like that in
-              them. Work out your buyers first and you can set the share here.
+              them. Say where you are with this, or work out your buyers, and you can set the
+              share here.
             </p>
           </>
         ) : (
           <>
+            {stage && keptShare && (
+              /* Modelled on the configurator's value-changed notice: the
+                 stage pick kept a hand-set share, and this says so instead of
+                 the picker silently deciding either way. */
+              <div className="rounded-xl border border-saibyl-warning/25 bg-saibyl-warning/[0.06] px-4 py-3 mb-3">
+                <p className="text-[12px] text-saibyl-silver leading-relaxed">
+                  You set this to {(value.adversarialShare * 100).toFixed(0)}% yourself, so
+                  picking a stage did not change it. Runs at this stage usually start at{' '}
+                  {(stage.default_adversarial_share * 100).toFixed(0)}%.{' '}
+                  <button
+                    type="button"
+                    onClick={adoptStageDefault}
+                    className="text-saibyl-gold hover:underline"
+                  >
+                    Use {(stage.default_adversarial_share * 100).toFixed(0)}% instead
+                  </button>
+                </p>
+              </div>
+            )}
             <div className="flex items-baseline justify-between mb-2">
               <label className="text-[12px] font-medium text-saibyl-muted uppercase tracking-wide">
                 How many will push back
@@ -322,17 +412,27 @@ export default function FounderLensStep({
               max={50}
               step={5}
               value={Math.round(value.adversarialShare * 100)}
-              onChange={(e) =>
-                onChange({ ...value, adversarialShare: Number(e.target.value) / 100 })
-              }
+              onChange={(e) => {
+                const adversarialShare = Number(e.target.value) / 100;
+                onChange((prev) => ({ ...prev, adversarialShare, shareSetByUser: true }));
+              }}
               className="w-full accent-saibyl-gold"
             />
-            <p className="text-[11px] text-saibyl-muted mt-2 leading-relaxed">
-              These are people happy with whatever they use today, so they talk your score down
-              on purpose. The report always keeps them separate from your buyers and says where
-              they came from. Half the room is the ceiling: past that, the score is measuring
-              the number you picked here rather than the market.
-            </p>
+            {value.icpProfileId ? (
+              <p className="text-[11px] text-saibyl-muted mt-2 leading-relaxed">
+                These are people happy with whatever they use today, so they talk your score down
+                on purpose. The report always keeps them separate from your buyers and says where
+                they came from. Half the room is the ceiling: past that, the score is measuring
+                the number you picked here rather than the market.
+              </p>
+            ) : (
+              <p className="text-[11px] text-saibyl-muted mt-2 leading-relaxed">
+                This shapes the group we are about to work out of your documents: the share of
+                that room who are happy with what they use today and will talk your score down
+                on purpose. Half the room is the ceiling: past that, the score is measuring
+                the number you picked here rather than the market.
+              </p>
+            )}
           </>
         )}
         {profile && profile.profile.competitors.some((c) => c.mentioned_in.length > 0) && (

@@ -7,6 +7,7 @@ import { getErrorMessage } from '@/lib/errors';
 import { listPacks } from '@/lib/packs';
 import RunConfigurator, { type RunShape } from '@/components/RunConfigurator';
 import FounderLensStep, { type FounderConfig } from '@/components/founder/FounderLensStep';
+import type { FounderStage } from '@/lib/founder';
 import type { OrgPersonaPack, PersonaPack, Project } from '@/types';
 
 const PLATFORMS = [
@@ -22,6 +23,18 @@ const PLATFORMS = [
   { id: 'discord', name: 'Discord', desc: 'Channels and roles' },
   { id: 'news_comments', name: 'News Comments', desc: 'Comments under an article' },
   { id: 'custom', name: 'Custom', desc: 'Your own rules' },
+];
+
+/* The five stage ids, mirroring `FounderStage` in lib/founder.ts. The specs
+   themselves are fetched, not copied — this list exists only to validate the
+   `founder_stage` query parameter the product rail passes along, so an
+   unrecognised value is dropped rather than sent to the API. */
+const FOUNDER_STAGES: readonly FounderStage[] = [
+  'concept_validation',
+  'pre_launch_positioning',
+  'launch_gtm',
+  'growth',
+  'fundraise',
 ];
 
 /* Six steps. The heading counts them out of this array rather than restating
@@ -105,6 +118,9 @@ export default function NewSimulationPage() {
     stage: null,
     icpProfileId: null,
     adversarialShare: 0,
+    // False until the founder moves the share slider themselves. Never sent to
+    // the API — the submit payload below picks its fields by name.
+    shareSetByUser: false,
   });
 
   useEffect(() => {
@@ -117,6 +133,16 @@ export default function NewSimulationPage() {
         setProjectId(preselect);
       }
     }).catch(() => {});
+    /* The product rail's "start a run" link carries the moment the founder
+       just picked (`?founder_stage=…`) so they are not asked to pick it twice.
+       Adopted only when it names a real stage. The stage-default share is then
+       applied by the buyers step exactly as if the stage had been clicked
+       there — its untouched-share effect adopts the default, and a hand-set
+       share is never overwritten. */
+    const stageParam = searchParams.get('founder_stage');
+    if (stageParam && (FOUNDER_STAGES as readonly string[]).includes(stageParam)) {
+      setFounder((prev) => (prev.stage === stageParam ? prev : { ...prev, stage: stageParam }));
+    }
   }, [searchParams]);
 
   useEffect(() => {
