@@ -1,15 +1,15 @@
 # PUBLIC INTERFACE
 # ─────────────────────────────────────────────────────────
-# run_critic_gauntlet(capture, *, organization_id=None) -> CritiqueResult   [async]
+# run_critic_gauntlet(capture, *, reference=None, organization_id=None)
+#     -> CritiqueResult   [async]
 # CritiqueResult, CriticDimension, CriticFinding, CriticError
 # ─────────────────────────────────────────────────────────
-"""The critic gauntlet: five reviewers judge a rendered page (PRD_V3 §4b).
+"""The critic gauntlet: six reviewers judge a rendered page (PRD_V3 §4b).
 
 Each reviewer is ONE vision call with its own rubric, and each is blind to the
-other four — that independence is the design. Five specialists who cannot see
-each other's verdicts give five uncorrelated reads, so where they agree the
-agreement is evidence rather than echo. Nothing connects them, so they run
-concurrently.
+other five — that independence is the design. Specialists who cannot see each
+other's verdicts give uncorrelated reads, so where they agree the agreement is
+evidence rather than echo. Nothing connects them, so they run concurrently.
 
 The reviewers judge what a visitor is shown, not what the HTML intends: the
 desktop screenshot for how the page reads, earns trust, and routes a reader to
@@ -19,17 +19,27 @@ evidence — the prompt forbids inventing content — and every finding ends in 
 instruction the founder can paste into their coding tool unedited, per the §5
 standard ("improve your value proposition" is a defect, not a finding).
 
-Five or nothing: a reviewer that cannot finish fails the whole gauntlet with
-its dimension named, because a four-reviewer verdict presented as the page's
-score would be a number quietly missing a fifth of its meaning.
+The sixth reviewer judges the look itself, by measurement. The page's computed
+styles arrive as counted facts — fonts, colors, radii, shadows, spacing — so
+"the type feels loose" becomes a number instead of a mood. Given a reference
+site, it stops asking "is this good?" and asks "how does this differ from the
+benchmark, in measured values?", quoting both numbers for every gap — and its
+call is the only one that carries two screenshots. The other five reviewers
+receive one measured line from the same styles for grounding; their rubrics
+are unchanged.
 
-The overall score is the rounded mean of the five dimension scores, and the
+Six or nothing: a reviewer that cannot finish fails the whole gauntlet with
+its dimension named, because a five-reviewer verdict presented as the page's
+score would be a number quietly missing a sixth of its meaning.
+
+The overall score is the rounded mean of the six dimension scores, and the
 one-sentence page takeaway comes from the copy reviewer, whose rubric is the
 message a stranger actually receives.
 """
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
@@ -49,6 +59,11 @@ logger = structlog.get_logger()
 _DOM_EXCERPT_CHARS = 4_000
 _DOM_PRIMARY_CHARS = 12_000
 
+# How much of a style-measurement table rides in the design reviewer's prompt.
+# The capture side aggregates before it stores, so a table this long already
+# means an unusually baroque page; the cut keeps the prompt bounded either way.
+_CENSUS_CHARS = 6_000
+
 # `llm_vision`'s bound on one encoded image (~4.5MB of base64). Guarded here,
 # before the call, so the failure a founder sees names the screenshot and the
 # remedy instead of surfacing a transport error. Downscaling is the capture
@@ -62,6 +77,12 @@ _MAX_BASE64_BYTES = 4_500_000
 class CriticFinding(BaseModel):
     severity: Literal["critical", "major", "minor"]
     region: str
+    # The prose reviewers may honestly leave this empty for purely visual
+    # findings (a spacing gap has nothing to quote); forcing it there made the
+    # hierarchy reviewer fail whole runs. The DESIGN reviewer's quotes are its
+    # measured values and MUST NOT be empty — enforced by _MeasuredFinding on
+    # its parse path, so the retry nudge lands only where the receipt is a
+    # number. Both facts were found by live gates, not by mocked tests.
     quote: str
     why: str
     fix: str
@@ -104,6 +125,16 @@ class _CriticResponse(BaseModel):
 
 class _CopyResponse(_CriticResponse):
     page_takeaway: str
+
+
+class _MeasuredFinding(CriticFinding):
+    """A design-reviewer finding: the quote carries measured values, never air."""
+
+    quote: str = Field(min_length=1)
+
+
+class _DesignResponse(_CriticResponse):
+    findings: list[_MeasuredFinding]
 
 
 # ── the rules every reviewer carries ─────────────────────────────────
@@ -176,10 +207,10 @@ _JSON_NUDGE = (
 # Founder-facing failure sentences, kept as templates so the vocabulary scan
 # can read them the way it reads the prompts.
 _TOO_LARGE_ERROR = (
-    "The {label} review could not run: the {which} screenshot of the page is "
-    "too large to send for review (about {size_mb:.1f} MB once prepared for "
-    "sending; the limit is about {limit_mb:.1f} MB). Capture the page at a "
-    "smaller size and run the check again."
+    "The {label} review could not run: the {which} is too large to send for "
+    "review (about {size_mb:.1f} MB once prepared for sending; the limit is "
+    "about {limit_mb:.1f} MB). Capture the page at a smaller size and run "
+    "the check again."
 )
 _UNREADABLE_ERROR = (
     "The {label} review answered twice in a form that could not be read, so "
@@ -191,7 +222,7 @@ _FAILED_ERROR = (
 )
 
 
-# ── the five rubrics ─────────────────────────────────────────────────
+# ── the five page rubrics ────────────────────────────────────────────
 
 _HIERARCHY_TEMPLATE = """\
 REVIEW DIMENSION: hierarchy
@@ -213,6 +244,8 @@ Judge four things:
    blocks flatten the page? Quote the headings that sit at the wrong weight.
 
 PAGE TITLE: {title}
+
+PAGE STYLE (one measured line from the page's own styles): {census_digest}
 
 PAGE TEXT (an extract, for cross-reference — the screenshot is the evidence):
 {dom_excerpt}
@@ -240,6 +273,8 @@ Judge four things:
    drift between them and the page.
 
 PAGE TITLE: {title}
+
+PAGE STYLE (one measured line from the page's own styles): {census_digest}
 
 PAGE TAGS (what search results and link previews will show):
 {meta_lines}
@@ -271,6 +306,8 @@ Judge four things:
 
 PAGE TITLE: {title}
 
+PAGE STYLE (one measured line from the page's own styles): {census_digest}
+
 PAGE TEXT (an extract, for cross-reference):
 {dom_excerpt}
 
@@ -295,6 +332,8 @@ Judge four things:
    the passages that assume otherwise.
 
 PAGE TITLE: {title}
+
+PAGE STYLE (one measured line from the page's own styles): {census_digest}
 
 PAGE TEXT (the primary evidence — quote from it):
 {dom_text}
@@ -322,11 +361,141 @@ Judge four things:
 
 PAGE TITLE: {title}
 
+PAGE STYLE (one measured line from the page's own styles): {census_digest}
+
 PAGE TEXT (an extract, for cross-reference — the phone screenshot is the
 evidence):
 {dom_excerpt}
 
 {review_rules}"""
+
+
+# ── the sixth rubric: the look, measured ─────────────────────────────
+#
+# The design reviewer's method is not "is this good?" but "what do the
+# numbers say?" — every signal it checks is grounded in the style
+# measurements the capture side counts from the page's computed styles.
+# One reviewer, two modes: judged alone, or judged against a reference
+# site with every visible gap quoted as both measured values.
+
+_DESIGN_KEY = "design"
+_DESIGN_LABEL = "design"
+
+#: The signals both design modes check — one block so the two rubrics can
+#: never drift apart on what an undesigned page looks like.
+_DESIGN_SIGNALS = """\
+1. Font choice — if the primary typeface is a browser default or system stack
+   (Arial, Helvetica, Times New Roman, "system-ui", "-apple-system",
+   "Segoe UI"), that is the single loudest tell of an undesigned page. Report
+   it as a finding of severity "major" at the least — "critical" if the whole
+   page is set in it — and name the font the measurements show.
+2. Color discipline — count the accent colors in the measurements. A designed
+   page spends one accent, and that accent owns every action. Report how many
+   accents this page spends and which color, if any, owns the buttons.
+3. Corner radii — a designed page uses at most three or four radius values;
+   eight different radii is no system at all. Count the distinct radii in the
+   measurements and name the values.
+4. Shadows — do the shadows form a short ladder (none, resting, raised), or
+   is every shadow its own recipe? Count the distinct shadows.
+5. Spacing rhythm — do the measured gaps repeat one base unit (the
+   measurements include a base-unit estimate), or is every gap improvised?
+   Name the values that fall off the rhythm.
+6. Imagery and icons — one family (all line icons, or all photos with one
+   treatment), or styles mixed on one page? Name the elements that break the
+   family; the screenshot is the evidence for this one."""
+
+#: Widens the shared quote rule for this reviewer only: its evidence is
+#: numbers, so a quote of measured values is a quote of the page. The live
+#: gate showed the model writing measurements into "why" and leaving "quote"
+#: empty — an empty quote now fails validation, so the rule is stated as the
+#: hard requirement it is.
+_DESIGN_EVIDENCE_RULE = """\
+For this review the style measurements below are page evidence. HARD
+REQUIREMENT: the "quote" field of EVERY finding MUST contain the measured
+value(s) that prove it — never prose, never empty. Example of a valid quote:
+"radius values: 2px, 4px, 6px, 10px, 12px, 24px". Put the argument in "why";
+put the numbers in "quote"; put the element or style property in "region".
+A finding whose quote is empty will be rejected and the whole review
+discarded."""
+
+_DESIGN_TEMPLATE = (
+    """\
+REVIEW DIMENSION: design
+
+You are reviewing whether this page's look is a designed system or an
+accident. The attached image is a full-page desktop screenshot. Below it are
+the page's style measurements — the fonts, colors, corner radii, shadows,
+and spacing values the page actually computes, with how often each occurs.
+Be ruthless, and judge with the numbers: a finding grounded in a measurement
+outranks an impression.
+
+Judge six things:
+"""
+    + _DESIGN_SIGNALS
+    + """
+
+"""
+    + _DESIGN_EVIDENCE_RULE
+    + """
+"score" here measures how much of a coherent visual system exists at all:
+90+ is a disciplined system, below 40 means no system is present.
+
+PAGE TITLE: {title}
+
+STYLE MEASUREMENTS (counted from the page's own styles):
+{census}
+
+{review_rules}"""
+)
+
+_DESIGN_TEMPLATE_REFERENCE = (
+    """\
+REVIEW DIMENSION: design
+
+You are reviewing this page's look against a reference site the founder
+wants to stand beside. TWO images are attached: the FIRST is a full-page
+desktop screenshot of the founder's page; the SECOND is a full-page desktop
+screenshot of the reference site. Below are style measurements for both
+pages — the fonts, colors, corner radii, shadows, and spacing values each
+page actually computes, with how often each occurs. Be ruthless: do not ask
+whether the page looks good — measure how it differs from the reference, in
+values.
+
+Judge six things about the founder's page:
+"""
+    + _DESIGN_SIGNALS
+    + """
+
+Then measure the gaps. For every property where the two measurement tables
+differ in a way a visitor can see — typeface, weights, sizes, letter
+spacing, line height, color counts, radii, shadows, spacing rhythm — write a
+finding whose "quote" carries BOTH values, the page's and the reference's,
+in this form: "Your body letter-spacing: 0em. Theirs: -0.011em." A gap
+finding that shows only one of the two numbers is a failed finding. Order
+the findings by visual impact: the gap a visitor notices first comes first.
+
+In "strengths", also name what the founder's page already does that the
+reference site would keep — the reference is a bar to clear, not a page to
+copy, and a redesign must not flatten what already works.
+
+"""
+    + _DESIGN_EVIDENCE_RULE
+    + """
+"score" here measures how close this page's visual discipline comes to the
+reference's: 90+ means the same discipline, below 40 a different league.
+
+PAGE TITLE: {title}
+
+STYLE MEASUREMENTS OF THIS PAGE (counted from the page's own styles):
+{census}
+
+REFERENCE SITE: {reference_title}
+
+STYLE MEASUREMENTS OF THE REFERENCE SITE:
+{reference_census}
+
+{review_rules}"""
+)
 
 
 # ── wiring ───────────────────────────────────────────────────────────
@@ -351,9 +520,108 @@ def _meta_lines(meta: object) -> str:
     return "(the page ships no tags — that absence is itself worth judging)"
 
 
+def _style_census(capture: WebsiteCapture) -> dict | None:
+    """The capture's style measurements, if the capture side took any.
+
+    Read with `getattr` because `style_census` is landing on `WebsiteCapture`
+    in parallel with this module: a capture made before that field exists must
+    still get a full gauntlet, with the measurements honestly reported as
+    absent rather than crashing the design review.
+    """
+    census = getattr(capture, "style_census", None)
+    return census if isinstance(census, dict) else None
+
+
+def _named_counts(value: object) -> list[tuple[str, float]]:
+    """Read one measurement table into (name, count) pairs, most common first.
+
+    Tolerant of shape — a `{value: count}` mapping, a list of entries, or a
+    list of dicts naming their value — because the digest is grounding, not a
+    contract: an unreadable table degrades to an absent line, never an error.
+    """
+    if isinstance(value, dict):
+        pairs = [
+            (str(name), count if isinstance(count, int | float) else 0.0)
+            for name, count in value.items()
+        ]
+        return sorted(pairs, key=lambda pair: -pair[1])
+    if isinstance(value, list):
+        pairs = []
+        for entry in value:
+            if isinstance(entry, dict):
+                name = next(
+                    (entry[key] for key in ("value", "name", "family", "color") if entry.get(key)),
+                    None,
+                )
+                if name is None:
+                    continue
+                count = entry.get("count", 0)
+                pairs.append((str(name), count if isinstance(count, int | float) else 0.0))
+            elif entry is not None:
+                pairs.append((str(entry), 0.0))
+        return sorted(pairs, key=lambda pair: -pair[1])
+    return []
+
+
+def _census_lookup(table: dict, *keys: str) -> object:
+    for key in keys:
+        if key in table:
+            return table[key]
+    return None
+
+
+def _census_digest(census: dict | None) -> str:
+    """One measured line — top font, leading colors, base unit — for the five
+    page reviewers. Cheap grounding so "the hero font" and "the accent color"
+    in their findings name what the page actually computes."""
+    if not census:
+        return "(no style measurements were taken)"
+    parts: list[str] = []
+
+    fonts = _census_lookup(census, "fonts", "font_families", "families")
+    if isinstance(fonts, dict):
+        nested = _census_lookup(fonts, "families", "family")
+        if nested is not None:
+            fonts = nested
+    ranked_fonts = _named_counts(fonts)
+    if ranked_fonts:
+        parts.append(f"main font {ranked_fonts[0][0]}")
+
+    colors = _census_lookup(census, "accent_colors", "accents", "text_colors", "colors")
+    ranked_colors = [name for name, _ in _named_counts(colors)[:3]]
+    if ranked_colors:
+        parts.append("leading colors " + ", ".join(ranked_colors))
+
+    base_unit = _census_lookup(census, "spacing_base_unit", "base_unit", "base_unit_guess")
+    if base_unit is None:
+        spacing = census.get("spacing")
+        if isinstance(spacing, dict):
+            base_unit = _census_lookup(spacing, "base_unit", "base_unit_guess", "base_unit_px")
+    if base_unit is not None:
+        parts.append(f"spacing base unit {base_unit}")
+
+    if not parts:
+        return "(style measurements were taken, but no summary line could be read from them)"
+    return "; ".join(parts)
+
+
+def _census_text(census: dict | None) -> str:
+    """The full measurement table, rendered for the design reviewer."""
+    if not census:
+        return "(no style measurements could be taken from this page)"
+    rendered = json.dumps(census, indent=1, sort_keys=True, ensure_ascii=False, default=str)
+    if len(rendered) > _CENSUS_CHARS:
+        rendered = (
+            rendered[:_CENSUS_CHARS].rstrip()
+            + "\n[cut here — the rest of the measurements did not fit]"
+        )
+    return rendered
+
+
 def _shared_context(capture: WebsiteCapture) -> dict[str, str]:
     return {
         "title": capture.title or "(the page has no title)",
+        "census_digest": _census_digest(_style_census(capture)),
         "dom_excerpt": _excerpt(capture.dom_text, _DOM_EXCERPT_CHARS),
     }
 
@@ -365,6 +633,7 @@ def _credibility_context(capture: WebsiteCapture) -> dict[str, str]:
 def _copy_context(capture: WebsiteCapture) -> dict[str, str]:
     return {
         "title": capture.title or "(the page has no title)",
+        "census_digest": _census_digest(_style_census(capture)),
         "dom_text": _excerpt(capture.dom_text, _DOM_PRIMARY_CHARS),
     }
 
@@ -381,7 +650,9 @@ class _Critic:
 
 
 #: Order is presentation order in the result, and the order failures are
-#: reported in when more than one reviewer breaks.
+#: reported in when more than one reviewer breaks. The design reviewer is not
+#: in this tuple: its rubric depends on whether a reference site rides along,
+#: so `_design_critic` builds it per run, and it always presents last.
 _CRITICS: tuple[_Critic, ...] = (
     _Critic(
         key="hierarchy",
@@ -431,6 +702,53 @@ _CRITICS: tuple[_Critic, ...] = (
 )
 
 
+def _design_context(capture: WebsiteCapture, reference: WebsiteCapture | None) -> dict[str, str]:
+    context = {
+        "title": capture.title or "(the page has no title)",
+        "census": _census_text(_style_census(capture)),
+    }
+    if reference is not None:
+        context["reference_title"] = reference.title or "(the reference site has no title)"
+        context["reference_census"] = _census_text(_style_census(reference))
+    return context
+
+
+def _design_critic(reference: WebsiteCapture | None) -> _Critic:
+    """The sixth reviewer, built per run: one critic, two rubrics.
+
+    Alone, it judges whether the page's measurements describe a designed
+    system at all; given a reference, it also measures every visible gap
+    between the two pages and quotes both values.
+    """
+    return _Critic(
+        key=_DESIGN_KEY,
+        label=_DESIGN_LABEL,
+        template=_DESIGN_TEMPLATE_REFERENCE if reference is not None else _DESIGN_TEMPLATE,
+        response_model=_DesignResponse,
+        uses_mobile=False,
+        context=lambda capture: _design_context(capture, reference),
+        json_shape=_JSON_INSTRUCTION,
+    )
+
+
+def _design_images(
+    capture: WebsiteCapture, reference: WebsiteCapture | None
+) -> tuple[tuple[bytes, str], ...]:
+    """The design reviewer's evidence, founder's page always first.
+
+    In reference mode this is the gauntlet's only two-image call — the prompt
+    tells the model the first image is the founder's page and the second the
+    reference site, and this ordering is that promise kept.
+    """
+    ours = (capture.screenshot_desktop, "desktop screenshot of the page")
+    if reference is None:
+        return (ours,)
+    return (
+        ours,
+        (reference.screenshot_desktop, "desktop screenshot of the reference site"),
+    )
+
+
 def _fill(template: str, **fields: object) -> str:
     """Fill a reviewer prompt, always with the shared rules in it.
 
@@ -467,14 +785,29 @@ def _guard_size(critic: _Critic, screenshot: bytes, which: str) -> None:
         )
 
 
-def _try_parse(critic: _Critic, raw: str) -> _CriticResponse | None:
+def _try_parse(critic: _Critic, raw: str) -> tuple[_CriticResponse | None, str]:
+    """Parsed response, or (None, a short complaint naming what failed).
+
+    The complaint rides into the retry prompt: a model that produced valid
+    JSON with an empty design quote was re-asked with a generic "return valid
+    JSON" nudge it had already satisfied, and failed the same way twice (live
+    gate). Telling it which field was rejected is what changes the answer.
+    """
     try:
-        return critic.response_model.model_validate_json(_extract_json(raw))
-    except ValidationError:
-        return None
+        return critic.response_model.model_validate_json(_extract_json(raw)), ""
+    except ValidationError as exc:
+        parts = [
+            f"{'.'.join(str(p) for p in err['loc'])}: {err['msg']}"
+            for err in exc.errors()[:3]
+        ]
+        return None, "; ".join(parts) or "the answer did not match the shape"
 
 
-async def _run_one(critic: _Critic, capture: WebsiteCapture) -> _CriticResponse:
+async def _run_one(
+    critic: _Critic,
+    capture: WebsiteCapture,
+    images: tuple[tuple[bytes, str], ...] | None = None,
+) -> _CriticResponse:
     """One reviewer, start to verdict.
 
     Any way this can go wrong becomes a `CriticError` naming the dimension:
@@ -482,20 +815,31 @@ async def _run_one(critic: _Critic, capture: WebsiteCapture) -> _CriticResponse:
     retry, and anything the transport raises. The gauntlet upgrades a single
     reviewer's failure to a whole-run failure, so the message here is the one
     the founder reads.
+
+    `images` — (bytes, what-to-call-it-in-a-failure) pairs — overrides the
+    single screenshot `uses_mobile` selects; today only the design reviewer
+    passes it, because its reference mode sends two desktops in one call.
     """
     try:
-        which = "phone" if critic.uses_mobile else "desktop"
-        screenshot = (
-            capture.screenshot_mobile if critic.uses_mobile else capture.screenshot_desktop
-        )
-        _guard_size(critic, screenshot, which)
+        if images is None:
+            which = "phone" if critic.uses_mobile else "desktop"
+            screenshot = (
+                capture.screenshot_mobile if critic.uses_mobile else capture.screenshot_desktop
+            )
+            images = ((screenshot, f"{which} screenshot of the page"),)
+        for screenshot, described_as in images:
+            _guard_size(critic, screenshot, described_as)
 
+        evidence = [screenshot for screenshot, _ in images]
         prompt = _fill(critic.template, **critic.context(capture)) + "\n\n" + critic.json_shape
-        raw = await llm_vision(prompt, [screenshot])
-        parsed = _try_parse(critic, raw)
+        raw = await llm_vision(prompt, evidence)
+        parsed, complaint = _try_parse(critic, raw)
         if parsed is None:
-            raw = await llm_vision(prompt + "\n\n" + _JSON_NUDGE, [screenshot])
-            parsed = _try_parse(critic, raw)
+            nudge = _JSON_NUDGE
+            if complaint:
+                nudge += f"\nThe previous answer was rejected because — {complaint}."
+            raw = await llm_vision(prompt + "\n\n" + nudge, evidence)
+            parsed, _ = _try_parse(critic, raw)
         if parsed is None:
             raise CriticError(critic.key, _UNREADABLE_ERROR.format(label=critic.label))
         return parsed
@@ -513,19 +857,29 @@ async def _run_one(critic: _Critic, capture: WebsiteCapture) -> _CriticResponse:
 async def run_critic_gauntlet(
     capture: WebsiteCapture,
     *,
+    reference: WebsiteCapture | None = None,
     organization_id: str | None = None,
 ) -> CritiqueResult:
-    """Run the five reviewers concurrently and assemble one verdict.
+    """Run the six reviewers concurrently and assemble one verdict.
+
+    `reference` switches the design reviewer into measured-gap mode: its one
+    call carries both desktop screenshots and both pages' style measurements,
+    and every visible difference comes back with both values quoted. The
+    other five reviewers never see the reference — their rubrics judge the
+    founder's page alone either way.
 
     Every call is attributed to the cost ledger as `website_critics` — the
-    priced stage §4e profiles from measured usage. Five or nothing: the first
+    priced stage §4e profiles from measured usage. Six or nothing: the first
     failed reviewer, in presentation order, fails the run with its dimension
     named; the remaining verdicts are discarded rather than passed off as a
     complete review.
     """
+    design = _design_critic(reference)
+    roster = (*_CRITICS, design)
     with usage_context("website_critics", organization_id=organization_id):
         outcomes = await asyncio.gather(
             *(_run_one(critic, capture) for critic in _CRITICS),
+            _run_one(design, capture, _design_images(capture, reference)),
             return_exceptions=True,
         )
 
@@ -535,7 +889,7 @@ async def run_critic_gauntlet(
 
     dimensions: list[CriticDimension] = []
     page_takeaway = ""
-    for critic, response in zip(_CRITICS, outcomes, strict=True):
+    for critic, response in zip(roster, outcomes, strict=True):
         dimensions.append(
             CriticDimension(
                 key=critic.key,

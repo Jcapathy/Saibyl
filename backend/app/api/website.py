@@ -67,6 +67,17 @@ class CreateWebsiteCheckBody(BaseModel):
 
     project_id: str
     url: str = Field(min_length=1, max_length=MAX_URL_LENGTH)
+    # A site the founder admires; the critics judge their page against it.
+    reference_url: str | None = Field(None, max_length=MAX_URL_LENGTH)
+
+
+def _looks_like_web_address(url: str) -> bool:
+    """The same shape guard for both addresses; depth stays in the capture."""
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return False
+    return parts.scheme in ("http", "https") and bool(parts.netloc)
 
 
 # ---------------------------------------------------------------------------
@@ -96,17 +107,20 @@ async def create_website_check(
     if not owned.data:
         raise HTTPException(status_code=404, detail="We couldn't find that workspace.")
 
-    try:
-        parts = urlsplit(body.url)
-        url_ok = parts.scheme in ("http", "https") and bool(parts.netloc)
-    except ValueError:
-        url_ok = False
-    if not url_ok:
+    if not _looks_like_web_address(body.url):
         raise HTTPException(
             status_code=400,
             detail=(
                 "That doesn't look like a web address. It needs to start "
                 "with http:// or https://."
+            ),
+        )
+    if body.reference_url and not _looks_like_web_address(body.reference_url):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "The address of the site you admire doesn't look like a web "
+                "address. It needs to start with http:// or https://."
             ),
         )
 
@@ -130,6 +144,7 @@ async def create_website_check(
             "organization_id": auth["org_id"],
             "project_id": body.project_id,
             "url": body.url,
+            "reference_url": body.reference_url,
             "status": "queued",
             "credits_charged": credits,
             "created_at": datetime.now(UTC).isoformat(),
@@ -160,9 +175,9 @@ async def list_website_checks(
     query = (
         admin.table("website_snapshots")
         .select(
-            "id, project_id, url, final_url, title, status, credits_charged, "
-            "dom_chars, document_id, error_message, created_at, completed_at, "
-            "critique",
+            "id, project_id, url, reference_url, final_url, title, status, "
+            "credits_charged, dom_chars, document_id, error_message, "
+            "created_at, completed_at, critique",
             count="exact",
         )
         .eq("organization_id", auth["org_id"])
@@ -175,6 +190,23 @@ async def list_website_checks(
     for row in result.data or []:
         critique = row.pop("critique", None) or {}
         items.append({**row, "overall_score": critique.get("overall_score")})
+
+    # Each check's design-gallery row, when the worker managed to leave one —
+    # one batched query, not one per item. `design_gallery_id` is None until
+    # then; the gallery is a byproduct, so its absence is not an error state.
+    gallery_by_snapshot: dict[str, str] = {}
+    if items:
+        gallery_rows = (
+            admin.table("design_gallery")
+            .select("id, snapshot_id")
+            .eq("organization_id", auth["org_id"])
+            .in_("snapshot_id", [item["id"] for item in items])
+            .execute()
+        ).data or []
+        gallery_by_snapshot = {g["snapshot_id"]: g["id"] for g in gallery_rows}
+    for item in items:
+        item["design_gallery_id"] = gallery_by_snapshot.get(item["id"])
+
     return {"items": items, "total": result.count, "limit": LIST_LIMIT}
 
 
@@ -192,4 +224,15 @@ async def get_website_check(snapshot_id: str, auth: dict = Depends(get_current_o
     ).data or []
     if not rows:
         raise HTTPException(status_code=404, detail="We couldn't find that check.")
-    return rows[0]
+    row = rows[0]
+
+    gallery = (
+        admin.table("design_gallery")
+        .select("id")
+        .eq("snapshot_id", snapshot_id)
+        .eq("organization_id", auth["org_id"])
+        .limit(1)
+        .execute()
+    ).data or []
+    row["design_gallery_id"] = gallery[0]["id"] if gallery else None
+    return row

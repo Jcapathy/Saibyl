@@ -10,6 +10,13 @@ The capture and critic services write their error messages for the founder
 ("the page took longer than 45 seconds to answer"), so those pass through to
 the row verbatim. Anything else lands as one generic sentence, with the detail
 in the logs — a stack trace on the row is not a failure story, it is a leak.
+
+Two byproducts ride the same run. When the founder named a site they admire,
+it is captured too and the critics judge against it — that capture failing
+fails the run, because it is part of what was ordered. And every completed
+check distils the page's design into `design_gallery` — that failing never
+fails the run, because the critique is the deliverable and the gallery is the
+platform's own byproduct.
 """
 from __future__ import annotations
 
@@ -33,6 +40,18 @@ PAGE_EXCERPT_CHARS = 15_000
 GENERIC_FAILURE_MESSAGE = (
     "Something went wrong while checking this page. Try again in a few minutes."
 )
+
+# A founder may name a site they admire; the critics judge against it. If that
+# site can't be captured, the run fails with this in front of the capture
+# service's own founder-readable sentence — the founder must learn *which* of
+# the two addresses defeated the check.
+REFERENCE_FAILURE_PREFIX = "We couldn't read the site you admire — "
+
+# The bucket `services/website/store` uploads to. Mirrored rather than
+# imported: this module must import without the website services present (the
+# lazy-import discipline in `run_website_check`), and a top-level import for
+# one constant would break that.
+SCREENSHOT_BUCKET = "project-media"
 
 
 async def run_website_check(snapshot_id: str, organization_id: str) -> None:
@@ -72,28 +91,76 @@ async def run_website_check(snapshot_id: str, organization_id: str) -> None:
             _record_failure(snapshot_id, str(exc))
             return
 
+        # The admired site, when the founder named one. Captured before any
+        # storage write: a check that will fail on its reference should fail
+        # before it has half-landed. Its failure fails the run — the founder
+        # asked to be judged against this site, and a verdict that silently
+        # dropped the comparison would not be the check they paid for.
+        reference_capture = None
+        if snapshot.get("reference_url"):
+            try:
+                reference_capture = await capture_website(snapshot["reference_url"])
+            except WebsiteCaptureError as exc:
+                _record_failure(snapshot_id, REFERENCE_FAILURE_PREFIX + str(exc))
+                return
+            # Bot walls return a tiny challenge page with a 200: the fetch
+            # "succeeds" and the critics would measure a CAPTCHA instead of the
+            # admired design. Found live when linear.app returned an 18KB
+            # not-Linear. A near-empty reference is a failed reference.
+            if len(reference_capture.dom_text or "") < 400:
+                _record_failure(
+                    snapshot_id,
+                    REFERENCE_FAILURE_PREFIX
+                    + "that site blocked automated readers, so there was "
+                    "nothing real to measure against. Try another site you "
+                    "admire.",
+                )
+                return
+
         paths = await upload_screenshots(
             organization_id=organization_id,
             snapshot_id=snapshot_id,
             capture=capture,
         )
+        reference_screenshot_path = None
+        if reference_capture is not None:
+            reference_screenshot_path = await _upload_reference_screenshot(
+                organization_id=organization_id,
+                snapshot_id=snapshot_id,
+                capture=reference_capture,
+            )
 
-        admin.table("website_snapshots").update({
+        capture_update = {
             "final_url": capture.final_url,
             "title": capture.title,
             "dom_chars": len(capture.dom_text or ""),
             "screenshot_desktop_path": paths["desktop"],
             "screenshot_mobile_path": paths["mobile"],
             "status": "judging",
-        }).eq("id", snapshot_id).execute()
+        }
+        if reference_screenshot_path:
+            capture_update["reference_screenshot_path"] = reference_screenshot_path
+        admin.table("website_snapshots").update(capture_update).eq(
+            "id", snapshot_id
+        ).execute()
 
         try:
             critique = await run_critic_gauntlet(
-                capture, organization_id=organization_id
+                capture,
+                reference=reference_capture,
+                organization_id=organization_id,
             )
         except CriticError as exc:
             _record_failure(snapshot_id, str(exc))
             return
+
+        await _store_design_gallery_row(
+            snapshot,
+            organization_id=organization_id,
+            capture=capture,
+            overall_score=critique.model_dump().get("overall_score"),
+            paths=paths,
+        )
 
         document_id = await _store_page_document(
             snapshot, organization_id=organization_id, capture=capture
@@ -159,6 +226,81 @@ def _compose_page_markdown(capture: Any) -> str:
         parts += ["", description]
     parts += ["", excerpt]
     return "\n".join(parts) + "\n"
+
+
+async def _upload_reference_screenshot(
+    *, organization_id: str, snapshot_id: str, capture: Any
+) -> str:
+    """Store the admired site's desktop PNG beside the snapshot's own pair.
+
+    `upload_screenshots` (services/website/store) owns the founder's page at
+    both viewports; the reference contributes one desktop frame, under the same
+    org-scoped prefix, named so nothing that globs the snapshot's own
+    screenshots ever confuses the two.
+    """
+    path = f"website/{organization_id}/{snapshot_id}/reference-desktop.png"
+    bucket = get_supabase_admin().storage.from_(SCREENSHOT_BUCKET)
+    bucket.upload(path, capture.screenshot_desktop, {"content-type": "image/png"})
+    logger.info(
+        "website_reference_screenshot_stored",
+        organization_id=organization_id,
+        snapshot_id=snapshot_id,
+        desktop_bytes=len(capture.screenshot_desktop),
+    )
+    return path
+
+
+async def _store_design_gallery_row(
+    snapshot: dict[str, Any],
+    *,
+    organization_id: str,
+    capture: Any,
+    overall_score: int | None,
+    paths: dict[str, str],
+) -> None:
+    """Distil the page's design into the gallery; never fail the check for it.
+
+    The critique is the paid deliverable; the gallery row is the byproduct
+    that accumulates into the before/after showcase (PRD_V3 §4 — flagged, not
+    built). So every failure here — the DNA extraction, the insert itself —
+    is logged whole and swallowed: a founder's check must not fail because
+    the platform's byproduct did.
+    """
+    try:
+        from app.services.website.design_dna import extract_design_dna
+
+        dna = await extract_design_dna(capture, organization_id=organization_id)
+        get_supabase_admin().table("design_gallery").insert({
+            "organization_id": organization_id,
+            "project_id": snapshot.get("project_id"),
+            "snapshot_id": snapshot["id"],
+            "url": capture.final_url or snapshot["url"],
+            "characterization": dna.characterization,
+            "summary": dna.summary,
+            "style_tags": dna.style_tags,
+            "maturity_level": dna.maturity_level,
+            "maturity_rationale": dna.maturity_rationale,
+            "tokens": dna.tokens.model_dump(),
+            "census": getattr(capture, "style_census", None) or {},
+            "design_md": dna.design_md,
+            "overall_score": overall_score,
+            "screenshot_desktop_path": paths["desktop"],
+            "screenshot_mobile_path": paths["mobile"],
+            "reference_url": snapshot.get("reference_url"),
+            "created_at": datetime.now(UTC).isoformat(),
+        }).execute()
+        logger.info(
+            "design_gallery_row_stored",
+            snapshot_id=snapshot["id"],
+            organization_id=organization_id,
+            maturity_level=dna.maturity_level,
+        )
+    except Exception:
+        logger.exception(
+            "design_gallery_store_failed",
+            snapshot_id=snapshot["id"],
+            organization_id=organization_id,
+        )
 
 
 def _record_failure(snapshot_id: str, message: str) -> None:

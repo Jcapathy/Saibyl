@@ -1,6 +1,6 @@
 """Website capture and vision: the evidence pipeline can't lie about what it saw.
 
-No live browser and no network anywhere in this file. Four claims:
+No live browser and no network anywhere in this file. Five claims:
 
 **The module imports where Playwright is absent.** The dev venv and CI carry no
 browser runtime — only the Docker image does — so `services/website/capture`
@@ -18,6 +18,12 @@ public hostname that lands on a private address.
 `meta` — a report must never judge half a page as the whole page silently —
 and an endless page is clipped, noted, rather than rendered into an image no
 model accepts.
+
+**The style census measures, and never endangers the capture.** The desktop
+pass tallies computed styles into `style_census` — fonts, colors, spacing,
+radii, shadows, structure — normalized, hex-converted and capped in Python so
+the census is bounded and deterministic. A census that fails for any reason
+ships empty; the screenshots and text are never hostage to it.
 
 **`llm_vision` puts the images on the wire, or refuses.** litellm's message
 conversion silently drops Anthropic-native image blocks, which is why
@@ -93,6 +99,11 @@ class _FakePage:
 
     async def evaluate(self, script: str):
         # Keyed on marker substrings the module guarantees in its script constants.
+        if "getComputedStyle" in script:
+            raises = self._spec.get("census_raises")
+            if raises is not None:
+                raise raises
+            return self._spec.get("census_raw", {})
         if "querySelectorAll('meta')" in script:
             return dict(self._spec.get("meta", {}))
         if "innerText" in script:
@@ -352,7 +363,147 @@ async def test_a_timeout_names_the_budget_it_exhausted(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Claim 4: llm_vision puts the images on the wire, or refuses
+# Claim 4: the style census measures, and never endangers the capture
+# ---------------------------------------------------------------------------
+
+#: What the census script would tally on a small page: raw {value: count}
+#: maps, exactly the shape `_normalize_census` receives from the browser.
+_RAW_CENSUS = {
+    "sampled": 42,
+    "font_families": {'"Space Grotesk", sans-serif': 30, "Arial, sans-serif": 12},
+    "font_weights": {"400": 28, "700": 14},
+    "font_sizes": {"16px": 25, "48px": 4},
+    "letter_spacing": {"headings": {"-0.02em": 4}, "body": {"normal": 38}},
+    "line_heights": {"24px": 30},
+    "text_colors": {"rgb(16, 20, 24)": 40, "rgba(16, 20, 24, 0.5)": 2},
+    "background_colors": {"rgb(245, 242, 236)": 6},
+    "border_colors": {"rgb(220, 220, 220)": 3},
+    "border_radii": {"8px": 9},
+    "box_shadows": {"rgba(0, 0, 0, 0.08) 0px 1px 2px 0px": 5},
+    "spacing": {"24px": 40, "16px": 30, "8px": 22, "32px": 10, "40px": 5},
+    "structure": {"headings": {"h1": 1, "h2": 4}, "buttons": 3, "links": 12, "images": 6},
+}
+
+
+def test_the_census_script_carries_its_marker_and_the_sample_cap():
+    """The constant exists, is fake-able by its marker, and embeds the cap."""
+    assert "getComputedStyle" in capture_mod._STYLE_CENSUS_JS
+    assert str(capture_mod._CENSUS_MAX_ELEMENTS) in capture_mod._STYLE_CENSUS_JS
+
+
+async def test_the_census_is_wired_into_the_desktop_pass_and_normalized(monkeypatch):
+    monkeypatch.setattr(
+        security.socket, "getaddrinfo", _resolving({"acme.example": _PUBLIC_IP})
+    )
+    _install_fake_playwright(monkeypatch, {"census_raw": dict(_RAW_CENSUS)})
+
+    result = await capture_website("https://acme.example/")
+    census = result.style_census
+
+    assert census["sampled_elements"] == 42
+    assert census["fonts"]["families"][0] == {
+        "stack": '"Space Grotesk", sans-serif',
+        "family": "Space Grotesk",
+        "count": 30,
+    }
+    assert census["fonts"]["weights"][0] == {"value": "400", "count": 28}
+    assert census["fonts"]["sizes"][0] == {"value": "16px", "count": 25}
+
+    # Colors arrive as rgb()/rgba() and leave as hex — alpha kept as hex8.
+    assert census["color"]["text"][0] == {"value": "#101418", "count": 40}
+    assert census["color"]["text"][1]["value"] == "#10141880"
+    assert census["color"]["background"][0]["value"] == "#f5f2ec"
+    assert census["color"]["border"][0]["value"] == "#dcdcdc"
+
+    assert census["text"]["letter_spacing"]["headings"][0]["value"] == "-0.02em"
+    assert census["text"]["letter_spacing"]["body"][0]["value"] == "normal"
+    assert census["shape"]["border_radius"][0] == {"value": "8px", "count": 9}
+    assert census["shape"]["box_shadow"][0]["count"] == 5
+
+    # The grid guess is Python arithmetic over the top values: gcd(24,16,8,32,40).
+    assert census["spacing"]["values"][0] == {"value": "24px", "count": 40}
+    assert census["spacing"]["base_unit_px"] == 8
+
+    assert census["structure"] == {
+        "headings": {"h1": 1, "h2": 4},
+        "buttons": 3,
+        "links": 12,
+        "images": 6,
+    }
+
+
+async def test_a_census_failure_never_fails_the_capture(monkeypatch):
+    monkeypatch.setattr(
+        security.socket, "getaddrinfo", _resolving({"acme.example": _PUBLIC_IP})
+    )
+    _install_fake_playwright(monkeypatch, {
+        "title": "Acme — Ship faster",
+        "dom_text": "Welcome to Acme.",
+        "census_raises": _FakePlaywrightError("Execution context was destroyed"),
+    })
+
+    result = await capture_website("https://acme.example/")
+
+    assert result.style_census == {}
+    assert result.title == "Acme — Ship faster"
+    assert result.dom_text == "Welcome to Acme."
+
+
+def test_census_caps_hold_on_a_pathologically_styled_page():
+    """A page with hundreds of one-off values still yields a bounded census."""
+    raw = {
+        "sampled": 800,
+        "font_families": {f"Font{i:02d}, serif": i + 1 for i in range(15)},
+        "font_weights": {str(100 * (i + 1)): i + 1 for i in range(9)},
+        "font_sizes": {f"{i}px": i + 1 for i in range(10, 40)},
+        "letter_spacing": {"body": {f"{i / 100}em": i + 1 for i in range(20)}},
+        "line_heights": {f"{i}px": i + 1 for i in range(10, 40)},
+        "text_colors": {f"rgb({i}, 0, 0)": i + 1 for i in range(30)},
+        "background_colors": {f"rgb(0, {i}, 0)": i + 1 for i in range(25)},
+        "border_colors": {f"rgb(0, 0, {i})": i + 1 for i in range(25)},
+        "border_radii": {f"{i}px": i + 1 for i in range(20)},
+        "box_shadows": {f"0 0 {i}px red": i + 1 for i in range(25)},
+        "spacing": {f"{i}px": i + 1 for i in range(1, 41)},
+        "structure": {"headings": {"h1": 1}, "buttons": 2, "links": 3, "images": 4},
+    }
+
+    census = capture_mod._normalize_census(raw)
+
+    assert len(census["fonts"]["families"]) == 10
+    assert len(census["fonts"]["sizes"]) == 15
+    assert len(census["text"]["letter_spacing"]["body"]) == 10
+    assert len(census["text"]["line_heights"]) == 10
+    assert len(census["color"]["text"]) == 20
+    assert len(census["color"]["background"]) == 20
+    assert len(census["color"]["border"]) == 20
+    assert len(census["shape"]["border_radius"]) == 10
+    assert len(census["shape"]["box_shadow"]) == 10
+    assert len(census["spacing"]["values"]) == 15
+
+    # Most-used first, and no grid pretended into consecutive-integer chaos.
+    assert census["spacing"]["values"][0]["value"] == "40px"
+    assert census["spacing"]["base_unit_px"] is None
+
+
+def test_an_empty_or_malformed_census_normalizes_to_nothing():
+    assert capture_mod._normalize_census({}) == {}
+    assert capture_mod._normalize_census(None) == {}
+    assert capture_mod._normalize_census("nonsense") == {}
+    assert capture_mod._normalize_census(["rgb(0, 0, 0)"]) == {}
+
+
+def test_css_colors_normalize_to_hex_only_where_parseable():
+    assert capture_mod._css_color_to_hex("rgb(255, 255, 255)") == "#ffffff"
+    assert capture_mod._css_color_to_hex("rgb(16, 20, 24)") == "#101418"
+    assert capture_mod._css_color_to_hex("rgba(0, 0, 0, 0.5)") == "#00000080"
+    assert capture_mod._css_color_to_hex("rgb(0 128 255 / 0.25)") == "#0080ff40"
+    # Anything the parser does not understand passes through untouched.
+    assert capture_mod._css_color_to_hex("color(display-p3 1 0 0)") == "color(display-p3 1 0 0)"
+    assert capture_mod._css_color_to_hex("rgb(300, 0, 0)") == "rgb(300, 0, 0)"
+
+
+# ---------------------------------------------------------------------------
+# Claim 5: llm_vision puts the images on the wire, or refuses
 # ---------------------------------------------------------------------------
 
 def _fake_anthropic(monkeypatch) -> list[dict]:

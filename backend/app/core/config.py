@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     # entirely — the API answers 404, not 403 — until it returns as a paid
     # module. Env var: CRISIS_ENABLED.
     crisis_enabled: bool = False
+    # The platform owner's org; empty disables the admin routes entirely
+    # (they answer 404, like crisis above). Env var: ADMIN_ORGANIZATION_ID.
+    admin_organization_id: str = ""
 
     model_config = {"env_file": ["../.env", ".env"], "env_file_encoding": "utf-8"}
 

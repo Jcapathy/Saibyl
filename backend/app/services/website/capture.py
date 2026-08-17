@@ -25,13 +25,23 @@ then; the re-check guarantees its content never leaves this function.
 **Playwright is imported lazily, inside the call.** The local dev venv and CI
 have no browser runtime — only the Docker image does (see the Dockerfile) — so
 this module must import cleanly everywhere, and tests mock the import boundary.
+
+One soft rule: **the style census is best-effort.** Alongside the screenshots,
+the desktop pass measures the page's computed styles — fonts, colors, spacing,
+radii, shadows — into `style_census`, the numbers that let a later reviewer say
+"your letter-spacing is X" instead of guessing. A page that defeats the census
+(a hostile stylesheet, a mid-walk navigation) still captures; the census logs
+its failure and ships empty, because the screenshots and text are the evidence
+the product cannot do without and the census is the evidence it is better with.
 """
 from __future__ import annotations
 
+import math
+import re
 from typing import Any
 
 import structlog
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.core.security import validate_external_url
 
@@ -70,6 +80,76 @@ _META_TAGS_JS = """() => {
   return out;
 }"""
 
+# The style census samples computed styles across the page so a later reviewer
+# argues from measured numbers, not vibes. The JS side only tallies raw values
+# (value -> count); every cap, sort, hex conversion and the base-unit guess
+# happen in `_normalize_census` below, in Python, where they are testable
+# without a browser. All caps keep the census a bounded, deterministic dict.
+_CENSUS_MAX_ELEMENTS = 800  # visible elements sampled; embedded in the JS below
+_CENSUS_TOP_COLORS = 20  # text / background / border colors kept, each
+_CENSUS_TOP_SPACING = 15  # margin/padding histogram entries kept
+_CENSUS_TOP_SIZES = 15  # font-size histogram entries kept
+_CENSUS_TOP_SHADOWS = 10  # box-shadow values kept
+_CENSUS_TOP_COMMON = 10  # families, weights, line-heights, letter-spacings, radii
+
+# Marker string for tests (the `getComputedStyle` call), same pattern as the
+# meta/dom scripts above. Skips invisible elements, tallies computed styles,
+# and counts structure document-wide; the sample cap keeps one pathological
+# page from turning the census into a page crawl.
+_STYLE_CENSUS_JS = ("""() => {
+  const CAP = """ + str(_CENSUS_MAX_ELEMENTS) + """;
+  const SKIP = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'META', 'LINK', 'HEAD', 'TITLE', 'BR', 'HR']);
+  const tally = (map, key) => { if (key) map[key] = (map[key] || 0) + 1; };
+  const out = {
+    sampled: 0,
+    font_families: {}, font_weights: {}, font_sizes: {},
+    letter_spacing: { headings: {}, body: {} },
+    line_heights: {},
+    text_colors: {}, background_colors: {}, border_colors: {},
+    border_radii: {}, box_shadows: {},
+    spacing: {},
+    structure: {
+      headings: {
+        h1: document.querySelectorAll('h1').length,
+        h2: document.querySelectorAll('h2').length,
+        h3: document.querySelectorAll('h3').length,
+        h4: document.querySelectorAll('h4').length,
+        h5: document.querySelectorAll('h5').length,
+        h6: document.querySelectorAll('h6').length,
+      },
+      buttons: document.querySelectorAll('button, [role="button"], input[type="submit"], input[type="button"]').length,
+      links: document.querySelectorAll('a[href]').length,
+      images: document.querySelectorAll('img').length,
+    },
+  };
+  const elements = document.body ? document.body.querySelectorAll('*') : [];
+  for (const el of elements) {
+    if (out.sampled >= CAP) break;
+    if (SKIP.has(el.tagName)) continue;
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) continue;
+    const cs = getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+    out.sampled += 1;
+    tally(out.font_families, cs.fontFamily);
+    tally(out.font_weights, cs.fontWeight);
+    tally(out.font_sizes, cs.fontSize);
+    const isHeading = /^H[1-6]$/.test(el.tagName);
+    tally(isHeading ? out.letter_spacing.headings : out.letter_spacing.body, cs.letterSpacing);
+    tally(out.line_heights, cs.lineHeight);
+    tally(out.text_colors, cs.color);
+    const bg = cs.backgroundColor;
+    if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') tally(out.background_colors, bg);
+    if (cs.borderTopStyle !== 'none' && cs.borderTopWidth !== '0px') tally(out.border_colors, cs.borderTopColor);
+    if (cs.borderRadius && cs.borderRadius !== '0px') tally(out.border_radii, cs.borderRadius);
+    if (cs.boxShadow && cs.boxShadow !== 'none') tally(out.box_shadows, cs.boxShadow);
+    const box = [cs.marginTop, cs.marginRight, cs.marginBottom, cs.marginLeft,
+                 cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft];
+    for (const v of box) { if (v && v !== '0px' && v !== 'auto') tally(out.spacing, v); }
+  }
+  return out;
+}""")
+
 # Chromium's net error codes, translated for the person who typed the URL. The
 # raw form ("net::ERR_NAME_NOT_RESOLVED at https://…") reads as a stack trace
 # to a founder; the report surfaces these messages verbatim.
@@ -101,6 +181,9 @@ class WebsiteCapture(BaseModel):
     meta: dict
     screenshot_desktop: bytes  # PNG
     screenshot_mobile: bytes  # PNG
+    # Measured computed styles (see `_normalize_census` for the shape). Empty
+    # when the census could not run — never a reason the capture itself fails.
+    style_census: dict = Field(default_factory=dict)
 
 
 def _import_playwright() -> Any:
@@ -188,6 +271,7 @@ async def capture_website(url: str, *, timeout_s: int = 45) -> WebsiteCapture:
         meta=meta,
         screenshot_desktop=desktop["screenshot"],
         screenshot_mobile=mobile["screenshot"],
+        style_census=desktop.get("style_census") or {},
     )
 
 
@@ -215,6 +299,7 @@ async def _render(
             result["title"] = (await page.title()) or None
             result["meta"] = await page.evaluate(_META_TAGS_JS)
             result["dom_text"] = await page.evaluate(_DOM_TEXT_JS)
+            result["style_census"] = await _style_census(page, url)
 
         result["screenshot"], result["screenshot_truncated"] = await _screenshot(page, viewport)
         return result
@@ -237,6 +322,176 @@ async def _screenshot(page: Any, viewport: dict[str, int]) -> tuple[bytes, bool]
         )
         return shot, True
     return await page.screenshot(type="png", full_page=True), False
+
+
+async def _style_census(page: Any, url: str) -> dict:
+    """Measure the page's computed styles — best-effort by contract.
+
+    Whatever goes wrong here (a script error, a navigation mid-walk, a fake
+    page in tests that never learned the census) is logged and answered with
+    an empty census. The capture's hard evidence — screenshots, text, tags —
+    must never be hostage to the soft evidence.
+    """
+    try:
+        return _normalize_census(await page.evaluate(_STYLE_CENSUS_JS))
+    except Exception as exc:
+        logger.warning("style_census_failed", url=url, error=f"{type(exc).__name__}: {exc}")
+        return {}
+
+
+def _normalize_census(raw: object) -> dict:
+    """Order, cap and annotate the tallies the census script measured.
+
+    Pure and deterministic: same raw tallies in, same census out. Every list
+    is sorted by count (desc), then value (asc) for stable ties, and capped by
+    the `_CENSUS_TOP_*` constants; colors are normalized to hex; the spacing
+    base unit is guessed here — GCD of the most-used pixel values — because
+    arithmetic belongs in Python, not in a page-evaluated script.
+    """
+    if not isinstance(raw, dict) or not raw:
+        return {}
+    letter = raw.get("letter_spacing")
+    if not isinstance(letter, dict):
+        letter = {}
+    spacing_rows = _top(raw.get("spacing"), _CENSUS_TOP_SPACING)
+    return {
+        "sampled_elements": _as_count(raw.get("sampled")),
+        "fonts": {
+            "families": _font_families(raw.get("font_families")),
+            "weights": _top(raw.get("font_weights"), _CENSUS_TOP_COMMON),
+            "sizes": _top(raw.get("font_sizes"), _CENSUS_TOP_SIZES),
+        },
+        "text": {
+            "letter_spacing": {
+                "headings": _top(letter.get("headings"), _CENSUS_TOP_COMMON),
+                "body": _top(letter.get("body"), _CENSUS_TOP_COMMON),
+            },
+            "line_heights": _top(raw.get("line_heights"), _CENSUS_TOP_COMMON),
+        },
+        "color": {
+            "text": _hex_rows(_top(raw.get("text_colors"), _CENSUS_TOP_COLORS)),
+            "background": _hex_rows(_top(raw.get("background_colors"), _CENSUS_TOP_COLORS)),
+            "border": _hex_rows(_top(raw.get("border_colors"), _CENSUS_TOP_COLORS)),
+        },
+        "shape": {
+            "border_radius": _top(raw.get("border_radii"), _CENSUS_TOP_COMMON),
+            "box_shadow": _top(raw.get("box_shadows"), _CENSUS_TOP_SHADOWS),
+        },
+        "spacing": {
+            "values": spacing_rows,
+            "base_unit_px": _base_unit_guess(spacing_rows),
+        },
+        "structure": _structure(raw.get("structure")),
+    }
+
+
+def _as_count(value: object) -> int:
+    try:
+        return max(int(value), 0)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 0
+
+
+def _top(tally: object, limit: int) -> list[dict]:
+    """A raw `{value: count}` tally as `[{value, count}]`, sorted and capped."""
+    if not isinstance(tally, dict):
+        return []
+    rows = []
+    for value, count in tally.items():
+        n = _as_count(count)
+        if n > 0:
+            rows.append((str(value), n))
+    rows.sort(key=lambda pair: (-pair[1], pair[0]))
+    return [{"value": value, "count": n} for value, n in rows[:limit]]
+
+
+def _font_families(tally: object) -> list[dict]:
+    """Font stacks with counts, the first family split out for easy naming.
+
+    The split-out key is `family` — the name downstream readers (the critics'
+    census digest, the design-DNA prompt) reach for first.
+    """
+    return [
+        {"stack": row["value"], "family": _first_family(row["value"]), "count": row["count"]}
+        for row in _top(tally, _CENSUS_TOP_COMMON)
+    ]
+
+
+def _first_family(stack: str) -> str:
+    return stack.split(",", 1)[0].strip().strip("'\"")
+
+
+_RGB_RE = re.compile(r"rgba?\(([^)]*)\)")
+
+
+def _hex_rows(rows: list[dict]) -> list[dict]:
+    return [{"value": _css_color_to_hex(row["value"]), "count": row["count"]} for row in rows]
+
+
+def _css_color_to_hex(value: str) -> str:
+    """`rgb(…)`/`rgba(…)` as `#rrggbb` (or `#rrggbbaa`); anything else as-is."""
+    match = _RGB_RE.fullmatch(value.strip())
+    if not match:
+        return value
+    parts = match.group(1).replace("/", " ").replace(",", " ").split()
+    if len(parts) not in (3, 4):
+        return value
+    try:
+        r, g, b = (round(float(part)) for part in parts[:3])
+        alpha = float(parts[3]) if len(parts) == 4 else 1.0
+    except ValueError:
+        return value
+    if not all(0 <= c <= 255 for c in (r, g, b)) or not 0.0 <= alpha <= 1.0:
+        return value
+    out = f"#{r:02x}{g:02x}{b:02x}"
+    if alpha < 1.0:
+        out += f"{round(alpha * 255):02x}"
+    return out
+
+
+def _base_unit_guess(spacing_rows: list[dict]) -> int | None:
+    """The GCD of the most-used spacing values, in px — the grid, if one exists.
+
+    Hairlines (0/1px) are ignored so a border-heavy page cannot flatten the
+    guess to 1, and a GCD under 2 is reported as no grid at all rather than a
+    meaningless "1px system".
+    """
+    values = []
+    for row in spacing_rows[:8]:
+        px = _px_int(str(row["value"]))
+        if px is not None and px >= 2:
+            values.append(px)
+    if not values:
+        return None
+    unit = values[0]
+    for value in values[1:]:
+        unit = math.gcd(unit, value)
+    return unit if unit >= 2 else None
+
+
+def _px_int(value: str) -> int | None:
+    if not value.endswith("px"):
+        return None
+    try:
+        return round(float(value[:-2]))
+    except ValueError:
+        return None
+
+
+def _structure(raw: object) -> dict:
+    if not isinstance(raw, dict):
+        return {}
+    headings = raw.get("headings")
+    out: dict[str, Any] = {
+        "headings": (
+            {str(level): _as_count(count) for level, count in headings.items()}
+            if isinstance(headings, dict)
+            else {}
+        )
+    }
+    for key in ("buttons", "links", "images"):
+        out[key] = _as_count(raw.get(key))
+    return out
 
 
 def _failure_reason(exc: Exception) -> str:

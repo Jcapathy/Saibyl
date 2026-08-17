@@ -9,6 +9,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api import (
     accuracy,
+    admin,
     analysis,
     auth,
     billing,
@@ -150,6 +151,7 @@ def create_app() -> FastAPI:
     app.include_router(billing.router, prefix="/api/billing")
     app.include_router(clearance.router, prefix="/api/clearance")
     app.include_router(website.router, prefix="/api/website")
+    app.include_router(admin.router, prefix="/api/admin")
     # Mounted at /api because its paths are nested under /simulations/{id}/…
     # but it is a separate module from the simulation lifecycle router.
     # Registered after simulations.router so no path can shadow one of its

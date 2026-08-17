@@ -54,6 +54,7 @@ class _Query:
         self._store = store
         self._calls = calls
         self._filters: dict[str, object] = {}
+        self._in: dict[str, tuple] = {}
         self._op: str | None = None
         self._payload = None
         self._columns: list[str] | None = None
@@ -83,6 +84,10 @@ class _Query:
         self._filters[column] = value
         return self
 
+    def in_(self, column: str, values):
+        self._in[column] = tuple(values)
+        return self
+
     def order(self, column: str, desc: bool = False):
         self._order = (column, desc)
         return self
@@ -110,6 +115,7 @@ class _Query:
             row
             for row in rows
             if all(row.get(k) == v for k, v in self._filters.items())
+            and all(row.get(k) in v for k, v in self._in.items())
         ]
 
         if self._op == "update":
@@ -461,8 +467,10 @@ def _install_services(
 
     critique_obj = SimpleNamespace(model_dump=lambda: CRITIQUE)
 
-    async def run_critic_gauntlet(capture, *, organization_id=None):
-        calls.critics = SimpleNamespace(capture=capture, organization_id=organization_id)
+    async def run_critic_gauntlet(capture, *, reference=None, organization_id=None):
+        calls.critics = SimpleNamespace(
+            capture=capture, reference=reference, organization_id=organization_id
+        )
         if isinstance(critic_error, BaseException):
             raise critic_error
         if critic_error is not None:
