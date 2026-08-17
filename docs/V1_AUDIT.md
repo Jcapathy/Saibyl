@@ -203,6 +203,27 @@ decision, not item 36's, and item 39 stays open.
 > **item 39** (the no-caller subsystems, which needs a wire-up-or-delete decision
 > per subsystem; `/api/uploads` and the ingestion processors are now wired).
 >
+> **Status 2026-08-16 (Phase A, branch v3-prd):**
+> **19 — GC hazard closed, durability still open.** `app/core/tasks.spawn`
+> replaced all four `_safe_task` copies and holds a strong reference until each
+> task ends; a task can no longer vanish mid-run inside a healthy process. A
+> process restart still loses in-flight work — the durable-jobs half stays open.
+> **25 — deferred by decision, no longer a hard stop.** PRD_V3 §6: Stripe tiers
+> wait until the product functions as intended; free first run is the only
+> launch motion.
+> **39 — decided and executed.** Deleted: `/api/platforms` router, `/api/uploads`
+> shim, and the entire ontology subsystem (generator, critic, graph builder,
+> worker tasks, and the report engine's three graph tools, which had silently
+> no-oped forever because no UI-reachable writer for `knowledge_graphs` ever
+> existed) — 1,138 lines. **The "exports has no caller" note below is stale:**
+> `DashboardPage.tsx:130` calls `/reports/{id}/export`; it is the verified
+> production PDF path and stays. Residuals, deliberately not done: the orphaned
+> `project_assets` table (may hold V1-era uploads — founder sign-off required
+> to drop) and the now-inert `ontologies`-table read in `run_prepare_agents`.
+> **40 — fixed** (`e5f9312`): the `variant` parameter is removed rather than
+> defaulted; `simulation_analytics` defaults to the whole run, which also fixed
+> report chat's registry.
+>
 > **Item 36 now carries its evidence** — commit, file:line and the two root
 > causes — in the third-pass section above. It had been fixed in code while still
 > reading open here, which is the same failure mode as the defects this document

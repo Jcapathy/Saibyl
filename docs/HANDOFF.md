@@ -8,6 +8,33 @@ Still no live end-to-end run since the 2026-08-04 sweep — see §1.**
 Read this first in a new session. It is written to be read cold, with no memory
 of previous sessions.
 
+> ### ▶ 2026-08-16 — V3 Phase A landed on branch `v3-prd` (not yet merged)
+>
+> The product re-aimed: **`docs/PRD_V3.md` supersedes PRD_V2** (signed off by
+> the founder; the vision doc is `05_PRD/Saibyl-V3-Vision.html`). Phase A ships:
+> crisis shelved behind `CRISIS_ENABLED` (default false, 404), the tiered
+> idea-brief intake (five-question form → document → same pipeline; the
+> synthesizer's 1,000-char floor exempts idea briefs or they'd be silently
+> dropped), the report register rewritten for a founder reader, audit items
+> 19 (GC half) / 39 (executed, −1,138 lines) / 40 (variant removed) closed,
+> the three run-setup share bugs fixed, index.html metadata moved off the V1
+> story, and deploy.yml now actually gated on the suite.
+>
+> **Ops ordering on merge — this matters:**
+> 1. Migration **033 is already applied** to production (additive; required
+>    before this code serves).
+> 2. Migration **032 (drop asset_count + RPCs) is written but NOT applied —
+>    apply it only after this branch is deployed and serving**, or every
+>    upload/delete on the old code breaks.
+> 3. The Tallyhook demo org's 35 stray test credits were deducted (balance 0).
+> 4. After deploy: `POST /api/simulations/{id}/analysis/rebuild` exists — 
+>    rebuild the Tallyhook run before anyone exports it (stale frozen
+>    vocabulary; one small objection-grouping model call).
+>
+> The landing-page gauntlet redesign (prototype + two-round critique + 
+> CC-PROMPT 10) lives in `Saibyl Management/Saibyl Redesign/` — implementation
+> awaits the founder's approval of the direction.
+
 > ### ▶ If you are the overnight build session, read `docs/AUTONOMOUS_BUILD.md` instead.
 >
 > It carries standing authority to build, commit, deploy and verify without
