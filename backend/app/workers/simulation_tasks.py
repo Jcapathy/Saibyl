@@ -7,7 +7,6 @@ import structlog
 from app.core.database import get_supabase_admin
 from app.core.llm_client import _extract_json, llm_fast
 from app.services.billing.usage_ledger import usage_context
-from app.services.engine.ontology_generator import generate_ontology
 from app.services.engine.personas.icp_synthesizer import source_text
 from app.services.platforms.base_adapter import (
     DIRECTED_EVENT_TYPES,
@@ -21,19 +20,6 @@ logger = structlog.get_logger()
 
 # Limit concurrent LLM calls during agent generation to avoid rate limits
 _AGENT_GEN_SEMAPHORE = asyncio.Semaphore(8)
-
-
-async def run_generate_ontology(project_id: str):
-    result = await generate_ontology(project_id)
-    logger.info("task_generate_ontology_complete", project_id=project_id)
-    return {"ontology_id": result["id"]}
-
-
-async def run_build_knowledge_graph(project_id: str, ontology_id: str):
-    from app.services.engine.knowledge_graph_builder import build_graph
-    result = await build_graph(project_id, ontology_id)
-    logger.info("task_build_knowledge_graph_complete", project_id=project_id)
-    return {"knowledge_graph_id": result["id"]}
 
 
 def apportion(weights: Sequence[float], total: int) -> list[int]:

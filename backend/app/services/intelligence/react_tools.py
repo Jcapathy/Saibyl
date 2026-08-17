@@ -1,8 +1,5 @@
 # PUBLIC INTERFACE
 # ─────────────────────────────────────────────────────────
-# insight_forge(graph_id, query, ...) -> InsightResult
-# panorama_search(graph_id, category) -> PanoramaResult
-# quick_search(graph_id, query, limit) -> list[SearchResult]
 # simulation_analytics(simulation_id, analysis_type, ...) -> AnalyticsResult
 # agent_interview_tool(simulation_id, prompt, ...) -> list[InterviewResponse]
 # ─────────────────────────────────────────────────────────
@@ -15,7 +12,6 @@ import structlog
 from pydantic import BaseModel
 
 from app.core.database import get_supabase_admin
-from app.services.engine.knowledge_graph_builder import get_all_edges, get_all_nodes, search_graph
 from app.services.engine.personas.interview_engine import (
     InterviewResponse,
     interview_all,
@@ -27,29 +23,6 @@ logger = structlog.get_logger()
 
 # ── Result models ────────────────────────────────────────
 
-class InsightResult(BaseModel):
-    query: str
-    entities: list[dict]
-    relationships: list[dict]
-    facts: list[str]
-    total_results: int
-
-
-class PanoramaResult(BaseModel):
-    category: str
-    node_count: int
-    edge_count: int
-    entity_summaries: list[dict]
-    relationship_summaries: list[dict]
-
-
-class SearchResult(BaseModel):
-    name: str
-    summary: str
-    labels: list[str]
-    score: float
-
-
 class AnalyticsResult(BaseModel):
     analysis_type: str
     variant: str
@@ -57,106 +30,7 @@ class AnalyticsResult(BaseModel):
     summary: str
 
 
-# ── Tool 1: InsightForge ─────────────────────────────────
-
-async def insight_forge(
-    graph_id: str,
-    query: str,
-    entity_types: list[str] | None = None,
-    include_relationships: bool = True,
-    depth: int = 2,
-) -> InsightResult:
-    """Deep semantic search of knowledge graph with relationship traversal."""
-    nodes = await search_graph(UUID(graph_id), query, limit=depth * 10)
-
-    # Filter by entity types if specified
-    if entity_types:
-        nodes = [n for n in nodes if any(t in n.labels for t in entity_types)]
-
-    entities = [{"name": n.name, "summary": n.summary, "labels": n.labels} for n in nodes]
-    relationships = []
-    facts = []
-
-    if include_relationships:
-        edges = await get_all_edges(UUID(graph_id))
-        node_uuids = {n.uuid for n in nodes}
-        for edge in edges:
-            if edge.source_uuid in node_uuids or edge.target_uuid in node_uuids:
-                relationships.append({
-                    "type": edge.relationship_type,
-                    "source": edge.source_uuid,
-                    "target": edge.target_uuid,
-                    "facts": edge.facts,
-                })
-                facts.extend(edge.facts)
-
-    return InsightResult(
-        query=query,
-        entities=entities,
-        relationships=relationships,
-        facts=facts,
-        total_results=len(entities),
-    )
-
-
-# ── Tool 2: PanoramaSearch ───────────────────────────────
-
-async def panorama_search(
-    graph_id: str,
-    category: Literal["all", "active", "historical", "entities", "relationships"] = "all",
-) -> PanoramaResult:
-    """Breadth-first retrieval of all entities and edges."""
-    nodes = await get_all_nodes(UUID(graph_id))
-    edges = await get_all_edges(UUID(graph_id))
-
-    entity_summaries = [
-        {"name": n.name, "summary": n.summary, "labels": n.labels}
-        for n in nodes
-    ]
-    relationship_summaries = [
-        {"type": e.relationship_type, "facts": e.facts, "expired": e.is_expired}
-        for e in edges
-    ]
-
-    if category == "entities":
-        relationship_summaries = []
-    elif category == "relationships":
-        entity_summaries = []
-    elif category == "active":
-        relationship_summaries = [r for r in relationship_summaries if not r["expired"]]
-    elif category == "historical":
-        relationship_summaries = [r for r in relationship_summaries if r["expired"]]
-
-    return PanoramaResult(
-        category=category,
-        node_count=len(entity_summaries),
-        edge_count=len(relationship_summaries),
-        entity_summaries=entity_summaries,
-        relationship_summaries=relationship_summaries,
-    )
-
-
-# ── Tool 3: QuickSearch ──────────────────────────────────
-
-async def quick_search(
-    graph_id: str,
-    query: str,
-    limit: int = 10,
-) -> list[SearchResult]:
-    """Fast keyword + semantic search for specific facts."""
-    nodes = await search_graph(UUID(graph_id), query, limit=limit)
-    return [
-        SearchResult(
-            name=n.name,
-            summary=n.summary,
-            labels=n.labels,
-            score=1.0 / (i + 1),  # rank-based score
-        )
-        for i, n in enumerate(nodes)
-    ]
-
-
-# ── Tool 4: SimulationAnalytics ──────────────────────────
+# ── Tool 1: SimulationAnalytics ──────────────────────────
 
 _NO_ARTIFACT = (
     "No analysis artifact exists for this simulation, so there are no measured "
@@ -372,7 +246,7 @@ async def simulation_analytics(
     )
 
 
-# ── Tool 5: AgentInterview ───────────────────────────────
+# ── Tool 2: AgentInterview ───────────────────────────────
 
 async def agent_interview_tool(
     simulation_id: UUID,

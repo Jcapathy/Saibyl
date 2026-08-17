@@ -17,27 +17,19 @@ from pydantic import BaseModel
 from app.core.config import settings
 from app.core.database import get_supabase_admin
 from app.core.llm_client import llm_complete
-from app.services.intelligence.react_tools import (
-    insight_forge,
-    quick_search,
-    simulation_analytics,
-)
+from app.services.intelligence.react_tools import simulation_analytics
 
 logger = structlog.get_logger()
 
 CHAT_TTL_SECONDS = 86400  # 24 hours
 
 AVAILABLE_TOOLS = {
-    "insight_forge": insight_forge,
-    "quick_search": quick_search,
     "simulation_analytics": simulation_analytics,
 }
 
 REACT_SYSTEM_PROMPT = """\
 You are an AI assistant helping users understand a simulation report.
-You have access to the following tools to gather additional context:
-- insight_forge: Generate deeper insights from simulation data.
-- quick_search: Search through simulation events and agent data.
+You have access to the following tool to gather additional context:
 - simulation_analytics: Compute analytics metrics for a simulation.
 
 When answering, decide whether you need to call a tool first.

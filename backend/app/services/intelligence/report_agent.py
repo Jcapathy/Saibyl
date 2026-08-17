@@ -29,9 +29,6 @@ from app.services.intelligence.analysis_builder import get_analysis
 from app.services.intelligence.analysis_data import MeasuredEvent, load_run_data
 from app.services.intelligence.react_tools import (
     agent_interview_tool,
-    insight_forge,
-    panorama_search,
-    quick_search,
     simulation_analytics,
 )
 
@@ -431,10 +428,8 @@ Research angles for this section: {research_angles}
 {lens_context}
 You have access to these tools (call by name). The tool names are internal — call \
 them by these names, and never name one in the text you write:
-1. insight_forge(query) — Deep semantic search of knowledge graph for entities, relationships, facts
-2. quick_search(query) — Fast keyword search for specific facts and data points
-3. simulation_analytics(type) — Analyze the run's data. Types: measured_findings, sentiment_over_time, platform_comparison, persona_breakdown, top_posts, viral_moments, agent_activity
-4. agent_interview(prompt) — Interview people from the run in-character about what they made of it
+1. simulation_analytics(type) — Analyze the run's data. Types: measured_findings, sentiment_over_time, platform_comparison, persona_breakdown, top_posts, viral_moments, agent_activity
+2. agent_interview(prompt) — Interview people from the run in-character about what they made of it
 
 Evidence gathered so far:
 {evidence}
@@ -442,10 +437,9 @@ Evidence gathered so far:
 Instructions:
 - If you need more evidence, respond with: TOOL: <tool_name>(<args>)
 - If you have enough evidence, respond with: ANSWER: <section content in markdown>
-- Use MULTIPLE different tools before writing your answer — do not answer after just 1-2 tool calls
+- Make MULTIPLE tool calls before writing your answer — do not answer after just 1-2 tool calls
 - Call simulation_analytics with DIFFERENT types to get varied data dimensions
 - Use agent_interview to get quotes in people's own words
-- Use insight_forge or quick_search for contextual knowledge beyond this run's data
 
 MEASUREMENT RULES — these are not style guidance:
 - Every sentiment, stance, intensity, or objection figure you state MUST come
@@ -852,7 +846,6 @@ async def _run_react_loop(
     section: SectionPlan,
     simulation_id: str,
     prediction_goal: str,
-    graph_id: str | None,
     config: ReACTConfig,
     platforms: str = "",
     lens_context: str = "",
@@ -906,7 +899,7 @@ async def _run_react_loop(
         if response.strip().startswith("TOOL:"):
             tool_line = response.split("TOOL:", 1)[1].strip()
             observation = await _execute_tool(
-                tool_line, simulation_id, graph_id, config
+                tool_line, simulation_id, config
             )
             evidence.append(f"[Tool: {tool_line}]\n{observation}")
         else:
@@ -939,28 +932,13 @@ async def _run_react_loop(
 async def _execute_tool(
     tool_line: str,
     simulation_id: str,
-    graph_id: str | None,
     config: ReACTConfig,
 ) -> str:
     """Parse and execute a tool call, return observation string."""
     tool_line = tool_line.strip()
 
     try:
-        if tool_line.startswith("insight_forge"):
-            query = _extract_arg(tool_line)
-            if graph_id:
-                result = await insight_forge(graph_id, query)
-                return f"Found {result.total_results} entities. Facts: {'; '.join(result.facts[:10])}"
-            return "No knowledge graph available."
-
-        elif tool_line.startswith("quick_search"):
-            query = _extract_arg(tool_line)
-            if graph_id:
-                results = await quick_search(graph_id, query)
-                return "\n".join(f"- {r.name}: {r.summary}" for r in results[:5])
-            return "No knowledge graph available."
-
-        elif tool_line.startswith("simulation_analytics"):
+        if tool_line.startswith("simulation_analytics"):
             atype = _extract_arg(tool_line)
             result = await simulation_analytics(UUID(simulation_id), atype)
             return f"{result.summary}\nData: {json.dumps(result.data, default=str)[:5000]}"
@@ -976,12 +954,6 @@ async def _execute_tool(
                     for r in responses
                 )
             return "Agent interviews disabled in config."
-
-        elif tool_line.startswith("panorama_search"):
-            if graph_id:
-                result = await panorama_search(graph_id)
-                return f"Graph overview: {result.node_count} nodes, {result.edge_count} edges"
-            return "No knowledge graph available."
 
         else:
             return f"Unknown tool: {tool_line}"
@@ -1025,12 +997,6 @@ async def generate_report(
         "id", count="exact"
     ).eq("simulation_id", sim_id).execute()
     agent_count = agents.count or 0
-
-    # Get knowledge graph ID
-    kg = admin.table("knowledge_graphs").select("id").eq(
-        "project_id", sim["project_id"]
-    ).eq("build_status", "complete").limit(1).execute().data
-    graph_id = kg[0]["id"] if kg else None
 
     # Report depth scales with run size in both directions. The old formula,
     # min(7, max(4, event_count // 30 + 2)), had a floor of 4 — so a 25-agent
@@ -1093,7 +1059,7 @@ async def generate_report(
             })
 
             content = await _run_react_loop(
-                section, sim_id, sim["prediction_goal"], graph_id, config,
+                section, sim_id, sim["prediction_goal"], config,
                 platforms=platforms, lens_context=lens_context,
             )
             content = clean_report_output(content)  # sanitise before DB write

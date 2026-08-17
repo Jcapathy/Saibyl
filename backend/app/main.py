@@ -18,16 +18,13 @@ from app.api import (
     gtm,
     icp,
     inoculation,
-    ontologies,
     organizations,
     packs,
     personas,
-    platforms,
     products,
     projects,
     reports,
     simulations,
-    uploads,
     variants,
     ws,
 )
@@ -135,7 +132,6 @@ def create_app() -> FastAPI:
     # same rows.
     app.include_router(products.router, prefix="/api/products")
     app.include_router(documents.router, prefix="/api/documents")
-    app.include_router(ontologies.router, prefix="/api/ontologies")
     app.include_router(simulations.router, prefix="/api/simulations")
     app.include_router(reports.router, prefix="/api/reports")
     app.include_router(personas.router, prefix="/api/persona-packs")
@@ -149,7 +145,6 @@ def create_app() -> FastAPI:
     app.include_router(gtm.router, prefix="/api/gtm")
     app.include_router(inoculation.router, prefix="/api/inoculation")
     app.include_router(variants.router, prefix="/api/variants")
-    app.include_router(platforms.router, prefix="/api/platforms")
     app.include_router(billing.router, prefix="/api/billing")
     # Mounted at /api because its paths are nested under /simulations/{id}/…
     # but it is a separate module from the simulation lifecycle router.
@@ -157,7 +152,6 @@ def create_app() -> FastAPI:
     # routes — the collision that made the export path unreachable in V1.
     app.include_router(analysis.router, prefix="/api")
     app.include_router(exports.router, prefix="/api")
-    app.include_router(uploads.router, prefix="/api/uploads")
     app.include_router(accuracy.router, prefix="/api/accuracy")
     app.include_router(comparison.router, prefix="/api/compare")
 
