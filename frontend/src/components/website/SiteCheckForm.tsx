@@ -20,6 +20,11 @@ import type { SiteCheck } from './types';
  * shows that sentence with the one control that fixes it — the same contract
  * the clearance form follows. A malformed address arrives as a 400/422 with
  * plain language in `detail`, rendered as given.
+ *
+ * The second box is optional and stays optional: a founder who names a site
+ * they admire gets their page measured against it — type, color, spacing, as
+ * numbers — and one who leaves it blank gets the same check as before. Left
+ * empty it sends nothing, so the backend never sees an empty-string address.
  */
 
 const inputBase =
@@ -34,6 +39,7 @@ export default function SiteCheckForm({
   onStarted: (check: SiteCheck) => void;
 }) {
   const [address, setAddress] = useState('');
+  const [reference, setReference] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<{ message: string; billing: boolean } | null>(
     null,
@@ -55,14 +61,21 @@ export default function SiteCheckForm({
     setError(null);
 
     // A founder types "yoursite.com"; the fetcher needs a scheme. Added
-    // quietly here rather than bounced back as a correction.
-    const url = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    // quietly here rather than bounced back as a correction — and the site
+    // they admire gets exactly the same courtesy.
+    const withScheme = (value: string) =>
+      /^https?:\/\//i.test(value) ? value : `https://${value}`;
+    const url = withScheme(trimmed);
+
+    const body: { project_id: string; url: string; reference_url?: string } = {
+      project_id: productId,
+      url,
+    };
+    const admired = reference.trim();
+    if (admired) body.reference_url = withScheme(admired);
 
     try {
-      const { data } = await api.post<SiteCheck>('/website/check', {
-        project_id: productId,
-        url,
-      });
+      const { data } = await api.post<SiteCheck>('/website/check', body);
       onStarted(data);
     } catch (err) {
       const status = err instanceof AxiosError ? err.response?.status : undefined;
@@ -110,6 +123,35 @@ export default function SiteCheckForm({
         placeholder="yoursite.com"
         className={inputBase}
       />
+
+      <div>
+        <label
+          htmlFor="site-check-reference"
+          className="block text-[12.5px] text-saibyl-silver"
+        >
+          A site you admire <span className="text-saibyl-muted">(optional)</span>
+        </label>
+        <p className="text-[11.5px] text-saibyl-muted mt-0.5 mb-1.5 leading-relaxed">
+          We&rsquo;ll measure yours against theirs &mdash; type, color, spacing,
+          the exact numbers.
+        </p>
+        <input
+          id="site-check-reference"
+          type="text"
+          inputMode="url"
+          autoComplete="url"
+          value={reference}
+          onChange={(e) => setReference(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              void submit();
+            }
+          }}
+          placeholder="theirsite.com"
+          className={inputBase}
+        />
+      </div>
 
       {error && (
         <div className="rounded-xl border border-saibyl-negative/25 bg-saibyl-negative/[0.07] p-4">

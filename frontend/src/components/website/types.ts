@@ -57,6 +57,11 @@ export interface SiteCheck {
   document_id?: string | null;
   error_message?: string | null;
   screenshot_paths?: Record<string, string> | string[] | null;
+  /** The site the founder asked to be measured against, when they named one. */
+  reference_url?: string | null;
+  reference_screenshot_path?: string | null;
+  /** Where the page's craft sits on the seven-level ladder, when judged. */
+  maturity_level?: number | null;
   created_at: string;
 }
 
@@ -111,9 +116,13 @@ const DIMENSION_WORDS: Record<string, { name: string; help: string }> = {
     name: 'On a phone',
     help: 'How the page holds up on a small screen.',
   },
+  design: {
+    name: 'The look',
+    help: 'Type, color, spacing — measured in numbers, not judged by feel.',
+  },
 };
 
-/** Spellings the backend could plausibly use for the same five. */
+/** Spellings the backend could plausibly use for the same six. */
 const DIMENSION_ALIASES: Record<string, string> = {
   conversion_path: 'conversion',
   copy_clarity: 'copy',
@@ -121,7 +130,15 @@ const DIMENSION_ALIASES: Record<string, string> = {
   accessibility: 'mobile',
   accessibility_mobile: 'mobile',
   mobile_accessibility: 'mobile',
+  design_system: 'design',
+  design_craft: 'design',
 };
+
+/** One spelling per dimension, whichever spelling the backend used. */
+function canonicalKey(key: string): string {
+  const normalized = key.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
+  return DIMENSION_ALIASES[normalized] ?? normalized;
+}
 
 /**
  * The founder-facing name and one-line reading of a dimension key.
@@ -130,14 +147,61 @@ const DIMENSION_ALIASES: Record<string, string> = {
  * dimension the backend adds later should arrive readable, not invisible.
  */
 export function dimensionWords(key: string): { name: string; help: string } {
-  const normalized = key.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
-  const named =
-    DIMENSION_WORDS[normalized] ??
-    DIMENSION_WORDS[DIMENSION_ALIASES[normalized] ?? ''];
+  const named = DIMENSION_WORDS[canonicalKey(key)];
   if (named) return named;
   const readable = key.replace(/[_-]+/g, ' ').trim();
   return {
     name: readable.charAt(0).toUpperCase() + readable.slice(1),
     help: '',
   };
+}
+
+/**
+ * Whether a dimension is the design one, under any of its spellings. The
+ * design card is the one that renders measured values and leads the grid
+ * when a reference site was named, so its identity has to survive a backend
+ * spelling change the same way its display name does.
+ */
+export function isDesignDimension(key: string): boolean {
+  return canonicalKey(key) === 'design';
+}
+
+/* ------------------------------------------------------------------ */
+/*  Design maturity                                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The design maturity level of a finished check, if the backend sent one.
+ *
+ * The contract for where this number lives is still settling — it may arrive
+ * on the row itself, on the critique, or inside the design dimension's own
+ * payload. This looks in each place in that order and takes the first value
+ * that reads as a level: a finite number from 1 to 7 (a numeric string
+ * counts). Anything else — absent, out of range, unparseable — is treated as
+ * "the backend did not judge this", and the caller renders nothing.
+ */
+export function maturityLevel(check: SiteCheck): number | null {
+  const candidates: unknown[] = [check.maturity_level];
+
+  const critique = check.critique;
+  if (critique) {
+    const extra = critique as unknown as Record<string, unknown>;
+    candidates.push(extra.maturity_level);
+    const designPayload = extra.design;
+    if (designPayload && typeof designPayload === 'object') {
+      candidates.push((designPayload as Record<string, unknown>).maturity_level);
+    }
+    for (const dimension of critique.dimensions) {
+      if (!isDesignDimension(dimension.key)) continue;
+      const carried = dimension as unknown as Record<string, unknown>;
+      candidates.push(carried.maturity_level, carried.maturity);
+    }
+  }
+
+  for (const value of candidates) {
+    if (value === null || value === undefined || value === '') continue;
+    const level = Math.round(Number(value));
+    if (Number.isFinite(level) && level >= 1 && level <= 7) return level;
+  }
+  return null;
 }
