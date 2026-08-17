@@ -3,6 +3,7 @@
 # WebsiteCapture                — the rendered evidence for one URL
 # WebsiteCaptureError           — capture failure, founder-readable message
 # capture_website(url, *, timeout_s=45) -> WebsiteCapture
+# capture_html(html, *, timeout_s=45) -> WebsiteCapture
 # ─────────────────────────────────────────────────────────
 """Fetch and render a founder-supplied URL into judgeable evidence (PRD V3 §4a).
 
@@ -49,6 +50,11 @@ logger = structlog.get_logger()
 
 DESKTOP_VIEWPORT = {"width": 1440, "height": 900}
 MOBILE_VIEWPORT = {"width": 390, "height": 844}
+
+# The address a string-rendered document reports as its `url` and `final_url`.
+# Nothing was fetched, so no real URL exists; the constant keeps every reader
+# (reports, storage paths, logs) agreeing on how that fact is spelled.
+REVISION_URL = "about:revision"
 
 # Full-page screenshots are evidence for vision critics, and an infinite-scroll
 # page would otherwise produce an image no model accepts. The cap trades the
@@ -218,7 +224,7 @@ async def capture_website(url: str, *, timeout_s: int = 45) -> WebsiteCapture:
         async with pw.async_playwright() as playwright:
             browser = await playwright.chromium.launch(headless=True)
             try:
-                desktop = await _render(browser, url, DESKTOP_VIEWPORT, timeout_s, mobile=False)
+                desktop = await _render(browser, DESKTOP_VIEWPORT, timeout_s, mobile=False, url=url)
 
                 # Redirects re-open the SSRF question: the guard above cleared
                 # the URL the founder typed, not the one the site landed on.
@@ -226,7 +232,7 @@ async def capture_website(url: str, *, timeout_s: int = 45) -> WebsiteCapture:
                 if final_url != url:
                     validate_external_url(final_url)
 
-                mobile = await _render(browser, url, MOBILE_VIEWPORT, timeout_s, mobile=True)
+                mobile = await _render(browser, MOBILE_VIEWPORT, timeout_s, mobile=True, url=url)
             finally:
                 await browser.close()
     except pw.TimeoutError as exc:
@@ -238,6 +244,107 @@ async def capture_website(url: str, *, timeout_s: int = 45) -> WebsiteCapture:
     except pw.Error as exc:
         raise WebsiteCaptureError(f"We couldn't load {url}: {_failure_reason(exc)}") from exc
 
+    return _assemble(url=url, final_url=final_url, desktop=desktop, mobile=mobile)
+
+
+async def capture_html(html: str, *, timeout_s: int = 45) -> WebsiteCapture:
+    """Render a provided HTML string through the same pipeline as a URL capture.
+
+    Same evidence bundle — desktop and mobile full-page screenshots, DOM text,
+    meta tags, style census — but the document is set directly on the page
+    rather than fetched, so there is no URL to SSRF-check and nothing to
+    redirect. `url` and `final_url` are both `REVISION_URL`, the honest
+    spelling of "this page never had an address".
+
+    The rendered document is still denied the network entirely — see
+    `_abort_external_request` for why.
+    """
+    pw = _import_playwright()
+
+    try:
+        async with pw.async_playwright() as playwright:
+            browser = await playwright.chromium.launch(headless=True)
+            try:
+                desktop = await _render(
+                    browser, DESKTOP_VIEWPORT, timeout_s, mobile=False, html=html
+                )
+                mobile = await _render(browser, MOBILE_VIEWPORT, timeout_s, mobile=True, html=html)
+            finally:
+                await browser.close()
+    except pw.TimeoutError as exc:
+        raise WebsiteCaptureError(
+            f"The page did not finish rendering within {timeout_s} seconds — its "
+            "markup may be too heavy for a browser to lay out. Generate it again."
+        ) from exc
+    except pw.Error as exc:
+        raise WebsiteCaptureError(
+            f"The page could not be rendered: {_failure_reason(exc)}"
+        ) from exc
+
+    return _assemble(url=REVISION_URL, final_url=REVISION_URL, desktop=desktop, mobile=mobile)
+
+
+async def _abort_external_request(route: Any) -> None:
+    """Deny the network to a string-rendered document.
+
+    A document that arrives as a string was written, not fetched — for page
+    revisions, written by a model — so any network request it makes is a
+    liability rather than a dependency: a beacon that reports where the page
+    is being judged, or a reference to a dead CDN that stalls the render until
+    the timeout. Everything except a data: URI (which never leaves the page)
+    is aborted; the self-contained contract says the page must render from
+    what it carries, and this is that contract enforced.
+    """
+    if str(route.request.url).startswith("data:"):
+        await route.continue_()
+        return
+    await route.abort()
+
+
+async def _render(
+    browser: Any,
+    viewport: dict[str, int],
+    timeout_s: int,
+    *,
+    mobile: bool,
+    url: str | None = None,
+    html: str | None = None,
+) -> dict[str, Any]:
+    """One viewport's pass: open the page, extract (desktop only), screenshot.
+
+    Exactly one of `url` (navigate to it) and `html` (set it as the document,
+    with all outbound requests aborted) is given; everything downstream of the
+    open — text, tags, census, screenshot — is the same pipeline either way.
+    """
+    context_kwargs: dict[str, Any] = {"viewport": viewport}
+    if mobile:
+        context_kwargs["is_mobile"] = True
+    context = await browser.new_context(**context_kwargs)
+    try:
+        page = await context.new_page()
+        if html is not None:
+            await context.route("**/*", _abort_external_request)
+            await page.set_content(html, timeout=timeout_s * 1000, wait_until="load")
+        else:
+            await page.goto(url, timeout=timeout_s * 1000, wait_until="load")
+
+        result: dict[str, Any] = {"final_url": page.url}
+        if not mobile:
+            # Text and tags are viewport-independent; extracting once keeps the
+            # mobile pass to what only it can provide — the mobile rendering.
+            result["title"] = (await page.title()) or None
+            result["meta"] = await page.evaluate(_META_TAGS_JS)
+            result["dom_text"] = await page.evaluate(_DOM_TEXT_JS)
+            result["style_census"] = await _style_census(page, url or REVISION_URL)
+
+        result["screenshot"], result["screenshot_truncated"] = await _screenshot(page, viewport)
+        return result
+    finally:
+        await context.close()
+
+
+def _assemble(*, url: str, final_url: str, desktop: dict, mobile: dict) -> WebsiteCapture:
+    """The two viewport passes as one WebsiteCapture, every cap noted in meta."""
     meta = dict(desktop["meta"] or {})
     dom_text = str(desktop["dom_text"] or "")
     if len(dom_text) > DOM_TEXT_MAX_CHARS:
@@ -273,38 +380,6 @@ async def capture_website(url: str, *, timeout_s: int = 45) -> WebsiteCapture:
         screenshot_mobile=mobile["screenshot"],
         style_census=desktop.get("style_census") or {},
     )
-
-
-async def _render(
-    browser: Any,
-    url: str,
-    viewport: dict[str, int],
-    timeout_s: int,
-    *,
-    mobile: bool,
-) -> dict[str, Any]:
-    """One viewport's pass: navigate, extract (desktop only), screenshot."""
-    context_kwargs: dict[str, Any] = {"viewport": viewport}
-    if mobile:
-        context_kwargs["is_mobile"] = True
-    context = await browser.new_context(**context_kwargs)
-    try:
-        page = await context.new_page()
-        await page.goto(url, timeout=timeout_s * 1000, wait_until="load")
-
-        result: dict[str, Any] = {"final_url": page.url}
-        if not mobile:
-            # Text and tags are viewport-independent; extracting once keeps the
-            # mobile pass to what only it can provide — the mobile rendering.
-            result["title"] = (await page.title()) or None
-            result["meta"] = await page.evaluate(_META_TAGS_JS)
-            result["dom_text"] = await page.evaluate(_DOM_TEXT_JS)
-            result["style_census"] = await _style_census(page, url)
-
-        result["screenshot"], result["screenshot_truncated"] = await _screenshot(page, viewport)
-        return result
-    finally:
-        await context.close()
 
 
 async def _screenshot(page: Any, viewport: dict[str, int]) -> tuple[bytes, bool]:

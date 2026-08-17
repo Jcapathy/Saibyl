@@ -210,13 +210,27 @@ async def llm_vision(
         extra["system"] = system
 
     client = AsyncAnthropic(api_key=_api_key())
-    response = await client.messages.create(
-        model=settings.llm_model,
-        messages=[{"role": "user", "content": content}],
-        temperature=temperature,
-        max_tokens=max_tokens,
-        **extra,
-    )
+    # The SDK refuses non-streaming requests whose max_tokens could exceed a
+    # ten-minute operation (raised live by the 32K revision ceiling) — large
+    # ceilings must stream and accumulate. Both paths end at the same usage
+    # object and text join.
+    if max_tokens > 8192:
+        async with client.messages.stream(
+            model=settings.llm_model,
+            messages=[{"role": "user", "content": content}],
+            temperature=temperature,
+            max_tokens=max_tokens,
+            **extra,
+        ) as stream:
+            response = await stream.get_final_message()
+    else:
+        response = await client.messages.create(
+            model=settings.llm_model,
+            messages=[{"role": "user", "content": content}],
+            temperature=temperature,
+            max_tokens=max_tokens,
+            **extra,
+        )
     usage = response.usage
     logger.info(
         "llm_vision",
