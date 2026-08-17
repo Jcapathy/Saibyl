@@ -35,6 +35,46 @@ of previous sessions.
 > The landing-page gauntlet redesign (prototype + two-round critique + 
 > CC-PROMPT 10) lives in `Saibyl Management/Saibyl Redesign/` — implementation
 > awaits the founder's approval of the direction.
+>
+> ### ▶ 2026-08-16 (later) — Phase IP shipped: the IP Check tab
+>
+> PRD_V3 §11 built, gated live, and deployed (`ab25c99`; route verified by
+> the 404→401 flip). Migration **034 applied to production before** the
+> deploy. Live gate: a STANDARD run on a real invention returned YELLOW with
+> Microsoft's prompt-injection filings as closest art (run
+> `596ab7f7-4c79-4db7-9282-8edfb658794a`, Saido Labs org), all honesty
+> markers intact; QUICK completed free end to end.
+>
+> **⚠ One manual step owed (founder): add `USPTO_ODP_API_KEY` and
+> `USPTO_TSDR_API_KEY` to the backend service's environment in the Render
+> dashboard** (values are in the root `.env` and in `Provisional Patent MCP
+> and Skill/`). Until then the deployed route 503s with the honest
+> "not configured yet" sentence. Local/worker runs with the root `.env` work.
+>
+> Known product decision parked: QUICK (0 deep reads) can report GREEN where
+> STANDARD's claim-reading finds YELLOW — consider "not evaluated at this
+> depth" for QUICK's headline. Founder's call; the skill's tier table is the
+> current law.
+>
+> ### ▶ 2026-08-16 (later still) — Phase B shipped: the website check
+>
+> PRD_V3 §4a–c built and gated live under the founder's no-gate order. The
+> audience step's third path: paste a URL → chromium captures desktop+mobile
+> full-page → five vision critics judge it (via `llm_vision`, which talks to
+> the Anthropic SDK **directly — litellm silently drops Anthropic-native
+> image blocks**, verified and pinned by a test) → the page's text joins the
+> founder's material (`material_kind='website_url'`, now subject material in
+> `subject_brief` too). Migration **035 applied to production before** the
+> deploy. Live gate: ParryAI's live page scored 56 overall (credibility 42)
+> with 50 named-element findings and paste-ready fixes — snapshot
+> `e544eda3-ede7-475b-baab-78d24662830c`, Saido Labs org.
+>
+> Ops notes: the Docker image now installs chromium at /ms-playwright (build
+> takes several minutes longer); SSRF on founder URLs goes through
+> `core/security.validate_external_url` before fetch AND after redirects;
+> website checks are 1,750 credits (PROVISIONAL — recalibrate from llm_usage
+> per §8). The shared OneDrive `.venv` fought `uv sync` with file locks —
+> local work now uses `UV_PROJECT_ENVIRONMENT=C:\Users\jcapa\.venvs\saibyl-v3`.
 
 > ### ▶ If you are the overnight build session, read `docs/AUTONOMOUS_BUILD.md` instead.
 >

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, FileText, Loader2 } from 'lucide-react';
+import { Check, FileText, Globe, Loader2 } from 'lucide-react';
 
 import api, { unwrapList } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
@@ -15,12 +15,27 @@ import {
   StageError,
 } from '@/components/stages/StagePrimitives';
 import { useProduct, useStage } from '@/components/stages/useProduct';
+import { SiteStatusChip } from '@/components/website/chips';
+import SiteCheckForm from '@/components/website/SiteCheckForm';
+import SiteCritique from '@/components/website/SiteCritique';
+import {
+  CHECK_PROGRESS,
+  isCheckUnderway,
+  type SiteCheck,
+  type SiteCheckListItem,
+} from '@/components/website/types';
 
 /**
  * Step 1 — who is going to react to this?
  *
  * Upload the deck, the landing page, the pricing page. One pass reads it and
  * proposes the buyers. The founder confirms, or corrects what looks wrong.
+ *
+ * Three ways in, one pipeline. A founder with files uploads them; a founder
+ * with only an idea answers five questions; a founder with a site pastes the
+ * address and the backend reads the page, judges it, and writes its text up
+ * as a document. All three paths end in the same documents list, read the
+ * same way.
  *
  * The confirm control is the interesting part and it is not decoration.
  * `POST /icp/{id}/confirm` writes `confirmed_at`, and stage 4 reads it to decide
@@ -65,17 +80,26 @@ export default function AudienceStagePage() {
   const [working, setWorking] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [checks, setChecks] = useState<SiteCheckListItem[]>([]);
+  const [activeCheck, setActiveCheck] = useState<SiteCheck | null>(null);
+  const [showSite, setShowSite] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const load = useCallback(() => {
     Promise.all([
       api.get('/documents', { params: { project_id: product.id } }),
       api.get('/icp', { params: { project_id: product.id } }),
+      api.get('/website/check', { params: { project_id: product.id } }),
     ])
-      .then(([docs, profiles]) => {
+      .then(([docs, profiles, siteChecks]) => {
         setDocuments(unwrapList<ProjectDocument>(docs.data).items);
         const list = unwrapList<ICPProfile>(profiles.data).items;
         setProfile(list.length > 0 ? list[0] : null);
+        setChecks(
+          [...unwrapList<SiteCheckListItem>(siteChecks.data).items].sort(
+            (a, b) => b.created_at.localeCompare(a.created_at),
+          ),
+        );
         setError('');
       })
       .catch((err) => setError(getErrorMessage(err, 'We could not read this step.')))
@@ -103,6 +127,81 @@ export default function AudienceStagePage() {
     const timer = setInterval(load, 3000);
     return () => clearInterval(timer);
   }, [documents, load]);
+
+  // Poll the site check that is underway. The worker moves it queued →
+  // capturing → judging → complete; when it lands, the page's text has become
+  // a document, so this refreshes exactly what the other two paths refresh —
+  // the documents poll above then carries the new row the rest of the way.
+  useEffect(() => {
+    if (!activeCheck || !isCheckUnderway(activeCheck.status)) return;
+    const id = activeCheck.id;
+    const timer = setInterval(() => {
+      api
+        .get<SiteCheck>(`/website/check/${id}`)
+        .then(({ data }) => {
+          setActiveCheck(data);
+          if (data.status === 'complete') {
+            load();
+            refresh();
+          }
+        })
+        .catch(() => {
+          // A missed poll is not a failed check — the next tick asks again,
+          // and the row keeps its last known state meanwhile.
+        });
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [activeCheck, load, refresh]);
+
+  // A founder who left mid-check and came back resumes where the worker is:
+  // the newest check still underway starts polling again, and the newest
+  // finished one shows what it found without another click.
+  useEffect(() => {
+    if (activeCheck !== null || checks.length === 0) return;
+    const candidate = checks.find(
+      (c) => isCheckUnderway(c.status) || c.status === 'complete',
+    );
+    if (!candidate) return;
+    api
+      .get<SiteCheck>(`/website/check/${candidate.id}`)
+      .then(({ data }) => setActiveCheck(data))
+      .catch(() => {
+        // The list row still shows its status, and opening it stays a click
+        // away — this prefetch failing quietly costs a click, not an answer.
+      });
+  }, [checks, activeCheck]);
+
+  /* The site path lands here still queued — nothing has been read yet. The
+     row is seeded so the list shows it at once, and the poll above carries it
+     to complete, at which point `load` and `refresh` run exactly as they do
+     for the other two paths. */
+  function checkStarted(check: SiteCheck) {
+    setShowSite(false);
+    setActiveCheck(check);
+    setChecks((prev) =>
+      prev.some((c) => c.id === check.id)
+        ? prev
+        : [
+            {
+              id: check.id,
+              url: check.url,
+              status: check.status,
+              overall_score: null,
+              created_at: check.created_at,
+            },
+            ...prev,
+          ],
+    );
+  }
+
+  function openCheck(id: string) {
+    api
+      .get<SiteCheck>(`/website/check/${id}`)
+      .then(({ data }) => setActiveCheck(data))
+      .catch((err) =>
+        setError(getErrorMessage(err, 'We could not open what that check found.')),
+      );
+  }
 
   async function upload() {
     if (pending.length === 0) return;
@@ -346,6 +445,111 @@ export default function AudienceStagePage() {
             </ul>
           )}
         </div>
+
+        {/* ── Or paste your site — the third way in ── */}
+        <div
+          id="site-check"
+          className={`scroll-mt-6 ${
+            documents.length > 0 || checks.length > 0 || activeCheck !== null
+              ? 'mt-6 pt-5 border-t border-white/[0.06]'
+              : 'mt-3'
+          }`}
+        >
+          {showSite ? (
+            <SiteCheckForm productId={product.id} onStarted={checkStarted} />
+          ) : checks.length === 0 && activeCheck === null ? (
+            <p className="text-[12.5px] text-saibyl-muted">
+              Something built already? We&rsquo;ll read the page like a buyer
+              would and tell you what a stranger takes away.{' '}
+              <button
+                type="button"
+                onClick={() => setShowSite(true)}
+                className="text-saibyl-gold hover:underline"
+              >
+                Or paste your site
+              </button>
+            </p>
+          ) : null}
+
+          {(activeCheck !== null || checks.length > 0) && (
+            <div className="mt-4 space-y-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-[13px] text-saibyl-platinum">Your site</p>
+                {!showSite && (
+                  <button
+                    type="button"
+                    onClick={() => setShowSite(true)}
+                    className="text-[12px] text-saibyl-gold hover:underline"
+                  >
+                    Check another page
+                  </button>
+                )}
+              </div>
+
+              {activeCheck !== null && isCheckUnderway(activeCheck.status) && (
+                <p className="flex items-center gap-2 text-[12.5px] text-saibyl-muted">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  {CHECK_PROGRESS[activeCheck.status]}
+                </p>
+              )}
+
+              <ul className="space-y-1.5">
+                {checks.map((row) => {
+                  /* While a check is underway the server list row lags the
+                     polled copy, so the polled copy wins for its own row. */
+                  const live = activeCheck?.id === row.id ? activeCheck : null;
+                  const status = live?.status ?? row.status;
+                  const score =
+                    live?.critique?.overall_score ?? row.overall_score;
+                  return (
+                    <li
+                      key={row.id}
+                      className="flex flex-wrap items-center gap-2.5 text-[12.5px]"
+                    >
+                      <Globe className="w-3.5 h-3.5 text-saibyl-muted shrink-0" />
+                      <span className="text-saibyl-platinum truncate">
+                        {row.url}
+                      </span>
+                      <SiteStatusChip status={status} />
+                      {typeof score === 'number' && (
+                        <span className="font-mono text-[11.5px] text-saibyl-muted">
+                          {Math.round(score)}/100
+                        </span>
+                      )}
+                      {status === 'complete' && activeCheck?.id !== row.id && (
+                        <button
+                          type="button"
+                          onClick={() => openCheck(row.id)}
+                          className="text-saibyl-gold hover:underline"
+                        >
+                          See what we found
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+
+              {activeCheck?.status === 'failed' && (
+                <SiteCritique
+                  check={activeCheck}
+                  onRetry={() => setShowSite(true)}
+                />
+              )}
+
+              {activeCheck?.status === 'complete' && (
+                <details open>
+                  <summary className="cursor-pointer text-[12.5px] text-saibyl-gold hover:underline select-none">
+                    What we found on {activeCheck.url}
+                  </summary>
+                  <div className="mt-3">
+                    <SiteCritique check={activeCheck} />
+                  </div>
+                </details>
+              )}
+            </div>
+          )}
+        </div>
       </section>
 
       {/* ── Who buys this ── */}
@@ -359,7 +563,7 @@ export default function AudienceStagePage() {
               headline="Nothing to read yet"
               body={
                 documents.length === 0
-                  ? 'We work out who buys this by reading what you have written. Upload the deck or the landing page — or, if the idea is all you have so far, answer five short questions and we will build your audience from those.'
+                  ? 'We work out who buys this by reading what you have written. Upload the deck or the landing page, paste your site’s address — or, if the idea is all you have so far, answer five short questions and we will build your audience from those.'
                   : 'We work out who buys this by reading what you have written. Upload the deck, the landing page or the pricing page and this step can run.'
               }
               action={{ label: 'Upload something', href: '#upload' }}
