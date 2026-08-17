@@ -12,6 +12,7 @@ from app.api import (
     analysis,
     auth,
     billing,
+    clearance,
     comparison,
     documents,
     exports,
@@ -146,6 +147,7 @@ def create_app() -> FastAPI:
     app.include_router(inoculation.router, prefix="/api/inoculation")
     app.include_router(variants.router, prefix="/api/variants")
     app.include_router(billing.router, prefix="/api/billing")
+    app.include_router(clearance.router, prefix="/api/clearance")
     # Mounted at /api because its paths are nested under /simulations/{id}/…
     # but it is a separate module from the simulation lifecycle router.
     # Registered after simulations.router so no path can shadow one of its

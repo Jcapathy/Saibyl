@@ -12,7 +12,8 @@
 # check_synthesis_budget(org_id) -> BudgetCheck
 # deduct_credits(org_id, credits) -> None
 # standard_run_credits() -> int
-# CREDITS_PER_USD, TIER_CREDIT_GRANTS, STANDARD_RUN
+# clearance_credits(tier) -> int
+# CREDITS_PER_USD, TIER_CREDIT_GRANTS, STANDARD_RUN, CLEARANCE_PRICING
 # ─────────────────────────────────────────────────────────
 """Run cost estimation, credit accounting, and budget enforcement.
 
@@ -1080,3 +1081,54 @@ def deduct_credits(org_id: UUID, credits: int) -> None:
     }).execute()
 
     logger.info("credits_deducted", org_id=str(org_id), deducted=credits)
+
+
+# ---------------------------------------------------------------------------
+# IP clearance (PRD_V3 §11) — fixed per-tier prices
+# ---------------------------------------------------------------------------
+
+# ⚠ PROVISIONAL COGS, estimated rather than measured. No clearance run has ever
+# written to the `llm_usage` ledger, so these are constructed from the work
+# each tier does, not from measured rows. **Re-derive after the first live
+# runs**, exactly as the 2026-08-03/04 recalibrations did for every simulation
+# stage above (the PRD §8 cost model): both of those passes found stages whose
+# construction and measured spend disagreed — the report writing six sections
+# where four were quoted is the canonical story — and these figures should be
+# assumed wrong in the same way until the ledger says otherwise.
+#
+# The USPTO APIs themselves are free (PRD_V3 §11), so COGS here is LLM-only:
+#
+#   QUICK          one small planning call                            ≈ $0.03
+#   STANDARD       one plan call + 3-5 claim deep-reads + the
+#                  report composition pass                            ≈ $0.40
+#   COMPREHENSIVE  the above plus assignee sweeps, continuity
+#                  mapping, and examiner behavior                     ≈ $1.20
+CLEARANCE_QUICK_COGS_USD = Decimal("0.03")
+CLEARANCE_STANDARD_COGS_USD = Decimal("0.40")
+CLEARANCE_COMPREHENSIVE_COGS_USD = Decimal("1.20")
+
+
+def _clearance_price_credits(cogs_usd: Decimal) -> int:
+    """Price COGS at the target margin, in credits: cogs / 0.2 at 80%."""
+    return credits_for(cogs_usd / (Decimal("1") - TARGET_MARGIN_PCT / Decimal("100")))
+
+
+# What each tier charges the founder. QUICK is free — the teaser that earns the
+# deeper tiers — but its cost constant above stays defined, because a free run
+# still spends real dollars and "free to the user" must never become
+# "unaccounted" when the ledger is reconciled.
+CLEARANCE_PRICING = {
+    "QUICK": 0,
+    "STANDARD": _clearance_price_credits(CLEARANCE_STANDARD_COGS_USD),  # 2,000
+    "COMPREHENSIVE": _clearance_price_credits(
+        CLEARANCE_COMPREHENSIVE_COGS_USD
+    ),  # 6,000
+}
+
+
+def clearance_credits(tier: str) -> int:
+    """Credits a clearance run of this tier charges: 0 / 2,000 / 6,000."""
+    try:
+        return CLEARANCE_PRICING[tier]
+    except KeyError:
+        raise ValueError(f"Unknown clearance tier: {tier!r}") from None
