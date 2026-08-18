@@ -10,6 +10,34 @@ since 2026-08-16).
 
 ---
 
+## 2026-08-17 (night) — Shipped to production, and the deploy gate was broken
+
+- **Master pushed and LIVE.** `master` = `ab0dc98`. Verified by discriminator
+  on the served CSS: `5268e9` (the new primary-gradient stop) present,
+  `0A0F1C` (the dark ground) absent. Backend verified too — the deployed
+  `/billing/credits` now returns `capped_run_credits`. Live screenshots of a
+  free account read by eye: plan "Free", cap 25, sidebar "About 1 more run".
+- **The CI gate had never once run.** Both workflows ran `uv sync --dev`,
+  which installs a PEP 735 `[dependency-groups]` table; this project declares
+  its dev tools under `[project.optional-dependencies]`, so uv installed none
+  and the step died at `Failed to spawn: ruff` before any test. Proven, not
+  reasoned: `uv export --extra dev` resolves ruff/pytest/black/pypdf, the old
+  form resolves zero. Fixed to `--extra dev`.
+- Then the suite ran and found the second gap: **CI had no Redis**, so seven
+  export tests errored on a refused connection (1,325 passed). Both workflows
+  now run a `redis:7-alpine` service, matching production. `test.yml` also
+  ran the weaker `tsc --noEmit` instead of `npm run build` — the exact gap
+  that shipped five errors past a "clean" frontend once before; it now runs
+  the same four gates as the deploy workflow. **Tests workflow is green.**
+- **⚠ OWED (founder): the Render deploy-hook secrets are empty.** The deploy
+  job runs `curl -sS -X POST ""` and fails with "URL rejected: Malformed
+  input" — `RENDER_DEPLOY_HOOK_BACKEND` / `..._FRONTEND` are not set in the
+  repo. Production updates anyway because **Render auto-deploys from GitHub
+  on its own**, which is why deploys have appeared to work while this job has
+  never succeeded. Decide one: add the two secrets, or delete the deploy job
+  and record that Render's own integration is the deploy path. As it stands
+  the repo shows a red Deploy workflow on every push to a healthy production.
+
 ## 2026-08-17 — The app-shell light restyle: built, proven, push to master OWED
 
 - Branch `v3-prd` pushed at `ac28cb4` — four commits: wave 0 (token

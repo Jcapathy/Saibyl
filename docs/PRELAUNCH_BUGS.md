@@ -37,6 +37,28 @@ reading code) landed on the same defect twice; those are noted.
 
 ---
 
+## Status — 2026-08-17 night
+
+**Fixed, shipped to production, and verified live:** P0-1 (the room's prove
+leg), P0-2 (the 0.00 feed), P0-4 (credits contradiction), P0-5 (the free-plan
+lie), P0-10 (no error boundary), P1-6 (dead error fallbacks), P1-8 (no axios
+timeout). Master = `ab0dc98`; discriminators and live screenshots recorded in
+INFRA_LOG.
+
+**Found while shipping, and fixed:** the CI gate had **never executed a single
+test** — `uv sync --dev` installed nothing because the dev tools are declared
+as an *extra*, so the step died at `ruff` — and once running, CI had no Redis.
+Both fixed; the Tests workflow is green for the first time. The Render
+deploy-hook secrets are empty, so that job cannot work; production updates
+through Render's own GitHub auto-deploy. Founder decision recorded in
+INFRA_LOG.
+
+**Still open below:** P0-3, P0-6, P0-7, P0-8, P0-9, P0-11, and the P1/P2
+tails. Two need a founder decision before code (P0-7 flagship vs free grant,
+P0-8 wire Google or remove it).
+
+---
+
 ## P0 — Launch blockers
 
 ### P0-1 · The flagship "prove it with the room" leg can never run **[verified]**
