@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff, AlertCircle, Building2 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
+import { getErrorMessage } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 
 /* ------------------------------------------------------------------ */
@@ -108,10 +109,10 @@ export default function SignupPage() {
          away. */
       navigate('/app/home');
     } catch (err: unknown) {
-      const axiosDetail = (err as { response?: { data?: { detail?: string } } })
-        ?.response?.data?.detail;
-      const msg = axiosDetail || (err instanceof Error ? err.message : 'Signup failed');
-      setError(msg);
+      // Same 422-array trap as the login page: `detail` is an array of
+      // validation objects, and setting it as state renders an object as a
+      // React child. `getErrorMessage` flattens both shapes.
+      setError(getErrorMessage(err, 'We could not create your account. Please try again.'));
     } finally {
       setLoading(false);
     }

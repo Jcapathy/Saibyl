@@ -9,6 +9,7 @@ from app.core.auth import get_current_org
 from app.services.billing.agent_pricing import (
     CREDITS_PER_USD,
     STANDARD_RUN,
+    capped_run_credits,
     check_credit_budget,
     estimate_simulation_cost,
     get_credit_balance,
@@ -234,6 +235,12 @@ async def credit_balance(auth: dict = Depends(get_current_org)):
         # deciding whether they can afford to click. Sent rather than computed
         # client-side: the run price is a pricing fact and belongs on one side.
         "standard_run_credits": per_run,
+        # And what a run costs at THIS tier's ceiling. The client must divide
+        # by this one to say "about N more runs": dividing a free balance by
+        # the 100-agent reference price answers a question a capped account
+        # cannot ask, and printed "About 0 more runs" to every new signup
+        # holding a grant that covers a full capped run.
+        "capped_run_credits": capped_run_credits(plan),
         # Aliases. The two readers of this endpoint were both written against
         # `balance`/`grant` and would have rendered silent zeros - a balance of
         # 0 is the one number that stops a founder clicking. Kept as aliases

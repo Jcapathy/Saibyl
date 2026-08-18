@@ -66,6 +66,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
   one anyway is how this block went wrong the first time.
 */
 const PLAN_PRICE: Record<string, string> = {
+  free: 'Free',
   founder: '$99',
   growth: '$299',
   agency: '$999',
@@ -73,6 +74,7 @@ const PLAN_PRICE: Record<string, string> = {
 };
 
 const PLAN_AGENT_CAP: Record<string, string> = {
+  free: '25',
   founder: '100',
   growth: '150',
   agency: '250',
@@ -81,25 +83,41 @@ const PLAN_AGENT_CAP: Record<string, string> = {
 
 const PLAN_ORDER = ['founder', 'growth', 'agency', 'enterprise'];
 
-/** V1 plan names still in the database, mapped to what they became. */
+/**
+ * V1 plan names still in the database, mapped to what they became.
+ *
+ * `free` and `trial` are **deliberately not here.** They aliased to `founder`,
+ * so an account that had paid nothing was shown "Your plan: Founder · $99/mo"
+ * — a fabricated billing fact, one panel away from the sidebar rendering the
+ * same account's plan as "FREE". Every signup lands on `free`
+ * (`DEFAULT_SIGNUP_PLAN`), so this was the default reading of the page that
+ * asks for money.
+ */
 const LEGACY_PLAN_ALIAS: Record<string, string> = {
   starter: 'founder',
   analyst: 'founder',
   pro: 'growth',
   strategist: 'growth',
   war_room: 'agency',
-  free: 'founder',
-  trial: 'founder',
 };
+
+/** The free tier is a real state, not a missing paid one. */
+const FREE_PLANS = ['free', 'trial'];
 
 function resolvePlan(plan: string | undefined | null): string {
   const key = (plan ?? '').toLowerCase();
   if (PLAN_ORDER.includes(key)) return key;
-  return LEGACY_PLAN_ALIAS[key] ?? 'founder';
+  if (FREE_PLANS.includes(key)) return 'free';
+  return LEGACY_PLAN_ALIAS[key] ?? 'free';
 }
 
 function getNextPlan(current: string): string | null {
-  const idx = PLAN_ORDER.indexOf(resolvePlan(current));
+  const key = resolvePlan(current);
+  // A free account's next step is the first paid tier. `free` is not in
+  // PLAN_ORDER (it is not a rung on the paid ladder), so without this the
+  // upgrade CTA disappeared for exactly the account it is meant for.
+  if (key === 'free') return PLAN_ORDER[0];
+  const idx = PLAN_ORDER.indexOf(key);
   if (idx === -1 || idx >= PLAN_ORDER.length - 1) return null;
   return PLAN_ORDER[idx + 1];
 }
@@ -186,7 +204,9 @@ function BillingTab() {
             </h2>
             <p className="font-mono tabular-nums text-[15px] text-saibyl-silver mt-1">
               {price}
-              {price !== 'Custom' && <span className="text-[13px]">/mo</span>}
+              {price !== 'Custom' && price !== 'Free' && (
+                <span className="text-[13px]">/mo</span>
+              )}
             </p>
             {agentCap && (
               <p className="text-[13px] text-saibyl-muted mt-2">

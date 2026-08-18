@@ -3,6 +3,18 @@ import axios from 'axios';
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/api',
   headers: { 'Content-Type': 'application/json' },
+  /*
+    Axios defaults to no timeout at all, so a request that never settles
+    never runs its `finally` — bypassing every disciplined `setLoading(false)`
+    in the app. The worst case is the founder's very first load: a stalled
+    `/auth/me` against a cold-started Render backend leaves `ProtectedRoute`
+    on a bare, textless spinner forever.
+
+    90s is chosen against the work, not against a browser default: report
+    generation and clearance runs are the long ones and both are polled
+    rather than awaited, so nothing legitimate on this instance runs longer.
+  */
+  timeout: 90_000,
 });
 
 // Inject auth token

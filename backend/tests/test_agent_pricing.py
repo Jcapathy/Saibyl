@@ -190,6 +190,52 @@ def test_the_free_grant_covers_one_free_run():
     assert TIER_CREDIT_GRANTS["trial"] == TIER_CREDIT_GRANTS["free"]
 
 
+def test_a_new_free_account_is_told_it_has_a_run():
+    """The number the sidebar prints must agree with the grant that was sized.
+
+    The test above proves the grant covers one capped run. It did **not**
+    prove the app says so — and the app said the opposite. The sidebar divided
+    the balance by `standard_run_credits()` (the 100-agent reference, a shape
+    the free tier is capped out of configuring), so `floor(1500 / 3014)` = 0
+    and every new signup read "About 0 more runs — add more" while holding a
+    grant deliberately sized for exactly one run.
+
+    This is the customer-visible half of the same fact, which is the half no
+    test asserted: the pricing model was self-consistent and the product
+    still lied. `capped_run_credits` is what a client must divide by.
+    """
+    from app.services.billing.agent_pricing import (
+        TIER_CREDIT_GRANTS,
+        capped_run_credits,
+        standard_run_credits,
+    )
+
+    grant = TIER_CREDIT_GRANTS["free"]
+    per_run = capped_run_credits("free")
+
+    assert grant // per_run >= 1, (
+        f"a new free account holds {grant} credits and a run it can configure "
+        f"costs {per_run} — the app would tell them they have "
+        f"{grant // per_run} runs on the tier whose whole promise is one."
+    )
+    # And the reference price is the wrong unit for this tier — the mistake
+    # this test exists to keep out. If these ever coincide the free caps have
+    # been raised to the reference shape, and that is a decision, not a drift.
+    assert per_run < standard_run_credits(), (
+        "the free tier's capped run now costs the reference price; the caps or "
+        "the reference moved, and the 'runs left' unit needs re-deciding"
+    )
+
+    # A paid tier can configure the reference shape, so its unit stays the
+    # reference — otherwise pricing every tier at its own ceiling would
+    # understate the run counts PRICING_GUIDE advertises.
+    for plan in ("founder", "growth", "agency"):
+        assert capped_run_credits(plan) == standard_run_credits(), (
+            f"{plan} should count runs at the reference price it can actually "
+            f"configure, not at its ceiling"
+        )
+
+
 def test_paid_tier_run_counts_are_whole_runs():
     """A tier advertising N runs must actually afford N.
 

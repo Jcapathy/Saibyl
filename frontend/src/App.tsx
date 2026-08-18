@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-route
 import { AnimatePresence } from 'framer-motion';
 
 import AppLayout from '@/components/AppLayout';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import PageTransition from '@/components/PageTransition';
 import ProductLayout from '@/components/stages/ProductLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
@@ -127,7 +128,16 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <AnimatedRoutes />
+      {/*
+        Inside the router, so the recovery links are real navigation, and
+        keyed on nothing — a boundary that remounts per route would swallow
+        its own reset. `AnimatedRoutes` is the whole tree, so this catches a
+        throw on any screen rather than only the ones somebody remembered to
+        wrap.
+      */}
+      <ErrorBoundary>
+        <AnimatedRoutes />
+      </ErrorBoundary>
     </BrowserRouter>
   );
 }

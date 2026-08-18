@@ -20,10 +20,26 @@ export function getErrorMessage(err: unknown, fallback = 'Something went wrong')
       if (messages.length) return messages.join('; ');
     }
 
-    if (err.message) return err.message;
+    /*
+      Axios' own message is not a sentence for a founder.
+
+      With no backend exception handler, a 500 arrives as Starlette's default
+      `PlainTextResponse("Internal Server Error")` — no JSON body, so neither
+      `detail` branch above matches and this line returned "Request failed
+      with status code 500". That shadowed the written fallback at roughly 65
+      call sites: every carefully worded "We could not load your reports."
+      was dead code on exactly the failure it was written for.
+
+      So the transport's message is used only when it says something a reader
+      can act on — a genuine network failure — and everything else falls
+      through to the caller's sentence.
+    */
+    if (!err.response && err.message) return err.message;
   }
 
-  if (err instanceof Error && err.message) return err.message;
+  if (err instanceof Error && err.message && !(err instanceof AxiosError)) {
+    return err.message;
+  }
 
   return fallback;
 }

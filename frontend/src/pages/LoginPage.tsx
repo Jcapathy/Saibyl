@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
+import { getErrorMessage } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 
 /* ── Particle data for the brand panel ── */
@@ -74,12 +75,14 @@ export default function LoginPage() {
          away. */
       navigate('/app/home');
     } catch (err: unknown) {
-      const message =
-        err instanceof Error
-          ? (err as Error & { response?: { data?: { detail?: string } } }).response?.data?.detail ||
-            err.message
-          : 'Login failed';
-      setError(message);
+      /*
+        Through `getErrorMessage`, not a hand-rolled cast. The cast asserted
+        `detail` was a string; FastAPI returns an **array** of validation
+        objects on a 422, so `setError(array)` reached the JSX and threw
+        "Objects are not valid as a React child" — blanking the login page,
+        the one screen with no navigation to escape from.
+      */
+      setError(getErrorMessage(err, 'We could not sign you in. Please try again.'));
     } finally {
       setLoading(false);
     }

@@ -178,12 +178,24 @@ export default function AppLayout() {
   useEffect(() => {
     let cancelled = false;
     api
-      .get<{ balance: number; grant: number; standard_run_credits?: number }>(
-        '/billing/credits',
-      )
+      .get<{
+        balance: number;
+        grant: number;
+        standard_run_credits?: number;
+        capped_run_credits?: number;
+      }>('/billing/credits')
       .then(({ data }) => {
         if (cancelled) return;
-        const perRun = data.standard_run_credits;
+        /*
+          The price of a run **this account can actually configure**, not the
+          100-agent reference. Dividing a free balance by the reference price
+          printed "About 0 more runs" to every new signup while their 1,500
+          grant covered a full capped run (1,273) with headroom — the app
+          denying the free run that is the entire launch motion, on every
+          page, in contradiction of the landing page and the pricing guide.
+          `standard_run_credits` remains the fallback for an older backend.
+        */
+        const perRun = data.capped_run_credits ?? data.standard_run_credits;
         setCredits({
           balance: data.balance ?? 0,
           grant: data.grant ?? 0,
