@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v2
       - name: Backend tests
-        run: cd backend && uv sync --dev && uv run ruff check . && uv run pytest --tb=short
+        run: cd backend && uv sync --extra dev && uv run ruff check . && uv run pytest --tb=short
       - uses: actions/setup-node@v4
         with:
           node-version: 20

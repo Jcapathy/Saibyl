@@ -6,7 +6,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v2
-      - run: cd backend && uv sync --dev && uv run ruff check . && uv run pytest
+      - run: cd backend && uv sync --extra dev && uv run ruff check . && uv run pytest
   frontend:
     runs-on: ubuntu-latest
     steps:
