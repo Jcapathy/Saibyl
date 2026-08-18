@@ -433,13 +433,36 @@ export default function ReportViewerPage() {
         <p className="text-[18px] font-bold text-saibyl-platinum">
           There is nothing written up for this run
         </p>
-        <p className="text-[13px] text-saibyl-muted">
-          We could not load it. That happens when the run never finished, or when the
-          write-up failed and has not been started again.
+        <p className="text-[13px] text-saibyl-muted max-w-md text-center leading-relaxed">
+          The run itself is safe — everyone in the room has already been read and
+          measured. It is only the write-up that did not finish, and writing it
+          again costs nothing: nobody goes back in the room.
         </p>
+        {/*
+          The button this screen was missing.
+
+          It said the write-up "has not been started again" and then offered no
+          way to start it — a dead end at the worst possible moment, because a
+          founder reaches it having already spent the credits the run charged.
+          On the free tier that is the entire grant, so "go back to your runs"
+          was the whole remedy for a paid run with no report.
+
+          `regenerateReport` already existed and is free; it was simply never
+          reachable from the failure it exists for.
+        */}
+        <button
+          type="button"
+          onClick={regenerateReport}
+          className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-saibyl-blue text-white font-semibold text-[13px] hover:bg-saibyl-gold-hover transition-colors"
+        >
+          {regenerating ? 'Writing it up again…' : 'Write it up again'}
+        </button>
+        {regenerateError && (
+          <p className="text-[12px] text-saibyl-negative">{regenerateError}</p>
+        )}
         <Link
           to="/app/simulations"
-          className="flex items-center gap-1.5 text-[13px] text-saibyl-signal-blue hover:text-saibyl-platinum transition-colors"
+          className="flex items-center gap-1.5 text-[13px] text-saibyl-muted hover:text-saibyl-ink transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to your runs

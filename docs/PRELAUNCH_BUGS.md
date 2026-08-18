@@ -59,6 +59,58 @@ P0-8 wire Google or remove it).
 
 ---
 
+## The loss leader, exercised on a real free account (2026-08-17 night)
+
+Run against production as a genuinely free org, from the five questions to
+the report, on the 1,500-credit grant. **The evaluation itself works**: buyers
+synthesized and confirmed, run started and charged, complete in 235s, 19
+objections, headline valence 0.272 (95% CI 0.106–0.438, n=25), two report
+sections of 9.0K and 10.3K characters.
+
+**Then the write-up failed.** `reports.status = 'failed'`, no Executive
+Summary, and the final section row — "Strategic Implications & Recommended
+Actions" — persisted with **null content**. The founder is left holding a
+completed run, no report, and a balance of **0**: the grant is spent, so on
+the free tier there is nothing left to run again with.
+
+Two defects, both now fixed:
+
+- **P0-12 · The failure screen was a dead end.** It said the write-up "has not
+  been started again" and then offered no way to start it — reached, by
+  definition, only by someone who has already paid. `regenerateReport` already
+  existed in that file and is **free** (`POST /reports/generate` charges
+  nothing; nobody goes back in the room), it was simply never wired to the
+  failure it exists for. Now offered, with the honest sentence that the run is
+  safe and only the write-up needs redoing.
+- **P1-9 stands and now has a face.** Credits are charged at run start and
+  never refunded on failure. A free founder whose one run's write-up dies has
+  spent the entire grant. Recovery is free, so this is survivable — but only
+  because the button now exists.
+
+**Still open (founder's call): report generation is not retried server-side.**
+The section died mid-write and nothing tried again; the same shape succeeded on
+five concurrent runs an hour earlier, so it reads as a transient model failure.
+A single automatic retry on a failed section would make the loss leader
+reliable without any UI at all.
+
+## The revenue bridge does not exist yet
+
+The model is: idea evaluation free, then pay for the website check and the
+USPTO clearance. The free half works. **The paid half is never offered.**
+
+Verified by grep across the whole frontend: **nothing links to `/app/ip-check`
+except the sidebar nav item**, and no post-run surface — not the report, not
+the product home, not the rail — contains the words patent, trademark or USPTO
+anywhere. The website check is reachable only as an *intake path* on the
+audience step, never as a paid product a founder is invited to buy.
+
+So the conversion moment — a founder has just read 19 objections about their
+idea and is thinking "is this even mine to build?" — is unbuilt. That is the
+highest-value remaining work for revenue, and it is small: an offer block at
+the end of a finished evaluation naming both checks and their prices, which
+`GET /billing/prices` now serves. **Not built unprompted — placement and copy
+are the founder's call.**
+
 ## P0 — Launch blockers
 
 ### P0-1 · The flagship "prove it with the room" leg can never run **[verified]**
