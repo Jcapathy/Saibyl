@@ -6,6 +6,8 @@ import { ArrowRight } from 'lucide-react';
 import api from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
 import { Guarded } from '@/components/stages/StagePrimitives';
+import PriceTag from '@/components/billing/PriceTag';
+import { usePrices } from '@/lib/prices';
 import type { SiteCheck } from './types';
 
 /**
@@ -38,6 +40,7 @@ export default function SiteCheckForm({
   /** The freshly queued check. The caller polls it the rest of the way. */
   onStarted: (check: SiteCheck) => void;
 }) {
+  const prices = usePrices();
   const [address, setAddress] = useState('');
   const [reference, setReference] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -171,13 +174,17 @@ export default function SiteCheckForm({
       )}
 
       <div>
+        {/* Priced before the work, not refused after it. */}
+        <div className="mb-3">
+          <PriceTag entry={prices?.website_check} />
+        </div>
         <Guarded
           label="Check my site"
           onClick={submit}
           busy={submitting}
           busyLabel="Reading your site…"
         />
-        <p className="text-[11px] text-saibyl-muted/60 mt-3 leading-relaxed">
+        <p className="text-[11px] text-saibyl-muted mt-3 leading-relaxed">
           The page&rsquo;s own words become part of your material, so the
           audience step reads them alongside anything you upload.
         </p>

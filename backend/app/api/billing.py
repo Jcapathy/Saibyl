@@ -11,11 +11,14 @@ from app.services.billing.agent_pricing import (
     STANDARD_RUN,
     capped_run_credits,
     check_credit_budget,
+    clearance_credits,
     estimate_simulation_cost,
     get_credit_balance,
     largest_affordable_run,
     standard_run_credits,
     tier_caps,
+    website_check_credits,
+    website_revision_credits,
 )
 from app.services.billing.run_quote import QuoteError, issue_quote
 from app.services.billing.stripe_service import (
@@ -248,6 +251,55 @@ async def credit_balance(auth: dict = Depends(get_current_org)):
         # callers read and breaking them to tidy a name is not worth it.
         "balance": balance,
         "grant": granted,
+    }
+
+
+@router.get("/prices")
+async def paid_feature_prices(auth: dict = Depends(get_current_org)):
+    """What each paid thing costs, and whether this balance covers it.
+
+    Exists so a founder learns the price **before** doing the work rather
+    than after. Every paid surface refused with a 402 at submit — "this check
+    needs 1,750; you have 1,500" — which arrives once the URL is typed and
+    the form filled, and reads as a wall rather than an offer.
+
+    The shape of the business is deliberate and is encoded here: the idea
+    evaluation is the loss leader (the free grant covers one full run at the
+    free cap) and the checks that save a founder real money — the website
+    read, the USPTO clearance — are what they pay for. So this endpoint
+    reports the free thing as free and prices the rest honestly, with the
+    shortfall already worked out.
+    """
+    balance, _granted, plan = get_credit_balance(auth["org_id"])
+
+    def entry(credits: int, label: str, free_note: str | None = None) -> dict:
+        return {
+            "credits": credits,
+            "label": label,
+            "affordable": balance >= credits,
+            "shortfall": max(0, credits - balance),
+            "free": credits == 0,
+            "note": free_note,
+        }
+
+    return {
+        "balance": balance,
+        "plan": plan,
+        "idea_evaluation": entry(
+            capped_run_credits(plan),
+            "A room of buyers reacts to your idea",
+            "Your free credits cover one of these.",
+        ),
+        "website_check": entry(
+            website_check_credits(), "We read your page like a buyer would"
+        ),
+        "website_revision": entry(
+            website_revision_credits(), "We rewrite the page and prove the difference"
+        ),
+        "clearance": {
+            tier: entry(clearance_credits(tier), f"USPTO search — {tier.lower()}")
+            for tier in ("QUICK", "STANDARD", "COMPREHENSIVE")
+        },
     }
 
 

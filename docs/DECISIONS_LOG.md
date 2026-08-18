@@ -8,6 +8,48 @@ choices.
 
 ---
 
+## 2026-08-17 — The loss leader is the idea evaluation, not the website check
+
+Founder's direction, stated plainly and binding on pricing, copy and the
+first-run path:
+
+> The idea evaluation is the loss leader. Give founders something of real
+> value to validate their idea, then charge for the rest — the website check,
+> the USPTO clearance, and what follows.
+
+**The argument behind it**, in the founder's words, and worth keeping because
+it is the product's whole reason to exist: people spin something up with AI
+tools, get excited, and only afterwards discover a hundred others built it or
+that the idea is already patented. Finding that out early **saves money they
+can never recoup.** The free evaluation is what earns the right to sell the
+checks; the checks are what make the saving real.
+
+**What this settles:**
+
+1. **The free grant is correctly sized and is not a bug.** 1,500 credits
+   against a 1,273 capped run — one full idea evaluation with 227 spare. An
+   audit flagged "the flagship costs more than the free grant" (website check
+   1,750 > 1,500) as a launch blocker. It is not: the website check is
+   *supposed* to sit above the grant. Do not "fix" this by raising the grant.
+2. **PRD_V3 calls Website Intelligence the flagship.** That remains true of
+   its ambition and its build cost, but **not** of the free motion. The free
+   path is idea → five questions → a room of buyers → objections. Copy and
+   onboarding lead with that.
+3. **The real defect was the presentation, and it is fixed.** Paid surfaces
+   refused at submit with a 402 *after* the founder typed the URL and filled
+   the form. `GET /billing/prices` now publishes what each thing costs with
+   the shortfall already computed, and both paid forms show it next to the
+   button — free things say free, affordable things say the price, short
+   balances get an offer and a link rather than a wall.
+4. **The price table, as it stands:** idea evaluation 0 (covered by the
+   grant) · USPTO QUICK 0 · website check 1,750 · USPTO STANDARD 2,000 ·
+   page revision 5,000 · USPTO COMPREHENSIVE 6,000.
+
+**Open, and the founder's to decide:** USPTO QUICK is free and is the form's
+default. That is consistent with a loss-leader model (a taste that sells the
+full search) but it is the one paid family with a free rung — worth an
+explicit yes rather than an inherited default.
+
 ## 2026-08-17 — The app goes light: the in-app color law
 
 Executing the founder's order ("I love the new aesthetic and want the whole

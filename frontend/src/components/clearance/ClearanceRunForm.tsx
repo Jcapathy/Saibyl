@@ -6,6 +6,8 @@ import { ArrowRight } from 'lucide-react';
 import api from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
 import { Guarded } from '@/components/stages/StagePrimitives';
+import PriceTag from '@/components/billing/PriceTag';
+import { usePrices } from '@/lib/prices';
 import {
   TIER_LABELS,
   type ClearanceRun,
@@ -70,6 +72,7 @@ export default function ClearanceRunForm({
   const [field, setField] = useState('');
   const [rivals, setRivals] = useState('');
   const [tier, setTier] = useState<ClearanceTier>(initialTier);
+  const prices = usePrices();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<{ message: string; billing: boolean } | null>(
     null,
@@ -243,6 +246,10 @@ export default function ClearanceRunForm({
           )}
         </div>
       )}
+
+      {/* The price of the tier they have selected, before they click it —
+          not a 402 after the subject is written. */}
+      <PriceTag entry={prices?.clearance?.[tier]} />
 
       <Guarded
         label="Search the USPTO"
