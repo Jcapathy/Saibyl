@@ -12,6 +12,20 @@ jobs:
   # the frontend acceptance scans (jargon, reachability) gate the deploy too.
   test:
     runs-on: ubuntu-latest
+    # Production runs with Redis and the export API reaches it, so the gate
+    # runs with one too. Without it the suite is red on an environment gap
+    # rather than on the code, and a permanently red gate blocks every deploy
+    # while telling nobody anything.
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v2

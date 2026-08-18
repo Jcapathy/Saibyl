@@ -3,6 +3,21 @@ on: [push, pull_request]
 jobs:
   backend:
     runs-on: ubuntu-latest
+    # The export API reaches Redis, and production runs with Redis, so the
+    # suite gets one rather than being taught that its absence is normal.
+    # Without this, seven export tests error on a refused connection while
+    # the other 1,325 pass — a red suite for an environment gap, which is the
+    # state that trains everyone to ignore the gate.
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v2
@@ -14,4 +29,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: cd frontend && npm ci && npx tsc --noEmit
+      # `npm run build` (tsc -b + vite build), never a bare `tsc --noEmit` —
+      # they are different checks, and the looser one let five real errors
+      # reach a deploy while every session reported the frontend clean.
+      - run: cd frontend && npm ci && npm run build && npx eslint . --quiet && npx vitest run
