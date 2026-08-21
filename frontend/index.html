@@ -39,7 +39,23 @@
          Claims here are limited to what the product actually does and what
          the pricing code actually charges. A schema block is machine-readable
          marketing copy, and an inflated one is the fastest way to be cited
-         inaccurately by the engines this exists to reach. -->
+         inaccurately by the engines this exists to reach.
+
+         What this will and will not do, honestly:
+         - Google stopped showing FAQ rich results on 2026-05-07 and removed
+           the documentation. FAQPage stays anyway — not for a rich result,
+           but because the question-and-answer shape is what answer engines
+           quote, and these are the questions founders actually type.
+         - SoftwareApplication needs `aggregateRating` or `review` to earn a
+           rich result. Saibyl has no legitimate third-party ratings, so it
+           gets none. Inventing one is a manual-action risk and a lie; the
+           markup is here for entity clarity, not for a star rating.
+         - Schema's effect on AI citation is unproven. Google says it is not
+           needed; the only study was run by a schema vendor and measured a
+           negligible effect. This is cheap and truthful, not a lever. -->
+    <!-- FAQ content note: keep these answers matching the product. A stale
+         answer here is worse than none, because it is the version a machine
+         quotes. -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
