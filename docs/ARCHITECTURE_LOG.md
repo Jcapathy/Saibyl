@@ -42,12 +42,37 @@ nothing in the backend ever published there. The wire vocabulary
 in the run, the other says what the agent did — and trying to pick a winner is
 why a third vocabulary exists in `event_schema.py` that nothing produces.
 
-**`services/website/capture.py` gained a ceiling and a pool.** `timeout_s`
-bounds `page.goto`; it never bounded `chromium.launch()`, and two production
-checks sat at `capturing` for twelve minutes. The whole capture now runs under
-a hard deadline, and at most two browsers run per process — the memory is what
-ran out. The deadline starts when the slot is acquired, so queueing behind
-another capture is not charged against this page's budget.
+**`services/website/capture.py` gained a ceiling, a pool, and bounds on every
+step after the navigation.** The navigation was never the problem: `page.goto`
+is bounded and a slow site fails cleanly at 45 seconds. Everything *after* it
+was unbounded — `page.title()`, two `page.evaluate()` calls, the style census
+and the full-page screenshot — and `page.evaluate` has no default timeout in
+Playwright. Two heavy commercial pages never came back. Now: a
+`set_default_timeout` on the context for Playwright's own actions, optional
+steps (census, meta, title) that cost a field on overrun, and required steps
+(the page's text, the screenshot) that end the capture with a sentence,
+because a capture with no text would hand the critics a blank page to judge.
+At most two browsers per process, since memory is what ran out.
+
+**`services/maintenance/reaper.py` — a new boundary, and the one this batch
+most needed.** Every worker writes a non-terminal status, works, then writes a
+terminal one; a process that stops between the two leaves a row nobody will
+ever close. Both ways of stopping were observed while testing this release: a
+Render deploy killed three report writers mid-write, and a capture hung
+somewhere `asyncio.wait_for` could not cancel. `gtm/discovery` had already
+written the limitation down and named the query that finds the rows. The
+reaper sweeps at startup and every five minutes, closes anything past a
+generous deadline, and refunds only where the state itself proves nothing was
+spent.
+
+It also took two attempts to work, and the reason is worth keeping: the first
+version named `credits_charged` in its select and the second wrote
+`error_message` on update, and `reports` has neither column. Both times
+PostgREST rejected the statement, the handler logged it, and that rule failed
+on every sweep — indistinguishable from a table with nothing to clean. A sweep
+now reports its failure count as one error-level fact. **The reaper exists
+because a dead worker is silent; it needed fixing twice because a broken rule
+was silent in exactly the same way.**
 
 ---
 

@@ -60,6 +60,19 @@ async def test_a_capture_inside_the_deadline_passes_its_result_through():
     assert await cap._bounded(_fast(), "https://ok.example", 45) == "captured"
 
 
+def test_the_default_fits_the_instance_the_service_actually_runs_on():
+    """`render.yaml` puts saibyl-backend on the `starter` plan: 512 MB. A
+    headless Chromium wants 300-500 MB on its own, so two do not fit — and the
+    failure is not a slow capture, it is the whole service being killed. Two
+    sample runs proved it: hung captures the first time, `502 Bad Gateway`
+    across every endpoint the second, taking down runs and billing calls that
+    had nothing to do with the browser."""
+    assert cap.MAX_CONCURRENT_CAPTURES == 1, (
+        "more than one browser at a time does not fit in 512 MB; raise this "
+        "only alongside the Render plan"
+    )
+
+
 @pytest.mark.asyncio
 async def test_no_more_browsers_run_at_once_than_the_box_can_hold():
     """The contention that caused the hang. Without a cap, every concurrent

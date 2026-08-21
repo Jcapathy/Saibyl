@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import asyncio
 import math
+import os
 import re
 from typing import Any
 
@@ -224,17 +225,23 @@ async def capture_website(url: str, *, timeout_s: int = 45) -> WebsiteCapture:
 
 # How many captures may hold a browser at once, per process.
 #
-# A Chromium instance is the heaviest thing this service starts, and the
-# backend runs on one modest Render instance. Three checks began within four
-# minutes of each other and two of them never got a browser — they sat at
-# `capturing` until the deadline above cut them off. The deadline makes that
-# failure honest; this stops it happening.
+# **One, because the box is 512 MB.** `render.yaml` puts saibyl-backend on the
+# `starter` plan; a headless Chromium wants 300–500 MB on its own. Two do not
+# fit, and the failure is not a slow capture — it is the whole service being
+# killed and restarted. Measured twice: three sample products reaching their
+# website checks together produced hung captures on the first run and
+# `502 Bad Gateway` across every endpoint on the second, taking down runs and
+# billing calls that had nothing to do with the browser.
 #
-# Two rather than one because a single slot turns two founders into a queue
-# where the second waits the first's full capture, and rather than four
-# because the memory is what ran out. A founder who waits a few seconds for a
-# slot is in a much better place than one whose check dies for want of RAM.
-MAX_CONCURRENT_CAPTURES = 2
+# So the cost of the wrong number here is not paid by the founder whose check
+# is slow. It is paid by every other founder on the platform.
+#
+# Tunable by env because the right value is a property of the instance rather
+# than of this code: on a plan with room for two browsers, set
+# WEBSITE_CAPTURE_CONCURRENCY=2 and the queue halves.
+MAX_CONCURRENT_CAPTURES = max(
+    1, int(os.environ.get("WEBSITE_CAPTURE_CONCURRENCY", "1") or 1)
+)
 
 _capture_slots: asyncio.Semaphore | None = None
 
