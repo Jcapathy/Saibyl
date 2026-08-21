@@ -21,6 +21,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import structlog
+from pydantic import ValidationError
 
 from app.core.database import get_supabase_admin
 from app.services.gtm.messaging_doc import build_messaging_doc
@@ -50,6 +51,19 @@ async def run_messaging_doc(doc_id: str, simulation_id: str, org_id: str) -> Non
 
     try:
         doc = await build_messaging_doc(simulation_id, org_id)
+    except ValidationError as exc:
+        # `ValidationError` subclasses `ValueError`, so this must be caught
+        # first or a model that emits malformed JSON is treated as a
+        # deliberate refusal and its pydantic error is shown to the founder.
+        # Observed in production on the sibling outbound worker.
+        log.error(
+            "messaging_doc_unparseable",
+            doc_id=doc_id,
+            simulation_id=simulation_id,
+            error=str(exc)[:400],
+        )
+        _fail(GENERIC_FAILURE_MESSAGE)
+        return
     except ValueError as exc:
         # The one failure with something useful to say: the run carries no
         # measured objections, so there is nothing to build a document from.

@@ -17,7 +17,7 @@ from typing import Any
 import structlog
 from anthropic import AsyncAnthropic
 from litellm import acompletion
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from app.core.config import settings
 from app.services.billing.usage_ledger import record_llm_call
@@ -243,31 +243,93 @@ async def llm_vision(
     return "".join(block.text for block in response.content if block.type == "text")
 
 
+# How many times a malformed structured response is handed back to the model
+# to correct before the call is given up on.
+#
+# **Why this exists.** A live pipeline run lost a 2,500-credit outbound
+# sequence to one truncated brace: the model emitted JSON that stopped mid
+# string, `model_validate_json` raised, and there was no second attempt. One
+# unlucky token destroyed a paid artifact, and the founder was told to "try
+# building it again", which costs them the same again.
+#
+# Two retries rather than one because the failure is random rather than
+# systematic — a schema the model genuinely cannot satisfy fails all three
+# times and should, while a truncation or a stray comma almost never repeats.
+# The corrective turn carries the parser's own error, so the model is told
+# what was wrong rather than merely asked again.
+STRUCTURED_RETRIES = 2
+
+
 async def llm_structured(
     messages: list[dict[str, str]],
     schema: type[BaseModel],
     model: str | None = None,
 ) -> BaseModel:
-    """Send messages to LLM and return validated Pydantic model (uses fast model by default)."""
+    """Send messages to LLM and return a validated Pydantic model.
+
+    Retries a malformed response up to `STRUCTURED_RETRIES` times, showing the
+    model its own output and the parse error. Raises the last
+    `ValidationError` if none of the attempts parse — callers distinguish that
+    from a deliberate refusal, which is a `ValueError` they raise themselves.
+    """
     resolved = _resolve_model(model, fast=True)
-    response = await acompletion(
-        model=resolved,
-        messages=messages,
-        response_format={"type": "json_object"},
-        api_key=_api_key(),
-    )
-    logger.info(
-        "llm_structured",
-        model=resolved,
-        schema=schema.__name__,
-        tokens=response.usage.completion_tokens,
-    )
-    _record(resolved, response.usage)
-    raw = response.choices[0].message.content
-    # Extract clean JSON from LLM response which may include markdown
-    # fences, trailing commentary, or other non-JSON text
-    raw = _extract_json(raw)
-    return schema.model_validate_json(raw)
+    attempt_messages = list(messages)
+    last_error: ValidationError | None = None
+
+    for attempt in range(STRUCTURED_RETRIES + 1):
+        response = await acompletion(
+            model=resolved,
+            messages=attempt_messages,
+            response_format={"type": "json_object"},
+            api_key=_api_key(),
+        )
+        logger.info(
+            "llm_structured",
+            model=resolved,
+            schema=schema.__name__,
+            tokens=response.usage.completion_tokens,
+            attempt=attempt + 1,
+        )
+        # Recorded per attempt, not per call: a retry is real spend, and a
+        # ledger that counted only the successful turn would understate COGS
+        # exactly when the model is behaving worst.
+        _record(resolved, response.usage)
+
+        raw = response.choices[0].message.content
+        # Extract clean JSON from LLM response which may include markdown
+        # fences, trailing commentary, or other non-JSON text
+        cleaned = _extract_json(raw)
+        try:
+            return schema.model_validate_json(cleaned)
+        except ValidationError as exc:
+            last_error = exc
+            logger.warning(
+                "llm_structured_unparseable",
+                model=resolved,
+                schema=schema.__name__,
+                attempt=attempt + 1,
+                remaining=STRUCTURED_RETRIES - attempt,
+                error=str(exc)[:300],
+            )
+            if attempt == STRUCTURED_RETRIES:
+                break
+            attempt_messages = [
+                *attempt_messages,
+                {"role": "assistant", "content": raw or ""},
+                {
+                    "role": "user",
+                    "content": (
+                        "That response did not parse against the required "
+                        f"schema:\n\n{str(exc)[:1500]}\n\n"
+                        "Return the same content as a single valid JSON "
+                        "object matching the schema. No commentary, no code "
+                        "fences, and close every string and brace."
+                    ),
+                },
+            ]
+
+    assert last_error is not None
+    raise last_error
 
 
 def _extract_json(text: str) -> str:

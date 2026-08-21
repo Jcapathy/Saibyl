@@ -1121,6 +1121,54 @@ def deduct_credits(org_id: UUID, credits: int) -> None:
     logger.info("credits_deducted", org_id=str(org_id), deducted=credits)
 
 
+def refund_credits(org_id: UUID | str, credits: int, *, reason: str) -> None:
+    """Give back a charge for work that was never performed.
+
+    **When this is right, and when it is not.** Every paid artifact is charged
+    at create, because deducting on completion would let one artifact's worth
+    of credits start ten. The cost of that rule is that a job which dies
+    before spending anything still takes the founder's money — and the only
+    remedy in this codebase was a manual refund, on every path except GTM
+    discovery.
+
+    Observed in production: a website check failed because the founder's own
+    site did not finish loading inside 45 seconds. No page was captured, no
+    critic ran, no model was called — and 1,750 credits were kept, with a
+    message inviting them to try again at the same price.
+
+    So this is for failures **before any model spend**. A job that failed
+    halfway through its critics has consumed real compute and is not refunded;
+    saying so plainly is better than a rule that quietly sometimes pays.
+
+    `reason` is logged rather than stored: the artifact row already carries
+    `credits_charged` and its own error, so the refund is reconcilable from
+    two records that were written independently.
+    """
+    if credits <= 0:
+        return
+
+    admin = get_supabase_admin()
+    try:
+        admin.rpc("grant_credits", {
+            "org_uuid": str(org_id),
+            "amount": credits,
+        }).execute()
+    except Exception:
+        # Never re-raise into a worker's failure path. The founder is already
+        # being told the job failed; turning a refund problem into a second
+        # exception would replace a recoverable accounting gap with a lost
+        # error message.
+        logger.exception(
+            "credits_refund_failed",
+            org_id=str(org_id), credits=credits, reason=reason,
+        )
+        return
+
+    logger.info(
+        "credits_refunded", org_id=str(org_id), refunded=credits, reason=reason
+    )
+
+
 # ---------------------------------------------------------------------------
 # IP clearance (PRD_V3 §11) — fixed per-tier prices
 # ---------------------------------------------------------------------------

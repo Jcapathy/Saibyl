@@ -87,21 +87,55 @@ Every commercial investor list is partly wrong the day it ships. Two rules:
   stale.** Withheld is honest; stale is a wrong pitch sent to a real firm with
   our name on the recommendation.
 
-## Sourcing, without a scraper
+## Sourcing — built, not licensed (settled 2026-08-21)
 
-Same shape as `gtm/discovery`: search, then read what the search returns.
-Firms' own sites, their published theses, regulatory filings (Form ADV for
-registered advisers), and reputable directories whose terms permit it. No
-crawling, no authenticated fetches, no blocked domains. If a firm publishes
-nothing, it does not go in the bank — an unevidenced entry is the thing this
-whole design exists to avoid.
+**Founder's decision: we build the discovery pipeline ourselves.** Not Fintrx,
+not any licensed feed. The matching is the moat; buying coverage would rent
+the part that is not the product, and licensed data carries redistribution
+terms that collected data does not.
 
-**Open question for the founder:** whether to license a provider (Fintrx is
-the specialist here) for coverage and layer our matching on top. Licensed data
-carries redistribution rights that collected data does not. Route (b) as chosen
-does not require it, and I would ship ours first — the matching is the moat and
-it is cheaper to prove with fifty well-evidenced firms than five thousand thin
-ones.
+`services/capital/discovery.py`. Same shape as `gtm/discovery` — search, then
+read what the search returns — and the same two-half split: `propose_firms`
+makes the model call, `verify_firms` is pure and decides what survives, so
+"a field must be evidenced" is a test rather than a live-run observation.
+
+**Two stages, because the open web forced it.** The first live pass returned
+zero firms, three times over, and each cause was invisible behind the same
+empty list:
+
+1. The turn was truncated, not empty — the model spent a 4,000-token budget in
+   extended thinking and emitted no tool call. Raised to 16,000, and
+   `stop_reason` is now logged: a truncated turn must not be able to
+   impersonate an exhausted web.
+2. The obvious queries returned journalism. `"family office" "investment
+   thesis" healthcare` gave CNBC, a trade magazine and a competitor's
+   listicle. Journalists write about family offices in the third person; a
+   firm writes *"we are a single family office"*. Every template is now first
+   person.
+3. Given a listicle, the model quoted a competitor's **paraphrase** as the
+   firm's thesis. A paraphrase of a paraphrase cannot be quoted back to a
+   founder as "here is what they say they fund", which is the whole mechanism.
+
+So: **stage one harvests names from anything that names firms** — directories
+are excellent at names — **and stage two builds the record only from that
+firm's own site**, matched by domain label so a directory at
+`firm.example.directory.com` cannot pass as `firm.example`. A firm that
+publishes no thesis anywhere does not enter the bank.
+
+Measured on the first working pass: 15 names harvested, 9 firms verified. The
+gap is the honest price of the rule, and `names_found` is reported beside the
+firm count so it stays visible.
+
+**Where an unstated posture lands.** All nine verified firms defaulted to
+`no_inbound`, because none of them published an inbound position the search
+surfaced. That is the conservative real answer, not a gap: guessing that a
+family office accepts submissions causes a real approach to a firm that never
+invited one. `inbound_unevidenced_defaulted` counts it every time.
+
+**Running it:** `python scripts/curate_family_offices.py --sectors healthcare
+fintech`. Service role only, charges nobody, takes no founder input; the model
+spend still lands in the cost ledger. Re-running grows the bank rather than
+doubling it — stored firms are passed back as `known_domains`.
 
 ## Pricing
 

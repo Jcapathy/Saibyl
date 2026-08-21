@@ -3,7 +3,8 @@
 # MeasuredObjection, FounderContext
 # partition_by_freshness(firms, now) -> (fresh, withheld)
 # build_shortlist(context, firms, *, now=None, limit=MAX_MATCHES) -> Shortlist
-# MATCH_WEIGHTS, MAX_MATCHES, MIN_SHARED_TOKENS, normalise_key(value)
+# MATCH_WEIGHTS, SUBSTANTIVE_DIMENSIONS, MAX_MATCHES, MIN_SHARED_TOKENS
+# normalise_key(value)
 # ─────────────────────────────────────────────────────────
 """Match a founder to firms, and say why in both sides' words.
 
@@ -108,6 +109,13 @@ MATCH_WEIGHTS: dict[str, float] = {
     "check_size": 0.05,
     "geography": 0.05,
 }
+
+# The dimensions that can carry a recommendation by themselves. The three left
+# out — stage, check_size, geography — are qualifiers: they rule a founder out
+# when they conflict, but satisfying one says only that nothing disqualifies
+# you, which is not a reason to approach a firm. See the check at the end of
+# `_entry_for`, and the real shortlist that forced it.
+SUBSTANTIVE_DIMENSIONS: tuple[str, ...] = ("objection_bridge", "thesis", "sector")
 
 # What a firm has published about one dimension: it fits, it rules the
 # founder out, or it says nothing. A Literal rather than a bare str so a
@@ -565,6 +573,27 @@ def _entry(firm: FamilyOffice, context: FounderContext) -> ShortlistEntry | None
     if bridge is not None:
         reasons.insert(0, bridge)
     if not reasons:
+        return None
+
+    # **Table stakes cannot carry a recommendation on their own.**
+    #
+    # Found by running a real shortlist: a pediatric-health foundation was
+    # recommended to a prompt-injection security founder, and its entire
+    # reason list was one row — dimension `stage`, firm_quote "seed",
+    # founder_quote "seed". Every other dimension scored zero. "We both say
+    # seed" is not a reason to approach a firm; it is the absence of one.
+    #
+    # Stage, cheque size and geography are qualifiers: they can rule a founder
+    # out (and do, as refusals above) but satisfying them says only that
+    # nothing disqualifies you. A recommendation needs a positive reason — the
+    # measured objection bridge, an overlap in the two parties' own words, or
+    # at minimum a sector the firm actually publishes.
+    #
+    # This is the padding the module exists to refuse. Its own note to the
+    # founder says a shortlist kept long by weak entries "is a list padded
+    # with firms that would have said so on the call", and a stage-only entry
+    # is exactly that firm.
+    if not any(components[name] for name in SUBSTANTIVE_DIMENSIONS):
         return None
 
     score = sum(MATCH_WEIGHTS[name] * value for name, value in components.items())

@@ -28,6 +28,7 @@ import structlog
 from fastapi import UploadFile
 
 from app.core.database import get_supabase_admin
+from app.services.billing.agent_pricing import refund_credits
 
 logger = structlog.get_logger()
 
@@ -89,6 +90,19 @@ async def run_website_check(snapshot_id: str, organization_id: str) -> None:
             # The capture service's messages are founder-readable by contract,
             # so the row carries them whole.
             _record_failure(snapshot_id, str(exc))
+            # Nothing was spent. The page never loaded, so no critic ran and
+            # no model was called — and the founder was being told to try
+            # again at the same price for work we had not done. Observed in
+            # production on a site that was merely slow to wake.
+            #
+            # Refunded only on THIS path. A check that dies later has consumed
+            # real compute, and a rule that quietly sometimes pays is worse
+            # than one that says plainly when it does.
+            refund_credits(
+                organization_id,
+                int(snapshot.get("credits_charged") or 0),
+                reason="website_capture_failed_before_any_model_call",
+            )
             return
 
         # The admired site, when the founder named one. Captured before any

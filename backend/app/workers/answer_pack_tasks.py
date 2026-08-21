@@ -22,6 +22,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import structlog
+from pydantic import ValidationError
 
 from app.core.database import get_supabase_admin
 from app.services.gtm.answer_pack import build_answer_pack
@@ -51,6 +52,19 @@ async def run_answer_pack(pack_id: str, simulation_id: str, org_id: str) -> None
 
     try:
         pack = await build_answer_pack(simulation_id, org_id)
+    except ValidationError as exc:
+        # `ValidationError` subclasses `ValueError`, so this must be caught
+        # first or a model that emits malformed JSON is treated as a
+        # deliberate refusal and its pydantic error is shown to the founder.
+        # Observed in production on the sibling outbound worker.
+        log.error(
+            "answer_pack_unparseable",
+            pack_id=pack_id,
+            simulation_id=simulation_id,
+            error=str(exc)[:400],
+        )
+        _fail(GENERIC_FAILURE_MESSAGE)
+        return
     except ValueError as exc:
         # The one failure with something useful to say: the run carries no
         # measured objections, so there is nothing to build answers from.

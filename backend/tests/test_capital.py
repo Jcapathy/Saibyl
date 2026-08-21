@@ -830,3 +830,71 @@ def test_the_shortlist_is_priced_at_the_target_margin():
     revenue = price / 1000  # credits are $0.001 of COGS by definition
     margin_pct = (revenue - float(CAPITAL_SHORTLIST_COGS_USD)) / revenue * 100
     assert margin_pct >= float(MIN_MARGIN_PCT)
+
+
+# ---------------------------------------------------------------------------
+# Table stakes cannot carry a recommendation (found in production)
+# ---------------------------------------------------------------------------
+
+def test_a_firm_matching_on_stage_alone_is_not_a_match():
+    """The real shortlist that forced this rule.
+
+    A prompt-injection security founder was recommended the Charles H. Hood
+    Foundation — a paediatric health funder — and the entire reason list was
+    one row: dimension `stage`, firm_quote "seed", founder_quote "seed". Every
+    other dimension scored zero.
+
+    "We both say seed" is not a reason to approach a firm; it is the absence
+    of one, and this module's own note to the founder calls a list kept long
+    by such entries "padded with firms that would have said so on the call".
+    """
+    unrelated = _firm(
+        "Hood Foundation",
+        domain="hood.example",
+        inbound=InboundPath(
+            kind="no_inbound", source_url="https://hood.example/approach"
+        ),
+        thesis="We fund paediatric clinical research at academic centres.",
+        sectors=["paediatric health"],
+        stages=["Pre-seed", "Seed"],
+        check_size_low=None,
+        check_size_high=None,
+        geography=[],
+    )
+    context = _context(
+        sector="prompt injection security",
+        stage="seed",
+        material="We block prompt injection attacks against AI agents in line.",
+        check_size_needed=None,
+        geography=None,
+        objections=[],
+    )
+
+    shortlist = m.build_shortlist(context, [unrelated], now=NOW)
+
+    assert shortlist.matches == [], (
+        "a firm whose only agreement is the funding stage was recommended"
+    )
+    # Considered, so the denominator stays honest about what was read.
+    assert shortlist.considered == 1
+
+
+def test_a_qualifier_still_counts_once_something_substantive_matches():
+    """The rule removes padding, not signal. Stage still scores — it just
+    cannot be the whole argument."""
+    fitting = _firm("Verrill", stages=["Pre-seed", "Seed"])
+    entry = m.build_shortlist(_context(), [fitting], now=NOW).matches[0]
+
+    assert entry.score_components["stage"] == 1.0
+    assert any(
+        entry.score_components[d] for d in m.SUBSTANTIVE_DIMENSIONS
+    ), "the fixture no longer matches on anything substantive"
+
+
+def test_the_substantive_set_is_the_three_that_carry_an_argument():
+    """Stage, cheque size and geography rule a founder out when they conflict;
+    satisfying one says only that nothing disqualifies you."""
+    assert set(m.SUBSTANTIVE_DIMENSIONS) == {"objection_bridge", "thesis", "sector"}
+    for qualifier in ("stage", "check_size", "geography"):
+        assert qualifier not in m.SUBSTANTIVE_DIMENSIONS
+        assert qualifier in m.MATCH_WEIGHTS, "a qualifier stopped being scored"

@@ -218,6 +218,38 @@ async def capture_website(url: str, *, timeout_s: int = 45) -> WebsiteCapture:
     do — with the reason in founder-readable language.
     """
     validate_external_url(url)
+    return await _bounded(_capture_website(url, timeout_s=timeout_s), url, timeout_s)
+
+
+def _overall_deadline(timeout_s: int) -> int:
+    """The whole capture's ceiling: two renders, plus room to launch and close.
+
+    `timeout_s` bounds `page.goto`. It does not bound
+    `chromium.launch()` — and that is where two production checks hung
+    indefinitely, sitting at `capturing` with no screenshots and no error
+    while a founder watched a spinner. Three checks had been started within
+    four minutes of each other on one instance; the third failed honestly at
+    its `goto` timeout and the two that were still launching never returned.
+    """
+    return timeout_s * 2 + 60
+
+
+async def _bounded(coro, subject: str, timeout_s: int) -> WebsiteCapture:
+    """Run a capture under a hard ceiling, so no step can hang unbounded."""
+    import asyncio
+
+    try:
+        return await asyncio.wait_for(coro, timeout=_overall_deadline(timeout_s))
+    except TimeoutError as exc:
+        raise WebsiteCaptureError(
+            f"We could not finish reading {subject} within "
+            f"{_overall_deadline(timeout_s)} seconds. This is usually a very "
+            "heavy page or a browser that would not start — try again in a "
+            "moment."
+        ) from exc
+
+
+async def _capture_website(url: str, *, timeout_s: int) -> WebsiteCapture:
     pw = _import_playwright()
 
     try:

@@ -27,6 +27,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import structlog
+from pydantic import ValidationError
 
 from app.core.database import get_supabase_admin
 from app.services.gtm.outbound import build_outbound_sequences
@@ -58,6 +59,25 @@ async def run_outbound_sequences(sequence_id: str, simulation_id: str, org_id: s
 
     try:
         built = await build_outbound_sequences(simulation_id, org_id)
+    except ValidationError as exc:
+        # **`ValidationError` subclasses `ValueError`**, so without this branch
+        # a model that emits malformed JSON is treated as a deliberate refusal
+        # and its pydantic error is written verbatim into a column a founder
+        # reads. That happened in production: a Chartwell sequence failed with
+        # "1 validation error for _Generated / Invalid JSON: expected `,` or
+        # `}` at line 16 column 375" shown to the customer.
+        #
+        # It must be caught BEFORE the ValueError branch below, because
+        # `except` clauses are tried in order and the subclass would otherwise
+        # never be reached.
+        log.error(
+            "outbound_unparseable",
+            sequence_id=sequence_id,
+            simulation_id=simulation_id,
+            error=str(exc)[:400],
+        )
+        _fail(GENERIC_FAILURE_MESSAGE)
+        return
     except ValueError as exc:
         # The refusals with something useful to say: the run carries no measured
         # objections, or no buyer profile to write to. `build_outbound_sequences`

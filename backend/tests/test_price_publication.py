@@ -31,14 +31,19 @@ from app.services.billing import agent_pricing
 #   standard_run_credits / capped_run_credits — a *run* is priced per agent,
 #     round and arena, so its cost is quoted by `/billing/estimate-cost`
 #     against the founder's actual configuration rather than by a flat number.
-#   deduct_credits — a mutation that happens to end in the same word.
+#   deduct_credits / refund_credits — mutations that happen to end in the same
+#     word. They move a balance; they do not price anything.
 #
 # Everything else that prices something a founder buys belongs on the prices
-# screen, and a new name lands in this test's scope automatically.
+# screen, and a new name lands in this test's scope automatically. That
+# automatic scope is the point and it has a cost: `refund_credits` was added
+# to the pricing module and failed here on the same commit, which is exactly
+# the alarm working — the exclusion is a decision recorded, not a silencing.
 _NOT_ARTIFACTS = {
     "standard_run_credits",
     "capped_run_credits",
     "deduct_credits",
+    "refund_credits",
 }
 
 # `clearance` is published as a nested object keyed by tier rather than as a
