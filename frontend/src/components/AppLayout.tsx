@@ -6,6 +6,7 @@ import {
   FolderOpen,
   Building2,
   Clock,
+  Landmark,
   MessageSquare,
   Search,
   ShieldCheck,
@@ -58,6 +59,12 @@ const coreNav: NavItem[] = [
      rather than inside a product because a founder checks an idea before it is
      a product; the run form associates one optionally. */
   { path: '/app/ip-check', label: IP_CHECK_NAME, Icon: ShieldCheck },
+  /* "Who would fund this?" — the family-office bank (docs/CAPITAL_MODULE.md).
+     Here rather than on a product's rail for the same reason as the check
+     above: a founder asks it at any point, including before a room has ever
+     reacted to anything. It shipped built, priced and with no way to reach it,
+     which is the same as not having shipped it. */
+  { path: '/app/capital', label: 'Who would fund this', Icon: Landmark },
   { path: '/app/settings', label: 'Settings', Icon: Settings },
 ];
 

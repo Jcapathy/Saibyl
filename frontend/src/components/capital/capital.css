@@ -1,0 +1,80 @@
+/* The capital module's surface, in the app's own design language.
+ *
+ * Four things make a surface feel like Saibyl (docs/DESIGN_GUIDE.md): a washed
+ * ground rather than flat paper, soft blue shadows on the cards that carry
+ * meaning, a dot on every mono label, and exactly one serif italic phrase in
+ * the biggest heading. The values below are the landing page's own — copied
+ * from `pages/landing.css` rather than re-invented, because a second set of
+ * numbers is a second brand within a month.
+ *
+ * Scoped to this module rather than added to `index.css` for one reason: the
+ * app-wide restyle is still in progress in other hands, and a shared file is
+ * where two sessions collide. Fold these into the app-wide sheet when the
+ * eyebrow and the ground become everybody's.
+ */
+
+/* 1 — the washed ground. Two radial washes over paper. */
+.capital-ground {
+  background:
+    radial-gradient(circle at 87% 1%, rgba(127, 184, 255, .19), transparent 22rem),
+    radial-gradient(circle at 2% 26%, rgba(143, 119, 245, .10), transparent 26rem),
+    #f8fbff;
+}
+
+/* 2 — soft blue shadows, on the cards that carry meaning only. Hairlines stay
+   on dense lists: shadow every row and the page turns to soup. */
+.capital-hero { box-shadow: 0 22px 60px rgba(52, 96, 164, .12); }
+.capital-card { box-shadow: 0 14px 44px rgba(57, 91, 146, .06); }
+
+/* 3 — the dotted eyebrow. Every mono label that names a section wears it, and
+   that qualifier is the one reading of the guide this module applies: the dot
+   marks where a block begins. The 9.5px captions inside a card — a stat's
+   term, the speaker above a quote — are metadata on an already-labelled block,
+   and dotting each of them would turn a dense record into a constellation
+   while the guide's other rule (density does not change) says not to. Section
+   labels here all go through `MonoLabel`, so there is one place to change if
+   that reading is ever overruled. */
+.capital-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+}
+.capital-eyebrow::before {
+  content: '';
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #35c7d5;
+  box-shadow: 0 0 0 5px rgba(53, 199, 213, .12);
+}
+
+/* One orchestrated arrival per screen, not scattered micro-interactions.
+   `--i` staggers the entries; callers cap it so a long list never makes the
+   founder wait for the tail. */
+@keyframes capital-arrive {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+.capital-arrive {
+  animation: capital-arrive .5s cubic-bezier(.22, .61, .36, 1) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+
+.capital-lift { transition: transform .22s ease, border-color .22s ease; }
+.capital-lift:hover { transform: translateY(-2px); }
+
+/* And it all collapses under a reduced-motion preference. The landing page
+   does this, so everything does — it is not optional. */
+@media (prefers-reduced-motion: reduce) {
+  .capital-arrive {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .capital-lift,
+  .capital-lift:hover {
+    transition: none;
+    transform: none;
+  }
+}

@@ -10,6 +10,7 @@ from app.services.billing.agent_pricing import (
     CREDITS_PER_USD,
     STANDARD_RUN,
     answer_pack_credits,
+    capital_shortlist_credits,
     capped_run_credits,
     check_credit_budget,
     clearance_credits,
@@ -299,6 +300,14 @@ async def paid_feature_prices(auth: dict = Depends(get_current_org)):
         ),
         "website_revision": entry(
             website_revision_credits(), "We rewrite the page and prove the difference"
+        ),
+        # The family-office shortlist. It was priced in `agent_pricing` and
+        # charged by `POST /capital/shortlist`, but never published here — so
+        # the one surface that shows a price before the work could not show
+        # this one, and a founder met the cost as a 402 at submit. That is the
+        # exact failure this endpoint exists to prevent.
+        "capital_shortlist": entry(
+            capital_shortlist_credits(), "Who would fund this, and who would not"
         ),
         "clearance": {
             tier: entry(clearance_credits(tier), f"USPTO search — {tier.lower()}")

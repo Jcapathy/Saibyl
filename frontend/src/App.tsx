@@ -14,6 +14,7 @@ import MessagesStagePage from '@/pages/product/MessagesStagePage';
 import NewProductPage from '@/pages/product/NewProductPage';
 import ProductHomePage from '@/pages/product/ProductHomePage';
 import ReactionsStagePage from '@/pages/product/ReactionsStagePage';
+import CapitalPage from '@/pages/CapitalPage';
 import ComparisonPage from '@/pages/ComparisonPage';
 import LandingPage from '@/pages/LandingPage';
 import DashboardPage from '@/pages/DashboardPage';
@@ -84,6 +85,11 @@ function AnimatedRoutes() {
           </Route>
           <Route path="dashboard" element={<PageTransition><DashboardPage /></PageTransition>} />
           <Route path="ip-check" element={<PageTransition><IpCheckPage /></PageTransition>} />
+          {/* "Who would fund this?" — the family-office bank. Global for the
+              same reason the clearance check is: it is asked before there is a
+              rail to hang it on, and the answer is stored against one product
+              rather than being a step in one. */}
+          <Route path="capital" element={<PageTransition><CapitalPage /></PageTransition>} />
           <Route path="guide" element={<PageTransition><GuidePage /></PageTransition>} />
           <Route path="projects" element={<PageTransition><ProjectsPage /></PageTransition>} />
           <Route path="projects/:id" element={<PageTransition><ProjectDetailPage /></PageTransition>} />

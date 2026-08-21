@@ -8,6 +8,47 @@ running delta record.
 
 ---
 
+## 2026-08-21 — The capital module gets a surface
+
+The bank, the matcher, the pricing and the routes shipped on 2026-08-20 and
+were reachable by nobody: no page, no route, no nav entry, no price on the
+`/billing/prices` screen. Built, deployed, priced and unbuyable — the same
+defect as Audiences and Companies before the rail, and the reason
+`ia.test.ts` asserts reachability at all.
+
+- **`frontend/src/components/capital/`** — `ShortlistPanel` (buy, poll,
+  render), `BankPanel` (browse what the match reads), `FirmRecord` (one
+  record, whole), `CapitalPrimitives` (provenance, inbound route, people,
+  both-sides quotes, the calm refusal), `capital.css` (the module's washed
+  ground, dotted eyebrow and one arrival, all collapsing under
+  `prefers-reduced-motion`). Types and readers in `lib/capital.ts`.
+- **`/app/capital`**, global rather than a sixth step on the rail, for the
+  clearance check's reason: "who would fund this" is asked before there is a
+  product to hang it on. Nav entry in `coreNav`.
+- **The three fields a list vendor would have dropped are rendered**:
+  refusals quoting the firm's own published position, withheld-stale records
+  named with their dates, and the denominator (`firms_considered`). A
+  `warm_intro_only` or `no_inbound` record renders as a stated refusal
+  carrying no route, never as a lead with a missing field —
+  `lib/capital.inboundRoute` is the one reader, so no screen can spell it the
+  other way.
+- **No contact affordance anywhere on the path**, pinned by
+  `src/test/capital.test.ts`: no `mailto:` on this surface, and app-wide no
+  `mailto:` assembled from a stored value. A firm's published role address
+  renders as text; a submission form renders as a link to their own page.
+- **Backend, one line of it:** `GET /billing/prices` never published
+  `capital_shortlist`, though `agent_pricing.capital_shortlist_credits()`
+  priced it and `POST /capital/shortlist` charged it. The one endpoint whose
+  purpose is "learn the price before doing the work" could not price this
+  work, so the founder would have met it as a 402 at submit.
+- **Known gap, not closed here:** `GET /capital/firms` returns validated
+  `FamilyOffice` models, and pydantic drops the row's `id`. No client can
+  therefore link to `GET /capital/firms/{firm_id}`, so that route is
+  unreachable from the UI and no detail page was built (an unlinked route
+  fails the reachability test, correctly). Add `id` to the model to open it.
+
+---
+
 ## 2026-08-20 — The redesign becomes a deliverable the founder keeps
 
 Founder's ask: *"clients who we render a new website for should be able to

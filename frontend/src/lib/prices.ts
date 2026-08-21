@@ -27,6 +27,15 @@ export interface PricesResponse {
   website_check: PriceEntry;
   answer_pack: PriceEntry;
   website_revision: PriceEntry;
+  /**
+   * The family-office shortlist.
+   *
+   * Optional because a deployed backend older than the release that publishes
+   * it answers without the key, and `PriceTag` renders nothing for an absent
+   * entry rather than rendering a paid thing as free. The server prices the
+   * work again at submit either way.
+   */
+  capital_shortlist?: PriceEntry;
   clearance: Record<string, PriceEntry>;
 }
 
