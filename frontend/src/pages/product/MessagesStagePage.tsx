@@ -8,6 +8,7 @@ import { isFinished } from '@/lib/status';
 import type { Simulation } from '@/types';
 import StageHeader from '@/components/stages/StageHeader';
 import { EmptyState, Guarded, StageError } from '@/components/stages/StagePrimitives';
+import MessagingDocPanel from '@/components/gtm/MessagingDocPanel';
 import { useProduct, useStage } from '@/components/stages/useProduct';
 
 /**
@@ -83,6 +84,14 @@ export default function MessagesStagePage() {
     (s) =>
       isFinished(s.status) && !s.parent_simulation_id && (s.variants ?? 1) > 1,
   );
+
+  /* The worksheet below is built from measured objections, which any finished
+     run carries — it does not need several wordings to have been compared. So
+     it is deliberately *not* gated on `compared`: gating it there would hide
+     the whole module from every founder who tested one version, which is most
+     of them on their first run. The comparison makes the document richer (it
+     gains the message-test section) rather than possible. */
+  const source = runs.find((s) => isFinished(s.status) && !s.parent_simulation_id);
   const setupHref = `/app/marketing?project=${product.id}`;
 
   return (
@@ -141,6 +150,14 @@ export default function MessagesStagePage() {
           </div>
         </section>
       )}
+
+      {/* The document the rest of the go-to-market is derived from: the
+          problem, the solution, who it is for, the value props, the
+          differentiators and the pitch — filled in from what the room
+          measured rather than from memory. Rendered only when there is a
+          finished run behind it, because a worksheet built with nothing
+          measured is the one the founder would have written alone. */}
+      {source && <MessagingDocPanel simulationId={source.id} />}
     </div>
   );
 }
