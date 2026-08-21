@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, ShieldCheck, Globe } from 'lucide-react';
+import { ArrowRight, ShieldCheck, Globe, MessageSquare } from 'lucide-react';
 
 import PriceTag from '@/components/billing/PriceTag';
 import { usePrices } from '@/lib/prices';
@@ -33,15 +33,44 @@ export default function WhatNext({ productId }: { productId?: string | null }) {
         After this run
       </p>
       <h2 className="text-h2 text-saibyl-ink mt-1.5">
-        Two things this room could not tell you
+        What this room could not tell you
       </h2>
       <p className="text-[13px] text-saibyl-silver mt-2 max-w-2xl leading-relaxed">
         The buyers argued about your idea and told you where it loses them.
-        They could not tell you whether somebody already owns it, or whether
-        the page a stranger lands on says any of what you just read.
+        They could not tell you whether somebody already owns it, whether the
+        page a stranger lands on says any of this, or what to say when one of
+        these objections comes up on a call.
       </p>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-5">
+        <div className="rounded-xl border border-saibyl-border bg-saibyl-elevated p-5 flex flex-col">
+          <MessageSquare className="w-5 h-5 text-saibyl-blue" />
+          <h3 className="text-[15px] font-semibold text-saibyl-ink mt-3">
+            What do I say when they push back?
+          </h3>
+          <p className="text-[12.5px] text-saibyl-silver mt-1.5 leading-relaxed flex-1">
+            The objections above, turned into what to say out loud &mdash; in
+            the order the room said they matter, each with the buyer&rsquo;s
+            own sentence so you can say four people put it exactly that way.
+          </p>
+          <div className="mt-3">
+            <PriceTag entry={prices?.answer_pack} />
+          </div>
+          {productId ? (
+            <Link
+              to={`/app/products/${productId}/answers`}
+              className="inline-flex items-center gap-1.5 mt-3 px-4 py-2 rounded-xl bg-saibyl-blue text-white font-semibold text-[12.5px] hover:bg-saibyl-gold-hover transition-colors self-start"
+            >
+              Build the answers
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          ) : (
+            <p className="text-[12px] text-saibyl-muted mt-3">
+              Open this from one of your products to build them.
+            </p>
+          )}
+        </div>
+
         <div className="rounded-xl border border-saibyl-border bg-saibyl-elevated p-5 flex flex-col">
           <ShieldCheck className="w-5 h-5 text-saibyl-blue" />
           <h3 className="text-[15px] font-semibold text-saibyl-ink mt-3">
