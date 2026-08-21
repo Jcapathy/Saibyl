@@ -1198,6 +1198,29 @@ def website_check_credits() -> int:
 
 
 # ---------------------------------------------------------------------------
+# The answer pack (GTM module) — one fixed price per build
+# ---------------------------------------------------------------------------
+#
+# One main-model structured generation over up to ten measured objections with
+# their verbatim quotes, plus battlecards. Input carries the objection rows and
+# quotes; output is the matrix. Sized against the report's measured per-section
+# cost (≈$0.145) at roughly two sections of work, plus headroom for the
+# battlecards:
+#
+#   matrix + battlecards, one structured call                        ≈ $0.30
+#
+# PROVISIONAL — recalibrate from `llm_usage` once real builds exist, the same
+# way the website check and the revision are due to be. A price derived from an
+# estimate is a guess with a decimal point on it until the ledger confirms it.
+ANSWER_PACK_COGS_USD = Decimal("0.30")
+
+
+def answer_pack_credits() -> int:
+    """Credits one answer pack charges: COGS at the target margin — 1,500."""
+    return _clearance_price_credits(ANSWER_PACK_COGS_USD)
+
+
+# ---------------------------------------------------------------------------
 # Page revision (PRD_V3 §4d) — one fixed price per revision
 # ---------------------------------------------------------------------------
 
