@@ -97,6 +97,14 @@ class _FakeContext:
         self._viewport = viewport
         self._calls = calls
         self.closed = False
+        self.default_timeout_ms: int | None = None
+
+    def set_default_timeout(self, ms: int) -> None:
+        # Bounds Playwright's own actions after the document loads. A
+        # model-written page is small, but the same pipeline serves live sites
+        # where an unbounded screenshot is how a capture hung for fifteen
+        # minutes.
+        self.default_timeout_ms = ms
 
     async def new_page(self):
         return self._page

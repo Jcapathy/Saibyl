@@ -121,6 +121,13 @@ class _FakeContext:
     def __init__(self, page: _FakePage):
         self._page = page
         self.closed = False
+        # Recorded rather than ignored: the ceiling on Playwright's own
+        # actions is what stops a screenshot of a very tall page running
+        # unbounded after `goto` has already returned.
+        self.default_timeout_ms: int | None = None
+
+    def set_default_timeout(self, ms: int) -> None:
+        self.default_timeout_ms = ms
 
     async def new_page(self):
         return self._page

@@ -115,3 +115,50 @@ async def test_waiting_for_a_slot_is_not_charged_against_the_pages_budget():
         "a queued capture failed on a deadline that was running while it waited"
     )
     cap._capture_slots = None
+
+
+# ---------------------------------------------------------------------------
+# The steps AFTER the navigation — where captures actually hung
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_a_slow_optional_step_costs_a_field_not_the_capture():
+    """The style census is best-effort by this module's own contract. Until
+    now "a page that defeats the census" did not include "takes forever"."""
+    async def _forever():
+        await asyncio.sleep(3600)
+
+    assert await cap._optional(_forever(), 0, "style_census") is None
+
+
+@pytest.mark.asyncio
+async def test_an_optional_step_that_raises_is_also_survivable():
+    async def _boom():
+        raise RuntimeError("the page fought back")
+
+    assert await cap._optional(_boom(), 5, "meta") is None
+
+
+@pytest.mark.asyncio
+async def test_a_slow_required_step_ends_the_capture_with_a_sentence():
+    """A page that came back with no text is not a cheaper capture, it is a
+    wrong one — the critics would be handed a blank page to judge."""
+    async def _forever():
+        await asyncio.sleep(3600)
+
+    with pytest.raises(cap.WebsiteCaptureError) as exc:
+        await cap._required(_forever(), 0, "the page's text", "https://heavy.example")
+
+    message = str(exc.value)
+    assert "could not read the page's text" in message
+    assert "https://heavy.example" in message
+    assert "Traceback" not in message
+
+
+@pytest.mark.asyncio
+async def test_steps_inside_their_budget_pass_their_value_through():
+    async def _ok():
+        return {"font-family": "Inter"}
+
+    assert await cap._optional(_ok(), 5, "census") == {"font-family": "Inter"}
+    assert await cap._required(_ok(), 5, "text", "u") == {"font-family": "Inter"}

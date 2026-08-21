@@ -383,6 +383,13 @@ async def _render(
     if mobile:
         context_kwargs["is_mobile"] = True
     context = await browser.new_context(**context_kwargs)
+    # Everything after the navigation used to be unbounded, and that is where
+    # captures actually hung: `page.evaluate` has no default timeout in
+    # Playwright, and the style census walks computed styles across the whole
+    # DOM. Two heavy commercial pages sat at `capturing` for fifteen minutes
+    # each with their `goto` long since returned. This covers the Playwright
+    # actions; `_step` below covers the evaluates, which ignore it.
+    context.set_default_timeout(timeout_s * 1000)
     try:
         page = await context.new_page()
         if html is not None:
@@ -395,15 +402,61 @@ async def _render(
         if not mobile:
             # Text and tags are viewport-independent; extracting once keeps the
             # mobile pass to what only it can provide — the mobile rendering.
-            result["title"] = (await page.title()) or None
-            result["meta"] = await page.evaluate(_META_TAGS_JS)
-            result["dom_text"] = await page.evaluate(_DOM_TEXT_JS)
-            result["style_census"] = await _style_census(page, url or REVISION_URL)
+            # Extras: the product is better with them and does not need them,
+            # so an overrun costs the field rather than the capture.
+            result["title"] = await _optional(page.title(), timeout_s, "title")
+            result["meta"] = await _optional(
+                page.evaluate(_META_TAGS_JS), timeout_s, "meta"
+            ) or {}
+            # Best-effort by contract — this module's own docstring says a page
+            # that defeats the census still captures, because the screenshots
+            # and the text are the evidence the product cannot do without.
+            # Until now "defeats" did not include "takes forever".
+            result["style_census"] = await _optional(
+                _style_census(page, url or REVISION_URL), timeout_s, "style_census"
+            ) or {}
 
-        result["screenshot"], result["screenshot_truncated"] = await _screenshot(page, viewport)
+            # Evidence. A capture without the page's text is not a capture,
+            # and returning an empty string would send the critics a blank
+            # page to judge.
+            result["dom_text"] = await _required(
+                page.evaluate(_DOM_TEXT_JS), timeout_s, "the page's text", url
+            )
+
+        result["screenshot"], result["screenshot_truncated"] = await _required(
+            _screenshot(page, viewport), timeout_s, "a screenshot", url
+        )
         return result
     finally:
         await context.close()
+
+
+async def _optional(awaitable: Any, timeout_s: int, what: str) -> Any:
+    """A step whose failure costs a field, not the capture."""
+    try:
+        return await asyncio.wait_for(awaitable, timeout=timeout_s)
+    except TimeoutError:
+        logger.warning("website_capture_step_timeout", step=what, seconds=timeout_s)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("website_capture_step_failed", step=what, error=str(exc)[:200])
+    return None
+
+
+async def _required(awaitable: Any, timeout_s: int, what: str, url: str | None) -> Any:
+    """A step the capture has no meaning without.
+
+    Bounded like the others, but its overrun ends the capture with a sentence
+    rather than degrading quietly — a page that came back with no text is not
+    a cheaper capture, it is a wrong one.
+    """
+    try:
+        return await asyncio.wait_for(awaitable, timeout=timeout_s)
+    except TimeoutError as exc:
+        raise WebsiteCaptureError(
+            f"We loaded {url or 'the page'} but could not read {what} from it "
+            f"within {timeout_s} seconds. This usually means a very heavy "
+            "page — try again, or try a lighter page on the same site."
+        ) from exc
 
 
 def _assemble(*, url: str, final_url: str, desktop: dict, mobile: dict) -> WebsiteCapture:
