@@ -60,6 +60,45 @@ async def test_a_capture_inside_the_deadline_passes_its_result_through():
     assert await cap._bounded(_fast(), "https://ok.example", 45) == "captured"
 
 
+def test_chromium_is_told_not_to_use_the_containers_64mb_of_shared_memory():
+    """The reason the flagship module never worked on a real website.
+
+    The launch took no arguments at all. Docker gives a container 64 MB of
+    /dev/shm and Chromium uses shared memory for rendering, so a light page
+    renders and a heavy commercial one exhausts it and hangs. The production
+    record is exactly that shape: every successful check in the database was
+    one small Vercel page, and every attempt at stripe.com or
+    simplepractice.com — the kind of site a founder actually submits — failed
+    or hung, every time, for four days.
+
+    `--disable-dev-shm-usage` moves that allocation to disk-backed /tmp.
+    """
+    assert "--disable-dev-shm-usage" in cap._LAUNCH_ARGS, (
+        "without this, Chromium is capped at the container's 64 MB /dev/shm "
+        "and heavy pages hang"
+    )
+
+
+def test_both_launch_sites_pass_the_container_flags():
+    """`capture_website` and `capture_html` start their own browsers. A flag
+    set on one and not the other fixes live sites and leaves the revision
+    renderer on the old footing."""
+    import inspect
+
+    # `await playwright.chromium.launch(` rather than `chromium.launch(`,
+    # which also matches the prose above the constant explaining why the
+    # flags exist.
+    source = inspect.getsource(cap)
+    launches = source.count("await playwright.chromium.launch(")
+    with_args = source.count(
+        "await playwright.chromium.launch(headless=True, args=_LAUNCH_ARGS)"
+    )
+
+    assert launches == with_args == 2, (
+        f"{launches} launch sites, {with_args} of them configured"
+    )
+
+
 def test_the_default_fits_the_instance_the_service_actually_runs_on():
     """`render.yaml` puts saibyl-backend on the `starter` plan: 512 MB. A
     headless Chromium wants 300-500 MB on its own, so two do not fit — and the

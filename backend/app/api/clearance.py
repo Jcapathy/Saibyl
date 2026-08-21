@@ -48,9 +48,22 @@ def _mark_clearance_failed(run_id: str, name: str) -> Callable[[Exception], None
     watches a spinner for a failure that was logged and never surfaced.
     """
     def _mark(exc: Exception) -> None:
+        # Same fix as `simulations._mark_simulation_failed`, and the same
+        # reason: this column is rendered to the founder, so the exception
+        # belongs in the log and a sentence belongs here.
+        log.error(
+            "clearance_worker_failed",
+            run_id=run_id,
+            task=name,
+            error_type=type(exc).__name__,
+            error=str(exc)[:500],
+        )
         get_supabase_admin().table("clearance_runs").update({
             "status": "failed",
-            "error_message": f"[{name}] {type(exc).__name__}: {exc}",
+            "error_message": (
+                "This search stopped before it finished. Nothing was left "
+                "half-saved — try it again, and tell us if it keeps failing."
+            ),
         }).eq("id", run_id).execute()
     return _mark
 

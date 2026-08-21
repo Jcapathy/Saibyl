@@ -78,6 +78,25 @@ class StuckRule:
 
 
 STUCK: tuple[StuckRule, ...] = (
+    # The run itself, and the omission that proved the point. The first
+    # version of this list covered every artifact built *from* a run and not
+    # the run, which is the one `gtm/discovery`'s docstring actually names —
+    # "completed_at IS NULL AND status = 'running'". A Ledgerline run sat at
+    # `analyzing` for twenty-seven minutes while its neighbours were closed.
+    #
+    # **`ready` is deliberately absent.** It is a resting state, not a
+    # half-finished one: a prepared run waits there for the founder to press
+    # start, and reaping it would destroy work nobody had abandoned. That
+    # distinction is the whole reason these states are listed rather than
+    # inferred as "not terminal".
+    #
+    # Ninety minutes because a large run is genuinely long: agents, rounds and
+    # arenas multiply, and the analysis pass that follows is model-heavy.
+    StuckRule(
+        "simulations", ("queued", "preparing", "running", "analyzing"), 90,
+        "This run stopped before it finished. Anything it had already measured "
+        "is saved — start a new run when you're ready.",
+    ),
     StuckRule(
         "website_snapshots", ("queued", "capturing", "judging"), 20,
         "This check stopped before it finished. Nothing was left half-saved — "

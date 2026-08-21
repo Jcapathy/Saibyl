@@ -34,9 +34,24 @@ def _mark_simulation_failed(simulation_id: str, name: str) -> Callable[[Exceptio
     watches a spinner for a failure that was logged and never surfaced.
     """
     def _mark(exc: Exception) -> None:
+        # The exception goes to the log, where we can act on it. The row gets
+        # a sentence, because the row is rendered to the founder — this is the
+        # line P1-7 names, and it is how somebody ends up reading
+        # `KeyError: 'organization_id'` in monospace on a page they paid for.
+        log.error(
+            "simulation_worker_failed",
+            simulation_id=simulation_id,
+            task=name,
+            error_type=type(exc).__name__,
+            error=str(exc)[:500],
+        )
         get_supabase_admin().table("simulations").update({
             "status": "failed",
-            "error_message": f"[{name}] {type(exc).__name__}: {exc}",
+            "error_message": (
+                "This run stopped before it finished. Anything it had already "
+                "measured is saved — start a new run when you're ready, and "
+                "tell us if it happens again."
+            ),
         }).eq("id", simulation_id).execute()
     return _mark
 

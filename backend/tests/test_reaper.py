@@ -293,6 +293,39 @@ def test_only_reports_is_declared_as_lacking_an_error_message():
     )
 
 
+@pytest.mark.asyncio
+async def test_a_run_stuck_analyzing_is_closed_too(world):
+    """The omission that proved the point. The first version of the rule list
+    covered every artifact built *from* a run and not the run itself — which
+    is the one `gtm/discovery`'s docstring actually names. A Ledgerline run
+    sat at `analyzing` for twenty-seven minutes while its neighbours were
+    being closed correctly."""
+    store, _admin, _refunds = world
+    row = _row("analyzing", 200)
+    del row["credits_charged"]          # simulations has no such column
+    store["simulations"] = [row]
+
+    closed = await reaper.sweep_once(now=NOW)
+
+    assert closed.get("simulations") == 1
+    assert store["simulations"][0]["status"] == "failed"
+
+
+@pytest.mark.asyncio
+async def test_a_prepared_run_waiting_for_the_founder_is_never_reaped(world):
+    """`ready` is a resting state, not a half-finished one: a prepared run
+    waits there until someone presses start. Reaping it would destroy work
+    nobody had abandoned — which is why the states are listed rather than
+    inferred as "anything not terminal"."""
+    store, _admin, _refunds = world
+    store["simulations"] = [_row("ready", 10_000)]
+
+    closed = await reaper.sweep_once(now=NOW)
+
+    assert closed == {}
+    assert store["simulations"][0]["status"] == "ready"
+
+
 def test_every_rule_names_states_and_a_sentence_a_founder_can_act_on():
     for rule in reaper.STUCK:
         assert rule.states, f"{rule.table}: no states"

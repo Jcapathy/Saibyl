@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.core.auth import get_current_org
 from app.core.database import fetch_all, get_supabase_admin
+from app.core.messages import founder_safe
 from app.services.intelligence.analysis_builder import (
     build_simulation_analysis,
     get_analysis,
@@ -55,9 +56,18 @@ async def simulation_analysis(id: str, auth: dict = Depends(get_current_org)):
         )
 
     if row.get("build_status") != "complete":
+        # The stored message is served when somebody wrote it for a founder,
+        # and replaced when it is the machine's. Caught live: this endpoint
+        # returned `409 {"detail": "RemoteProtocolError: Server disconnected"}`
+        # to a customer. The raw text stays in the row for us.
         raise HTTPException(
             status_code=409,
-            detail=row.get("error_message") or "Analysis failed for this simulation.",
+            detail=founder_safe(
+                row.get("error_message"),
+                "We could not finish analysing this run. Your run and its "
+                "events are safe — try rebuilding the analysis, and tell us "
+                "if it keeps failing.",
+            ),
         )
 
     return {

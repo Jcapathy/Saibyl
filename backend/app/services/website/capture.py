@@ -243,6 +243,32 @@ MAX_CONCURRENT_CAPTURES = max(
     1, int(os.environ.get("WEBSITE_CAPTURE_CONCURRENCY", "1") or 1)
 )
 
+# How Chromium is started inside a container, and the reason the flagship
+# module never worked on a real website.
+#
+# The launch took no arguments at all. Docker gives a container **64 MB of
+# /dev/shm**, and Chromium uses shared memory for rendering — so a light page
+# renders fine and a heavy commercial one exhausts it and hangs. That is
+# exactly the shape of the production record: every successful check in this
+# database was one small Vercel page, and every attempt at stripe.com or
+# simplepractice.com — the kind of site a founder actually submits — failed or
+# hung, on every try, for four days.
+#
+# `--disable-dev-shm-usage` moves that allocation to /tmp, which is disk-backed
+# and not capped at 64 MB. It is the standard fix for Playwright in Docker and
+# it is the one that matters here; the rest trim memory and start-up work that
+# a headless screenshot pass has no use for.
+_LAUNCH_ARGS = [
+    "--disable-dev-shm-usage",
+    "--no-sandbox",                     # already unprivileged in the container
+    "--disable-gpu",
+    "--disable-extensions",
+    "--disable-background-networking",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-renderer-backgrounding",
+    "--mute-audio",
+]
+
 _capture_slots: asyncio.Semaphore | None = None
 
 
@@ -292,7 +318,7 @@ async def _capture_website(url: str, *, timeout_s: int) -> WebsiteCapture:
 
     try:
         async with pw.async_playwright() as playwright:
-            browser = await playwright.chromium.launch(headless=True)
+            browser = await playwright.chromium.launch(headless=True, args=_LAUNCH_ARGS)
             try:
                 desktop = await _render(browser, DESKTOP_VIEWPORT, timeout_s, mobile=False, url=url)
 
@@ -333,7 +359,7 @@ async def capture_html(html: str, *, timeout_s: int = 45) -> WebsiteCapture:
 
     try:
         async with pw.async_playwright() as playwright:
-            browser = await playwright.chromium.launch(headless=True)
+            browser = await playwright.chromium.launch(headless=True, args=_LAUNCH_ARGS)
             try:
                 desktop = await _render(
                     browser, DESKTOP_VIEWPORT, timeout_s, mobile=False, html=html
