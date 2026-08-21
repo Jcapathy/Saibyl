@@ -8,6 +8,33 @@ running delta record.
 
 ---
 
+## 2026-08-20 — The GTM module joins the pipeline (answer pack)
+
+- New `services/gtm/answer_pack.py`: the objection matrix, built from
+  `canonical_objections` ranked by load-bearing score with verbatim quotes
+  attached. Four moves per objection (acknowledge / an explore **question** /
+  respond / confirm) plus battlecards, and `when_to_walk` where the honest
+  answer is that the objection cannot be talked away.
+- **Deliberately not the inoculation loop.** Inoculation drafts published
+  material and re-runs the room to prove the objection moved; this is the
+  script for a live call, which no room can score. Same input, different
+  artifact, and they are not substitutes.
+- Three disciplines enforced in code rather than in the prompt: measured
+  numbers are attached from the database (a model asked to echo a score
+  eventually rounds it), a row for an objection nobody raised is dropped, and
+  battlecards cover only founder-named rivals plus doing-nothing and
+  build-in-house. Fact discipline follows `revise.py` — `[TODO: your number]`
+  rather than an invented statistic.
+- `workers/answer_pack_tasks.py` deliberately does **not** copy the clearance
+  worker's failure handling, which writes raw exceptions into a
+  founder-visible column (logged as P1-7). The exception goes to the log; the
+  founder gets a sentence.
+- New table `answer_packs` (migration 038), routes under `/api/answer-pack`,
+  price published through `/billing/prices`, panel on the Answers step.
+- Priced 1,500 credits — COGS $0.30 at the 80% target margin through the same
+  helper as the website check and the clearance tiers. PROVISIONAL until the
+  ledger confirms it.
+
 ## 2026-08-17 — The app-shell light restyle, waves 1–2: pages, charts, critics
 
 - Ten parallel agents with disjoint file ownership restyled every page

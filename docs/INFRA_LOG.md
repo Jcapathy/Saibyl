@@ -10,6 +10,28 @@ since 2026-08-16).
 
 ---
 
+## 2026-08-20 — The GTM module's first artifact shipped
+
+- Migration **038_answer_packs** applied to production BEFORE the deploy and
+  verified against `information_schema` (12 columns, RLS on, two indexes).
+  Additive; nothing backfilled.
+- Deploy verified by the 404→401 flip on `POST /api/answer-pack`, then by a
+  **real build against a real run**: 10 measured objections → 9 matrix rows +
+  2 battlecards, charged exactly 1,500 credits, six `[TODO]` markers in the
+  output (the fact discipline holding — it refused to invent numbers the
+  input did not contain). Battlecards were doing-nothing and build-in-house
+  only, correct for a run whose material named no competitors.
+- Frontend verified by reading the live pages: the panel renders on the
+  Answers step stating "1,500 credits, charged once when it starts", and the
+  three-card offer block is live (confirmed by grepping the served JS bundle
+  for a string only the new build carries).
+- `frontend/public/robots.txt` and `sitemap.xml` now ship — there were none.
+  **Both name saibyl.com, which serves a GoDaddy parking page**; see
+  `docs/SEO_AEO.md`. Pointing DNS at the Render frontend is owed and is the
+  highest-value action for visibility.
+- Credits granted to the Beta Test Org (+5,000) to fund the live verification
+  of the paid path. Test org; noted so the balance is not read as revenue.
+
 ## 2026-08-17 (night) — Shipped to production, and the deploy gate was broken
 
 - **Master pushed and LIVE.** `master` = `ab0dc98`. Verified by discriminator
