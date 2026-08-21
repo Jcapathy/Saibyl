@@ -225,6 +225,43 @@ async def test_a_broken_table_does_not_stop_the_sweep(world):
     assert closed.get("website_snapshots") == 1, "one bad table sank the sweep"
 
 
+@pytest.mark.asyncio
+async def test_a_table_without_a_credits_column_is_still_swept(world):
+    """Found in production, and hidden by this module's own error handling.
+
+    The select named `credits_charged`, which `reports` does not have.
+    PostgREST rejected it, the handler logged it, and that table was skipped
+    on every sweep forever — three orphaned reports sat at `generating` while
+    the website rows beside them were being closed correctly. The read now
+    takes `*`, so a rule cannot be disabled by a column that varies between
+    tables.
+    """
+    store, _admin, refunds = world
+    row = _row("generating", 120)
+    del row["credits_charged"]          # exactly what a `reports` row looks like
+    store["reports"] = [row]
+
+    closed = await reaper.sweep_once(now=NOW)
+
+    assert closed.get("reports") == 1, "a table without credits_charged was skipped"
+    assert store["reports"][0]["status"] == "failed"
+    assert refunds == []
+
+
+@pytest.mark.asyncio
+async def test_a_refundable_row_missing_its_charge_refunds_nothing_rather_than_crashing(
+    world,
+):
+    store, _admin, refunds = world
+    row = _row("capturing", 60)
+    del row["credits_charged"]
+    store["website_snapshots"] = [row]
+
+    await reaper.sweep_once(now=NOW)
+
+    assert refunds == [(ORG, 0, "reaper:website_snapshots:capturing")]
+
+
 def test_every_rule_names_states_and_a_sentence_a_founder_can_act_on():
     for rule in reaper.STUCK:
         assert rule.states, f"{rule.table}: no states"

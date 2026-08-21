@@ -131,7 +131,14 @@ async def sweep_once(now: datetime | None = None) -> dict[str, int]:
         try:
             rows = (
                 admin.table(rule.table)
-                .select("id, organization_id, status, credits_charged, created_at")
+                # `*` rather than a column list, and this is not laziness.
+                # Naming `credits_charged` made the whole rule fail on
+                # `reports`, which has no such column — PostgREST rejects the
+                # select, the handler below logs it, and that table is skipped
+                # on every sweep forever. Three orphaned reports sat there
+                # while the website rows beside them were being closed
+                # correctly. These rows are small and capped at 200.
+                .select("*")
                 .in_("status", list(rule.states))
                 .lt("created_at", cutoff)
                 .limit(200)
