@@ -65,6 +65,69 @@ def test_an_inline_style_attribute_does_not_swallow_the_markup_after_it():
     ).faces == ["Manrope"]
 
 
+def test_a_font_variable_is_followed_to_the_face_it_names():
+    """Found on real pages: modern build output almost never names a family at
+    the point of use. A guide answering "your heading font is
+    var(--font-mono)" is technically accurate and completely useless."""
+    html = (
+        "<style>:root{--font-display:'Geist Sans',sans-serif;"
+        "--font-mono:\"Geist Mono\",monospace}"
+        "h1{font-family:var(--font-display)}code{font-family:var(--font-mono)}"
+        "</style>"
+    )
+    assert extract_tokens(html).faces == ["Geist Sans", "Geist Mono"]
+
+
+def test_an_undefined_variable_names_nothing_rather_than_itself():
+    """The face may be defined in a stylesheet we never fetched. Saying
+    nothing is honest; printing the variable name is not."""
+    assert extract_tokens("<style>h1{font-family:var(--missing)}</style>").faces == []
+
+
+def test_css_keywords_are_not_typefaces():
+    """Also found on real pages. `inherit` in a face list sends the reader
+    looking for a font that does not exist."""
+    html = (
+        "<style>a{font-family:inherit}b{font-family:unset}"
+        "c{font-family:Manrope,sans-serif}</style>"
+    )
+    assert extract_tokens(html).faces == ["Manrope"]
+
+
+def test_an_escaped_declaration_does_not_yield_a_typeface_called_backslash():
+    """Found on a real page: a font-family inside an embedded script is
+    written `font-family:\\"Uncut Sans\\"`, and the naive read takes the
+    backslash as the name. One nonsense line makes a founder distrust the
+    whole guide."""
+    html = '<script>el.style="font-family:\\"Uncut Sans\\",sans-serif"</script>'
+    assert "\\" not in extract_tokens(html).faces
+    assert extract_tokens(html).faces in ([], ["Uncut Sans"])
+
+
+def test_a_variable_cycle_gives_up_instead_of_looping():
+    html = "<style>:root{--a:var(--b);--b:var(--a)}h1{font-family:var(--a)}</style>"
+    assert extract_tokens(html).faces == []
+
+
+def test_an_important_none_is_still_no_shadow():
+    """Found on a real page. `!important` is about precedence, not shape — and
+    a page whose only "shadow" is `none !important` has no shadows."""
+    assert extract_tokens("<style>a{box-shadow:none !important}</style>").shadows == []
+    assert extract_tokens(
+        "<style>a{box-shadow:0 1px 2px #0001 !important}</style>"
+    ).shadows == ["0 1px 2px #0001"]
+
+
+def test_the_type_advice_matches_the_number_of_faces():
+    """A one-face page told to beware "a fourth face" reads as boilerplate,
+    and boilerplate is how a reader learns to skip the rest."""
+    one = build_style_guide(
+        url="", page_text="<style>h1{font-family:Inter,sans-serif}</style>"
+    )
+    assert "One face" in one
+    assert "fourth face" not in one
+
+
 def test_a_colour_used_once_is_not_a_token():
     """The cut is the point. A swatch chart listing every one-off value —
     a border at 4% opacity, a shadow tint — is not a system anybody can act

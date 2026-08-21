@@ -49,6 +49,19 @@ _TAG = re.compile(r"<[^>]+>")
 # the faces most worth naming.
 _FONT_FAMILY = re.compile(r"font-family\s*:\s*([^;}]+)", re.I)
 _MAX_FACE_CHARS = 64
+
+# Custom properties, so `font-family: var(--font-mono)` can be answered with
+# the face the page actually loads. Modern build output almost never names a
+# family at the point of use.
+_CUSTOM_PROP = re.compile(r"(--[\w-]+)\s*:\s*([^;}]+)")
+_VAR_REF = re.compile(r"var\(\s*(--[\w-]+)", re.I)
+
+# Not typefaces. A guide listing `inherit` as one of a page's four faces is
+# worse than a guide listing three: it sends the reader looking for a font
+# that does not exist.
+_NOT_A_FACE = frozenset(
+    {"inherit", "initial", "unset", "revert", "revert-layer", "none", "auto"}
+)
 _RADIUS = re.compile(r"border-radius\s*:\s*([^;\"'}]+)", re.I)
 _SHADOW = re.compile(r"box-shadow\s*:\s*([^;\"'}]+)", re.I)
 
@@ -68,39 +81,65 @@ def _normalize_hex(value: str) -> str:
     return v
 
 
-def _first_family(stack: str) -> str:
+def _first_family(stack: str, props: dict[str, str], _depth: int = 0) -> str:
     """The face a stack actually asks for, before its fallbacks.
 
     The stack may have been captured past its real end — a `style=` attribute
     is closed by a quote, not by a semicolon — so the cut happens here rather
     than in the pattern. A quoted name runs to its closing quote; a bare one
     stops at the first comma or quote, whichever the page reaches first.
+
+    `var(--font-mono)` is followed to what the page defines it as, because
+    modern build output almost never names a family at the point of use and
+    a guide that answered "your heading font is var(--font-mono)" would be
+    technically accurate and completely useless. Two hops, then it gives up
+    rather than chasing a cycle.
     """
     text = stack.strip()
     if not text:
         return ""
+
+    ref = _VAR_REF.match(text)
+    if ref:
+        if _depth >= 2:
+            return ""
+        target = props.get(ref.group(1))
+        return _first_family(target, props, _depth + 1) if target else ""
+
     if text[0] in "\"'":
         name = text[1:].split(text[0])[0]
     else:
         name = re.split(r"[,\"'>]", text)[0]
-    name = name.strip()
-    return name if len(name) <= _MAX_FACE_CHARS else ""
+
+    # A face has a name. Escaped declarations inside embedded scripts
+    # (`font-family:\"Uncut Sans\"`) otherwise yield a typeface called `\`,
+    # which is the kind of line that makes a founder distrust the whole guide.
+    name = name.strip().strip("\\").strip()
+    if not name or len(name) > _MAX_FACE_CHARS or name.lower() in _NOT_A_FACE:
+        return ""
+    if not any(c.isalnum() for c in name):
+        return ""
+    return name
 
 
 def extract_tokens(html: str) -> StyleTokens:
     """The system the page actually uses, read from the page."""
     colors = Counter(_normalize_hex(m.group(0)) for m in _HEX.finditer(html))
 
+    props = {m.group(1): m.group(2) for m in _CUSTOM_PROP.finditer(html)}
+
     faces: list[str] = []
     for match in _FONT_FAMILY.finditer(html):
-        first = _first_family(match.group(1))
+        first = _first_family(match.group(1), props)
         if first and first.lower() not in {f.lower() for f in faces}:
             faces.append(first)
 
     def _tail(pattern: re.Pattern[str], limit: int) -> list[str]:
         seen: list[str] = []
         for m in pattern.finditer(html):
-            value = " ".join(m.group(1).split())
+            # `!important` is about precedence, not shape — and it is what let
+            # a "shadow" of `none !important` reach a real page's guide.
+            value = " ".join(m.group(1).replace("!important", " ").split())
             if value and value.lower() != "none" and value not in seen:
                 seen.append(value)
             if len(seen) >= limit:
@@ -219,8 +258,13 @@ def build_style_guide(
             "",
             *[f"- `{face}`" for face in tokens.faces],
             "",
-            "Keep the count where it is. A fourth face is the most common way a "
-            "coherent page stops being one.",
+            (
+                "One face, carried by size and weight alone. Reach for a second "
+                "only when it is doing work this one cannot."
+                if len(tokens.faces) == 1
+                else "Keep the count where it is. One face more than a page "
+                "needs is the most common way a coherent page stops being one."
+            ),
             "",
         ]
 
