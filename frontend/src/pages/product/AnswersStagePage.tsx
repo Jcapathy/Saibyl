@@ -16,6 +16,7 @@ import {
 import type { Simulation } from '@/types';
 import StageHeader from '@/components/stages/StageHeader';
 import { EmptyState, Guarded, StageError } from '@/components/stages/StagePrimitives';
+import AnswerPackPanel from '@/components/gtm/AnswerPackPanel';
 import { useProduct, useStage } from '@/components/stages/useProduct';
 
 /**
@@ -208,6 +209,13 @@ export default function AnswersStagePage() {
           </section>
         </>
       )}
+
+      {/* The other half of answering an objection: what you say out loud when
+          it comes up, rather than what you publish and re-test. Rendered only
+          when there is a finished run to build it from — the matrix is made
+          of measured objections and there is nothing honest to offer without
+          them. */}
+      {source && <AnswerPackPanel simulationId={source.id} />}
     </div>
   );
 }

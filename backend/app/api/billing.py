@@ -9,6 +9,7 @@ from app.core.auth import get_current_org
 from app.services.billing.agent_pricing import (
     CREDITS_PER_USD,
     STANDARD_RUN,
+    answer_pack_credits,
     capped_run_credits,
     check_credit_budget,
     clearance_credits,
@@ -292,6 +293,9 @@ async def paid_feature_prices(auth: dict = Depends(get_current_org)):
         ),
         "website_check": entry(
             website_check_credits(), "We read your page like a buyer would"
+        ),
+        "answer_pack": entry(
+            answer_pack_credits(), "What to say when they push back"
         ),
         "website_revision": entry(
             website_revision_credits(), "We rewrite the page and prove the difference"

@@ -25,6 +25,7 @@ export interface PricesResponse {
   plan: string;
   idea_evaluation: PriceEntry;
   website_check: PriceEntry;
+  answer_pack: PriceEntry;
   website_revision: PriceEntry;
   clearance: Record<string, PriceEntry>;
 }

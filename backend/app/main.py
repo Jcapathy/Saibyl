@@ -11,6 +11,7 @@ from app.api import (
     accuracy,
     admin,
     analysis,
+    answer_pack,
     auth,
     billing,
     clearance,
@@ -153,6 +154,7 @@ def create_app() -> FastAPI:
     app.include_router(clearance.router, prefix="/api/clearance")
     app.include_router(website.router, prefix="/api/website")
     app.include_router(website_room.router, prefix="/api/website-room")
+    app.include_router(answer_pack.router, prefix="/api/answer-pack")
     app.include_router(admin.router, prefix="/api/admin")
     # Mounted at /api because its paths are nested under /simulations/{id}/…
     # but it is a separate module from the simulation lifecycle router.
