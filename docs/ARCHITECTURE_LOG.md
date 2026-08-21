@@ -8,6 +8,43 @@ running delta record.
 
 ---
 
+## 2026-08-20 — The redesign becomes a deliverable the founder keeps
+
+Founder's ask: *"clients who we render a new website for should be able to
+see the new site in HTML, that file should be downloadable and the
+style/branding guide should go along with it… A medical SaaS start up's site
+should look and feel radically different than a financial products start
+up's."* Two gaps, one boundary change.
+
+- **`services/website/verticals.py`** — the generator had no idea what kind of
+  company it was designing for. It inherited the founder's existing design DNA
+  and polished it, so a generic page came back as a better-executed generic
+  page, and a clinical product and a payments product were designed by the
+  same instincts. Six briefs (health, fintech, devtools, consumer, b2b_saas,
+  marketplace) plus a general fallback, each written as a **buyer argument** —
+  who signs the cheque, what they must believe, what the page must carry, what
+  reads as a warning sign — never as a house style. `brief_section()` is now a
+  block in `revise._generation_prompt`.
+- **Classification refuses more than it guesses.** A winner needs ≥2 signals
+  *and* a ≥2 margin over the runner-up; a medical-billing product that scores
+  health and fintech nearly equally falls back to general. A confidently wrong
+  brief pushes a page toward conventions its buyer does not hold, which is
+  worse than no brief.
+- **`services/website/style_guide.py`** — the design DNA was fed *into* the
+  generator and never handed *out*. The guide is now rendered from the
+  delivered file: colours, faces, radii and shadows extracted from the HTML
+  itself, the category brief that shaped it, the measured after-scores, and
+  the gallery's characterization of the old site. No model call on this path.
+- **`GET /website/revision/{id}/bundle`** zips `index.html` +
+  `STYLE_GUIDE.md`, named for the founder's own domain (sanitised — the string
+  lands in a `Content-Disposition` header). Charges nothing: both files are
+  already-produced artifacts.
+- **Boundary note:** the guide classifies from the page's *visible copy*, not
+  its markup. Left raw, a Tailwind page votes with its class names and a React
+  bundle with its variable names.
+
+---
+
 ## 2026-08-20 — The GTM module joins the pipeline (answer pack)
 
 - New `services/gtm/answer_pack.py`: the objection matrix, built from

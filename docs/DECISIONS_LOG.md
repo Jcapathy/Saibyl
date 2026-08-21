@@ -8,6 +8,43 @@ choices.
 
 ---
 
+## 2026-08-20 — Category shapes the page as an argument, never as a palette
+
+The founder's example was the decision: *"A medical SaaS start up's site
+should look and feel radically different than a financial products start
+up's."* The obvious implementation is a lookup table — medical means blue and
+rounded, fintech means navy and serif. **We deliberately did not build that.**
+
+A per-industry palette table produces exactly the generated look the Website
+Gauntlet exists to eliminate: every medical client gets the same site, and the
+product becomes a template shop with extra steps. Worse, it is confidently
+wrong guidance, which a model follows further than vague guidance.
+
+So `verticals.py` encodes each category as *who signs the cheque, what they
+must believe before they act, what evidence the page has to carry, and what
+reads to them as a warning sign* — pressures, not values. A test asserts no
+brief contains a literal hex colour or px/pt/rem size, so the file cannot
+quietly become the lookup table it replaced.
+
+**Two consequences that are features, not gaps:**
+
+1. **Refusal beats a guess.** A category needs ≥2 signals and a ≥2 margin over
+   the runner-up. Health-fintech products (medical billing, clinical
+   payments) genuinely sit between two sets of conventions; picking one by
+   tiebreak would be arbitrary, so they get the general brief.
+2. **The brief may not be invented into evidence.** Categories ask for
+   certifications, audit trails and numbers. Every brief ends with the
+   no-invention rule — a page that claims a certification it does not hold is
+   worse than one that omits it, so unknowns ship as placeholders.
+
+**Related and settled at the same time:** the client's redesigned page carries
+*no Saibyl branding*. Everything else we export is ours and wears the lockup;
+their homepage is theirs. Only the style guide beside it is signed, and only
+at the bottom. Recorded in `DESIGN_GUIDE.md` as the one export that must not
+look like Saibyl.
+
+---
+
 ## 2026-08-17 — The loss leader is the idea evaluation, not the website check
 
 Founder's direction, stated plainly and binding on pricing, copy and the

@@ -139,6 +139,49 @@ sequence, the capital shortlist all become documents a founder sends onward:
   so the brand is a thing that fails a test rather than a thing somebody
   remembers.
 
+## The one export that must NOT look like Saibyl
+
+The redesigned page we hand a client is the exception, and the exception is
+load-bearing. Every other artifact in this document carries our identity
+because it is ours. The client's new homepage is *theirs* — stamping our
+palette on it would be selling every founder the same website, which is the
+failure the Website Gauntlet exists to fix.
+
+So the split is:
+
+- **`index.html`** — the client's page, in the client's design language. No
+  Saibyl mark, no Saibyl palette, no attribution in the markup.
+- **`STYLE_GUIDE.md`** — ours, and signed. It describes their page; the
+  Saibyl line sits at the bottom where a colophon belongs.
+
+**Where it lives:** `backend/app/services/website/style_guide.py` renders the
+guide; `GET /website/revision/{id}/bundle` zips the pair; `SiteRevision.tsx`
+offers the download. Nothing on that path calls a model — a founder who paid
+for the revision pays nothing to take it away, and a guide that costs nothing
+to regenerate stays true after the next edit.
+
+**The rule that makes the guide worth shipping: every value is read out of
+the delivered HTML.** Colours, faces, radii and shadows are extracted from the
+file itself, so the guide and the page cannot disagree — which is the failure
+mode of every style guide written *alongside* a design rather than *from* one.
+Where a value is absent the section is omitted rather than filled with a
+plausible default; a founder handing this to a designer has no way to tell an
+invented line from a measured one, so there must be no invented lines.
+
+**Category is an argument, not a lookup table.**
+`backend/app/services/website/verticals.py` decides what a medical SaaS page
+must prove versus a fintech page, and it does so in terms of *who signs the
+cheque, what they must believe, and what the page has to carry* — never in
+hex values or font names. A test asserts no brief contains a literal colour
+or size, because the moment that file starts naming palettes per industry it
+has become the stereotype generator it exists to prevent. When the copy spans
+two categories or establishes none, it refuses and falls back to general:
+a confidently wrong brief is worse than no brief.
+
+**When you add another client-facing deliverable** (the messaging doc's
+one-pager, an exported deck), decide first whose artifact it is. Ours gets the
+lockup. Theirs gets their own design and a signed colophon — never both.
+
 ## The repeatable check, before any surface ships
 
 1. Does it use the washed ground, or flat paper by accident?
@@ -149,6 +192,8 @@ sequence, the capital shortlist all become documents a founder sends onward:
 6. Does it collapse under `prefers-reduced-motion`?
 7. If it can be exported: does it carry the lockup, and does it survive
    greyscale?
+8. If it is the *client's* artifact rather than ours: does it carry none of
+   our palette, and a signed colophon rather than a mark?
 
 Failing one of these is the difference between "looks like Saibyl" and "looks
 like a competent dialect of Saibyl", which is what a blind critic called the

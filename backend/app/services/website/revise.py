@@ -59,6 +59,7 @@ from app.core.llm_client import llm_vision
 from app.services.billing.usage_ledger import usage_context
 from app.services.website.capture import WebsiteCapture, capture_html
 from app.services.website.critics import CritiqueResult, run_critic_gauntlet
+from app.services.website.verticals import brief_section, classify_vertical
 
 logger = structlog.get_logger()
 
@@ -285,10 +286,25 @@ def _generation_prompt(
     reference: WebsiteCapture | None,
     previous_html: str | None,
 ) -> str:
+    # What the category demands, derived from the founder's own words.
+    #
+    # Without this the generator inherited the page's existing design DNA and
+    # polished it, so a generic page came back as a better-executed generic
+    # page — and a clinical product and a payments product were designed by
+    # the same instincts. The brief describes what THIS buyer must believe and
+    # what the page must therefore prove; it is placed before the findings so
+    # the fixes are made in the category's terms rather than in the abstract.
+    #
+    # `general` when the material does not clearly say — a confidently wrong
+    # category brief would push the page toward conventions its buyer does not
+    # hold, which is worse than no brief at all.
+    vertical = classify_vertical(page_text)
+
     sections = [
         _HEADER.format(round_no=round_no),
         _EVIDENCE_FIRST if previous_html is None else _EVIDENCE_LATER,
         _PAGE_TEXT_SECTION.format(page_text=_cut(page_text, _PAGE_TEXT_CHARS)),
+        brief_section(vertical),
         _FACT_RULES,
         _FINDINGS_HEADER + "\n" + _findings_block(critique),
         _STRENGTHS_HEADER + "\n" + _strengths_block(critique),

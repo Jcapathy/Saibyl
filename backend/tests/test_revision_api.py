@@ -960,6 +960,230 @@ def test_an_unfinished_revisions_page_is_a_409(authed_client, monkeypatch):
     assert calls.reads == []
 
 
+# ---------------------------------------------------------------------------
+# The takeaway bundle: the page and the rules that came with it
+# ---------------------------------------------------------------------------
+
+BUNDLE_HTML = (
+    "<html><head><style>body{font-family:Manrope,sans-serif;color:#14294a;"
+    "background:#f8fbff}.cta{background:#286cf0;border-radius:10px;"
+    "box-shadow:0 1px 2px rgba(20,41,74,.08)}.note{color:#286cf0;"
+    "border-radius:10px;background:#f8fbff}</style></head><body>"
+    "<h1>Prior authorization, answered before the patient leaves</h1>"
+    "<p>Acme works inside your EHR so clinical staff stop faxing health "
+    "plans. Built for hospital revenue teams and their patient care "
+    "coordinators.</p></body></html>"
+)
+
+
+def _bundle_store(**snapshot_overrides) -> dict:
+    return {
+        "page_revisions": [_complete_revision()],
+        "website_snapshots": [_complete_snapshot(**snapshot_overrides)],
+        "design_gallery": [{
+            "id": GALLERY,
+            "organization_id": ORG,
+            "snapshot_id": SNAP,
+            "url": URL,
+            "characterization": "A default Bootstrap theme with the buttons recoloured.",
+            "summary": "Stock components, no type scale, three competing blues.",
+        }],
+    }
+
+
+def _bundle_stored() -> dict[str, bytes]:
+    stored = _stored_objects()
+    stored[f"website/{ORG}/revisions/{REV}/revision.html"] = BUNDLE_HTML.encode()
+    return stored
+
+
+def _open_bundle(response) -> dict[str, str]:
+    import io
+    import zipfile
+
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        return {
+            name: archive.read(name).decode("utf-8")
+            for name in archive.namelist()
+        }
+
+
+def test_the_bundle_requires_auth(app, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    admin = _install(monkeypatch, _bundle_store())
+    _install_services(monkeypatch, stored=_bundle_stored())
+
+    response = TestClient(app).get(f"/api/website/revision/{REV}/bundle")
+
+    assert response.status_code in (401, 403), response.text
+    assert not admin.calls
+
+
+def test_the_bundle_carries_the_page_and_its_guide(authed_client, monkeypatch):
+    """The founder's request: the new page, downloadable, with the branding
+    guide beside it so it survives the next person who edits it."""
+    _install(monkeypatch, _bundle_store())
+    _install_services(monkeypatch, stored=_bundle_stored())
+
+    response = authed_client.get(f"/api/website/revision/{REV}/bundle")
+
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"] == "application/zip"
+    files = _open_bundle(response)
+    assert set(files) == {"index.html", "STYLE_GUIDE.md"}
+    assert files["index.html"] == BUNDLE_HTML
+
+
+def test_the_guide_describes_the_page_it_ships_with(authed_client, monkeypatch):
+    """Derived, not written alongside: every value in the guide must be one
+    the delivered file actually contains, or the two drift apart the first
+    time the page is regenerated."""
+    _install(monkeypatch, _bundle_store())
+    _install_services(monkeypatch, stored=_bundle_stored())
+
+    guide = _open_bundle(
+        authed_client.get(f"/api/website/revision/{REV}/bundle")
+    )["STYLE_GUIDE.md"]
+
+    # Colours and faces read out of the file.
+    assert "#286cf0" in guide and "#f8fbff" in guide
+    assert "Manrope" in guide
+    assert "10px" in guide  # the radius the page uses
+    # A colour used once is detail, not a token.
+    assert "#14294a" not in guide
+
+    # The category the copy establishes, argued rather than decorated.
+    assert "Health and clinical software" in guide
+    assert "compliance" in guide.lower() or "audit" in guide.lower()
+
+    # The measured verdict and where the design came from.
+    assert "81" in guide
+    assert "Bootstrap theme" in guide
+
+    assert "Saido Labs LLC" in guide
+
+
+def test_the_guide_reads_the_copy_not_the_markup(authed_client, monkeypatch):
+    """A page whose CSS is full of category words but whose copy says nothing
+    must not be handed a category. Class names are not an argument."""
+    markup_only = (
+        "<html><head><style>.patient-card{color:#286cf0}.clinical-grid{}"
+        ".health-hero{}.hospital-nav{}.ehr-panel{color:#286cf0}</style></head>"
+        "<body><h1>We make software.</h1></body></html>"
+    )
+    stored = _stored_objects()
+    stored[f"website/{ORG}/revisions/{REV}/revision.html"] = markup_only.encode()
+    _install(monkeypatch, _bundle_store())
+    _install_services(monkeypatch, stored=stored)
+
+    guide = _open_bundle(
+        authed_client.get(f"/api/website/revision/{REV}/bundle")
+    )["STYLE_GUIDE.md"]
+
+    assert "Health and clinical software" not in guide
+    assert "General" in guide
+
+
+def test_the_bundle_is_named_for_the_founders_own_domain(authed_client, monkeypatch):
+    _install(monkeypatch, _bundle_store())
+    _install_services(monkeypatch, stored=_bundle_stored())
+
+    response = authed_client.get(f"/api/website/revision/{REV}/bundle")
+
+    assert (
+        response.headers["content-disposition"]
+        == 'attachment; filename="acme.example-redesign.zip"'
+    )
+
+
+def test_a_hostile_url_cannot_break_out_of_the_download_header(
+    authed_client, monkeypatch
+):
+    """The filename lands in a response header. A quote or a newline there is
+    a response-splitting bug, not a cosmetic one — and the URL is founder
+    input."""
+    _install(monkeypatch, _bundle_store(url='https://ac"me\r\nX-Evil: 1.example/'))
+    _install_services(monkeypatch, stored=_bundle_stored())
+
+    disposition = authed_client.get(
+        f"/api/website/revision/{REV}/bundle"
+    ).headers["content-disposition"]
+
+    assert '"' not in disposition.removeprefix('attachment; filename="').rstrip('"')
+    assert "\r" not in disposition and "\n" not in disposition
+    assert "X-Evil" not in disposition
+
+
+def test_the_bundle_is_org_scoped(authed_client, monkeypatch):
+    store = _bundle_store()
+    store["page_revisions"] = [_complete_revision(organization_id=OTHER_ORG)]
+    _install(monkeypatch, store)
+    _install_services(monkeypatch, stored=_bundle_stored())
+
+    response = authed_client.get(f"/api/website/revision/{REV}/bundle")
+
+    assert response.status_code == 404, response.text
+
+
+def test_an_unfinished_revision_has_nothing_to_bundle(authed_client, monkeypatch):
+    store = _bundle_store()
+    store["page_revisions"] = [_queued_revision()]
+    _install(monkeypatch, store)
+    calls = _install_services(monkeypatch, stored=_bundle_stored())
+
+    response = authed_client.get(f"/api/website/revision/{REV}/bundle")
+
+    assert response.status_code == 409, response.text
+    assert "isn't finished" in response.json()["detail"]
+    assert calls.reads == []
+
+
+def test_a_missing_gallery_row_costs_a_section_not_the_download(
+    authed_client, monkeypatch
+):
+    """The gallery row is a byproduct whose failure is only ever a log line,
+    so a revision can legitimately exist without one."""
+    store = _bundle_store()
+    store["design_gallery"] = []
+    _install(monkeypatch, store)
+    _install_services(monkeypatch, stored=_bundle_stored())
+
+    response = authed_client.get(f"/api/website/revision/{REV}/bundle")
+
+    assert response.status_code == 200, response.text
+    guide = _open_bundle(response)["STYLE_GUIDE.md"]
+    assert "Where this came from" not in guide
+    assert "Health and clinical software" in guide, "the rest of the guide survived"
+
+
+def test_another_orgs_gallery_row_never_reaches_the_guide(authed_client, monkeypatch):
+    store = _bundle_store()
+    store["design_gallery"][0]["organization_id"] = OTHER_ORG
+    store["design_gallery"][0]["characterization"] = "Leaked characterization."
+    _install(monkeypatch, store)
+    _install_services(monkeypatch, stored=_bundle_stored())
+
+    guide = _open_bundle(
+        authed_client.get(f"/api/website/revision/{REV}/bundle")
+    )["STYLE_GUIDE.md"]
+
+    assert "Leaked" not in guide
+
+
+def test_the_bundle_charges_nothing(authed_client, monkeypatch):
+    """Both files are already-produced artifacts. A founder who paid for the
+    revision pays nothing to take it away."""
+    _install(monkeypatch, _bundle_store())
+    _install_services(monkeypatch, stored=_bundle_stored())
+    deductions = _fake_billing(monkeypatch)
+
+    assert (
+        authed_client.get(f"/api/website/revision/{REV}/bundle").status_code == 200
+    )
+    assert deductions == []
+
+
 def test_a_screenshot_request_must_name_a_stored_image(authed_client, monkeypatch):
     _install(monkeypatch, {
         "page_revisions": [_complete_revision()],

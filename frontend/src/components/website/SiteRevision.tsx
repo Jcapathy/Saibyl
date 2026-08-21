@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowDown, ArrowRight, ArrowUp, Check, Loader2, Minus } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowRight,
+  ArrowUp,
+  Check,
+  Download,
+  Loader2,
+  Minus,
+} from 'lucide-react';
 
 import api from '@/lib/api';
 import { scoreText } from './score';
@@ -142,6 +150,7 @@ export default function SiteRevision({
   const [copyState, setCopyState] = useState<'idle' | 'busy' | 'done' | 'failed'>(
     'idle',
   );
+  const [saveState, setSaveState] = useState<'idle' | 'busy' | 'failed'>('idle');
 
   /* Every Blob URL this component mints, revoked together on unmount. */
   const objectUrls = useRef<string[]>([]);
@@ -215,6 +224,31 @@ export default function SiteRevision({
   function retryHtml() {
     setHtmlState('loading');
     void fetchHtml();
+  }
+
+  /* The page and its style guide, as one zip the founder keeps.
+     Fetched rather than linked for the same reason as everything else here —
+     the endpoint is behind the bearer token — and the filename comes from the
+     server's Content-Disposition so the download is named for their own
+     domain rather than for a row id. */
+  async function saveBundle() {
+    setSaveState('busy');
+    try {
+      const response = await api.get<Blob>(
+        `${REVISION_PATH}/${revision.id}/bundle`,
+        { responseType: 'blob' },
+      );
+      const named = /filename="([^"]+)"/.exec(
+        String(response.headers['content-disposition'] ?? ''),
+      );
+      const link = document.createElement('a');
+      link.href = mint(response.data);
+      link.download = named?.[1] ?? 'redesign.zip';
+      link.click();
+      setSaveState('idle');
+    } catch {
+      setSaveState('failed');
+    }
   }
 
   async function copyCode() {
@@ -398,7 +432,29 @@ export default function SiteRevision({
             Copy the page&rsquo;s code
           </button>
         )}
+
+        {saveState === 'busy' ? (
+          <span className={`${quietBtn} opacity-70`} aria-live="polite">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            Packing it up&hellip;
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void saveBundle()}
+            className={quietBtn}
+          >
+            <Download className="w-3.5 h-3.5" />
+            Download the page &amp; style guide
+          </button>
+        )}
       </div>
+      {saveState === 'failed' && (
+        <p className="text-[12px] text-saibyl-negative leading-relaxed">
+          The download did not come back &mdash; try it again, or copy the
+          page&rsquo;s code above in the meantime.
+        </p>
+      )}
       {copyState === 'failed' && (
         <p className="text-[12px] text-saibyl-negative leading-relaxed">
           Copy did not reach your clipboard &mdash; open the new page and copy

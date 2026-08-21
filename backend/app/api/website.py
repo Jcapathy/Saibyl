@@ -17,6 +17,9 @@ parameterised one has shipped twice in this codebase.
 """
 from __future__ import annotations
 
+import io
+import re
+import zipfile
 from collections.abc import Callable
 from datetime import UTC, datetime
 from urllib.parse import urlsplit
@@ -34,6 +37,11 @@ from app.services.billing.agent_pricing import (
     website_check_credits,
     website_revision_credits,
 )
+
+# Bound at module scope rather than lazily like `capture`/`store` are below:
+# this one is pure text over an already-produced page, with no browser runtime
+# and no network behind it, so there is nothing to defer.
+from app.services.website.style_guide import build_style_guide
 from app.workers.revision_tasks import run_page_revision
 from app.workers.website_tasks import run_website_check
 
@@ -416,6 +424,104 @@ async def get_page_revision_html(
         )
     return Response(
         content=await _read_stored(row["html_path"]), media_type="text/html"
+    )
+
+
+def _bundle_name(url: object) -> str:
+    """A filename a founder will recognise in a downloads folder.
+
+    Derived from their own domain rather than from the revision id, and
+    sanitised hard: this string lands in a Content-Disposition header, where a
+    stray quote or newline is a response-splitting bug rather than a cosmetic
+    one.
+    """
+    host = ""
+    if isinstance(url, str) and url.strip():
+        host = urlsplit(url if "//" in url else f"https://{url}").hostname or ""
+    slug = re.sub(r"[^a-z0-9.-]+", "-", host.lower()).strip("-.") or "site"
+    return f"{slug}-redesign.zip"
+
+
+def _revision_design_dna(snapshot_id: str, org_id: str) -> dict | None:
+    """The check's design-gallery row, or None when the byproduct never landed.
+
+    The gallery row is written as a byproduct of the check and its failure is
+    only ever a log line, so a revision can legitimately exist without one.
+    The guide degrades a section rather than the download.
+    """
+    rows = (
+        get_supabase_admin()
+        .table("design_gallery")
+        .select("characterization, summary")
+        .eq("snapshot_id", snapshot_id)
+        .eq("organization_id", org_id)
+        .limit(1)
+        .execute()
+    ).data or []
+    return rows[0] if rows else None
+
+
+@router.get("/revision/{revision_id}/bundle")
+async def get_page_revision_bundle(
+    revision_id: str, auth: dict = Depends(get_current_org)
+):
+    """The revised page and its style guide, as one zip a founder can keep.
+
+    A page handed over without its rules is a page that decays the first time
+    somebody adds a section to it. The guide travels with it so the next
+    person — the founder, their designer, or the coding tool they paste it
+    into — is working from the same system rather than guessing from the
+    markup.
+
+    Both files are already-produced artifacts: the HTML is what the gauntlet
+    built, and the guide is rendered from the same category brief and design
+    DNA that shaped it. Nothing here calls a model, so a founder who has
+    already paid for the revision pays nothing to take it away.
+    """
+    row = _org_owned_row(
+        "page_revisions", revision_id, auth["org_id"],
+        missing="We couldn't find that revision.",
+    )
+    if row.get("status") != "complete" or not row.get("html_path"):
+        raise HTTPException(
+            status_code=409,
+            detail="This revision isn't finished yet — the new page isn't ready.",
+        )
+
+    html = await _read_stored(row["html_path"])
+    if isinstance(html, bytes):
+        html_text = html.decode("utf-8", errors="replace")
+    else:
+        html_text = str(html)
+
+    snapshot = _org_owned_row(
+        "website_snapshots", row["snapshot_id"], auth["org_id"],
+        missing="We couldn't find the check this revision came from.",
+    )
+
+    guide = build_style_guide(
+        url=str(snapshot.get("url") or ""),
+        page_text=html_text,
+        dna=_revision_design_dna(row["snapshot_id"], auth["org_id"]),
+        scores_after=row.get("scores_after"),
+    )
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as bundle:
+        bundle.writestr("index.html", html_text)
+        bundle.writestr("STYLE_GUIDE.md", guide)
+    buffer.seek(0)
+
+    return Response(
+        content=buffer.getvalue(),
+        media_type="application/zip",
+        headers={
+            # Named for the founder's site rather than the row id: this lands
+            # in a downloads folder next to a hundred other files.
+            "Content-Disposition": (
+                f'attachment; filename="{_bundle_name(snapshot.get("url"))}"'
+            )
+        },
     )
 
 
