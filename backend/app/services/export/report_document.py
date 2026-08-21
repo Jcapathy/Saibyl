@@ -308,7 +308,13 @@ def _cover(doc: ReportDocumentInput, analysis: SimulationAnalysis | None) -> str
 
     return f"""
 <div class="cover">
-  <div class="wordmark">SAIBYL</div>
+  <div class="lockup">
+    <span class="brand-mark">S</span>
+    <span>
+      <div class="wordmark">Saibyl</div>
+      <div class="wordmark-sub">BY SAIDO LABS</div>
+    </span>
+  </div>
   <hr class="top-rule">
   <div class="doc-kind">Predictive intelligence report</div>
   <h1>{_h(doc.simulation_name)}</h1>

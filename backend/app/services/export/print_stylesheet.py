@@ -45,17 +45,38 @@ from __future__ import annotations
 BASE_PT = 9.5
 LEAD_PT = 13.5
 
-_INK = "#14181d"
-_INK_MID = "#4d5761"
-_INK_SOFT = "#79838d"
-_RULE = "#c9d0d6"
-_RULE_SOFT = "#e4e8eb"
-_ACCENT = "#1f3b5c"  # Deep navy. Prints as a dark grey; never load-bearing.
-_WASH = "#f4f6f8"
+# ── The brand, on paper ──────────────────────────────────────────────────
+#
+# These are the Saibyl light-system values (`frontend/src/index.css`, and the
+# landing page's own tokens), pulled toward print: the ink is the product's
+# ink, and the accent is the product's blue rather than the generic navy this
+# file shipped with. An exported report is the artifact a founder forwards to
+# somebody who has never seen the app — it should look like it came from the
+# same company as the page they signed up on.
+#
+# The greyscale rule from this module's docstring still governs: no two things
+# are distinguished by hue alone, so a black-and-white print loses nothing.
+# Colour here is identity, never information.
+_INK = "#14294a"       # the product's ink
+_INK_MID = "#44587a"
+_INK_SOFT = "#60718e"  # the muted tier; ≥4.5:1 on white
+_RULE = "#c5d2e4"
+_RULE_SOFT = "#e2e9f3"
+_ACCENT = "#286cf0"    # the one accent. Prints as a mid grey; never load-bearing.
+_ACCENT_DEEP = "#1e5ad9"
+_VIOLET = "#6a4fe0"    # the emphasis hue, for the cover's one serif phrase
+_WASH = "#f4f7fc"      # the paper tint, on the ground
 
-_SERIF = '"Liberation Serif", "DejaVu Serif", "Times New Roman", Georgia, serif'
-_SANS = '"Liberation Sans", "DejaVu Sans", Helvetica, Arial, sans-serif'
-_MONO = '"DejaVu Sans Mono", "Liberation Mono", monospace'
+# Brand faces first, container-safe faces behind them.
+#
+# The Docker image installs `fonts-liberation` and `fonts-dejavu-core` and
+# nothing else, so today these stacks resolve to the same faces they always
+# did — naming the brand faces first costs nothing and means the real type
+# appears anywhere they are present (local runs, and the container the day
+# somebody installs them). The identity above does not depend on it.
+_SERIF = '"Playfair Display", "Liberation Serif", "DejaVu Serif", Georgia, serif'
+_SANS = 'Manrope, "Liberation Sans", "DejaVu Sans", Helvetica, Arial, sans-serif'
+_MONO = '"DM Mono", "DejaVu Sans Mono", "Liberation Mono", monospace'
 
 
 def _css_string(text: str) -> str:
@@ -277,12 +298,57 @@ section.doc-section.flow {{
     page-break-after: always;
 }}
 
+/* The lockup, as the product writes it: the gradient mark, the mixed-case
+   wordmark, and the Saido Labs line underneath. It was set as spaced-out
+   all-caps "SAIBYL", which is not how the brand is written anywhere else —
+   and an exported report is the surface most likely to be forwarded to
+   somebody who will never see the app. */
+.cover .lockup {{
+    display: flex;
+    align-items: center;
+    gap: 9pt;
+}}
+
+.cover .brand-mark {{
+    display: inline-block;
+    width: 26pt;
+    height: 26pt;
+    border-radius: 7pt;
+    background: linear-gradient(135deg, #2f75ef 5%, #705ee3 95%);
+    color: #ffffff;
+    font-family: {_SERIF};
+    font-size: 16pt;
+    font-weight: 700;
+    line-height: 26pt;
+    text-align: center;
+    /* Print-exact rather than a background WeasyPrint might drop when a
+       driver strips backgrounds: the tile is decoration, and the wordmark
+       beside it carries the identity on its own if it vanishes. */
+    -weasy-print-color-adjust: exact;
+}}
+
 .cover .wordmark {{
     font-family: {_SANS};
-    font-size: 13pt;
-    font-weight: 700;
-    letter-spacing: 0.42em;
-    color: {_ACCENT};
+    font-size: 15pt;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: {_INK};
+}}
+
+.cover .wordmark-sub {{
+    font-family: {_MONO};
+    font-size: 5.6pt;
+    letter-spacing: 0.09em;
+    color: {_INK_SOFT};
+    margin-top: 1.5pt;
+}}
+
+/* The one emphasised phrase, matching the product's use of the serif
+   italic — once per major heading, never sprinkled. */
+.cover h1 em {{
+    font-family: {_SERIF};
+    font-style: italic;
+    color: {_VIOLET};
 }}
 
 .cover .top-rule {{
