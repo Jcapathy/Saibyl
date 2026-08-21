@@ -8,6 +8,7 @@ import { present, sourceHost } from '@/lib/gtm';
 import type { CandidateListItem } from '@/types';
 import StageHeader from '@/components/stages/StageHeader';
 import { EmptyState, Guarded, StageError } from '@/components/stages/StagePrimitives';
+import OutboundPanel from '@/components/gtm/OutboundPanel';
 import { useProduct, useStage } from '@/components/stages/useProduct';
 
 /**
@@ -22,10 +23,28 @@ import { useProduct, useStage } from '@/components/stages/useProduct';
  * ordering against one buyer type, not a probability, and "73% match" would
  * invent precision the number does not carry — `lib/gtm.ts` exports no
  * percentage formatter for it on purpose.
+ *
+ * The other half of "who do I contact on Monday" is what to send them, so the
+ * outbound sequences live here too — below the companies, because the list is
+ * what the founder came for and the copy is what they do with it.
  */
 export default function BuyersStagePage() {
   const { product } = useProduct();
   const stage = useStage('buyers');
+
+  /*
+    The run the outbound copy is written from.
+
+    Step 2 is where objections are measured, and `produced_by` is the server's
+    own answer to "which run is step 2 about" — sent precisely so a page does
+    not pick one for itself. `product_state.py` explains why that matters: this
+    module sorts finished runs on `completed_at or created_at` while
+    `GET /simulations` orders on `created_at` alone, so a run that started
+    earlier and finished later is "the latest" to one of them and not the
+    other. Fetching a list here and taking the first row would be the second
+    opinion that disagreement produces.
+  */
+  const measuredBy = useStage('reactions').produced_by;
 
   const [candidates, setCandidates] = useState<CandidateListItem[]>([]);
   const [total, setTotal] = useState<number | null>(null);
@@ -146,6 +165,13 @@ export default function BuyersStagePage() {
           </Link>
         </>
       )}
+
+      {/* What to send the companies above. Rendered only when a finished run
+          exists to write from: the sequence's three pain slots are filled from
+          measured objections, and offering it without them would sell the
+          generic outbound it exists to replace. The panel itself refuses again
+          on the server, before anything is charged. */}
+      {measuredBy && <OutboundPanel simulationId={measuredBy} />}
     </div>
   );
 }
