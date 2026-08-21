@@ -1221,6 +1221,45 @@ def answer_pack_credits() -> int:
 
 
 # ---------------------------------------------------------------------------
+# The rest of the GTM module, and capital access
+# ---------------------------------------------------------------------------
+#
+# All three are PROVISIONAL and sized against the same yardstick as the answer
+# pack — the report's measured per-section cost of ≈$0.145 — because that is
+# the only per-artifact figure in this codebase that has been checked against
+# the ledger. Recalibrate all four from `llm_usage` once real builds exist.
+# A price derived from an estimate is a guess with a decimal point on it.
+
+# One structured pass over the buyer profile, the measured objections and the
+# message-test result. Same shape of work as the answer pack.
+MESSAGING_DOC_COGS_USD = Decimal("0.30")
+
+# Larger: a full sequence per buyer archetype, so output scales with the
+# number of archetypes rather than being one document.
+OUTBOUND_SEQUENCE_COGS_USD = Decimal("0.50")
+
+# Search + extraction + one matching pass — the cost shape of GTM discovery
+# rather than of a single generation, because the work is reading the open web
+# and not writing prose.
+CAPITAL_SHORTLIST_COGS_USD = Decimal("0.60")
+
+
+def messaging_doc_credits() -> int:
+    """Credits one messaging document charges — 1,500."""
+    return _clearance_price_credits(MESSAGING_DOC_COGS_USD)
+
+
+def outbound_sequence_credits() -> int:
+    """Credits one outbound sequence charges — 2,500."""
+    return _clearance_price_credits(OUTBOUND_SEQUENCE_COGS_USD)
+
+
+def capital_shortlist_credits() -> int:
+    """Credits one family-office shortlist charges — 3,000."""
+    return _clearance_price_credits(CAPITAL_SHORTLIST_COGS_USD)
+
+
+# ---------------------------------------------------------------------------
 # Page revision (PRD_V3 §4d) — one fixed price per revision
 # ---------------------------------------------------------------------------
 

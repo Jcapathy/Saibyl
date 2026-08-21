@@ -299,12 +299,44 @@ export interface SiteRevisionListItem {
 
 const OVERALL_KEYS = ['overall', 'overall_score', 'total'];
 
+/**
+ * The per-dimension scores, whichever shape they arrived in.
+ *
+ * `revision_tasks.py` writes `{overall, dimensions: {credibility: 58, …}}`
+ * while this file was written expecting the dimensions flat alongside
+ * `overall`. Nothing reconciled the two, so `scoreDeltas` iterated top-level
+ * keys, found only `overall` and `dimensions`, coerced the nested object with
+ * `Number({...})` → NaN, and produced an empty list. **The entire
+ * per-dimension before/after table has always rendered as nothing** — the
+ * proof-of-improvement the revision loop exists to show.
+ *
+ * This is the same asymmetry that was fixed once already on the writer side
+ * (see the comment at `revision_tasks.py:174`); the reader was missed. Both
+ * shapes are accepted here rather than picking one, because rows written
+ * before that fix carry the old shape and a founder's past revision should
+ * not silently lose its table.
+ */
+function dimensionScores(
+  scores: RevisionScores | null | undefined,
+): Record<string, unknown> {
+  if (!scores) return {};
+  const nested = (scores as Record<string, unknown>).dimensions;
+  if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+    return nested as Record<string, unknown>;
+  }
+  return scores as Record<string, unknown>;
+}
+
 function scoreOf(
   scores: RevisionScores | null | undefined,
   key: string,
 ): number | null {
   if (!scores) return null;
-  const value = scores[key];
+  // `overall` stays at the top level in both shapes; dimensions may be nested.
+  const source = OVERALL_KEYS.includes(key.toLowerCase())
+    ? (scores as Record<string, unknown>)
+    : dimensionScores(scores);
+  const value = source[key];
   if (value === null || value === undefined || value === '') return null;
   const n = Number(value);
   return Number.isFinite(n) ? Math.round(n) : null;
@@ -339,8 +371,11 @@ export function scoreDeltas(
   const keys: string[] = [];
   for (const source of [after, before]) {
     if (!source) continue;
-    for (const key of Object.keys(source)) {
+    // Read the dimension names from wherever they live, so a nested payload
+    // contributes its dimensions rather than the literal key "dimensions".
+    for (const key of Object.keys(dimensionScores(source))) {
       if (OVERALL_KEYS.includes(key.toLowerCase())) continue;
+      if (key === 'dimensions') continue;
       if (scoreOf(after, key) === null && scoreOf(before, key) === null) continue;
       if (!keys.includes(key)) keys.push(key);
     }
