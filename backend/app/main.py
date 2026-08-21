@@ -45,16 +45,27 @@ MAX_BODY_SIZE = 50 * 1024 * 1024
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup/shutdown lifecycle — launches Redis-to-WebSocket bridge."""
+    """Startup/shutdown lifecycle.
+
+    Launches the Redis-to-WebSocket bridge, and the reaper that closes jobs a
+    previous process died in the middle of. The reaper sweeps at startup
+    first: a deploy is the most common way in-flight work is orphaned, and the
+    process coming up is the one best placed to notice what the process that
+    went down left behind.
+    """
+    from app.services.maintenance.reaper import start_reaper
     from app.services.streaming.redis_bridge import start_redis_bridge
 
     bridge_task = asyncio.create_task(start_redis_bridge())
+    reaper_task = asyncio.create_task(start_reaper())
     yield
-    bridge_task.cancel()
-    try:
-        await bridge_task
-    except asyncio.CancelledError:
-        pass
+    for task in (bridge_task, reaper_task):
+        task.cancel()
+    for task in (bridge_task, reaper_task):
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 def create_app() -> FastAPI:
