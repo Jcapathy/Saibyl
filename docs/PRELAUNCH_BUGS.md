@@ -474,6 +474,51 @@ and three checks starting within four minutes on one instance was enough. The
 whole capture now runs under a hard deadline, and at most two browsers run per
 process — the deadline makes the failure honest, the pool stops it happening.
 
+### S-6 · The Website Gauntlet cannot read a real website — **OPEN, needs a decision**
+
+**The most serious finding of the exercise, and the flagship module.**
+
+Read off the production table rather than inferred: the last website check to
+complete was **2026-08-17**. Since then, twelve failures and none finished.
+And every check that has *ever* completed in this database was the same small
+Vercel page. **Every attempt at stripe.com or simplepractice.com — the kind of
+site a founder actually submits — has failed or hung, every time.**
+
+What was found and fixed along the way, none of which was the cause:
+
+- `chromium.launch()` took **no arguments**, so Chromium was capped at the
+  container's 64 MB `/dev/shm`. `--disable-dev-shm-usage` and the usual
+  container flags now ship. Correct, standard, and **did not fix it**.
+- Everything after `page.goto` was unbounded — `page.evaluate` has no default
+  timeout, and the style census walks the whole DOM. Now bounded.
+- Concurrent captures OOM'd the 512 MB instance and returned **502 across
+  every endpoint**, taking down runs and billing calls. Capped at one browser.
+
+**What is still true after all of that:** an isolated capture of
+simplepractice.com, with nothing else running, sat at `capturing` for 900
+seconds and **`asyncio.wait_for` never fired**. Playwright's async API talks
+to a driver subprocess over a pipe; a blocked read there is not cancellable at
+the Python await level. The in-process deadline cannot close it.
+
+**What holds today.** The reaper closes the row at 20 minutes and refunds the
+1,750 credits, so the founder gets an honest failure and their money back
+rather than a spinner forever. That is a floor, not a fix.
+
+**The decision, which is the founder's:**
+
+1. **More memory.** `render.yaml` puts saibyl-backend on `starter` — 512 MB,
+   half a CPU — and one Chromium wants 300–500 MB of that while the API,
+   three concurrent runs and the analysis pipeline share the rest. This is the
+   most likely single cause and the cheapest thing to test.
+2. **Move the browser out of the API process**, spawned as a subprocess that
+   can be *killed*. This is what makes an uncancellable native hang bounded,
+   and it also stops a browser OOM taking the API down with it. Roughly a day,
+   and it should be built with the browser runtime available to test against —
+   it cannot be verified from a machine with no Playwright installed.
+
+Do (1) first and re-run this check: it is a config change and it answers
+whether (2) is needed at all.
+
 ### S-5 · IP Check is dead in production — **founder-owed (P0-11)**
 
 All three products got `503 "The search service isn't configured yet"`.

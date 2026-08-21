@@ -43,6 +43,26 @@ check able to hang at `capturing` indefinitely. Details in PRELAUNCH_BUGS.
 `outbound_sequence` 2,500, `capital_shortlist` 3,000 all now served by
 `GET /billing/prices`, which had omitted all three.
 
+**The instance is the constraint, and this is the entry to read first.**
+`render.yaml` puts `saibyl-backend` on the **starter** plan: 512 MB, half a
+CPU. One headless Chromium wants 300–500 MB of that, while the API, the
+concurrent runs and the analysis pipeline share the rest. Measured, not
+assumed:
+
+- Three sample products reaching their website checks together produced
+  **502 Bad Gateway on every endpoint** — taking down run polling, billing
+  calls and the capital shortlist, none of which involve a browser. Captures
+  are now capped at one at a time (`WEBSITE_CAPTURE_CONCURRENCY`, default 1)
+  precisely because the cost of getting that number wrong is paid by every
+  *other* founder on the platform.
+- A run's analysis that takes ~200 s alone took **1,800 s and did not finish**
+  while a capture was running beside it.
+- No website check has completed since 2026-08-17, and none has *ever*
+  completed for a heavy commercial site. See S-6 in PRELAUNCH_BUGS: the
+  recommendation is to raise the plan and re-test before building anything,
+  because that is a config change that answers whether the larger fix (moving
+  the browser out of the API process) is needed at all.
+
 **Still owed by the founder, confirmed live rather than assumed:**
 `USPTO_ODP_API_KEY` and `USPTO_TSDR_API_KEY` are unset in the Render backend,
 so IP Check returned 503 on all three sample products. The route guards before
