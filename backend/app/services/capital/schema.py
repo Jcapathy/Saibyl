@@ -322,6 +322,14 @@ class FamilyOffice(BaseModel):
     how an investor list launders decay into confidence.
     """
 
+    # The stored row's identity, carried through so a reader can link back to
+    # it. Optional because a record being *proposed* by discovery does not have
+    # one yet — the database assigns it. Without this the model silently
+    # dropped the column on read, so `GET /capital/firms/{firm_id}` existed and
+    # no client could ever call it: the list handed out records with no id to
+    # ask about.
+    id: str | None = None
+
     firm_name: str
     domain: str | None = None
     firm_type: FirmType

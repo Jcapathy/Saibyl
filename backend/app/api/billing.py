@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from typing import Literal
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.core.auth import get_current_org
+from app.core.database import get_supabase_admin
 from app.services.billing.agent_pricing import (
     CREDITS_PER_USD,
     STANDARD_RUN,
@@ -17,6 +19,8 @@ from app.services.billing.agent_pricing import (
     estimate_simulation_cost,
     get_credit_balance,
     largest_affordable_run,
+    messaging_doc_credits,
+    outbound_sequence_credits,
     standard_run_credits,
     tier_caps,
     website_check_credits,
@@ -39,6 +43,8 @@ from app.services.billing.topups import (
     credits_for_topup,
     quote_topup,
 )
+
+log = structlog.get_logger()
 
 router = APIRouter(tags=["billing"])
 
@@ -80,6 +86,19 @@ class RunShape(BaseModel):
     platforms: int = Field(default=1, ge=1, le=12)
     variants: int = Field(default=1, ge=1, le=8)
     depth: Literal["brief", "standard", "deep"] = "standard"
+
+    # The run being priced, when there is one (P0-6).
+    #
+    # A price is not a property of a shape alone. A run whose agents read the
+    # project's uploaded material carries that material in every action prompt,
+    # and `POST /simulations/{id}/start` charges for it — while this endpoint,
+    # knowing only the shape, quoted as though it did not. The founder saw one
+    # number and was charged one 8–14% higher.
+    #
+    # Optional because the configurator legitimately prices a shape before a
+    # run exists. Absent, the answer is False, which is then the true answer:
+    # a run with no simulation behind it carries no brief.
+    simulation_id: str | None = None
 
 
 @router.post("/checkout")
@@ -301,13 +320,21 @@ async def paid_feature_prices(auth: dict = Depends(get_current_org)):
         "website_revision": entry(
             website_revision_credits(), "We rewrite the page and prove the difference"
         ),
-        # The family-office shortlist. It was priced in `agent_pricing` and
-        # charged by `POST /capital/shortlist`, but never published here — so
-        # the one surface that shows a price before the work could not show
-        # this one, and a founder met the cost as a 402 at submit. That is the
-        # exact failure this endpoint exists to prevent.
+        # Three artifacts were priced in `agent_pricing` and charged by their
+        # routes, but never published here — so the one surface whose whole
+        # purpose is "learn the price before doing the work" could not price
+        # them, and a founder met the cost as a 402 at submit. That is the
+        # exact failure this endpoint exists to prevent, and it happened three
+        # times because nothing fails when an artifact is left out. See the
+        # test that now enumerates every priced artifact and requires it here.
         "capital_shortlist": entry(
             capital_shortlist_credits(), "Who would fund this, and who would not"
+        ),
+        "messaging_doc": entry(
+            messaging_doc_credits(), "The words that landed, written down"
+        ),
+        "outbound_sequence": entry(
+            outbound_sequence_credits(), "Sixteen touches, built from real objections"
         ),
         "clearance": {
             tier: entry(clearance_credits(tier), f"USPTO search — {tier.lower()}")
@@ -331,10 +358,46 @@ async def quote_run(body: RunShape, auth: dict = Depends(get_current_org)):
             body.platforms,
             body.variants,
             body.depth,
+            subject_brief=_carries_subject_brief(body.simulation_id, auth["org_id"]),
         )
     except QuoteError as exc:
         raise HTTPException(400, str(exc)) from exc
     return quote.model_dump(mode="json")
+
+
+def _carries_subject_brief(simulation_id: str | None, org_id: str) -> bool:
+    """Will this run send the project's material with every action?
+
+    Org-scoped: pricing another organisation's run would leak whether they
+    uploaded material. A row we cannot read prices as False, which is also the
+    honest answer — we will not charge for material we cannot confirm is
+    there.
+    """
+    if not simulation_id:
+        return False
+    try:
+        row = (
+            get_supabase_admin()
+            .table("simulations")
+            .select("id, project_id, parent_simulation_id")
+            .eq("id", simulation_id)
+            .eq("organization_id", org_id)
+            .limit(1)
+            .execute()
+        ).data
+    except Exception:  # noqa: BLE001 - pricing must not fail on a lookup
+        log.exception("subject_brief_pricing_lookup_failed", simulation_id=simulation_id)
+        return False
+    if not row:
+        return False
+
+    from app.services.intelligence.subject_brief import run_will_carry_subject_brief
+
+    try:
+        return run_will_carry_subject_brief(row[0])
+    except Exception:  # noqa: BLE001
+        log.exception("subject_brief_pricing_failed", simulation_id=simulation_id)
+        return False
 
 
 @router.post("/estimate-cost")
@@ -344,12 +407,15 @@ async def estimate_cost(body: RunShape, auth: dict = Depends(get_current_org)):
     Cheaper than issuing a quote on every slider tick, and issuing one per tick
     would leave hundreds of unconsumed quote rows per configured run.
     """
+    subject_brief = _carries_subject_brief(body.simulation_id, auth["org_id"])
     estimate = estimate_simulation_cost(
-        body.agent_count, body.rounds, body.platforms, body.variants, body.depth
+        body.agent_count, body.rounds, body.platforms, body.variants, body.depth,
+        subject_brief=subject_brief,
     )
     budget = check_credit_budget(
         auth["org_id"], body.agent_count, body.rounds,
         body.platforms, body.variants, body.depth,
+        subject_brief=subject_brief,
     )
     _balance, _granted, plan = get_credit_balance(auth["org_id"])
 

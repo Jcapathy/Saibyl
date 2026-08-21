@@ -140,8 +140,16 @@ def issue_quote(
     platforms: int = 1,
     variants: int = 1,
     depth: str = "standard",
+    subject_brief: bool = False,
 ) -> RunQuote:
-    """Price a run shape, sign it, and store it."""
+    """Price a run shape, sign it, and store it.
+
+    `subject_brief` is whether the run's agents will read the project's
+    uploaded material, which the start endpoint prices and this endpoint used
+    to ignore (P0-6). A quote that omits it is honoured at the lower figure,
+    so the gap was absorbed rather than charged — the quote is a promise, and
+    the fix is to make the promise right rather than to break it later.
+    """
     _validate_shape(agent_count, rounds, platforms, variants)
 
     balance, _granted, plan = get_credit_balance(UUID(str(org_id)))
@@ -161,7 +169,8 @@ def issue_quote(
         exceeded.append(f"variants ({variants} > {caps.max_variants})")
 
     estimate = estimate_simulation_cost(
-        agent_count, rounds, platforms, variants, depth
+        agent_count, rounds, platforms, variants, depth,
+        subject_brief=subject_brief,
     )
 
     admin = get_supabase_admin()

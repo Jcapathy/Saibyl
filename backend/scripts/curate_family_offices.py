@@ -29,6 +29,14 @@ from pathlib import Path
 # without the caller having to set PYTHONPATH first.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+# A Windows console defaults to cp1252, where printing a firm name containing
+# any accented character raises UnicodeEncodeError — and it raises it *after*
+# the searches have been paid for and the firms verified, losing the whole
+# pass to a formatting detail. Found on the first real run.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -139,7 +147,7 @@ async def main() -> int:
         f"· sources {outcome.sources_seen}"
     )
     print(
-        f"names found: {outcome.names_found} → firms verified: "
+        f"names found: {outcome.names_found} -> firms verified: "
         f"{len(outcome.firms)}"
     )
     if outcome.names_found and not outcome.firms:
@@ -156,7 +164,7 @@ async def main() -> int:
     for firm in outcome.firms:
         route = firm.inbound_path.kind
         print(
-            f"  · {firm.firm_name} ({firm.firm_type}) — {route} — "
+            f"  - {firm.firm_name} ({firm.firm_type}) | {route} | "
             f"{', '.join(firm.sectors) or 'no stated sector'} — {firm.source_url}"
         )
 
@@ -171,7 +179,9 @@ async def main() -> int:
     payload = []
     for firm in outcome.firms:
         row = firm.model_dump(mode="json")
-        row.pop("is_stale", None)  # computed, not a column
+        # A proposed record has no id yet — the column is the primary key with
+        # its own default, and sending an explicit null violates it.
+        row.pop("id", None)
         payload.append(row)
 
     written = (admin.table("family_offices").insert(payload).execute()).data or []
