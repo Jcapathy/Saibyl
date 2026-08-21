@@ -37,6 +37,7 @@ the product cannot do without and the census is the evidence it is better with.
 """
 from __future__ import annotations
 
+import asyncio
 import math
 import re
 from typing import Any
@@ -221,6 +222,32 @@ async def capture_website(url: str, *, timeout_s: int = 45) -> WebsiteCapture:
     return await _bounded(_capture_website(url, timeout_s=timeout_s), url, timeout_s)
 
 
+# How many captures may hold a browser at once, per process.
+#
+# A Chromium instance is the heaviest thing this service starts, and the
+# backend runs on one modest Render instance. Three checks began within four
+# minutes of each other and two of them never got a browser — they sat at
+# `capturing` until the deadline above cut them off. The deadline makes that
+# failure honest; this stops it happening.
+#
+# Two rather than one because a single slot turns two founders into a queue
+# where the second waits the first's full capture, and rather than four
+# because the memory is what ran out. A founder who waits a few seconds for a
+# slot is in a much better place than one whose check dies for want of RAM.
+MAX_CONCURRENT_CAPTURES = 2
+
+_capture_slots: asyncio.Semaphore | None = None
+
+
+def _slots() -> asyncio.Semaphore:
+    """Created lazily: a Semaphore binds to the running loop, and this module
+    is imported at startup before there is one."""
+    global _capture_slots
+    if _capture_slots is None:
+        _capture_slots = asyncio.Semaphore(MAX_CONCURRENT_CAPTURES)
+    return _capture_slots
+
+
 def _overall_deadline(timeout_s: int) -> int:
     """The whole capture's ceiling: two renders, plus room to launch and close.
 
@@ -235,11 +262,15 @@ def _overall_deadline(timeout_s: int) -> int:
 
 
 async def _bounded(coro, subject: str, timeout_s: int) -> WebsiteCapture:
-    """Run a capture under a hard ceiling, so no step can hang unbounded."""
-    import asyncio
+    """Run a capture under a hard ceiling, so no step can hang unbounded.
 
+    The deadline starts when the browser slot is acquired, not when the
+    request arrived: time spent waiting for another capture to finish is not
+    this page's fault and must not be charged against its budget.
+    """
     try:
-        return await asyncio.wait_for(coro, timeout=_overall_deadline(timeout_s))
+        async with _slots():
+            return await asyncio.wait_for(coro, timeout=_overall_deadline(timeout_s))
     except TimeoutError as exc:
         raise WebsiteCaptureError(
             f"We could not finish reading {subject} within "
