@@ -18,6 +18,7 @@ import {
 } from '@/lib/analysis';
 import SectionRenderer from '@/components/report/SectionRenderer';
 import ReportExport from '@/components/report/ReportExport';
+import WhatNext from '@/components/billing/WhatNext';
 import HeadlineStats from '@/components/analysis/HeadlineStats';
 import QualityNotice from '@/components/analysis/QualityNotice';
 import AdversarialNotice from '@/components/analysis/AdversarialNotice';
@@ -671,6 +672,10 @@ export default function ReportViewerPage() {
                 objectionLabels={objectionLabels}
                 onDrillDown={drillDown}
               />
+              {/* Last on the page a founder actually reads, after the evidence
+                  rather than before it: the two questions this run raised and
+                  could not answer, priced. */}
+              <WhatNext productId={simulation?.project_id} />
             </>
           ) : (
             measurementMissing
