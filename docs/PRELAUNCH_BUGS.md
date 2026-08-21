@@ -59,6 +59,40 @@ P0-8 wire Google or remove it).
 
 ---
 
+## Status — 2026-08-21 (the last build push)
+
+**Closed and deployed:** **P0-3** (the live run feed had subscribers and no
+publisher — `services/streaming/publish.py`, plus the vocabulary collision
+between the browser's `event_type` and the adapters' `EventType`), **P0-6**
+(the quote omitted `subject_brief` while the charge included it; `RunShape`
+now carries an optional `simulation_id` and both pricing paths ask the same
+question the charging path asks), **P0-9** (`PLAN_LIMITS` held only the V2
+tier names, so every V3 tier fell through to the free allowance; now derived
+from `TIER_CREDIT_GRANTS` at ten times what the grant buys, so credits ration
+and this only stops a runaway loop).
+
+**Found by the three sample products and closed the same day** — see the
+sample-pipeline section at the bottom: a malformed model response destroying
+a paid artifact (no retry, *and* `ValidationError` subclassing `ValueError` so
+the pydantic error reached the founder), credits kept for a capture that never
+loaded a page, the capital shortlist recommending a firm on funding stage
+alone, and a website check able to hang at `capturing` forever because
+`chromium.launch()` was outside the timeout.
+
+**Also closed:** three artifacts that were priced and charged but absent from
+`GET /billing/prices` (`messaging_doc`, `outbound_sequence`,
+`capital_shortlist`), so the founder met the price as a 402 at submit. A test
+now reads the pricing module and requires every artifact it finds to be
+published.
+
+**Still open:** P0-7, P0-8, P0-11, and the P1/P2 tails. **P0-11 is confirmed
+live** — all three sample products got a 503 from IP Check because
+`USPTO_ODP_API_KEY` is unset in Render. The guard refuses before creating or
+charging, so nothing is lost, but the module is dead in production until the
+keys are pasted.
+
+---
+
 ## The loss leader, exercised on a real free account (2026-08-17 night)
 
 Run against production as a genuinely free org, from the five questions to
@@ -381,3 +415,82 @@ exists to avoid asserting.
 **Conclusion: the defects in this register are in the UI, the money layer and
 the contracts — not in the engine.** The thing the product is sold on works,
 at every founder stage.
+
+---
+
+## Sample-product exercise — 2026-08-21
+
+Three products built as real sample projects and driven through **every**
+module against production: **Chartwell** (medical SaaS, prior-authorisation),
+**Ledgerline** (fintech, multi-entity treasury), **Parry** (prompt-injection
+security). Chosen so the category-aware paths — `verticals.py`, the redesign
+brief, the capital matcher's sector — see genuinely different material rather
+than three flavours of one thing.
+
+**What worked, first time.** All three rooms completed (217/218/263s) with
+22/24/31 canonical objections and reports of 39k/36k/35k characters. Answer
+packs 3/3. Messaging documents 3/3. Capital shortlists 3/3, each considering
+7 firms and returning 3 matches with refusals reported rather than dropped.
+
+### S-1 · One malformed response destroys a paid artifact — **fixed**
+
+Chartwell's outbound sequence died on truncated model JSON. Two causes, both
+closed:
+
+- `llm_structured` made exactly one attempt. It now retries twice, handing the
+  model its own output and the parser's error, with every attempt recorded to
+  the cost ledger.
+- **`pydantic.ValidationError` subclasses `ValueError`.** All three GTM
+  workers catch `ValueError` to pass through deliberate refusals, which carry
+  a founder-readable sentence — so a malformed response took that branch and
+  the founder was shown *"1 validation error for _Generated / Invalid JSON:
+  expected `,` or `}` at line 16 column 375"*. This is P1-7's exact shape
+  arriving through a door nobody had checked. A test now pins the `except`
+  ordering, because reordering them would silently restore it.
+
+### S-2 · Credits kept for work never done — **fixed**
+
+Parry's website check failed because the site did not answer in 45 seconds: no
+page captured, no critic run, no model called, 1,750 credits kept, and a
+message inviting the founder to try again at the same price. `refund_credits`
+now returns the charge on failures **before any model spend**. A check that
+died halfway through its critics is not refunded — a rule that quietly
+sometimes pays is worse than one that says plainly when it does. This is the
+first crack in P1-9.
+
+### S-3 · The shortlist recommended a firm for no reason — **fixed**
+
+Parry was matched with the Charles H. Hood Foundation, a paediatric health
+funder, on a reason list of one row: `stage`, "seed" ↔ "seed". Stage, cheque
+size and geography are qualifiers — they rule a founder out, but satisfying
+one says only that nothing disqualifies you. A match now needs the objection
+bridge, a thesis overlap, or a published sector.
+
+### S-4 · A website check could hang forever — **fixed**
+
+Two checks sat at `capturing` for twelve minutes with no screenshots and no
+error. `timeout_s` bounds `page.goto`; it never bounded `chromium.launch()`,
+and three checks starting within four minutes on one instance was enough. The
+whole capture now runs under a hard deadline, and at most two browsers run per
+process — the deadline makes the failure honest, the pool stops it happening.
+
+### S-5 · IP Check is dead in production — **founder-owed (P0-11)**
+
+All three products got `503 "The search service isn't configured yet"`.
+`USPTO_ODP_API_KEY` is unset in Render. The route guards before creating or
+charging, so nothing was lost.
+
+### The same false alarm, twice — a note on method
+
+Three of the thirteen problems the harness reported were **the harness reading
+keys the API does not serve**: the analysis nests its findings under
+`artifact`, a report carries `markdown_content` and `section_count` rather
+than a `sections` array, and `GET /reports` takes no simulation filter — so
+passing one silently returns the org's newest reports instead of that run's.
+The app itself uses `/reports/by-simulation` and was never affected.
+
+**This register already recorded that exact false alarm on 2026-08-17**, and a
+freshly written harness reproduced it. The lesson is not "check the keys" but
+that a test harness written from memory of an API is a second implementation
+of that API, and it drifts. Every claim above was checked against the database
+before it was called a bug.

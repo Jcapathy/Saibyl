@@ -8,6 +8,49 @@ running delta record.
 
 ---
 
+## 2026-08-21 — The family-office bank fills itself, and three shapes change
+
+**`services/capital/discovery.py`** — the bank had been deployed and empty
+since migration 041. Founder chose route 1B: build the discovery pipeline, do
+not license one. Same two-half split as `gtm/extraction` (`propose_firms`
+makes the model call, `verify_firms` is pure and decides what survives), and
+the same rule: a firm enters only if the search returned its source, and a
+field is populated only when an evidence quote appears verbatim in that URL's
+text.
+
+**The open web forced a two-stage shape.** The category queries return
+directories, trade journalism and competitors' listicles — measured, not
+assumed. A listicle is a reliable source of *names* and an unacceptable source
+of *theses*, because it paraphrases. So stage one harvests names from anything
+that names firms, and stage two builds the record only from that firm's own
+site, matched by domain label. First working pass: 15 names → 9 verified
+firms, and 7 written to the bank on the run that followed.
+
+**`core/llm_client.llm_structured` now retries.** It made exactly one attempt
+and validated; one truncated brace destroyed a 2,500-credit artifact in
+production. Two retries, each carrying the parser's own error back to the
+model, and each attempt recorded to the cost ledger — a retry is real spend.
+This is shared by every structured call in the codebase, which makes it the
+highest-leverage change in this batch.
+
+**`services/streaming/publish.py`** — the live run feed's missing half (P0-3).
+`ws.py` and `redis_bridge.py` both subscribed to `simulation:*:events` and
+nothing in the backend ever published there. The wire vocabulary
+(`agent_action`, `round_start`, `round_end`, `simulation_completed`) now owns
+`event_type` and the adapters' `post|comment|react|dm` rides beside it as
+`action`. They were never alternatives — one says what kind of moment this is
+in the run, the other says what the agent did — and trying to pick a winner is
+why a third vocabulary exists in `event_schema.py` that nothing produces.
+
+**`services/website/capture.py` gained a ceiling and a pool.** `timeout_s`
+bounds `page.goto`; it never bounded `chromium.launch()`, and two production
+checks sat at `capturing` for twelve minutes. The whole capture now runs under
+a hard deadline, and at most two browsers run per process — the memory is what
+ran out. The deadline starts when the slot is acquired, so queueing behind
+another capture is not charged against this page's budget.
+
+---
+
 ## 2026-08-21 — The capital module gets a surface
 
 The bank, the matcher, the pricing and the routes shipped on 2026-08-20 and

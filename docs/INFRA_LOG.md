@@ -10,6 +10,53 @@ since 2026-08-16).
 
 ---
 
+## 2026-08-21 — The last build push, and three sample products against production
+
+**Deploys (master → Render, in order):** `2f79676` (three module UIs, the
+family-office discovery pipeline, the price-publication fix, P0-9, P0-6,
+P0-3), `7187dcb` (the four defects the sample run found), `e3231c7` (the
+browser concurrency cap).
+
+**The bank is no longer empty.** `scripts/curate_family_offices.py` run under
+the service role against production: 25 queries, 117 sources, 14 names
+harvested, **7 firms written** — Cox Enterprises, Ascend (Interplay), Dolby
+Family Ventures, Black Cliffs Partners, East Seattle Partners, Mitchell Family
+Office, Charles H. Hood Foundation. All seven verified, all carrying a
+six-month `stale_after`, theses of 121–570 characters quoted from each firm's
+own site. Rejection counts on that pass:
+`inbound_unevidenced_defaulted: 5`, `unknown_evidence_field: 2`.
+
+**Three sample products driven through every module** (org
+`26d46806-eba9-409b-be7c-465320014c29`, renamed **Saibyl Samples** and topped
+up for the exercise): Chartwell (medical SaaS), Ledgerline (fintech), Parry
+(prompt-injection security). Rooms completed in 217/218/263s with 22/24/31
+objections and reports of 39k/36k/35k characters. Answer packs 3/3, messaging
+docs 3/3, capital shortlists 3/3 (3 matches of 7 firms considered each, with
+refusals reported rather than dropped).
+
+**What the run found**, all fixed the same day and re-verified: a malformed
+model response destroying a paid artifact; credits kept for a capture that
+never loaded; the shortlist recommending on funding stage alone; and a website
+check able to hang at `capturing` indefinitely. Details in PRELAUNCH_BUGS.
+
+**Prices verified live** after deploy: `messaging_doc` 1,500,
+`outbound_sequence` 2,500, `capital_shortlist` 3,000 all now served by
+`GET /billing/prices`, which had omitted all three.
+
+**Still owed by the founder, confirmed live rather than assumed:**
+`USPTO_ODP_API_KEY` and `USPTO_TSDR_API_KEY` are unset in the Render backend,
+so IP Check returned 503 on all three sample products. The route guards before
+creating or charging, so no credits were lost — but the module cannot run. Also
+still owed: `ADMIN_ORGANIZATION_ID=231b7f17-d17c-4f6e-b530-f0196acd841b`, and
+saibyl.com's DNS.
+
+**Housekeeping:** two website-check rows orphaned by the pre-fix hang were
+marked failed and their 5,250 credits (3 × 1,750) returned by
+`grant_credits`, which is what the new refund path would now do
+automatically.
+
+---
+
 ## 2026-08-20 — The GTM module's first artifact shipped
 
 - Migration **038_answer_packs** applied to production BEFORE the deploy and

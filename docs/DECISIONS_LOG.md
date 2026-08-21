@@ -8,6 +8,60 @@ choices.
 
 ---
 
+## 2026-08-21 — We build the family-office bank; we do not license one
+
+Founder's decision, stated as a correction and binding: **route 1B is build
+the discovery scraper ourselves.** Not Fintrx, not any licensed feed.
+
+The argument: the matching is the moat. Buying coverage rents the part that is
+not the product, and licensed data carries redistribution terms that collected
+data does not. `CAPITAL_MODULE.md` had already made the case for shipping ours
+first — fifty well-evidenced firms beat five thousand thin ones — and this
+settles it.
+
+**What the decision costs, and why it is still right.** The rule that a
+record's thesis must be quoted from the firm's own site throws away most of
+what the open web returns: the first working pass harvested 15 names and
+verified 9. That gap is the price, and `names_found` is reported beside the
+firm count so it stays visible rather than looking like a search that failed.
+Many family offices publish no thesis anywhere; those are firms we **decline
+to recommend**, not firms we could not find.
+
+**Two consequences worth recording:**
+
+1. **A directory is a source of names, never of theses.** Given a competitor's
+   listicle the model quoted their paraphrase as the firm's own position. A
+   paraphrase of a paraphrase cannot be quoted back to a founder as "here is
+   what they say they fund", which is the entire mechanism this bank sells.
+2. **An unstated inbound posture becomes `no_inbound`.** All nine firms in the
+   first pass defaulted there. Guessing that a family office accepts
+   submissions causes a real approach to a firm that never invited one, and
+   the count is reported every time rather than hidden.
+
+---
+
+## 2026-08-21 — Table stakes cannot carry a recommendation
+
+Found by running a real shortlist rather than by reasoning about one: a
+prompt-injection security founder was matched with a paediatric health
+foundation, and the whole reason list was one row — dimension `stage`,
+firm_quote "seed", founder_quote "seed".
+
+**Stage, cheque size and geography are qualifiers, not reasons.** They rule a
+founder out when they conflict, and satisfying one says only that nothing
+disqualifies you. A recommendation needs the measured objection bridge, an
+overlap in the two parties' own published words, or at minimum a sector the
+firm actually states.
+
+This is the module's own standard applied to itself. Its note to the founder
+says a shortlist kept long by weak entries "is a list padded with firms that
+would have said so on the call" — and a stage-only entry is exactly that firm.
+Recorded here because the tempting fix was a score threshold, which would have
+been a number nobody could defend; naming which dimensions can carry an
+argument is a claim that can be argued with.
+
+---
+
 ## 2026-08-20 — Category shapes the page as an argument, never as a palette
 
 The founder's example was the decision: *"A medical SaaS start up's site
