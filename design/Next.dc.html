@@ -12,6 +12,25 @@
     a { color: #286cf0; text-decoration: none; }
     a:hover { color: #1e5ad9; }
     .mono { font-family: "DM Mono", ui-monospace, Consolas, monospace; }
+
+    /* This block is an offer, so its motion is an invitation rather than a
+       flourish: the three cards arrive in sequence, and lift when a hand
+       comes near them. The landing page's own button lift, reused. */
+    @keyframes sb-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+    .sb-rise { animation: sb-rise .5s cubic-bezier(.22,.61,.36,1) both; }
+
+    .sb-card { transition: transform .25s ease, box-shadow .25s ease; }
+    .sb-card:hover { transform: translateY(-4px); box-shadow: 0 22px 46px rgba(52,96,164,.16) !important; }
+    .sb-cta { transition: transform .25s ease, box-shadow .25s ease; }
+    .sb-card:hover .sb-cta { transform: translateY(-2px); box-shadow: 0 13px 25px rgba(40,108,240,.30); }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+      }
+    }
   </style>
 </helmet>
 
@@ -33,14 +52,14 @@
 
     <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 22px;">
       <sc-for list="{{cards}}" as="c" hint-placeholder-count="3">
-        <div style="display: flex; flex-direction: column; padding: 20px; border-radius: 20px; border: 1px solid {{c.border}}; background: {{c.bg}}; box-shadow: 0 12px 30px rgba(52,96,164,.08);">
+        <div class="sb-card sb-rise" style="display: flex; flex-direction: column; padding: 20px; border-radius: 20px; border: 1px solid {{c.border}}; background: {{c.bg}}; box-shadow: 0 12px 30px rgba(52,96,164,.08); animation-delay: {{c.delay}};">
           <div style="display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; color: white; background: {{c.mark}}; box-shadow: inset 0 1px rgba(255,255,255,.35);">
             <span class="mono" style="font-size: 13px; font-weight: 500;">{{c.glyph}}</span>
           </div>
           <h3 style="margin: 13px 0 0; font-size: 15px; font-weight: 700; letter-spacing: -.02em; line-height: 1.3;">{{c.title}}</h3>
           <p style="flex-grow: 1; margin: 8px 0 0; font-size: 12px; line-height: 1.6; color: #60718e;">{{c.body}}</p>
           <div class="mono" style="margin-top: 12px; font-size: 11px; color: #44587a;">{{c.price}}</div>
-          <div style="align-self: flex-start; margin-top: 12px; padding: 9px 15px; border-radius: 12px; font-size: 12px; font-weight: 800; color: white; background: linear-gradient(135deg, #286cf0, #5268e9); box-shadow: 0 8px 18px rgba(40,108,240,.22);">{{c.cta}}</div>
+          <div class="sb-cta" style="align-self: flex-start; margin-top: 12px; padding: 9px 15px; border-radius: 12px; font-size: 12px; font-weight: 800; color: white; background: linear-gradient(135deg, #286cf0, #5268e9); box-shadow: 0 8px 18px rgba(40,108,240,.22);">{{c.cta}}</div>
         </div>
       </sc-for>
     </div>
@@ -56,18 +75,21 @@ class Component extends DCLogic {
         {
           glyph: '§', title: 'Is this already someone else&#39;s?',
           body: 'We search the USPTO — trademarks, granted patents, and what is still pending — and name what stands closest to your idea, with the filing attached. Finding out now costs a search. Finding out after you build costs the build.',
+          delay: '.06s',
           price: '2,000 credits, charged once when it starts.', cta: 'Check who owns it',
           mark: 'linear-gradient(135deg, #2f75ef, #705ee3)', border: 'rgba(38,79,139,.14)', bg: 'rgba(255,255,255,.85)',
         },
         {
           glyph: '"', title: 'What do I say when they push back?',
           body: 'The objections above, turned into what to say out loud — in the order the room said they matter, each with the buyer&#39;s own sentence so you can say four people put it exactly that way.',
+          delay: '.16s',
           price: '1,500 credits, charged once when it starts.', cta: 'Build the answers',
           mark: 'linear-gradient(135deg, #8b73ee, #6a4fe0)', border: 'rgba(139,115,238,.28)', bg: 'rgba(255,255,255,.85)',
         },
         {
           glyph: '◷', title: 'Does your page land the way this pitch did?',
           body: 'We load your site the way a buyer&#39;s browser would and judge what a stranger actually takes away — then show you the gap, one named element at a time.',
+          delay: '.26s',
           price: '1,750 credits, charged once when it starts.', cta: 'Read my page',
           mark: 'linear-gradient(135deg, #35c7d5, #2f8fef)', border: 'rgba(38,79,139,.14)', bg: 'rgba(255,255,255,.85)',
         },

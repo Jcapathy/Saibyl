@@ -14,6 +14,7 @@ from app.api import (
     answer_pack,
     auth,
     billing,
+    capital,
     clearance,
     comparison,
     documents,
@@ -21,7 +22,9 @@ from app.api import (
     gtm,
     icp,
     inoculation,
+    messaging_doc,
     organizations,
+    outbound,
     packs,
     personas,
     products,
@@ -155,6 +158,11 @@ def create_app() -> FastAPI:
     app.include_router(website.router, prefix="/api/website")
     app.include_router(website_room.router, prefix="/api/website-room")
     app.include_router(answer_pack.router, prefix="/api/answer-pack")
+    # The rest of the GTM module, and capital access. Each is an ordinary paid
+    # artifact: refuse before charging, charge at create, one worker.
+    app.include_router(messaging_doc.router, prefix="/api/messaging-doc")
+    app.include_router(outbound.router, prefix="/api/outbound")
+    app.include_router(capital.router, prefix="/api/capital")
     app.include_router(admin.router, prefix="/api/admin")
     # Mounted at /api because its paths are nested under /simulations/{id}/…
     # but it is a separate module from the simulation lifecycle router.

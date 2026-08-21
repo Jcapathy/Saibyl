@@ -11,14 +11,14 @@
       "x": 0,
       "y": -180,
       "w": 520,
-      "text": "The four changes, applied everywhere:\n\n1. Radial washes on the ground (the app is flat #f8fbff today)\n2. Soft blue shadows on cards that carry meaning — hairlines stay on dense lists\n3. The dotted eyebrow on every mono label\n4. One Playfair italic phrase per major heading\n\nThe rail artboard has a Warm toggle above it — flip it off to see exactly what ships today."
+      "text": "The four changes, applied everywhere:\n\n1. Radial washes on the ground (the app is flat #f8fbff today)\n2. Soft blue shadows on cards that carry meaning — hairlines stay on dense lists\n3. The dotted eyebrow on every mono label\n4. One Playfair italic phrase per major heading\n\nThe rail artboard has a Warm toggle above it — flip it off to see exactly what ships today.\n\nMOTION: reload an artboard to replay it. The rail deals its five steps, then the open stage arrives. Every artboard collapses its animation under prefers-reduced-motion, exactly as the landing page does."
     },
     {
       "id": "the-room",
       "x": 1460,
       "y": -180,
       "w": 480,
-      "text": "The bigger idea, and the one worth arguing about.\n\nThe landing page's hero is a room of buyers orbiting a pitch. Inside the app, where the founder has actually paid for a room, the room has always been a table of numbers.\n\nThis puts it where it was bought. Same measured values underneath — nothing here is decoration standing in for data."
+      "text": "The bigger idea, and the one worth arguing about.\n\nThe landing page's hero is a room of buyers orbiting a pitch. Inside the app, where the founder has actually paid for a room, the room has always been a table of numbers.\n\nThis puts it where it was bought. Same measured values underneath — nothing here is decoration standing in for data.\n\nIt moves the way the landing page moves: the same keyframes, same durations. Orbits turn (20s and 25s, counter-rotating), the pitch floats at its centre, the buyers drift, the live dot blinks. Then the objections land underneath, one at a time, and the measured numbers follow.\n\nThat sequence IS the product: the room assembles, argues, and reports — in that order."
     },
     {
       "id": "density",

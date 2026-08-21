@@ -12,6 +12,30 @@
     a { color: #286cf0; text-decoration: none; }
     a:hover { color: #1e5ad9; }
     .mono { font-family: "DM Mono", ui-monospace, Consolas, monospace; }
+
+    /* One moment on this screen, not five: the rail deals its five steps in
+       sequence, then the open stage arrives. A founder sees the shape of the
+       work before they read any of it. */
+    @keyframes sb-deal { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
+    @keyframes sb-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+    @keyframes sb-pulse-dot { 0%,100% { box-shadow: 0 0 0 5px rgba(53,199,213,.12); } 50% { box-shadow: 0 0 0 9px rgba(53,199,213,0); } }
+
+    .sb-deal { animation: sb-deal .45s cubic-bezier(.22,.61,.36,1) both; }
+    .sb-rise { animation: sb-rise .5s cubic-bezier(.22,.61,.36,1) both; }
+    .sb-dot { animation: sb-pulse-dot 2.6s ease-in-out infinite; }
+
+    /* The active step earns a hairline lift on hover — the rail is
+       navigation, and navigation should feel like it can be touched. */
+    .sb-step { transition: transform .22s ease, box-shadow .22s ease; }
+    .sb-step:hover { transform: translateY(-2px); }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+      }
+    }
   </style>
 </helmet>
 
@@ -62,7 +86,7 @@
       <!-- The five steps -->
       <div style="display: flex; flex-direction: column; gap: 10px;">
         <sc-for list="{{steps}}" as="step" hint-placeholder-count="5">
-          <div style="padding: 13px 14px; border-radius: 16px; border: 1px solid {{step.border}}; background: {{step.bg}}; box-shadow: {{step.shadow}};">
+          <div class="sb-step sb-deal" style="padding: 13px 14px; border-radius: 16px; border: 1px solid {{step.border}}; background: {{step.bg}}; box-shadow: {{step.shadow}}; animation-delay: {{step.delay}};">
             <div style="display: flex; align-items: baseline; gap: 9px;">
               <span class="mono" style="font-size: 13px; color: {{step.numColor}};">{{step.n}}</span>
               <span style="font-size: 13px; font-weight: 600; color: #14294a;">{{step.label}}</span>
@@ -76,10 +100,10 @@
       </div>
 
       <!-- The open stage -->
-      <div>
+      <div class="sb-rise" style="animation-delay: .42s;">
         <div style="display: flex; align-items: center; gap: 8px;">
           <sc-if value="{{dot}}" hint-placeholder-val="{{true}}">
-            <span style="width: 7px; height: 7px; border-radius: 50%; background: #35c7d5; box-shadow: 0 0 0 5px rgba(53,199,213,.12);"></span>
+            <span class="sb-dot" style="width: 7px; height: 7px; border-radius: 50%; background: #35c7d5; box-shadow: 0 0 0 5px rgba(53,199,213,.12);"></span>
           </sc-if>
           <span class="mono" style="font-size: 11px; letter-spacing: .08em; color: #48628c;">STEP 1 OF 5</span>
         </div>
@@ -124,6 +148,9 @@ class Component extends DCLogic {
 
     const step = (n, label, blurb, note, active) => ({
       n, label, blurb, note,
+      // Dealt in order, ~70ms apart: fast enough not to be a wait, slow
+      // enough to read as a sequence rather than a flicker.
+      delay: `${(Number(n) - 1) * 0.07}s`,
       border: active ? 'rgba(40,108,240,.40)' : 'rgba(38,79,139,.14)',
       bg: active ? 'rgba(40,108,240,.07)' : '#ffffff',
       shadow: warm && active ? '0 12px 30px rgba(52,96,164,.10)' : 'none',

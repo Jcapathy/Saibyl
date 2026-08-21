@@ -12,6 +12,29 @@
     a { color: #286cf0; text-decoration: none; }
     a:hover { color: #1e5ad9; }
     .mono { font-family: "DM Mono", ui-monospace, Consolas, monospace; }
+
+    /* The moment worth animating here is the quote: the buyer's own sentence
+       is what makes the row credible, so it writes itself in under the
+       objection rather than being there from the start. */
+    @keyframes sb-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+    @keyframes sb-quote { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+    @keyframes sb-sweep { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+
+    .sb-rise { animation: sb-rise .5s cubic-bezier(.22,.61,.36,1) both; }
+    .sb-quote { animation: sb-quote .5s cubic-bezier(.22,.61,.36,1) both; }
+    /* The violet rule beside the quote draws downward as the quote lands. */
+    .sb-rule { transform-origin: top; animation: sb-sweep .45s cubic-bezier(.22,.61,.36,1) both; }
+
+    .sb-move { transition: background .2s ease; }
+    .sb-move:hover { background: rgba(40,108,240,.09) !important; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+      }
+    }
   </style>
 </helmet>
 
@@ -31,7 +54,7 @@
 
   <!-- One objection, opened: the anatomy that matters -->
   <sc-for list="{{rows}}" as="row" hint-placeholder-count="2">
-    <div style="margin-top: 14px; padding: 18px 20px; border-radius: 20px; border: 1px solid rgba(38,79,139,.14); background: rgba(255,255,255,.75); box-shadow: 0 14px 44px rgba(57,91,146,.07);">
+    <div class="sb-rise" style="margin-top: 14px; padding: 18px 20px; border-radius: 20px; border: 1px solid rgba(38,79,139,.14); background: rgba(255,255,255,.75); box-shadow: 0 14px 44px rgba(57,91,146,.07); animation-delay: {{row.delay}};">
 
       <div style="display: flex; align-items: baseline; gap: 10px;">
         <span style="width: 8px; height: 8px; border-radius: 2px; background: {{row.color}};"></span>
@@ -39,13 +62,13 @@
         <span class="mono" style="font-size: 11px; color: #60718e;">{{row.buyers}}</span>
       </div>
 
-      <div style="margin-top: 10px; padding-left: 13px; border-left: 2px solid rgba(139,115,238,.35);">
-        <p style="margin: 0; font-size: 12.5px; line-height: 1.6; font-style: italic; color: #44587a;">“{{row.quote}}”</p>
+      <div class="sb-rule" style="margin-top: 10px; padding-left: 13px; border-left: 2px solid rgba(139,115,238,.35); animation-delay: {{row.quoteDelay}};">
+        <p class="sb-quote" style="margin: 0; font-size: 12.5px; line-height: 1.6; font-style: italic; color: #44587a; animation-delay: {{row.quoteDelay}};">“{{row.quote}}”</p>
       </div>
 
       <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 14px;">
         <sc-for list="{{row.moves}}" as="m" hint-placeholder-count="4">
-          <div style="padding: 12px 14px; border-radius: 14px; background: {{m.bg}};">
+          <div class="sb-move" style="padding: 12px 14px; border-radius: 14px; background: {{m.bg}};">
             <div class="mono" style="font-size: 9.5px; letter-spacing: .13em; color: {{m.labelColor}};">{{m.label}}</div>
             <p style="margin: 5px 0 0; font-size: 12.5px; line-height: 1.55;">{{m.text}}</p>
           </div>
@@ -89,6 +112,7 @@ class Component extends DCLogic {
     return {
       rows: [
         {
+          delay: '.08s', quoteDelay: '.34s',
           label: 'A free tool already does this',
           buyers: '4 buyers',
           color: '#ff6e79',
@@ -102,6 +126,7 @@ class Component extends DCLogic {
           ],
         },
         {
+          delay: '.20s', quoteDelay: '.46s',
           label: 'No real validation behind this',
           buyers: '2 buyers',
           color: '#8b73ee',
