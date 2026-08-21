@@ -15,6 +15,13 @@ from app.services.platforms.base_adapter import (
     REPLY_EVENT_TYPES,
 )
 from app.services.refs import post_ref
+from app.services.streaming.publish import (
+    MAX_ACTIONS_STREAMED_PER_ROUND,
+    publish_agent_action,
+    publish_round_end,
+    publish_round_start,
+    publish_simulation_finished,
+)
 
 logger = structlog.get_logger()
 
@@ -914,7 +921,12 @@ async def run_simulation(simulation_id: str):
             if _check_stop_signal(simulation_id, admin):
                 logger.info("simulation_stopped", simulation_id=simulation_id, round=round_num)
                 admin.table("simulations").update({"status": "stopped"}).eq("id", simulation_id).execute()
+                await publish_simulation_finished(
+                    simulation_id, "stopped", total_events
+                )
                 return {"simulation_id": simulation_id, "status": "stopped", "total_events": total_events}
+
+            await publish_round_start(simulation_id, round_num, len(adapters))
 
             # Run every arena concurrently within each round. An arena is one
             # (platform, variant) pair, so an 8-variant run on 2 platforms runs
@@ -1005,6 +1017,16 @@ async def run_simulation(simulation_id: str):
                 total_events += written
                 unresolved_targets += unresolved
 
+                # Streamed after the write, not before: the feed shows what
+                # actually landed. Bounded — a large run makes thousands of
+                # actions and the feed exists to show a founder that something
+                # is happening, not to mirror the table.
+                for event in round_events[:MAX_ACTIONS_STREAMED_PER_ROUND]:
+                    await publish_agent_action(simulation_id, event)
+
+            await publish_round_end(
+                simulation_id, round_num, len(round_events), total_events
+            )
             logger.info("round_complete", simulation_id=simulation_id, round=round_num, events=len(round_events))
     except Exception as e:
         logger.exception("simulation_run_error", simulation_id=simulation_id, error=str(e))
@@ -1013,6 +1035,9 @@ async def run_simulation(simulation_id: str):
             "status": "failed",
             "error_message": error_msg,
         }).eq("id", simulation_id).execute()
+        # A founder watching a run that died deserves to be told, rather than
+        # left on a feed that simply stops.
+        await publish_simulation_finished(simulation_id, "failed", total_events)
         return {"simulation_id": simulation_id, "status": "failed", "total_events": total_events}
 
     if total_events == 0:
@@ -1023,6 +1048,7 @@ async def run_simulation(simulation_id: str):
                 "Check that your Anthropic API key is valid and has available credits.",
         }).eq("id", simulation_id).execute()
         logger.error("simulation_zero_events", simulation_id=simulation_id)
+        await publish_simulation_finished(simulation_id, "failed", 0)
         return {"simulation_id": simulation_id, "status": "failed", "total_events": 0}
 
     # The propagation graph, as actually built. Worth logging rather than
@@ -1099,6 +1125,8 @@ async def run_simulation(simulation_id: str):
         "status": "complete",
         "completed_at": datetime.now(UTC).isoformat(),
     }).eq("id", simulation_id).execute()
+
+    await publish_simulation_finished(simulation_id, "complete", total_events)
 
     logger.info("simulation_complete", simulation_id=simulation_id, total_events=total_events)
 
