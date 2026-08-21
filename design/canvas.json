@@ -1,0 +1,32 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 1360, "h": 900, "title": "The rail, with a step open" },
+    { "file": "Report.dc.html", "x": 1460, "y": 0, "w": 1360, "h": 940, "title": "The report — the room made visible" },
+    { "file": "Answers.dc.html", "x": 0, "y": 1020, "w": 1100, "h": 940, "title": "Answers — the objection matrix" },
+    { "file": "Next.dc.html", "x": 1200, "y": 1020, "w": 1100, "h": 620, "title": "What this room could not tell you" }
+  ],
+  "annotations": [
+    {
+      "id": "brief",
+      "x": 0,
+      "y": -180,
+      "w": 520,
+      "text": "The four changes, applied everywhere:\n\n1. Radial washes on the ground (the app is flat #f8fbff today)\n2. Soft blue shadows on cards that carry meaning — hairlines stay on dense lists\n3. The dotted eyebrow on every mono label\n4. One Playfair italic phrase per major heading\n\nThe rail artboard has a Warm toggle above it — flip it off to see exactly what ships today."
+    },
+    {
+      "id": "the-room",
+      "x": 1460,
+      "y": -180,
+      "w": 480,
+      "text": "The bigger idea, and the one worth arguing about.\n\nThe landing page's hero is a room of buyers orbiting a pitch. Inside the app, where the founder has actually paid for a room, the room has always been a table of numbers.\n\nThis puts it where it was bought. Same measured values underneath — nothing here is decoration standing in for data."
+    },
+    {
+      "id": "density",
+      "x": 0,
+      "y": 1960,
+      "w": 460,
+      "text": "Density is deliberately unchanged. Same type sizes, same 13px body, same row rhythm — warmth comes from ground, depth and one accent phrase, not from spacing things further apart. An app that reads like a marketing page is the opposite failure."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

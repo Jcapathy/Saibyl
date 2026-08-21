@@ -1,0 +1,118 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: Manrope, "Segoe UI", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+    a { color: #286cf0; text-decoration: none; }
+    a:hover { color: #1e5ad9; }
+    .mono { font-family: "DM Mono", ui-monospace, Consolas, monospace; }
+  </style>
+</helmet>
+
+<div style="width: 1360px; height: 940px; padding: 30px 34px; overflow: hidden; color: #14294a; background: radial-gradient(circle at 87% 1%, rgba(127,184,255,.19), transparent 22rem), radial-gradient(circle at 2% 26%, rgba(143,119,245,.10), transparent 26rem), #f8fbff;">
+
+  <div style="display: flex; align-items: center; gap: 8px;">
+    <span style="width: 7px; height: 7px; border-radius: 50%; background: #35c7d5; box-shadow: 0 0 0 5px rgba(53,199,213,.12);"></span>
+    <span class="mono" style="font-size: 11px; letter-spacing: .08em; color: #48628c;">THE ROOM · 25 BUYERS · 3 ROUNDS</span>
+  </div>
+
+  <h1 style="margin: 10px 0 0; font-size: 38px; font-weight: 800; letter-spacing: -.055em;">
+    They argued about it for <em style="font-family: Georgia, 'Playfair Display', serif; font-style: italic; color: #8b73ee; letter-spacing: -.045em;">three rounds.</em>
+  </h1>
+  <p style="margin: 8px 0 0; max-width: 640px; font-size: 13.5px; line-height: 1.65; color: #60718e;">
+    Here is who was in the room, what they kept coming back to, and the sentences behind every number on this page.
+  </p>
+
+  <!-- THE ROOM. The landing page's hero metaphor, brought inside — this is
+       the thing the app has never shown the founder who paid for it. -->
+  <div style="position: relative; height: 380px; margin-top: 18px; border-radius: 28px; border: 1px solid rgba(38,79,139,.14); background: linear-gradient(180deg, #edf5ff 0%, #f8fbff 87%); box-shadow: 0 22px 60px rgba(52,96,164,.12); overflow: hidden;">
+
+    <!-- orbit rings -->
+    <div style="position: absolute; top: 50%; left: 50%; width: 505px; height: 238px; border: 1px solid rgba(79,119,182,.19); border-radius: 50%; transform: translate(-50%,-50%) rotate(31deg);"></div>
+    <div style="position: absolute; top: 50%; left: 50%; width: 378px; height: 158px; border: 1px solid rgba(79,119,182,.19); border-radius: 50%; transform: translate(-50%,-50%) rotate(-20deg);"></div>
+
+    <!-- the pitch at the centre -->
+    <div style="position: absolute; top: 50%; left: 50%; display: grid; place-items: center; width: 168px; height: 168px; border: 1px solid rgba(255,255,255,.9); border-radius: 36px; color: white; text-align: center; transform: translate(-50%,-50%) rotate(-9deg); background: linear-gradient(145deg, #306fe9, #725ce1 72%); box-shadow: inset 0 1px 1px rgba(255,255,255,.42), 0 24px 52px rgba(61,90,185,.28);">
+      <div>
+        <div class="mono" style="margin-bottom: 7px; opacity: .78; font-size: 9px; letter-spacing: .12em;">YOUR PITCH</div>
+        <strong style="display: block; font-size: 22px; letter-spacing: -.05em;">Tallyhook</strong>
+        <b class="mono" style="display: block; margin-top: 3px; font-size: 9px; letter-spacing: .08em; opacity: .85; font-weight: 500;">3 ROUNDS · 74 REPLIES</b>
+      </div>
+    </div>
+
+    <!-- the buyers -->
+    <sc-for list="{{buyers}}" as="b" hint-placeholder-count="4">
+      <div style="position: absolute; top: {{b.top}}; left: {{b.left}}; right: {{b.right}}; display: flex; align-items: center; gap: 9px; min-width: 172px; padding: 10px 12px 10px 10px; border: 1px solid rgba(255,255,255,.9); border-radius: 14px; background: rgba(255,255,255,.86); box-shadow: 0 13px 30px rgba(48,84,143,.12); transform: rotate({{b.tilt}});">
+        <div style="display: grid; place-items: center; width: 27px; height: 27px; border-radius: 9px; font-size: 12px; font-weight: 800; color: {{b.fg}}; background: {{b.bg}};">{{b.initials}}</div>
+        <div>
+          <b style="display: block; font-size: 11px; letter-spacing: -.025em;">{{b.name}}</b>
+          <small class="mono" style="display: block; margin-top: 2px; color: #7483a0; font-size: 9px;">{{b.role}}</small>
+        </div>
+      </div>
+    </sc-for>
+
+    <!-- what they pushed back on, live -->
+    <div style="position: absolute; left: 50%; bottom: 20px; width: 430px; padding: 14px 15px; transform: translateX(-50%) rotate(-2deg); border: 1px solid rgba(91,126,188,.18); border-radius: 16px; background: rgba(249,252,255,.86); box-shadow: 0 18px 38px rgba(72,104,157,.14);">
+      <div class="mono" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid rgba(72,108,164,.13); color: #637895; font-size: 9px;">
+        <span>WHAT THEY PUSHED BACK ON</span>
+        <span style="display: inline-flex; align-items: center; gap: 5px; color: #2da871;"><i style="width: 5px; height: 5px; border-radius: 50%; background: currentColor;"></i>17 FOUND</span>
+      </div>
+      <sc-for list="{{objections}}" as="o" hint-placeholder-count="3">
+        <div class="mono" style="display: grid; grid-template-columns: 8px 1fr auto; gap: 8px; align-items: center; padding-top: 9px; font-size: 11.5px;">
+          <i style="width: 7px; height: 7px; border-radius: 2px; background: {{o.color}};"></i>
+          <span style="color: #44546f;">{{o.label}}</span>
+          <b style="color: #33507e; font-weight: 500;">{{o.count}}</b>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- the measured headline, unchanged in substance -->
+  <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 20px;">
+    <sc-for list="{{stats}}" as="s" hint-placeholder-count="4">
+      <div style="padding: 18px 20px; border-radius: 20px; border: 1px solid rgba(38,79,139,.14); background: rgba(255,255,255,.72); box-shadow: 0 14px 44px rgba(57,91,146,.06);">
+        <div style="display: flex; align-items: center; gap: 7px;">
+          <span style="width: 6px; height: 6px; border-radius: 50%; background: {{s.dot}};"></span>
+          <span class="mono" style="font-size: 9.5px; letter-spacing: .11em; color: #60718e;">{{s.label}}</span>
+        </div>
+        <div style="margin-top: 8px; font-size: 30px; font-weight: 800; letter-spacing: -.05em;">{{s.value}}</div>
+        <p style="margin: 5px 0 0; font-size: 11.5px; line-height: 1.5; color: #60718e;">{{s.note}}</p>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#286cf0","options":["#286cf0","#8b73ee","#35c7d5","#2fbf8a"],"section":"Direction"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      buyers: [
+        { initials: 'MR', name: 'Maya Rojas',   role: 'FINANCE LEAD',   top: '30px',  left: '38px',  right: 'auto',  tilt: '-5deg', fg: '#456ce0', bg: '#e8efff' },
+        { initials: 'DK', name: 'Dan Keller',   role: 'AGENCY OWNER',   top: '22px',  left: 'auto',  right: '46px',  tilt: '6deg',  fg: '#5d4ac4', bg: '#eeeaff' },
+        { initials: 'PW', name: 'Priya Walsh',  role: 'SOLO FOUNDER',   top: '236px', left: 'auto',  right: '30px',  tilt: '-3deg', fg: '#d94f5d', bg: '#ffe9ec' },
+        { initials: 'TO', name: 'Tomas Oyelaran', role: 'OPS MANAGER',  top: '248px', left: '26px',  right: 'auto',  tilt: '5deg',  fg: '#167f93', bg: '#dff9fa' },
+      ],
+      objections: [
+        { label: 'A free tool already does this',      count: '4 buyers', color: '#ff6e79' },
+        { label: 'Doubts anyone needs this kind of thing', count: '4 buyers', color: '#8b73ee' },
+        { label: 'Gets a lot out of what they already use', count: '2 buyers', color: '#35c7d5' },
+      ],
+      stats: [
+        { label: 'HOW THE ROOM FELT', value: '+0.55', note: 'Between +0.36 and +0.74, across 24 people.', dot: '#2fbf8a' },
+        { label: 'WHICH WAY IT MOVED', value: 'Held steady', note: 'Never left its confidence bands, over 3 rounds.', dot: '#286cf0' },
+        { label: 'FOR AND AGAINST', value: '11% against', note: '68% for, 9% undecided.', dot: '#8b73ee' },
+        { label: 'NEW GROUND', value: '19%', note: 'The rest is people repeating each other.', dot: '#35c7d5' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

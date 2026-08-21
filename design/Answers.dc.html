@@ -1,0 +1,131 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: Manrope, "Segoe UI", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+    a { color: #286cf0; text-decoration: none; }
+    a:hover { color: #1e5ad9; }
+    .mono { font-family: "DM Mono", ui-monospace, Consolas, monospace; }
+  </style>
+</helmet>
+
+<div style="width: 1100px; height: 940px; padding: 30px 34px; overflow: hidden; color: #14294a; background: radial-gradient(circle at 92% 2%, rgba(127,184,255,.17), transparent 20rem), #f8fbff;">
+
+  <div style="display: flex; align-items: center; gap: 8px;">
+    <span style="width: 7px; height: 7px; border-radius: 50%; background: #35c7d5; box-shadow: 0 0 0 5px rgba(53,199,213,.12);"></span>
+    <span class="mono" style="font-size: 11px; letter-spacing: .08em; color: #48628c;">ON A CALL</span>
+  </div>
+
+  <h1 style="margin: 10px 0 0; font-size: 30px; font-weight: 800; letter-spacing: -.05em;">
+    What to say when they <em style="font-family: Georgia, 'Playfair Display', serif; font-style: italic; color: #8b73ee;">push back.</em>
+  </h1>
+  <p style="margin: 7px 0 0; max-width: 620px; font-size: 12.5px; line-height: 1.65; color: #60718e;">
+    In the order the room said it matters — hardest first — with the buyer's own sentence attached, so you can say four people put it exactly that way.
+  </p>
+
+  <!-- One objection, opened: the anatomy that matters -->
+  <sc-for list="{{rows}}" as="row" hint-placeholder-count="2">
+    <div style="margin-top: 14px; padding: 18px 20px; border-radius: 20px; border: 1px solid rgba(38,79,139,.14); background: rgba(255,255,255,.75); box-shadow: 0 14px 44px rgba(57,91,146,.07);">
+
+      <div style="display: flex; align-items: baseline; gap: 10px;">
+        <span style="width: 8px; height: 8px; border-radius: 2px; background: {{row.color}};"></span>
+        <h2 style="margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -.02em;">{{row.label}}</h2>
+        <span class="mono" style="font-size: 11px; color: #60718e;">{{row.buyers}}</span>
+      </div>
+
+      <div style="margin-top: 10px; padding-left: 13px; border-left: 2px solid rgba(139,115,238,.35);">
+        <p style="margin: 0; font-size: 12.5px; line-height: 1.6; font-style: italic; color: #44587a;">“{{row.quote}}”</p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 14px;">
+        <sc-for list="{{row.moves}}" as="m" hint-placeholder-count="4">
+          <div style="padding: 12px 14px; border-radius: 14px; background: {{m.bg}};">
+            <div class="mono" style="font-size: 9.5px; letter-spacing: .13em; color: {{m.labelColor}};">{{m.label}}</div>
+            <p style="margin: 5px 0 0; font-size: 12.5px; line-height: 1.55;">{{m.text}}</p>
+          </div>
+        </sc-for>
+      </div>
+
+      <sc-if value="{{row.walk}}" hint-placeholder-val="{{true}}">
+        <div style="display: flex; gap: 9px; margin-top: 12px; padding: 11px 13px; border-radius: 12px; background: rgba(245,158,11,.08); border: 1px solid rgba(180,83,9,.22);">
+          <span class="mono" style="flex-shrink: 0; font-size: 9.5px; letter-spacing: .12em; color: #b45309;">WHEN TO WALK</span>
+          <span style="font-size: 12px; line-height: 1.5; color: #7c4a08;">{{row.walk}}</span>
+        </div>
+      </sc-if>
+    </div>
+  </sc-for>
+
+  <!-- what they are really choosing between -->
+  <h3 style="margin: 22px 0 0; font-size: 15px; font-weight: 700; letter-spacing: -.02em;">What they are really choosing between</h3>
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 10px;">
+    <sc-for list="{{cards}}" as="c" hint-placeholder-count="2">
+      <div style="padding: 16px 18px; border-radius: 18px; border: 1px solid rgba(38,79,139,.14); background: rgba(255,255,255,.75); box-shadow: 0 12px 30px rgba(52,96,164,.07);">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; font-size: 12px; font-weight: 800; color: {{c.fg}}; background: {{c.bg}};">{{c.mark}}</span>
+          <span style="font-size: 13.5px; font-weight: 700;">{{c.rival}}</span>
+        </div>
+        <p style="margin: 9px 0 0; font-size: 12px; line-height: 1.55; color: #60718e;"><span style="color: #8595ad;">Where they win:</span> {{c.honest}}</p>
+        <p style="margin: 6px 0 0; font-size: 12px; line-height: 1.55;"><span style="color: #8595ad;">Where you win:</span> {{c.win}}</p>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#8b73ee","options":["#8b73ee","#286cf0","#ff6e79"],"section":"Direction"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const move = (label, text, tone) => ({
+      label, text,
+      bg: tone === 'ask' ? 'rgba(40,108,240,.06)' : 'rgba(20,41,74,.03)',
+      labelColor: tone === 'ask' ? '#286cf0' : '#60718e',
+    });
+    return {
+      rows: [
+        {
+          label: 'A free tool already does this',
+          buyers: '4 buyers',
+          color: '#ff6e79',
+          quote: 'I tested something like this before and got back generic stuff that could have been a $2 API call.',
+          walk: 'If they cannot say what "specific enough" would look like, they have already decided. Thank them and move on.',
+          moves: [
+            move('SAY FIRST', 'You tried something like this and got back generic output. That is a fair reason to be sceptical.', 'say'),
+            move('THEN ASK', 'When you say generic — were the objections obvious, or were they not about your product at all?', 'ask'),
+            move('ANSWER', 'Every product gets price and ROI objections; that is not the signal. The buyers here are built from your own material, so what comes back is about your wording.', 'say'),
+            move('CHECK IT LANDED', 'If you saw the exact sentences behind each objection, would that change how you would use it?', 'ask'),
+          ],
+        },
+        {
+          label: 'No real validation behind this',
+          buyers: '2 buyers',
+          color: '#8b73ee',
+          walk: null,
+          quote: 'Eight months in and all I have is people saying it looks cool.',
+          moves: [
+            move('SAY FIRST', 'You have built something solid and all you have back is your network being kind about it.', 'say'),
+            move('THEN ASK', 'After you launch, how would you know which objections were the ones that killed the deals?', 'ask'),
+            move('ANSWER', 'This is the part we cannot fake: the objections come back ranked by how much of the room carried each one, with the sentences attached. [TODO: your number]', 'say'),
+            move('CHECK IT LANDED', 'Would you be willing to check them against your first ten real calls?', 'ask'),
+          ],
+        },
+      ],
+      cards: [
+        { mark: '—', rival: 'Doing nothing', fg: '#60718e', bg: '#eef2f8',
+          honest: 'Costs nothing today and nobody gets blamed for it.',
+          win: 'The cost lands later, as months spent building the wrong thing.' },
+        { mark: '{ }', rival: 'Building it in-house', fg: '#5d4ac4', bg: '#eeeaff',
+          honest: 'They control it, and for a simple version a weekend is genuinely enough.',
+          win: 'The room and the ranking are the part that takes longer than a weekend to get right.' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>
