@@ -29,6 +29,85 @@
     <meta name="twitter:description" content="A room of AI buyers built from your own material reads your pitch and shows you every objection — with the exact sentences behind it. One full free run, no card." />
     <meta name="twitter:image" content="https://saibyl.com/og-image.png" />
 
+    <!-- Structured data.
+
+         This is in index.html rather than injected by React on purpose: the
+         app is a client-rendered SPA, and an answer engine that does not
+         execute JavaScript sees only what is in this file. Everything below
+         is therefore true of the product without a single script running.
+
+         Claims here are limited to what the product actually does and what
+         the pricing code actually charges. A schema block is machine-readable
+         marketing copy, and an inflated one is the fastest way to be cited
+         inaccurately by the engines this exists to reach. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://saibyl.com/#organization",
+          "name": "Saido Labs LLC",
+          "url": "https://saibyl.com/",
+          "email": "info@saidolabs.com"
+        },
+        {
+          "@type": "SoftwareApplication",
+          "@id": "https://saibyl.com/#app",
+          "name": "Saibyl",
+          "applicationCategory": "BusinessApplication",
+          "operatingSystem": "Web",
+          "publisher": { "@id": "https://saibyl.com/#organization" },
+          "description": "Saibyl builds a room of AI buyers from a founder's own material, puts the pitch in front of them, and reports every objection with the exact sentences behind it — before launch.",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD",
+            "description": "One full evaluation of your idea is free. No card required."
+          }
+        },
+        {
+          "@type": "FAQPage",
+          "@id": "https://saibyl.com/#faq",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "How do I find out if my startup idea is already taken?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Saibyl runs a USPTO search across registered trademarks, granted patents and pending applications, and reports what stands closest to your idea with the filing attached. The free evaluation covers whether buyers want it; the clearance check covers whether it is yours to build."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How can I validate a startup idea without any customers yet?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Answer five questions about the problem, who has it, and what people use today. Saibyl builds a room of AI buyers from those answers, has them react to the pitch, and returns the objections ranked by how much of the room carried each one — with the sentences they said. It takes about three minutes and the first evaluation is free."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "What will buyers object to about my product?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Saibyl measures objections rather than guessing them. Each one is ranked by reach, intensity and how widely it spreads across different kinds of buyer, so the objection that actually costs deals ranks above the one that is merely loudest, and every number traces back to a quote."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Is Saibyl a survey or a focus group?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Neither. It is a rehearsal. The buyers are synthetic and labelled as synthetic on every screen. What it measures is how a pitch lands and what it fails to answer, before that costs real money to find out."
+              }
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+
     <!-- Manrope + Playfair Display + DM Mono (Google Fonts) — the landing redesign's type system -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

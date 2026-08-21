@@ -1,0 +1,70 @@
+# Saibyl — Saido Labs LLC
+#
+# There was no robots.txt at all, which is not neutral: crawlers get no
+# sitemap pointer and no stated position, and the AI crawlers below are the
+# ones that decide whether this product can be cited in an answer.
+#
+# The distinction that matters, and the one most sites get backwards:
+# some of these agents fetch pages to TRAIN models, and some fetch pages so a
+# product can be CITED in a live answer. Blocking the second kind to protect
+# against the first is how a company makes itself invisible to the search
+# surface its buyers are actually using.
+#
+# Saibyl's buyers are founders who ask an assistant "is my startup idea
+# taken?" — so every answer-time crawler is allowed deliberately.
+
+# ── Ordinary search ──────────────────────────────────────────────
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+# ── Answer-time crawlers: these fetch to ANSWER, and citation depends
+#    on them being allowed. Allowed on purpose. ────────────────────
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
+User-agent: Claude-SearchBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+# ── Training crawlers. Allowed for the public marketing pages only.
+#    Reviewed deliberately: being in the training corpus is how a product
+#    becomes a default recommendation later, and nothing public here is
+#    proprietary. Founder material behind /app is never public. ─────
+User-agent: GPTBot
+Allow: /$
+Allow: /privacy
+Allow: /terms
+Disallow: /app/
+
+User-agent: ClaudeBot
+Allow: /$
+Allow: /privacy
+Allow: /terms
+Disallow: /app/
+
+# Google-Extended governs Gemini training and grounding. It is not a
+# separate crawler — it is a permission token applied to Googlebot's fetch.
+User-agent: Google-Extended
+Allow: /
+
+# ── Everyone else ────────────────────────────────────────────────
+User-agent: *
+Allow: /
+# Nothing behind the login is public, and a crawler cannot authenticate,
+# so these are stated rather than left to produce login redirects.
+Disallow: /app/
+Disallow: /login
+Disallow: /signup
+
+Sitemap: https://saibyl.com/sitemap.xml
