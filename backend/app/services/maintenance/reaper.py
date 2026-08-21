@@ -69,6 +69,12 @@ class StuckRule:
     message: str
     # Refund only where the state itself proves no model was called.
     refund_states: tuple[str, ...] = ()
+    # Whether the table has an `error_message` column to write the sentence
+    # into. Verified against information_schema rather than assumed: `reports`
+    # is the one table without it, and writing to it there made the whole
+    # update fail — silently, on every sweep, while the tables beside it were
+    # cleaned correctly.
+    writes_message: bool = True
 
 
 STUCK: tuple[StuckRule, ...] = (
@@ -86,8 +92,13 @@ STUCK: tuple[StuckRule, ...] = (
     ),
     StuckRule(
         "reports", ("queued", "generating"), 40,
+        # Recorded but not written: `reports` has no `error_message` column,
+        # so a founder sees the status change and no sentence. That is a real
+        # gap — the row should say why — and it needs a migration rather than
+        # a workaround here.
         "This write-up stopped before it finished. Your run and its findings "
         "are safe — generate it again from the run.",
+        writes_message=False,
     ),
     StuckRule(
         "answer_packs", ("queued", "building"), 30,
@@ -125,6 +136,7 @@ async def sweep_once(now: datetime | None = None) -> dict[str, int]:
     moment = (now or datetime.now(UTC)).astimezone(UTC)
     admin = get_supabase_admin()
     closed: dict[str, int] = {}
+    failures: dict[str, int] = {}
 
     for rule in STUCK:
         cutoff = (moment - timedelta(minutes=rule.minutes)).isoformat()
@@ -145,6 +157,7 @@ async def sweep_once(now: datetime | None = None) -> dict[str, int]:
                 .execute()
             ).data or []
         except Exception:  # noqa: BLE001
+            failures[rule.table] = failures.get(rule.table, 0) + 1
             log.exception("reaper_read_failed", table=rule.table)
             continue
 
@@ -156,12 +169,16 @@ async def sweep_once(now: datetime | None = None) -> dict[str, int]:
             org_id = row.get("organization_id")
             charged = int(row.get("credits_charged") or 0)
 
+            payload: dict[str, object] = {"status": "failed"}
+            if rule.writes_message:
+                payload["error_message"] = rule.message
+
             try:
-                admin.table(rule.table).update({
-                    "status": "failed",
-                    "error_message": rule.message,
-                }).eq("id", row["id"]).eq("status", was).execute()
+                admin.table(rule.table).update(payload).eq(
+                    "id", row["id"]
+                ).eq("status", was).execute()
             except Exception:  # noqa: BLE001
+                failures[rule.table] = failures.get(rule.table, 0) + 1
                 log.exception(
                     "reaper_close_failed", table=rule.table, row_id=row.get("id")
                 )
@@ -183,6 +200,21 @@ async def sweep_once(now: datetime | None = None) -> dict[str, int]:
 
     if closed:
         log.warning("reaper_sweep_closed_rows", closed=closed)
+    if failures:
+        # Loud, and separate from the per-row exceptions above.
+        #
+        # Twice now a rule has been broken by a column the table did not have,
+        # and both times the per-row `log.exception` was indistinguishable
+        # from ordinary noise — a rule failing on every sweep forever looked
+        # exactly like a table with nothing to clean. A sweep that could not
+        # do its job must say so as a fact about the sweep, not as a stack
+        # trace somebody has to go looking for.
+        log.error(
+            "reaper_sweep_had_failures",
+            failures=failures,
+            detail="one or more rules could not complete; a rule that fails "
+                   "every sweep leaves those rows stuck forever",
+        )
     return closed
 
 

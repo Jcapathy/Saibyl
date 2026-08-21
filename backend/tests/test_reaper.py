@@ -262,6 +262,37 @@ async def test_a_refundable_row_missing_its_charge_refunds_nothing_rather_than_c
     assert refunds == [(ORG, 0, "reaper:website_snapshots:capturing")]
 
 
+@pytest.mark.asyncio
+async def test_a_table_without_an_error_message_column_is_still_closed(world):
+    """The second instance of the same defect, found the same way.
+
+    `reports` has no `error_message` column. Writing one made the update fail,
+    so three orphaned reports stayed at `generating` while the tables beside
+    them were cleaned correctly — and the per-row exception log was
+    indistinguishable from a table with nothing to do.
+    """
+    store, admin, _refunds = world
+    store["reports"] = [_row("generating", 120)]
+
+    closed = await reaper.sweep_once(now=NOW)
+
+    assert closed.get("reports") == 1
+    _table, _row_id, payload = admin.updates[0]
+    assert payload == {"status": "failed"}, (
+        "wrote error_message to a table that has no such column"
+    )
+
+
+def test_only_reports_is_declared_as_lacking_an_error_message():
+    """Verified against information_schema on 2026-08-21: every other table
+    the reaper touches carries both `error_message` and `credits_charged`."""
+    without = {rule.table for rule in reaper.STUCK if not rule.writes_message}
+
+    assert without == {"reports"}, (
+        f"the set of tables without an error_message column changed: {without}"
+    )
+
+
 def test_every_rule_names_states_and_a_sentence_a_founder_can_act_on():
     for rule in reaper.STUCK:
         assert rule.states, f"{rule.table}: no states"
