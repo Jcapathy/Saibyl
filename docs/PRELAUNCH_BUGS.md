@@ -585,11 +585,23 @@ storage, critics, verdict — is healthy.
    fault taking the API with it. This needs a machine with the browser runtime
    to build against and should not be written blind.
 
-### S-5 · IP Check is dead in production — **founder-owed (P0-11)**
+### S-5 · IP Check is dead in production (P0-11) — **CLOSED 2026-08-22**
 
-All three products got `503 "The search service isn't configured yet"`.
-`USPTO_ODP_API_KEY` is unset in Render. The route guards before creating or
-charging, so nothing was lost.
+Founder added `USPTO_ODP_API_KEY`, `USPTO_TSDR_API_KEY` and
+`ADMIN_ORGANIZATION_ID` in the Render dashboard. Verified live on Chartwell:
+QUICK clearance **complete in 31 seconds**, a 7,583-character report, both
+tracks run (trademark and patent — so both keys work), 0 credits charged,
+which confirms QUICK is the free tier.
+
+Admin routes opened at the same time: `/admin/design-gallery` returns 200 for
+a member of the Saido Labs organisation.
+
+**Learned, and worth keeping:** `render.yaml` in this repository is
+**descriptive, not synced**. `ADMIN_ORGANIZATION_ID` was set as a literal in
+that file, deployed, and confirmed live by commit — and the admin gate still
+refused, because Render never read it. Two consequences: env vars must be set
+in the dashboard, and the earlier worry that a Blueprint sync could silently
+downgrade the instance back to `starter` was unfounded.
 
 ### The same false alarm, twice — a note on method
 
