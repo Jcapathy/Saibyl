@@ -93,6 +93,42 @@ _PAGE_HEIGHT_JS = (
     "document.documentElement ? document.documentElement.scrollHeight : 0)"
 )
 _DOM_TEXT_JS = "() => document.body ? document.body.innerText : ''"
+
+# The same text, without forcing the browser to lay the page out.
+#
+# `innerText` is the better read — it is what a person sees, in reading order,
+# with hidden elements dropped. It is also **expensive**: the browser must
+# compute layout for the whole document to know what is visible. On half a CPU
+# with a long marketing page that measured over 45 seconds and failed the
+# capture, on a page that had already navigated and screenshotted fine.
+#
+# `textContent` needs no layout at all, but on `body` it would sweep up the
+# contents of every `<script>` and `<style>` — handing the critics a page of
+# JavaScript source and calling it copy. So this walks text nodes and skips
+# those, which keeps the cheapness and most of the quality.
+#
+# Used only as a fallback: quality first, and this when quality costs too much.
+_DOM_TEXT_FALLBACK_JS = """() => {
+  const SKIP = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'HEAD']);
+  const walker = document.createTreeWalker(
+    document.body || document.documentElement,
+    NodeFilter.SHOW_TEXT,
+    { acceptNode: (node) =>
+        SKIP.has(node.parentNode && node.parentNode.nodeName)
+          ? NodeFilter.FILTER_REJECT
+          : NodeFilter.FILTER_ACCEPT }
+  );
+  const parts = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    const text = (node.nodeValue || '').trim();
+    if (text) parts.push(text);
+  }
+  return parts.join('\\n');
+}"""
+
+# How long the good read gets before falling back to the cheap one.
+_DOM_TEXT_TIMEOUT_S = 20
 _META_TAGS_JS = """() => {
   const out = {};
   for (const el of document.querySelectorAll('meta')) {
@@ -501,10 +537,25 @@ async def _render(
 
             # Evidence. A capture without the page's text is not a capture,
             # and returning an empty string would send the critics a blank
-            # page to judge.
-            result["dom_text"] = await _required(
-                page.evaluate(_DOM_TEXT_JS), timeout_s, "the page's text", url
+            # page to judge — so this is the one read with a second attempt
+            # rather than a failure.
+            #
+            # `innerText` is what a person sees and is worth trying first. It
+            # forces a full layout, which on a long page and half a CPU has
+            # measured over 45 seconds; the fallback walks text nodes instead
+            # and needs no layout at all.
+            text = await _optional(
+                page.evaluate(_DOM_TEXT_JS), _DOM_TEXT_TIMEOUT_S, "dom_text"
             )
+            if not text:
+                logger.info("website_capture_text_fallback", url=url)
+                text = await _required(
+                    page.evaluate(_DOM_TEXT_FALLBACK_JS),
+                    timeout_s,
+                    "the page's text",
+                    url,
+                )
+            result["dom_text"] = text
 
             # Best-effort by contract — this module's own docstring says a page
             # that defeats the census still captures, because the screenshots

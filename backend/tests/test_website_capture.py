@@ -121,7 +121,17 @@ class _FakePage:
         if "querySelectorAll('meta')" in script:
             return dict(self._spec.get("meta", {}))
         if "innerText" in script:
+            # `innerText` forces a full layout. On a long page and half a CPU
+            # that measured over 45 seconds, so the module tries it briefly
+            # and falls back. `innertext_raises` lets a test say "this page is
+            # too heavy to lay out", which is the case that mattered.
+            raises = self._spec.get("innertext_raises")
+            if raises is not None:
+                raise raises
             return self._spec.get("dom_text", "")
+        if "createTreeWalker" in script:
+            # The layout-free fallback: text nodes, minus script and style.
+            return self._spec.get("dom_text_fallback", self._spec.get("dom_text", ""))
         if "scrollHeight" in script:
             return self._spec.get("page_height", 900)
         raise AssertionError(f"unexpected evaluate script: {script!r}")
@@ -280,6 +290,42 @@ async def test_a_redirect_landing_on_a_private_address_is_rejected(monkeypatch):
 # ---------------------------------------------------------------------------
 # Claim 3: the captured evidence is faithful
 # ---------------------------------------------------------------------------
+
+async def test_a_page_too_heavy_to_lay_out_still_yields_its_text(monkeypatch):
+    """`innerText` is what a person sees, and it forces a full layout to know
+    what is visible. On a long marketing page and half a CPU that measured
+    over 45 seconds and failed a capture that had already navigated and
+    screenshotted fine. The fallback walks text nodes and needs no layout."""
+    monkeypatch.setattr(
+        security.socket, "getaddrinfo", _resolving({"acme.example": _PUBLIC_IP})
+    )
+    _calls, _browser = _install_fake_playwright(monkeypatch, {
+        "innertext_raises": TimeoutError("layout never finished"),
+        "dom_text_fallback": "Prior authorization, answered.",
+        "page_height": 900,
+    })
+
+    result = await capture_website("https://acme.example/", timeout_s=45)
+
+    assert result.dom_text == "Prior authorization, answered."
+
+
+async def test_the_good_read_is_preferred_when_it_is_affordable(monkeypatch):
+    """The fallback is cheaper and worse — it cannot tell hidden text from
+    visible. It must not be used when `innerText` answers."""
+    monkeypatch.setattr(
+        security.socket, "getaddrinfo", _resolving({"acme.example": _PUBLIC_IP})
+    )
+    _calls, _browser = _install_fake_playwright(monkeypatch, {
+        "dom_text": "What a person sees.",
+        "dom_text_fallback": "every text node, hidden ones too",
+        "page_height": 900,
+    })
+
+    result = await capture_website("https://acme.example/", timeout_s=45)
+
+    assert result.dom_text == "What a person sees."
+
 
 async def test_navigation_does_not_wait_for_every_tracker_to_finish(monkeypatch):
     """`load` waits for every subresource — analytics beacons, chat widgets,
