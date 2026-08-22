@@ -141,29 +141,51 @@ async def _run_interview(
 async def interview_agent(
     simulation_id: UUID | str, agent_id: UUID | str, prompt: str
 ) -> InterviewResponse:
-    """Interview a single agent."""
+    """Interview a single agent of this run.
+
+    **Scoped to `simulation_id`, and that is not decoration.** The route checks
+    that the *simulation* belongs to the caller and then hands this function an
+    `agent_id` it never validated. Selecting on the id alone meant any agent id
+    from any organisation's run could be interviewed through a simulation the
+    caller did own, and the reply carried that persona's username, type and an
+    in-character answer. The backend holds the service-role client, so RLS
+    offers no second line here — the filter is the whole defence.
+    """
     admin = get_supabase_admin()
-    agent = (
+    rows = (
         admin.table("simulation_agents")
         .select("*")
         .eq("id", str(agent_id))
-        .single()
+        .eq("simulation_id", str(simulation_id))
+        .limit(1)
         .execute()
-    ).data
+    ).data or []
+    if not rows:
+        # Deliberately the same answer whether the agent belongs to another run
+        # or does not exist: telling them apart tells a prober which ids are
+        # real.
+        raise ValueError("That person isn't part of this run.")
 
     semaphore = asyncio.Semaphore(1)
-    return await _run_interview(agent, simulation_id, prompt, semaphore)
+    return await _run_interview(rows[0], simulation_id, prompt, semaphore)
 
 
 async def interview_batch(
     simulation_id: UUID | str, agent_ids: list[UUID | str], prompt: str
 ) -> list[InterviewResponse]:
-    """Interview multiple specific agents in parallel."""
+    """Interview several agents of this run in parallel.
+
+    Same scoping as `interview_agent`, for the same reason. Ids belonging to
+    another run are silently absent from the result rather than raising: a
+    batch is a best-effort fan-out over a selection, and the caller already
+    learns what came back.
+    """
     admin = get_supabase_admin()
     agents = (
         admin.table("simulation_agents")
         .select("*")
         .in_("id", [str(a) for a in agent_ids])
+        .eq("simulation_id", str(simulation_id))
         .execute()
     ).data
 
