@@ -84,6 +84,13 @@ _SETTLE_MS = 8_000
 # are what the critics actually judge.
 _CENSUS_TIMEOUT_S = 20
 
+# How long a capture will queue for the single browser slot before giving up.
+#
+# Long enough that an ordinary founder waiting behind one other check still
+# gets served; short enough that a wedged capture cannot silently swallow
+# every check that follows it. Roughly one full capture's worth of patience.
+_QUEUE_WAIT_S = 330
+
 # Scripts as module constants: each carries a distinctive marker string
 # ("scrollHeight", "innerText", "querySelectorAll('meta')") that tests key on
 # to fake `page.evaluate` without a browser.
@@ -368,10 +375,36 @@ async def _bounded(coro, subject: str, timeout_s: int) -> WebsiteCapture:
     The deadline starts when the browser slot is acquired, not when the
     request arrived: time spent waiting for another capture to finish is not
     this page's fault and must not be charged against its budget.
+
+    **The wait for the slot is bounded too, and that omission was a real
+    defect of its own.** There is one slot. `asyncio.wait_for` cancels a task
+    and then *awaits* its cancellation, so a browser call wedged somewhere
+    that never processes cancellation leaves the deadline itself waiting — and
+    the `async with` below never exits, so the slot is never returned. Every
+    later capture then blocked on `acquire()`, which sits OUTSIDE the deadline
+    and therefore had no ceiling at all.
+
+    One wedged page could take the whole Website Gauntlet down until the next
+    deploy, and the symptom — every check sitting at `capturing` — looked
+    exactly like the wedge repeating. Bounding the queue wait makes the
+    difference visible: "this page is too heavy" and "the checker is busy" are
+    now different sentences.
     """
+    slots = _slots()
     try:
-        async with _slots():
-            return await asyncio.wait_for(coro, timeout=_overall_deadline(timeout_s))
+        await asyncio.wait_for(slots.acquire(), timeout=_QUEUE_WAIT_S)
+    except TimeoutError as exc:
+        # The capture coroutine was built by the caller and will never run.
+        # Closing it is not tidiness: an un-awaited coroutine raises a
+        # RuntimeWarning at collection and holds its frame until then.
+        coro.close()
+        raise WebsiteCaptureError(
+            "Website checks are busy right now — another page is still being "
+            "read. Try again in a few minutes."
+        ) from exc
+
+    try:
+        return await asyncio.wait_for(coro, timeout=_overall_deadline(timeout_s))
     except TimeoutError as exc:
         raise WebsiteCaptureError(
             f"We could not finish reading {subject} within "
@@ -379,6 +412,8 @@ async def _bounded(coro, subject: str, timeout_s: int) -> WebsiteCapture:
             "heavy page or a browser that would not start — try again in a "
             "moment."
         ) from exc
+    finally:
+        slots.release()
 
 
 async def _capture_website(url: str, *, timeout_s: int) -> WebsiteCapture:

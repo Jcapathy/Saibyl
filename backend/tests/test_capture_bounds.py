@@ -171,6 +171,61 @@ async def test_no_more_browsers_run_at_once_than_the_box_can_hold():
 
 
 @pytest.mark.asyncio
+async def test_a_wedged_capture_cannot_swallow_every_check_behind_it(monkeypatch):
+    """The defect the slot itself introduced.
+
+    `asyncio.wait_for` cancels a task and then *awaits* its cancellation, so a
+    browser call wedged somewhere that never processes cancellation leaves the
+    deadline waiting too — and the slot is never returned. Every later capture
+    then blocked on `acquire()`, which sat outside the deadline and had no
+    ceiling at all. One wedged page took the whole module down until the next
+    deploy, and it looked exactly like the wedge repeating.
+    """
+    cap._capture_slots = None
+    monkeypatch.setattr(cap, "_QUEUE_WAIT_S", 0.1)
+
+    async def _wedged():
+        await asyncio.sleep(3600)
+
+    # Hold the only slot with something that will not finish.
+    stuck = asyncio.create_task(cap._bounded(_wedged(), "stuck", 45))
+    await asyncio.sleep(0.05)
+
+    async def _fine():
+        return "captured"
+
+    with pytest.raises(cap.WebsiteCaptureError) as exc:
+        await cap._bounded(_fine(), "https://next.example", 45)
+
+    assert "busy" in str(exc.value), (
+        "a queued capture must say the checker is busy, not that its own page "
+        "was too heavy — they are different problems with different fixes"
+    )
+    stuck.cancel()
+    cap._capture_slots = None
+
+
+@pytest.mark.asyncio
+async def test_the_slot_is_returned_when_a_capture_fails(monkeypatch):
+    """A failure must not leak the slot, or one bad page ends the module."""
+    cap._capture_slots = None
+    monkeypatch.setattr(cap, "_overall_deadline", lambda _t: 0.05)
+
+    async def _slow():
+        await asyncio.sleep(5)
+
+    with pytest.raises(cap.WebsiteCaptureError):
+        await cap._bounded(_slow(), "a", 45)
+
+    async def _fine():
+        return "captured"
+
+    # The next capture must be able to get in.
+    assert await cap._bounded(_fine(), "b", 45) == "captured"
+    cap._capture_slots = None
+
+
+@pytest.mark.asyncio
 async def test_waiting_for_a_slot_is_not_charged_against_the_pages_budget():
     """A founder whose capture queued behind another must not have that wait
     counted as their own page being slow."""
