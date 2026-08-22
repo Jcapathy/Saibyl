@@ -41,6 +41,36 @@ running delta record.
   under the score, and a "Claims to verify before you publish" section placed
   above everything else in `STYLE_GUIDE.md`.
 
+## 2026-08-22 — The same verification stage, now on report sections
+
+- **`services/intelligence/report_facts.py`** is new and mirrors
+  `website/claims.py`: `unsourced_figures(evidence, answer)` plus
+  `figure_complaint(figures)`, pure, no model call. The contract it checks is
+  unusually clean — a section is written by a ReACT loop whose `evidence` list
+  holds the seeded measured findings and every tool observation returned to
+  it, so that string is *exactly* what the model saw, truncation included. A
+  figure in the answer and not in the evidence is one the model supplied.
+
+- **Three shapes only** — decimals, percentages, "N of M" counts. Bare
+  integers are ignored deliberately (rounds, years, list positions, archetype
+  counts), and all four live fabrications are caught by the three.
+
+- **Matching is by rounding, not equality.** A stated `-0.47` is supported by
+  a measured `-0.4653`; `81%` by `80.56`. Percentages additionally match a
+  proportion, so `80.56%` is supported by `0.8056`.
+
+- **Percentages check against shares only**, not against every number —
+  `sourced_shares()` reads values written with `%` or held by a field named
+  `*_pct|percent|rate|ratio|share`. Without that narrowing a run of 25 agents
+  licenses "25%", which is exactly how one real fabrication passed. When the
+  evidence holds no share at all, percentage checking is skipped rather than
+  guessed.
+
+- **`_figure_checked` wraps all three answer paths** of `_run_react_loop`
+  (clean answer, format-violating answer, forced answer). One retry carrying
+  the complaint and the evidence; the correction is accepted only if it has
+  *strictly* fewer unsourced figures, otherwise the original stands.
+
 ## 2026-08-22 — The report's closing calls stop being able to kill it
 
 - **`report_agent._closing_call`** wraps the conclusion and executive-summary

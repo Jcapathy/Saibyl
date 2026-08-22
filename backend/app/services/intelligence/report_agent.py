@@ -32,6 +32,10 @@ from app.services.intelligence.react_tools import (
     agent_interview_tool,
     simulation_analytics,
 )
+from app.services.intelligence.report_facts import (
+    figure_complaint,
+    unsourced_figures,
+)
 
 logger = structlog.get_logger()
 
@@ -865,6 +869,92 @@ def _publish_progress(r: redis.Redis, report_id: str, payload: dict) -> None:
         logger.warning("report_progress_publish_failed", report_id=report_id)
 
 
+_FIGURE_RETRY = """\
+You wrote the report section "{section_title}" from the evidence below.
+
+EVIDENCE YOU WERE GIVEN — the only source of numbers for this section:
+{evidence}
+
+THE SECTION YOU WROTE:
+{answer}
+
+{complaint}"""
+
+
+async def _figure_checked(
+    answer: str,
+    evidence_text: str,
+    *,
+    section_title: str,
+    config: ReACTConfig,
+) -> str:
+    """The section, with figures it invented corrected where possible.
+
+    The measurement rule this enforces is already in `REACT_PROMPT`, under a
+    heading saying it is not style guidance — and it is overridden anyway (see
+    `report_facts`). So the check is deterministic and the retry quotes the
+    section's own sentences back at it.
+
+    The original is kept unless the rewrite is *strictly* better. A correction
+    pass that trades two invented figures for three is not a correction, and a
+    section is 800-1500 words of otherwise-good work to gamble on one retry.
+    """
+    figures = unsourced_figures(evidence_text, answer)
+    if not figures:
+        return answer
+
+    logger.warning(
+        "report_section_unsourced_figures",
+        section=section_title,
+        count=len(figures),
+        figures=[f.text for f in figures],
+    )
+    try:
+        corrected_raw = await llm_complete(
+            messages=[
+                {"role": "system", "content": REPORT_SYSTEM_PROMPT},
+                {"role": "user", "content": _FIGURE_RETRY.format(
+                    section_title=section_title,
+                    evidence=evidence_text,
+                    answer=answer,
+                    complaint=figure_complaint(figures),
+                )},
+            ],
+            temperature=config.temperature,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "report_figure_retry_failed",
+            section=section_title,
+            error=f"{type(exc).__name__}: {exc}",
+        )
+        return answer
+
+    corrected = strip_react_artifacts(
+        corrected_raw.split("ANSWER:", 1)[-1].strip()
+    )
+    if not corrected.strip():
+        return answer
+
+    survivors = unsourced_figures(evidence_text, corrected)
+    if len(survivors) >= len(figures):
+        logger.warning(
+            "report_figure_retry_no_better",
+            section=section_title,
+            before=len(figures),
+            after=len(survivors),
+        )
+        return answer
+
+    logger.info(
+        "report_figures_corrected",
+        section=section_title,
+        before=len(figures),
+        after=len(survivors),
+    )
+    return corrected
+
+
 async def _run_react_loop(
     section: SectionPlan,
     simulation_id: str,
@@ -917,7 +1007,12 @@ async def _run_react_loop(
         )
 
         if response.strip().startswith("ANSWER:"):
-            return strip_react_artifacts(response.split("ANSWER:", 1)[1].strip())
+            return await _figure_checked(
+                strip_react_artifacts(response.split("ANSWER:", 1)[1].strip()),
+                "\n".join(evidence),
+                section_title=section.title,
+                config=config,
+            )
 
         if response.strip().startswith("TOOL:"):
             tool_line = response.split("TOOL:", 1)[1].strip()
@@ -926,8 +1021,15 @@ async def _run_react_loop(
             )
             evidence.append(f"[Tool: {tool_line}]\n{observation}")
         else:
-            # LLM didn't follow format — treat as final answer
-            return strip_react_artifacts(response.strip())
+            # LLM didn't follow format — treat as final answer. Checked like
+            # any other: a section that ignored the response format is not
+            # more likely to have respected the measurement rules.
+            return await _figure_checked(
+                strip_react_artifacts(response.strip()),
+                "\n".join(evidence),
+                section_title=section.title,
+                config=config,
+            )
 
     # Max tool calls reached — force answer
     final_prompt = _prompt(
@@ -947,9 +1049,17 @@ async def _run_react_loop(
         ],
         temperature=config.temperature,
     )
-    if "ANSWER:" in result:
-        return strip_react_artifacts(result.split("ANSWER:", 1)[1].strip())
-    return strip_react_artifacts(result.strip())
+    forced = (
+        result.split("ANSWER:", 1)[1].strip()
+        if "ANSWER:" in result
+        else result.strip()
+    )
+    return await _figure_checked(
+        strip_react_artifacts(forced),
+        "\n".join(evidence),
+        section_title=section.title,
+        config=config,
+    )
 
 
 async def _execute_tool(

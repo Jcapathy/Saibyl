@@ -23,8 +23,11 @@ import asyncio
 import pytest
 from structlog.testing import capture_logs
 
+from app.services.intelligence import report_agent
 from app.services.intelligence.report_agent import (
+    ReACTConfig,
     _closing_call,
+    _figure_checked,
     clean_report_output,
 )
 
@@ -193,3 +196,124 @@ async def test_a_failed_closing_call_is_logged_at_error_level():
     assert entry["report_id"] == "r-42"
     assert entry["what"] == "Executive Summary"
     assert "RuntimeError" in entry["error"]
+
+
+# ── the figure correction pass ───────────────────────────────────────
+#
+# A section may not state a figure its own evidence never contained. The rule
+# is already in REACT_PROMPT under a heading saying it is not style guidance,
+# and two live runs overrode it — see `report_facts` for the numbers.
+
+EVIDENCE = """
+[Measured analysis — the only source of numbers for this report]
+{"by_platform": {"twitter_x": {"mean_sentiment": -0.4653, "oppose_pct": 80.56},
+"reddit": {"mean_sentiment": -0.091, "oppose_pct": 41.03}}, "agents": 25}
+"""
+
+HONEST = "Twitter/X ran at -0.4653 with 80.56% opposed; Reddit at -0.091."
+INVENTED = "Reddit hit -0.35 while Twitter/X sat at -0.19."
+
+
+class _FakeComplete:
+    """Records calls and replays scripted answers, like the revise tests."""
+
+    def __init__(self, replies):
+        self.replies = list(replies)
+        self.prompts: list[str] = []
+
+    async def __call__(self, messages, **kwargs):
+        self.prompts.append(messages[-1]["content"])
+        reply = self.replies.pop(0)
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+
+
+def _install(monkeypatch, replies):
+    fake = _FakeComplete(replies)
+    monkeypatch.setattr(report_agent, "llm_complete", fake)
+    return fake
+
+
+async def _check(answer):
+    return await _figure_checked(
+        answer, EVIDENCE, section_title="Platform dynamics", config=ReACTConfig()
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_section_reporting_measured_figures_is_not_retried(monkeypatch):
+    fake = _install(monkeypatch, [])
+
+    result = await _check(HONEST)
+
+    assert result == HONEST
+    assert fake.prompts == [], "an honest section paid for a correction it did not need"
+
+
+@pytest.mark.asyncio
+async def test_invented_figures_trigger_one_retry_that_names_them(monkeypatch):
+    fake = _install(monkeypatch, [f"ANSWER: {HONEST}"])
+
+    result = await _check(INVENTED)
+
+    assert len(fake.prompts) == 1
+    complaint = fake.prompts[0]
+    assert "-0.35" in complaint and "-0.19" in complaint
+    assert INVENTED in complaint, "the section was not quoted back to itself"
+    assert "-0.4653" in complaint, "the retry did not carry the evidence"
+    assert result == HONEST
+
+
+@pytest.mark.asyncio
+async def test_a_correction_that_is_no_better_leaves_the_original_standing(
+    monkeypatch,
+):
+    """A section is 800-1500 words of otherwise-good work; trading two invented
+    figures for two different ones is not a correction."""
+    _install(monkeypatch, ["ANSWER: Reddit hit -0.44 while Twitter/X sat at -0.77."])
+
+    result = await _check(INVENTED)
+
+    assert result == INVENTED
+
+
+@pytest.mark.asyncio
+async def test_a_partial_correction_is_accepted(monkeypatch):
+    """Strictly fewer invented figures is an improvement worth keeping."""
+    partial = "Reddit hit -0.091 while Twitter/X sat at -0.19."
+    _install(monkeypatch, [f"ANSWER: {partial}"])
+
+    result = await _check(INVENTED)
+
+    assert result == partial
+
+
+@pytest.mark.asyncio
+async def test_a_failed_retry_leaves_the_section_intact(monkeypatch):
+    _install(monkeypatch, [RuntimeError("upstream 529")])
+
+    result = await _check(INVENTED)
+
+    assert result == INVENTED
+
+
+@pytest.mark.asyncio
+async def test_an_empty_correction_leaves_the_section_intact(monkeypatch):
+    _install(monkeypatch, ["ANSWER:   "])
+
+    result = await _check(INVENTED)
+
+    assert result == INVENTED
+
+
+@pytest.mark.asyncio
+async def test_the_invented_figures_are_logged_with_their_values(monkeypatch):
+    _install(monkeypatch, [f"ANSWER: {HONEST}"])
+
+    with capture_logs() as logs:
+        await _check(INVENTED)
+
+    flagged = next(e for e in logs if e["event"] == "report_section_unsourced_figures")
+    assert flagged["section"] == "Platform dynamics"
+    assert set(flagged["figures"]) == {"-0.35", "-0.19"}
