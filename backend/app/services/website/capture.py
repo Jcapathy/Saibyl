@@ -74,6 +74,16 @@ DOM_TEXT_MAX_CHARS = 100_000
 # rather than waited on.
 _SETTLE_MS = 8_000
 
+# The census's own ceiling, shorter than the required steps'.
+#
+# It is the most expensive thing in a capture by a wide margin: for every
+# sampled element it reads `getBoundingClientRect` and `getComputedStyle`, and
+# each pair forces the browser to recompute layout. Hundreds of those on a
+# heavy page, on half a CPU, is the slowest step there is — and it is the one
+# the product can most afford to lose, because the screenshots and the text
+# are what the critics actually judge.
+_CENSUS_TIMEOUT_S = 20
+
 # Scripts as module constants: each carries a distinctive marker string
 # ("scrollHeight", "innerText", "querySelectorAll('meta')") that tests key on
 # to fake `page.evaluate` without a browser.
@@ -459,20 +469,18 @@ async def _render(
 
         result: dict[str, Any] = {"final_url": page.url}
         if not mobile:
-            # Text and tags are viewport-independent; extracting once keeps the
-            # mobile pass to what only it can provide — the mobile rendering.
-            # Extras: the product is better with them and does not need them,
-            # so an overrun costs the field rather than the capture.
+            # **The evidence first, the extras after.** Text and tags are
+            # viewport-independent; extracting once keeps the mobile pass to
+            # what only it can provide — the mobile rendering.
+            #
+            # The order here is load-bearing and was wrong. The census ran
+            # first and the page's text second, so a heavy page spent its
+            # budget on an *optional* measurement and then failed on the
+            # *required* one — observed on simplepractice.com, which navigated
+            # fine and then died reading its own text.
             result["title"] = await _optional(page.title(), timeout_s, "title")
             result["meta"] = await _optional(
                 page.evaluate(_META_TAGS_JS), timeout_s, "meta"
-            ) or {}
-            # Best-effort by contract — this module's own docstring says a page
-            # that defeats the census still captures, because the screenshots
-            # and the text are the evidence the product cannot do without.
-            # Until now "defeats" did not include "takes forever".
-            result["style_census"] = await _optional(
-                _style_census(page, url or REVISION_URL), timeout_s, "style_census"
             ) or {}
 
             # Evidence. A capture without the page's text is not a capture,
@@ -481,6 +489,23 @@ async def _render(
             result["dom_text"] = await _required(
                 page.evaluate(_DOM_TEXT_JS), timeout_s, "the page's text", url
             )
+
+            # Best-effort by contract — this module's own docstring says a page
+            # that defeats the census still captures, because the screenshots
+            # and the text are the evidence the product cannot do without.
+            # Until now "defeats" did not include "takes forever".
+            #
+            # It gets a **shorter** budget than the required steps, because it
+            # is the most expensive thing here by a wide margin: it reads
+            # `getBoundingClientRect` and `getComputedStyle` for hundreds of
+            # elements, and each pair forces the browser to recompute layout.
+            # On a small instance that is the single slowest step in a capture,
+            # and it is the one the product can most afford to lose.
+            result["style_census"] = await _optional(
+                _style_census(page, url or REVISION_URL),
+                _CENSUS_TIMEOUT_S,
+                "style_census",
+            ) or {}
 
         result["screenshot"], result["screenshot_truncated"] = await _required(
             _screenshot(page, viewport), timeout_s, "a screenshot", url

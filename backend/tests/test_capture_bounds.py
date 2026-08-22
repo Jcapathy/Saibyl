@@ -60,6 +60,37 @@ async def test_a_capture_inside_the_deadline_passes_its_result_through():
     assert await cap._bounded(_fast(), "https://ok.example", 45) == "captured"
 
 
+def test_the_page_text_is_read_before_the_optional_census():
+    """The ordering that cost a real capture.
+
+    The census ran first and the page's text second, so a heavy page spent its
+    budget on an *optional* measurement and then failed on the *required* one.
+    Observed on simplepractice.com: it navigated fine and died reading its own
+    text. Required evidence comes first now.
+    """
+    import inspect
+
+    source = inspect.getsource(cap._render)
+    text_at = source.find("_DOM_TEXT_JS")
+    census_at = source.find("_style_census(page")
+
+    assert text_at != -1 and census_at != -1
+    assert text_at < census_at, (
+        "the style census runs before the page's text is read, so an "
+        "expensive optional step can exhaust the budget for a required one"
+    )
+
+
+def test_the_census_gets_a_shorter_budget_than_the_evidence():
+    """It reads getBoundingClientRect and getComputedStyle per element, and
+    each pair forces a layout recompute. It is the slowest step in a capture
+    and the one the product can most afford to lose."""
+    assert cap._CENSUS_TIMEOUT_S < 45, (
+        "the census may not have as long as the steps a capture cannot do "
+        "without"
+    )
+
+
 def test_chromium_is_told_not_to_use_the_containers_64mb_of_shared_memory():
     """The reason the flagship module never worked on a real website.
 
