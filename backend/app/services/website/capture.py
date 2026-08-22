@@ -297,17 +297,33 @@ def _slots() -> asyncio.Semaphore:
     return _capture_slots
 
 
-def _overall_deadline(timeout_s: int) -> int:
-    """The whole capture's ceiling: two renders, plus room to launch and close.
+# The whole capture's ceiling, in seconds.
+#
+# **Measured, not guessed — the first value here was a guess and it was too
+# tight.** A capture is two full renders, and each one is: navigate, settle,
+# read the title, the meta tags and the page's text, take the style census,
+# and screenshot up to 8,000px of page. On half a CPU, a heavy commercial
+# marketing site does not fit that into two and a half minutes;
+# simplepractice.com reached this ceiling with every individual step inside
+# its own budget.
+#
+# Five minutes is a long time to wait, and it is the honest cost of judging a
+# real website on a small instance. The founder is told what is happening and
+# the work is already asynchronous. Tunable because the right number is a
+# property of the CPU underneath: on a faster plan, lower it.
+WEBSITE_CAPTURE_DEADLINE_S = max(
+    60, int(os.environ.get("WEBSITE_CAPTURE_DEADLINE_S", "300") or 300)
+)
 
-    `timeout_s` bounds `page.goto`. It does not bound
-    `chromium.launch()` — and that is where two production checks hung
-    indefinitely, sitting at `capturing` with no screenshots and no error
-    while a founder watched a spinner. Three checks had been started within
-    four minutes of each other on one instance; the third failed honestly at
-    its `goto` timeout and the two that were still launching never returned.
+
+def _overall_deadline(timeout_s: int) -> int:
+    """The whole capture's ceiling.
+
+    `timeout_s` bounds one `page.goto`. It bounds neither
+    `chromium.launch()` — where two production checks hung indefinitely — nor
+    the sum of every step across both viewports, which is what this covers.
     """
-    return timeout_s * 2 + 60
+    return max(WEBSITE_CAPTURE_DEADLINE_S, timeout_s * 2 + 60)
 
 
 async def _bounded(coro, subject: str, timeout_s: int) -> WebsiteCapture:
