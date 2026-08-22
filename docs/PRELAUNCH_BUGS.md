@@ -494,30 +494,68 @@ What was found and fixed along the way, none of which was the cause:
 - Concurrent captures OOM'd the 512 MB instance and returned **502 across
   every endpoint**, taking down runs and billing calls. Capped at one browser.
 
-**What is still true after all of that:** an isolated capture of
-simplepractice.com, with nothing else running, sat at `capturing` for 900
-seconds and **`asyncio.wait_for` never fired**. Playwright's async API talks
-to a driver subprocess over a pipe; a blocked read there is not cancellable at
-the Python await level. The in-process deadline cannot close it.
+### The investigation, after the founder asked "leak, or genuinely more memory?"
+
+That question was worth asking and the first answer — "raise the plan" — was
+wrong. What follows is what the evidence actually showed, in order.
+
+**1. Storage was blocking the event loop. This was the big one.**
+`get_supabase_admin()` returns `supabase._sync.client.Client`, and `store.py`
+called `bucket.upload(...)` directly inside `async def`. A multi-megabyte
+screenshot upload held the loop for its whole duration, so no request was
+served, Render's health check timed out, and the platform returned **502 on
+every endpoint** — which is precisely what an out-of-memory box looks like
+from outside. Six call sites moved onto threads. *This is why it looked like
+a memory problem and was not.*
+
+**2. It also explains why the deadlines never fired.** A blocked loop cannot
+run its own timers. With the loop free, `asyncio.wait_for` cancels Playwright
+exactly as expected — which the next three failures demonstrated by firing
+cleanly at 150s, at a step timeout, and at the overall ceiling.
+
+**3. Three real performance bugs, each found by the next clean failure:**
+- `wait_until="load"` waited for every analytics beacon and chat widget. Now
+  `domcontentloaded` plus a bounded settle.
+- The **optional** style census ran **before** the **required** page text, so
+  a heavy page spent its budget on a nice-to-have and failed on the essential.
+- `innerText` forces a full layout recompute to decide what is visible; on a
+  long page at half a CPU that exceeded 45 seconds. Tried briefly now, with a
+  layout-free tree-walk fallback that skips `<script>` and `<style>`.
+
+**4. A defect I introduced while fixing the others.** The one-browser
+semaphore let a wedged capture swallow every check behind it: `wait_for`
+cancels a task and then *awaits* its cancellation, so a wedged browser leaves
+the deadline waiting, the slot is never released, and later captures blocked
+on `acquire()` — outside the deadline, with no ceiling at all. The symptom was
+identical to the original fault, so **several "still hanging" results reported
+during this investigation were this, not the wedge.** The queue wait is now
+bounded and the two cases say different things.
+
+**What remains true, measured on a fresh process with a free slot and the
+running commit confirmed via `/health`:** a capture of simplepractice.com sat
+at `capturing` for 607 seconds against a 300-second deadline. Once a browser
+call wedges, in-process cancellation does not clear it — `wait_for` waits on a
+cancellation that never completes.
 
 **What holds today.** The reaper closes the row at 20 minutes and refunds the
-1,750 credits, so the founder gets an honest failure and their money back
-rather than a spinner forever. That is a floor, not a fix.
+1,750 credits. Later checks now fail fast with "the checker is busy" instead
+of hanging. `example.com` completes the full check end to end in 94 seconds
+with a real critique, so the pipeline itself — browser, census, screenshots,
+storage, critics, verdict — is healthy.
 
-**The decision, which is the founder's:**
+**The recommendation, in order:**
 
-1. **More memory.** `render.yaml` puts saibyl-backend on `starter` — 512 MB,
-   half a CPU — and one Chromium wants 300–500 MB of that while the API,
-   three concurrent runs and the analysis pipeline share the rest. This is the
-   most likely single cause and the cheapest thing to test.
-2. **Move the browser out of the API process**, spawned as a subprocess that
-   can be *killed*. This is what makes an uncancellable native hang bounded,
-   and it also stops a browser OOM taking the API down with it. Roughly a day,
-   and it should be built with the browser runtime available to test against —
-   it cannot be verified from a machine with no Playwright installed.
-
-Do (1) first and re-run this check: it is a config change and it answers
-whether (2) is needed at all.
+1. **Raise the plan.** `render.yaml` has `starter`: 512 MB and **half a CPU**.
+   The constraint is CPU more than memory — layout and DOM work are what run
+   long, and a wedge is what a starved Chromium does. The 2 GB Standard plan
+   is 1 CPU and 2 GB: double the CPU, quadruple the memory. This is a config
+   change, it is cheap, and it should be measured before anything is built.
+   `WEBSITE_CAPTURE_CONCURRENCY` and `WEBSITE_CAPTURE_DEADLINE_S` are both
+   env-tunable so the new headroom can be used without a deploy.
+2. **Then, if wedges persist: run the browser as a killable subprocess.** A
+   process can be killed; a wedged coroutine cannot. It also stops a browser
+   fault taking the API with it. This needs a machine with the browser runtime
+   to build against and should not be written blind.
 
 ### S-5 · IP Check is dead in production — **founder-owed (P0-11)**
 

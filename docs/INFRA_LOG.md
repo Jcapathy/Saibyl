@@ -43,6 +43,40 @@ check able to hang at `capturing` indefinitely. Details in PRELAUNCH_BUGS.
 `outbound_sequence` 2,500, `capital_shortlist` 3,000 all now served by
 `GET /billing/prices`, which had omitted all three.
 
+## 2026-08-21 (later) — "Do we need memory, or is something leaking?"
+
+Founder's question, and the honest answer is neither — the first diagnosis in
+the entry below was wrong and is corrected here.
+
+**The 502s were synchronous I/O on the event loop, not memory.**
+`get_supabase_admin()` is a *sync* client, and `store.py` called
+`bucket.upload(...)` inside `async def`. A multi-megabyte screenshot upload
+held the loop, so no request was served, Render's health check timed out, and
+the platform returned 502 on every endpoint — indistinguishable from an OOM
+from outside. Six storage call sites now run on threads. The same blockage is
+why every capture deadline appeared not to work: a blocked loop cannot run its
+own timers.
+
+**`/health` now reports the running commit** (`RENDER_GIT_COMMIT`, seven
+chars). This entry exists partly because a whole afternoon was spent testing
+production against changes that may or may not have shipped, and once drawing
+a wrong conclusion from it. That question now has an answer.
+
+**Where it stands, measured against a confirmed commit on a fresh process:**
+`example.com` completes the full check in 94 seconds with a real critique, so
+the pipeline is healthy. `simplepractice.com` still wedges — once a Playwright
+call stops responding, in-process cancellation cannot clear it, and the reaper
+closes the row at 20 minutes with a refund.
+
+**Recommendation: raise the plan and measure before building anything.** The
+binding constraint is CPU — `starter` is half a vCPU, and layout and DOM work
+are what run long. The 2 GB Standard plan doubles CPU and quadruples memory.
+`WEBSITE_CAPTURE_CONCURRENCY` and `WEBSITE_CAPTURE_DEADLINE_S` are env-tunable
+so the headroom can be used without a deploy. If wedges survive that, the
+durable fix is a killable browser subprocess — see S-6 in PRELAUNCH_BUGS.
+
+---
+
 **The instance is the constraint, and this is the entry to read first.**
 `render.yaml` puts `saibyl-backend` on the **starter** plan: 512 MB, half a
 CPU. One headless Chromium wants 300–500 MB of that, while the API, the
