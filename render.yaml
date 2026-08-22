@@ -70,11 +70,16 @@ services:
       - key: USPTO_TSDR_API_KEY
         sync: false
 
-      # Gates the admin-only gallery feed (`api/admin.py`). Not a secret — it
-      # is the Saido Labs organisation's own id — and not customer-facing:
-      # without it those routes simply refuse everyone, including us.
+      # Gates the admin-only routes (`api/admin.py`): a signed-in member of
+      # this organisation gets them, everyone else is refused.
+      #
+      # A literal rather than `sync: false` on purpose. It is not a secret —
+      # it is an organisation id, and holding it grants nothing without
+      # credentials for a member of that organisation — so putting it in the
+      # dashboard would only mean one more thing to type and one more thing to
+      # forget. It was forgotten for days.
       - key: ADMIN_ORGANIZATION_ID
-        sync: false
+        value: 231b7f17-d17c-4f6e-b530-f0196acd841b
       - key: LLM_PROVIDER
         value: anthropic
       - key: LLM_MODEL
