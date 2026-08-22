@@ -11,6 +11,54 @@ your check could only have passed for the reason you think it did.*
 
 ---
 
+## 2026-08-22 — A prompt is not a control, and a blind judge cannot catch invention
+
+Three lessons from a live fintech revision that shipped invented compliance
+badges, each of which transfers well past the website module.
+
+**1. An instruction the model overrides is not a safeguard, and repeating it
+does not make it one.** The prompt forbade inventing facts *twice* — once
+absolutely (`_FACT_RULES`), once with the consequence spelled out ("a page
+that claims a certification it does not hold is worse than one that omits
+it"). The model invented seven certifications anyway. The reason is
+instructive: the same prompt also carried a category checklist naming the
+evidence a fintech page must show, and **a checklist is a demand while a
+prohibition is only a rule**. When the material cannot satisfy the checklist,
+priors will. If you find yourself adding a third sentence to a prompt, the
+answer is a verifier, not a sentence.
+
+**2. Ask what your judge can physically see.** The six-critic gauntlet reads a
+screenshot of the *new* page. It never receives the old one. So no critic,
+however well prompted, could ever have caught a fabricated fact — and the
+scores prove it: 78 → 80 overall with credibility *unmoved at 82* while being
+handed invented ISO and PCI claims. Before trusting any evaluator, enumerate
+its inputs and ask which failure modes are outside them. Those need a
+different mechanism, not a better prompt.
+
+**3. A quality score is not a safety score, so do not rank on it alone.** The
+loop selected the best round by `overall_score`. That is a decision to ship a
+forgery whenever the forgery scores two points higher — which is exactly what
+happened. Wherever a pipeline ranks candidates by a model's judgement, check
+whether a *disqualifying* property exists that no score should be able to
+outweigh.
+
+**And the near-miss worth naming:** the deterministic scan caught a claim the
+careful manual diff had missed — *"is a licensed money transmitter in all US
+states that require one."* A reviewer reading for the badges they expected
+found six; a function that does not get tired found seven.
+
+**Corollary, and the shape of the remaining risk.** The scan catches
+*claim-shaped* fabrication — a badge, a price, a count — because those have a
+token to compare. The same runs showed identical behaviour in prose that has
+nothing checkable in it: a pre-launch product's answer pack asserting
+"customers are seeing 10+ hours per month back", an outbound sequence claiming
+"we built volume pricing into the model", a report inverting a measured
+platform split under a bolded **Evidence:** label. Across both runs
+**159 of 159 and 80 of 80 structured quotes were verbatim** — the schema
+boundary works exactly as designed — and the free prose beside them was
+unpoliced. Structured evidence being perfect is not evidence that the artifact
+is honest; it only proves the fields you constrained are the fields that held.
+
 ## 2026-08-22 — Three defect classes an audit found, and what transfers
 
 **A concurrency limit is not a spend limit.** `interview_batch` held a

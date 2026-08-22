@@ -10,6 +10,31 @@ since 2026-08-16).
 
 ---
 
+## 2026-08-22 — Two columns the founder-facing surfaces needed
+
+**Migrations applied to `txmvwuekkiedgxwovorp` (production, direct):**
+
+- `page_revisions_unsupported_claims` — `unsupported_claims jsonb`, nullable
+  on purpose. `null` means the row predates the check; `[]` means the scan ran
+  and found nothing. Only the second is a clean bill of health, and the bundle
+  and the UI both need to tell them apart before promising one.
+- `reports_error_message` — `error_message text`. `reports` was the only
+  artifact table without it, which is why a failed report told a founder
+  nothing at all. Measured before applying: **2 of 3 reports generated
+  2026-08-22 failed, 3 of 3 on 2026-08-21**, every one with no reason
+  recorded anywhere visible.
+
+Both are additive and nullable, so they carry no ordering constraint against
+the deploy — the columns can exist before the code that writes them, and old
+rows stay readable.
+
+**Verified against the live artifact, not reconstructed.** The delivered
+Ledgerline revision (`9ccd1775-…`, 51,122 bytes) was downloaded from
+`project-media` and run through the new detector: it reports SOC 2, ISO 27001,
+PCI DSS, AES-256, TLS, Central Bank of Ireland and a money-transmitter licence,
+plus the invented fee percentages. The scores on that row confirm the rest of
+the account — 78 → 80 overall, credibility 82 → 82, design 82 → 78.
+
 ## 2026-08-21 — The last build push, and three sample products against production
 
 **Deploys (master → Render, in order):** `2f79676` (three module UIs, the

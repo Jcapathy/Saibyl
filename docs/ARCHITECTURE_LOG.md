@@ -8,6 +8,54 @@ running delta record.
 
 ---
 
+## 2026-08-22 — A verification stage between the generator and the founder
+
+- **`services/website/claims.py`** is new: `unsupported_claims(page_text,
+  html)` returns claim-shaped statements present in a generated page and
+  absent from the source page, plus `claim_complaint(claims)` for the retry.
+  Pure — no model call, no network — which is the entire point. It is the
+  third instance of the extract/verify split (`gtm.extraction`,
+  `capital.discovery.verify_firms`): the model writes, and a function that
+  cannot hallucinate decides whether what it wrote is evidenced.
+
+  Three families, ordered by what a false one costs: `certification` (a named
+  standard, regulator, licence or audit regime), `figure` (money, percentages),
+  `scale` (customer counts). Certifications are matched by a shared regex
+  vocabulary applied to *both* texts, so a badge the founder already claims is
+  never reported; figures and counts are compared as normalised keys, so a
+  source that says "$1,200" covers a page that says "$ 1,200.00".
+
+- **The boundary it creates.** `revise._generate_html` now returns
+  `(html, claims)` and the loop carries claims per round;
+  `RevisionResult.unsupported_claims` is the new public field. Round selection
+  moved from "highest score" to `_is_better` — fewest forged certifications
+  first, then score.
+
+- **Import direction is deliberate:** `claims` imports `visible_copy` from
+  `style_guide`, so `style_guide` renders its founder-facing section from
+  plain dicts rather than importing `claims` back. The bundle endpoint passes
+  the stored rows straight through.
+
+- **A new surface for it in three places** — `page_revisions.unsupported_claims`
+  (jsonb), the `ClaimsWarning` block in `SiteRevision.tsx` sitting directly
+  under the score, and a "Claims to verify before you publish" section placed
+  above everything else in `STYLE_GUIDE.md`.
+
+## 2026-08-22 — The report's closing calls stop being able to kill it
+
+- **`report_agent._closing_call`** wraps the conclusion and executive-summary
+  generations: bounded at 300s (`llm_complete` has no timeout of its own) and
+  returning `None` instead of raising. Assembly then builds from whatever came
+  back and declares what is missing at the top of the document.
+  The failure mode this removes: both calls run *after* every paid section is
+  written, so one wedged call stranded the whole deliverable with
+  `markdown_content` empty.
+
+- **`reports` gains `error_message`**, making it the last artifact table to
+  carry one. `StuckRule.writes_message` — a hand-maintained boolean that
+  existed only because this column was missing — is deleted; the reaper's
+  failed-update counter is the correct guard for a schema fact.
+
 ## 2026-08-22 — Two new boundaries: role gates, and clearance personal data
 
 - **`core/auth.py` gains two dependencies**, `require_can_spend` and

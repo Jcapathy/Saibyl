@@ -432,6 +432,122 @@ than three flavours of one thing.
 packs 3/3. Messaging documents 3/3. Capital shortlists 3/3, each considering
 7 firms and returning 3 matches with refusals reported rather than dropped.
 
+## Re-run — 2026-08-22 (the same three products, after the fixes)
+
+All three re-driven end to end against production by independent agents.
+**The website path worked for the first time**: Ledgerline's check completed
+in ~6 minutes (stripe.com and mercury.com both captured), the revision
+finished in 540s over two rounds, and the bundle served as a 14KB zip. The
+category test passed visibly — the fintech brief was selected and *acted on*
+(`tabular-nums` seven times, a footnoted GDP figure). Parry's check completed
+too, with genuinely excellent findings: it caught that the hero says
+"11-layer" while the page lists seven steps, and diffed the meta description's
+"274/274 adversarial tests" against the body's "thousands".
+
+### S-7 · The revision invents certifications it was told not to — **fixed 2026-08-22**
+
+Ledgerline's delivered page claimed SOC 2 Type II, ISO 27001, PCI DSS Level 1,
+authorisation by the Central Bank of Ireland, AES-256, TLS 1.2, a
+money-transmitter licence and a seven-line fee table. **None appears in the
+captured source page**, and the page carried zero `[OWNER: fill in]`
+placeholders across 51KB. The six critics scored it *up* (78 → 80, credibility
+unmoved at 82) because they judge the render and never see the source.
+
+Fixed by `website/claims.py` — a pure verifier, one complained retry, an
+honesty-first best-round tie-break, and three founder-facing surfaces. Full
+reasoning in DECISIONS_LOG and CRITICS_LOG, both 2026-08-22. Verified against
+the real stored artifact, not a reconstruction.
+
+### S-8 · A paid report dies silently and strands its own content — **fixed 2026-08-22**
+
+**2 of 3 reports on 2026-08-22 failed, and 3 of 3 on 2026-08-21.** Every one
+recorded `error_message: None` — `reports` was the only artifact table without
+that column. In both failures **every section was written and `complete`**
+(31,021 characters in one case) while `markdown_content` was never assembled,
+so the founder's deliverable existed in the database and was reachable through
+no endpoint that serves it. `/progress` reported 100% and
+`/reports/by-simulation/{id}` returned 200 throughout.
+
+Fixed: both closing model calls bounded at 300s and non-fatal, assembly from
+whatever came back with the missing part declared at the top,
+`reports.error_message` added, and `clean_report_output` taught the openers it
+was missing. The leaked sentence — *"I need to gather comprehensive evidence
+before writing this section."* — shipped to two paying founders because the
+alternation listed `I'll|I will|Let me` and nothing else; the sanitiser now
+has tests, which it previously did not have at all.
+
+### Still open, found by the same re-run
+
+Ranked by what they cost the founder who hits them. **None of these are
+fixed** — they are recorded here so the next session does not re-discover
+them.
+
+1. **Report narrative fabricates where it is not reading the headline block.**
+   Parry's section 2 inverted the measured platform split (reported Reddit
+   −0.35 / Twitter −0.19; the artifact says twitter_x −0.4653 with 80.56%
+   oppose, reddit −0.091 with 41.03%) and built its whole thesis on the
+   inversion, with two quotes misattributed to the wrong platform and round.
+   Ledgerline's report claimed "~6 buyers engaged on both platforms" — one
+   platform per agent, so structurally impossible — and inverted its
+   claim-credibility table the same way. Section 1 numbers, read straight from
+   the headline block, were correct in both. **The pattern: exact where it
+   reads a field, invented where the narrative needs a number.**
+2. **GTM prose invents statistics and product facts.** "Customers are seeing
+   10+ hours per month back" for a pre-launch product; "we built volume
+   pricing into the model" for a product with none; "the 500 hours it takes to
+   tune an in-house system" (no "500" anywhere in 110,575 characters of
+   source); a `$3,600/year` figure in a sendable LinkedIn body that is 12× off
+   the founder's stated price, laundered in from one agent's arithmetic error.
+   The unsourced-number stripper exists (`inoculation.py`, `subject_brief.py`)
+   and is **not wired to GTM copy**. Same class as S-7, different module.
+3. **Placeholder counters are blind.** `_count_placeholders` matches only the
+   two literals `[TODO: your number]` / `[TODO: your example]`, so artifacts
+   report `placeholders_to_fill: 0` while carrying `[TODO: validated time
+   savings]`, `[TODO: benchmark hours saved]`, `[TODO: customer name]`.
+4. **Capital's `objection_bridge` matches on two generic English words.**
+   Ascend cleared the 0.40-weighted dimension on `{'approach', 'team'}`
+   against a 451-char generic thesis, producing a nonsense pairing in the
+   founder-facing explanation. S-3 closed the `sector`+`stage` door; this is
+   the same padding through the highest-weighted one. `MIN_SHARED_TOKENS = 2`
+   is too low without a stopword filter.
+5. **Objection clustering under-merges badly.** 14 of Ledgerline's 43
+   canonical objections are restatements of "too expensive" (combined
+   load-bearing 20.31 vs a top-ranked single row of 12.82); 8 of Parry's 42
+   begin "Pattern matching…". The canonicaliser's own rule — *answering one
+   would answer the other* — is failed by its own output, and the ranking a
+   founder reads understates what actually dominated the room.
+6. **Every persona is named Chen, Marcus or Sarah.** All 25 Parry handles,
+   15 of 25 Chartwell surnames, with numbered collisions (`mchen_appsec2`).
+   It is the most visible thing in the product.
+7. **21 of 36 Twitter/X posts truncate mid-word at exactly 280 characters**
+   and flow verbatim into every downstream artifact.
+8. **Style guide token extraction is half-resolved.** Radii and shadows print
+   as `var(--r-sm)` / `var(--shadow-subtle)`; `_first_family` resolves `var()`
+   for typefaces and `_tail()` does not. The colour ordering claim ("ordered
+   by how much of the page each carries") is false on a tokenised page — it
+   counts raw hex literals, so a brand colour referenced 14× via `var()` ranks
+   6th with "2 uses".
+9. **Clearance headers contradict their own bodies.** "Checks run: Trademark
+   search, Patent prior art" above a trademark section reading "Status: NOT
+   SEARCHED", and a GREEN verdict with `closest_art: []` on a search that
+   found 11 hits. Parry's `whitespace_signals` quote only zero-result queries,
+   which is a coverage failure being reported as opportunity.
+10. **`cybersecurity` is not a category** in `verticals.py`, and the refusal
+    to classify is silent — nothing logs, returns or persists why. Parry
+    scored devtools 5 / b2b_saas 4 and fell to `general` correctly, but the
+    founder is never told that happened.
+11. **Interviews are entirely unmetered** (the batch cap bounds one request;
+    nothing bounds requests), and `GET /billing/agent-pricing` has no auth
+    dependency.
+12. **No route promotes anyone to `admin`**, so the destructive gate currently
+    means "owner only" in every organisation. A product decision surfaced by
+    the role-gate work, not a bug in it.
+13. **Harness, not product:** three sample products share one org wallet, so
+    concurrent runs starve each other (Parry lost its revision and shortlist
+    to 402s). The harness also grades `report_fetch` on HTTP status alone, so
+    a **failed** report returning 200 passes unconditionally — which is why
+    S-8 went unreported for a day.
+
 ### S-1 · One malformed response destroys a paid artifact — **fixed**
 
 Chartwell's outbound sequence died on truncated model JSON. Two causes, both

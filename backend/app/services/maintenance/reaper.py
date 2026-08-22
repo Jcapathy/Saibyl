@@ -69,12 +69,15 @@ class StuckRule:
     message: str
     # Refund only where the state itself proves no model was called.
     refund_states: tuple[str, ...] = ()
-    # Whether the table has an `error_message` column to write the sentence
-    # into. Verified against information_schema rather than assumed: `reports`
-    # is the one table without it, and writing to it there made the whole
-    # update fail — silently, on every sweep, while the tables beside it were
-    # cleaned correctly.
-    writes_message: bool = True
+
+    # There was a `writes_message` flag here, because `reports` had no
+    # `error_message` column and naming one that does not exist makes PostgREST
+    # reject the entire update — silently, on every sweep. `reports` gained the
+    # column on 2026-08-22, so every rule writes its sentence and the flag was
+    # dead. It is not coming back: a hand-maintained boolean is the wrong guard
+    # for a schema fact. The right one is already in `sweep_once`, which counts
+    # and logs failed updates at error level, so the next missing column is
+    # loud on the first sweep instead of invisible forever.
 
 
 STUCK: tuple[StuckRule, ...] = (
@@ -111,13 +114,12 @@ STUCK: tuple[StuckRule, ...] = (
     ),
     StuckRule(
         "reports", ("queued", "generating"), 40,
-        # Recorded but not written: `reports` has no `error_message` column,
-        # so a founder sees the status change and no sentence. That is a real
-        # gap — the row should say why — and it needs a migration rather than
-        # a workaround here.
+        # The gap this comment used to describe is closed: `reports` gained an
+        # `error_message` column on 2026-08-22, so the sentence is written
+        # rather than merely recorded here. It mattered — two of three reports
+        # that day failed, and a founder saw the word "failed" and nothing else.
         "This write-up stopped before it finished. Your run and its findings "
         "are safe — generate it again from the run.",
-        writes_message=False,
     ),
     StuckRule(
         "answer_packs", ("queued", "building"), 30,
@@ -188,9 +190,10 @@ async def sweep_once(now: datetime | None = None) -> dict[str, int]:
             org_id = row.get("organization_id")
             charged = int(row.get("credits_charged") or 0)
 
-            payload: dict[str, object] = {"status": "failed"}
-            if rule.writes_message:
-                payload["error_message"] = rule.message
+            payload: dict[str, object] = {
+                "status": "failed",
+                "error_message": rule.message,
+            }
 
             try:
                 admin.table(rule.table).update(payload).eq(

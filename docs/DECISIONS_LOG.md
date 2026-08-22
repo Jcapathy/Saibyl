@@ -8,6 +8,79 @@ choices.
 
 ---
 
+## 2026-08-22 — An honest page outranks a higher-scoring one
+
+A live fintech revision delivered a page claiming **SOC 2 Type II, ISO 27001,
+PCI DSS Level 1, authorisation by the Central Bank of Ireland, AES-256, TLS
+1.2 and a seven-line fee table** — none of it anywhere in the captured source
+page. It also claimed to be "a licensed money transmitter in all US states
+that require one".
+
+**The instruction was already there and lost.** `revise._FACT_RULES` forbids
+invention in absolute terms, and `verticals.brief_section` closes with "A page
+that claims a certification it does not hold is worse than one that omits it".
+Both rode in the same prompt that produced the page. The same prompt also
+hands the model a category checklist — *"Who holds the funds and under what
+licence"*, *"SOC 2 with its date"* — and satisfying a checklist from priors is
+the path of least resistance when the material is silent. Adding a third
+sentence would not have helped.
+
+**The gauntlet cannot see this and never could.** The six critics judge a
+screenshot of the render; they never receive the founder's original page. So
+invention is structurally invisible to them, and on this run they scored the
+fabricating page *up* — 78 → 80 overall, credibility unmoved at 82.
+
+**Decided:**
+
+1. **Verification, not instruction.** `website/claims.py` is a pure function
+   with no model call: claim-shaped statements present in the render and
+   absent from the source. The same extract/verify split as
+   `capital.discovery.verify_firms`. "Every claim must be evidenced" is now an
+   assertion in a test rather than a hope in a prompt.
+2. **One retry, quoting the model to itself**, naming each invented sentence
+   and the placeholder that belongs there. Cost stays at two calls per round
+   because it shares the existing unparseable-answer retry.
+3. **A page that forges a certification loses the best-round tie-break to one
+   that does not, whatever it scored**, and clearing the target does not stop
+   the loop while a badge is forged. Ranking on score alone means knowingly
+   shipping the forgery whenever it lands two points higher, and "it scored
+   better" is not an answer a founder can give a regulator. Only
+   certifications are disqualifying — a figure or a customer count is reported
+   but does not override the score, being noisier to detect and cheaper to be
+   wrong about.
+4. **What survives reaches the founder**, on the revision row, in the UI
+   directly under the score it contradicts, and in the `STYLE_GUIDE.md` inside
+   the downloadable bundle — the artifact that actually gets published.
+
+**The honest limit:** this catches *claim-shaped* fabrication — badges,
+prices, counts. It does not catch an invented sentence with no checkable
+token in it. The same untested-prose gap exists in GTM copy and in report
+narrative; see PRELAUNCH_BUGS.md.
+
+## 2026-08-22 — A report delivers what was paid for, or says why
+
+Two of three reports generated on 2026-08-22 failed, and all three the day
+before. Every one recorded `error_message: None`, because `reports` was the
+only artifact table without that column. A founder saw the word "failed" and
+was told nothing.
+
+Worse, the content existed. Both failures had **every section written and
+`complete`** — 31,021 characters in one case — with `markdown_content` never
+assembled. `GET /reports/by-simulation/{id}` returned 200 throughout and
+`/progress` reported 100%, on a dead report.
+
+**The mechanism:** the conclusion and executive-summary calls run *after* every
+paid section is written, and `llm_complete` has no timeout of its own. One
+call that never returns stranded the entire deliverable.
+
+**Decided:** the sections are the deliverable and the summaries are not
+allowed to take them down. Both closing calls are bounded (300s) and return
+`None` rather than raising; the report assembles from whatever came back and
+names the missing part at the top of the document. A gap the document declares
+reads as what it is; a gap the founder discovers reads as a defect. `reports`
+gained `error_message`, and the reaper's `writes_message=False` workaround —
+which existed solely for that missing column — is deleted.
+
 ## 2026-08-22 — The free grant buys one service, not one run (1,500 → 2,000)
 
 Founder's decision, and it revises the 2026-08-17 entry below, which called

@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from app.core.config import settings
 from app.core.database import get_supabase_admin
 from app.core.llm_client import llm_complete, llm_structured
+from app.core.messages import founder_safe
 from app.services.billing.agent_pricing import report_section_count
 from app.services.engine.founder_stages import stage_spec
 from app.services.intelligence.analysis_builder import get_analysis
@@ -42,6 +43,26 @@ _PREAMBLE_VERBS = (
     r"|collect|retrieve|check|review|query|explore|write|assess|evaluate"
     r"|compile|synthesize|research|identify|determine|provide"
     r"|systematically"
+    # Added 2026-08-22. The executive summary is the one section whose own
+    # prompt invites the model to announce "I'll summarise…" before doing it,
+    # and it was the only obvious preamble verb the list did not carry.
+    r"|summarize|summarise|outline|draft|structure|focus|cover"
+)
+
+#: How the model announces itself before doing the work. Every one of these is
+#: only ever stripped in front of a `_PREAMBLE_VERBS` verb, which is what keeps
+#: the rule off real prose — a report writes "the founder should", never "I
+#: need to gather".
+#:
+#: "I need to" was missing until 2026-08-22, and it cost two paying founders
+#: the first sentence of a paid section: *"I need to gather comprehensive
+#: evidence before writing this section. ## Reception and Belief…"* went out
+#: exactly like that, in two separate reports, because the alternation listed
+#: `I'll|I will|Let me` and nothing else. One missing opener is all it takes,
+#: so the list is now deliberately generous — the guard is the verb, not this.
+_PREAMBLE_OPENERS = (
+    r"I'll|I will|I need to|I'll need to|I should|I must|I want to"
+    r"|I'm going to|I am going to|Let me|Let's|First,? I(?:'ll)?"
 )
 
 
@@ -66,16 +87,18 @@ def clean_report_output(text: str) -> str:
         text,
         flags=re.DOTALL | re.IGNORECASE,
     )
-    # 1b. Broader preamble-through-ANSWER (covers "I will", "Let me", etc.)
+    # 1b. Broader preamble-through-ANSWER (covers "I will", "I need to", etc.)
     text = re.sub(
-        r"(?:I'll|I will|Let me)\s+(?:\w+\s+)*?(?:" + _PREAMBLE_VERBS + r").*?ANSWER:\s*",
+        r"(?:" + _PREAMBLE_OPENERS + r")\s+(?:\w+\s+)*?(?:"
+        + _PREAMBLE_VERBS + r").*?ANSWER:\s*",
         "",
         text,
         flags=re.DOTALL | re.IGNORECASE,
     )
     # 1c. Preamble sentences NOT followed by ANSWER: (stop at sentence period)
     text = re.sub(
-        r"(?:I'll|I will|Let me)\s+(?:\w+\s+)*?(?:" + _PREAMBLE_VERBS + r")\b[^.]*\.\s*",
+        r"(?:" + _PREAMBLE_OPENERS + r")\s+(?:\w+\s+)*?(?:"
+        + _PREAMBLE_VERBS + r")\b[^.]*\.\s*",
         "",
         text,
         flags=re.IGNORECASE,
@@ -970,6 +993,53 @@ def _extract_arg(tool_call: str) -> str:
     return tool_call.split(None, 1)[1] if " " in tool_call else ""
 
 
+#: How long either closing call may take before the report gives up on it.
+#:
+#: `llm_complete` has no timeout of its own, and these two calls sit *after*
+#: every section has been written and paid for. On 2026-08-22 two of three
+#: reports died here: all sections `complete`, tens of thousands of characters
+#: in `report_sections`, and `markdown_content` never written — the founder's
+#: whole deliverable stranded behind one call that never returned. Generous
+#: because these prompts are long; finite because the alternative is what
+#: happened.
+_CLOSING_CALL_TIMEOUT_S = 300
+
+_REPORT_FAILED_MESSAGE = (
+    "This write-up stopped before it finished. Your run and its findings are "
+    "safe — generate it again from the run."
+)
+
+_MISSING_PART_NOTE = (
+    "> **{what} could not be produced.** Everything else in this report is "
+    "complete and measured as usual. Generating the report again will retry "
+    "the missing part."
+)
+
+
+async def _closing_call(coro, *, what: str, report_id: str) -> str | None:
+    """One of the two closing model calls, or None if it did not come back.
+
+    Returning None rather than raising is the whole point. These calls run
+    after the sections the founder paid for are already written, so letting one
+    of them take the report down converts a missing summary into a missing
+    report — which is exactly the failure this replaces.
+    """
+    try:
+        raw = await asyncio.wait_for(coro, timeout=_CLOSING_CALL_TIMEOUT_S)
+    except Exception as exc:  # noqa: BLE001 — including TimeoutError
+        # Not `logger.warning`: this is a paid deliverable arriving incomplete,
+        # and it went unnoticed for a day because nothing said so at error
+        # level.
+        logger.error(
+            "report_closing_call_failed",
+            report_id=report_id,
+            what=what,
+            error=f"{type(exc).__name__}: {exc}",
+        )
+        return None
+    return clean_report_output(raw)
+
+
 async def generate_report(
     simulation_id: UUID,
     config: ReACTConfig | None = None,
@@ -1110,69 +1180,114 @@ async def generate_report(
             "status": "pending",
         }).execute()
 
-        conclusion_raw = await llm_complete(
-            messages=[
-                {"role": "system", "content": REPORT_SYSTEM_PROMPT},
-                {"role": "user", "content": _prompt(
-                CONCLUSION_PROMPT,
-                prediction_goal=sim["prediction_goal"],
-                platforms=platforms,
-                agent_count=agent_count,
-                rounds=rounds,
-                event_count=event_count,
-                sections_text=sections_text[:20000],
-                **polarization_fields,
-            )}],
+        #: Parts that did not come back, named for the founder at the top of
+        #: the finished document. Empty is the ordinary case.
+        missing: list[str] = []
+
+        conclusion_content = await _closing_call(
+            llm_complete(
+                messages=[
+                    {"role": "system", "content": REPORT_SYSTEM_PROMPT},
+                    {"role": "user", "content": _prompt(
+                    CONCLUSION_PROMPT,
+                    prediction_goal=sim["prediction_goal"],
+                    platforms=platforms,
+                    agent_count=agent_count,
+                    rounds=rounds,
+                    event_count=event_count,
+                    sections_text=sections_text[:20000],
+                    **polarization_fields,
+                )}],
+            ),
+            what=conclusion_title,
+            report_id=report_id,
         )
-        conclusion_content = clean_report_output(conclusion_raw)
 
-        admin.table("report_sections").update({
-            "content": conclusion_content,
-            "status": "complete",
-        }).eq("report_id", report_id).eq("section_index", conclusion_idx).execute()
+        if conclusion_content:
+            admin.table("report_sections").update({
+                "content": conclusion_content,
+                "status": "complete",
+            }).eq("report_id", report_id).eq("section_index", conclusion_idx).execute()
 
-        _publish_progress(r, report_id, {
-            "section_index": conclusion_idx, "status": "complete",
-            "title": conclusion_title,
-        })
+            _publish_progress(r, report_id, {
+                "section_index": conclusion_idx, "status": "complete",
+                "title": conclusion_title,
+            })
 
-        # Append conclusion to sections text so exec summary can reference it
-        sections_text += f"\n\n---\n\n## {conclusion_title}\n\n{conclusion_content}"
+            # Append conclusion to sections text so exec summary can reference it
+            sections_text += f"\n\n---\n\n## {conclusion_title}\n\n{conclusion_content}"
 
-        # Update section_count to include conclusion
-        admin.table("reports").update({
-            "section_count": conclusion_idx + 1,
-        }).eq("id", report_id).execute()
+            # Update section_count to include conclusion
+            admin.table("reports").update({
+                "section_count": conclusion_idx + 1,
+            }).eq("id", report_id).execute()
+        else:
+            missing.append(conclusion_title)
+            # Close the row rather than leaving it `pending` for a reaper to
+            # find: progress is computed from section statuses, and a pending
+            # row here is what let a dead report report itself as 100%.
+            admin.table("report_sections").update({
+                "status": "failed",
+            }).eq("report_id", report_id).eq("section_index", conclusion_idx).execute()
+            _publish_progress(r, report_id, {
+                "section_index": conclusion_idx, "status": "failed",
+                "title": conclusion_title,
+            })
 
         # Phase 4: Executive Summary (generated last — sees all sections + conclusion)
-        exec_summary_raw = await llm_complete(
-            messages=[
-                {"role": "system", "content": REPORT_SYSTEM_PROMPT},
-                {"role": "user", "content": _prompt(
-                EXECUTIVE_SUMMARY_PROMPT,
-                prediction_goal=sim["prediction_goal"],
-                platforms=platforms,
-                agent_count=agent_count,
-                rounds=rounds,
-                event_count=event_count,
-                sections_text=sections_text[:20000],
-                **polarization_fields,
-            )}],
+        exec_summary = await _closing_call(
+            llm_complete(
+                messages=[
+                    {"role": "system", "content": REPORT_SYSTEM_PROMPT},
+                    {"role": "user", "content": _prompt(
+                    EXECUTIVE_SUMMARY_PROMPT,
+                    prediction_goal=sim["prediction_goal"],
+                    platforms=platforms,
+                    agent_count=agent_count,
+                    rounds=rounds,
+                    event_count=event_count,
+                    sections_text=sections_text[:20000],
+                    **polarization_fields,
+                )}],
+            ),
+            what="Executive Summary",
+            report_id=report_id,
         )
-        exec_summary = clean_report_output(exec_summary_raw)
 
-        # Store exec summary as a section so the frontend can find it
-        admin.table("report_sections").insert({
-            "report_id": report_id,
-            "organization_id": org_id,
-            "section_index": -1,  # sorts before all ReACT sections
-            "title": "Executive Summary",
-            "content": exec_summary,
-            "status": "complete",
-        }).execute()
+        if exec_summary:
+            # Store exec summary as a section so the frontend can find it
+            admin.table("report_sections").insert({
+                "report_id": report_id,
+                "organization_id": org_id,
+                "section_index": -1,  # sorts before all ReACT sections
+                "title": "Executive Summary",
+                "content": exec_summary,
+                "status": "complete",
+            }).execute()
+        else:
+            missing.append("An executive summary")
 
-        full_markdown = f"# {sim['name']} — Intelligence Report\n\n## Executive Summary\n\n{exec_summary}\n\n{sections_text}"
-        full_markdown = clean_report_output(full_markdown)  # sanitise before DB write
+        # Assembly. Built from whatever came back rather than assumed whole:
+        # the sections below are the deliverable, and they were written and
+        # paid for long before either closing call ran. Losing them because a
+        # summary timed out is what this replaces.
+        if not sections_text.strip():
+            raise RuntimeError("no section content was produced")
+
+        parts = [f"# {sim['name']} — Intelligence Report", ""]
+        if exec_summary:
+            parts += ["## Executive Summary", "", exec_summary, ""]
+        if missing:
+            # Named plainly and at the top. A gap a founder discovers for
+            # themselves reads as a defect; a gap the document declares reads
+            # as what it is.
+            parts += [
+                _MISSING_PART_NOTE.format(what=" and ".join(missing)),
+                "",
+            ]
+        parts.append(sections_text)
+
+        full_markdown = clean_report_output("\n".join(parts))  # sanitise before DB write
 
         admin.table("reports").update({
             "status": "complete",
@@ -1180,12 +1295,21 @@ async def generate_report(
             "completed_at": datetime.now(UTC).isoformat(),
         }).eq("id", report_id).execute()
 
-        logger.info("report_generated", report_id=report_id, sections=len(outline.sections))
+        logger.info(
+            "report_generated",
+            report_id=report_id,
+            sections=len(outline.sections),
+            missing=missing,
+        )
         return admin.table("reports").select("*").eq("id", report_id).single().execute().data
 
     except Exception as e:
         admin.table("reports").update({
             "status": "failed",
+            # `reports` gained this column on 2026-08-22. Before it, a founder
+            # saw the word "failed" and was told nothing at all — on two of
+            # three reports generated that day.
+            "error_message": founder_safe(str(e), _REPORT_FAILED_MESSAGE),
         }).eq("id", report_id).execute()
         logger.error("report_generation_failed", report_id=report_id, error=str(e))
         raise

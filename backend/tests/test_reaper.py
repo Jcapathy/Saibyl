@@ -20,6 +20,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from app.core.messages import looks_like_a_traceback
 from app.services.maintenance import reaper
 
 NOW = datetime(2026, 8, 21, 18, 0, tzinfo=UTC)
@@ -263,13 +264,15 @@ async def test_a_refundable_row_missing_its_charge_refunds_nothing_rather_than_c
 
 
 @pytest.mark.asyncio
-async def test_a_table_without_an_error_message_column_is_still_closed(world):
-    """The second instance of the same defect, found the same way.
+async def test_a_reaped_report_now_says_why(world):
+    """`reports` was the one table with nowhere to put the sentence.
 
-    `reports` has no `error_message` column. Writing one made the update fail,
-    so three orphaned reports stayed at `generating` while the tables beside
-    them were cleaned correctly — and the per-row exception log was
-    indistinguishable from a table with nothing to do.
+    It had no `error_message` column, so the rule carried a `writes_message=
+    False` flag and a founder whose report died saw the word "failed" and
+    nothing else. That was not rare: two of three reports generated on
+    2026-08-22 failed, and all three the day before. The column was added the
+    same day and the flag deleted, so this is the assertion that the sentence
+    actually lands.
     """
     store, admin, _refunds = world
     store["reports"] = [_row("generating", 120)]
@@ -278,19 +281,25 @@ async def test_a_table_without_an_error_message_column_is_still_closed(world):
 
     assert closed.get("reports") == 1
     _table, _row_id, payload = admin.updates[0]
-    assert payload == {"status": "failed"}, (
-        "wrote error_message to a table that has no such column"
-    )
+    assert payload["status"] == "failed"
+    assert "generate it again from the run" in payload["error_message"]
 
 
-def test_only_reports_is_declared_as_lacking_an_error_message():
-    """Verified against information_schema on 2026-08-21: every other table
-    the reaper touches carries both `error_message` and `credits_charged`."""
-    without = {rule.table for rule in reaper.STUCK if not rule.writes_message}
+def test_every_rule_tells_the_founder_something_they_can_act_on():
+    """No rule may close a row silently.
 
-    assert without == {"reports"}, (
-        f"the set of tables without an error_message column changed: {without}"
-    )
+    The point of the reaper is that a dead row stops lying about being alive —
+    but a row that says "failed" and nothing else has only traded one useless
+    state for another. Each sentence has to name what survived and what to do.
+    """
+    for rule in reaper.STUCK:
+        assert rule.message.strip(), f"{rule.table} closes rows with no reason"
+        assert rule.message.strip().endswith("."), (
+            f"{rule.table}'s reason is not a sentence"
+        )
+        assert not looks_like_a_traceback(rule.message), (
+            f"{rule.table} shows a founder machine output"
+        )
 
 
 @pytest.mark.asyncio
