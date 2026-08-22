@@ -74,6 +74,7 @@ from pydantic import BaseModel, Field
 
 from app.core.database import get_supabase_admin
 from app.core.llm_client import llm_structured
+from app.services.gtm.facts import count_placeholders, scrub_unsourced
 from app.services.gtm.schema import contains_personal_contact_detail
 
 log = structlog.get_logger()
@@ -549,12 +550,16 @@ def _user_prompt(
 
 
 def _placeholder_count(steps: list[OutboundStep]) -> int:
-    """How many blanks the founder still has to fill before any of this sends."""
-    total = 0
-    for step in steps:
-        text = f"{step.subject}\n{step.body}"
-        total += text.count(TODO_NUMBER) + text.count(TODO_EXAMPLE)
-    return total
+    """How many blanks the founder still has to fill before any of this sends.
+
+    Counts the `[TODO: …]` *shape*, not the two spellings this module names.
+    All four live sequences reported `placeholders_to_fill: 0` while carrying
+    `[TODO: benchmark hours saved]`, `[TODO: customer name]` and `[TODO: entity
+    count]` — on copy whose whole purpose is to be sent to a stranger.
+    """
+    return sum(
+        count_placeholders(f"{step.subject}\n{step.body}") for step in steps
+    )
 
 
 def _assemble(
@@ -680,16 +685,32 @@ async def build_outbound_sequences(simulation_id: str, org_id: str) -> OutboundS
 
     sequences: list[ArchetypeSequence] = []
     for archetype in covered:
+        user = _user_prompt(context, archetype, pains, winner)
         generated = await llm_structured(
             [
                 {"role": "system", "content": SYSTEM},
-                {
-                    "role": "user",
-                    "content": _user_prompt(context, archetype, pains, winner),
-                },
+                {"role": "user", "content": user},
             ],
             _Generated,
         )
+
+        # This is the artifact that gets *sent*, so it is the one where an
+        # invented figure stops being a quality problem. Live sequences carried
+        # "customers are seeing 10+ hours per month back" for a product with no
+        # customers, "we built volume pricing into the model" for one with no
+        # volume pricing, and a $3,600/year price 12x off the founder's own —
+        # all under notes labelling them "(factual)". A figure not in `user`
+        # becomes the placeholder, which cannot be sent by accident.
+        generated, invented = scrub_unsourced(generated, user)
+        if invented:
+            log.warning(
+                "outbound_scrubbed_invented_figures",
+                simulation_id=simulation_id,
+                archetype=str(archetype.get("id")),
+                count=len(invented),
+                figures=invented[:10],
+            )
+
         archetype_id = str(archetype.get("id"))
         steps = _assemble(generated, pains, archetype_id)
         tooling = archetype.get("incumbent_tooling")

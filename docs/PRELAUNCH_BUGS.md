@@ -482,7 +482,16 @@ Ranked by what they cost the founder who hits them. **None of these are
 fixed** — they are recorded here so the next session does not re-discover
 them.
 
-1. **Report narrative fabricates where it is not reading the headline block.**
+**Closed 2026-08-22 (items 1–3 below):** the report narrative now verifies
+every decimal, percentage and "N of M" against the ReACT loop's own evidence
+(`intelligence/report_facts.py`), GTM copy substitutes `[TODO: your number]`
+for any money / percentage / time figure absent from its material
+(`gtm/facts.py`), and the placeholder counters count the `[TODO: …]` shape
+rather than two literals. The answer pack gained the counter it never had.
+Left in place below, struck through, because the *evidence* for each is what
+makes the fix worth keeping.
+
+1. ~~**Report narrative fabricates where it is not reading the headline block.**~~
    Parry's section 2 inverted the measured platform split (reported Reddit
    −0.35 / Twitter −0.19; the artifact says twitter_x −0.4653 with 80.56%
    oppose, reddit −0.091 with 41.03%) and built its whole thesis on the

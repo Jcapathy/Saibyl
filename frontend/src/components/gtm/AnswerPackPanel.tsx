@@ -51,6 +51,12 @@ interface AnswerPack {
   battlecards: Battlecard[];
   notes: string[];
   built_from_objections: number;
+  /**
+   * Blanks left where the run measured nothing. The messaging doc and the
+   * outbound sequences both surfaced this and the pack did not, so a pack
+   * shipped with eleven `[TODO: …]` in it and no sign that it had.
+   */
+  placeholders_to_fill?: number;
   error_message: string | null;
 }
 
@@ -197,7 +203,28 @@ export default function AnswerPackPanel({ simulationId }: { simulationId: string
             Built from{' '}
             <span className="font-mono tabular-nums">{pack.built_from_objections}</span>{' '}
             measured objections, hardest first.
+            {(pack.placeholders_to_fill ?? 0) > 0 && (
+              <>
+                {' · '}
+                <span className="text-saibyl-warning">
+                  <span className="font-mono tabular-nums">
+                    {pack.placeholders_to_fill}
+                  </span>{' '}
+                  {pack.placeholders_to_fill === 1 ? 'fact' : 'facts'} still to
+                  fill in
+                </span>
+              </>
+            )}
           </p>
+
+          {(pack.placeholders_to_fill ?? 0) > 0 && (
+            <p className="text-[11.5px] text-saibyl-muted leading-relaxed">
+              The amber markers below are numbers this run did not measure —
+              including any the draft supplied on its own. They are left visible
+              on purpose: you would say these out loud to the one person who can
+              check them.
+            </p>
+          )}
 
           <ol className="space-y-3">
             {pack.rows.map((row) => (

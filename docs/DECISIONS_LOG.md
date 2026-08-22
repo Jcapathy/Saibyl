@@ -57,6 +57,49 @@ prices, counts. It does not catch an invented sentence with no checkable
 token in it. The same untested-prose gap exists in GTM copy and in report
 narrative; see PRELAUNCH_BUGS.md.
 
+## 2026-08-22 — An invented number becomes the blank it should have been
+
+The third instance of one defect, and the last of the three the audits found.
+A report section stated figures its own evidence never held — inverting a
+measured platform split under a bold **Evidence:** heading, and reporting 31
+of 25 people active. GTM copy did the same in prose meant to be *sent*:
+"customers are seeing 10+ hours per month back" for a pre-launch product,
+"we built volume pricing into the model" for one with none, "the 500 hours it
+takes to tune an in-house system" with no "500" anywhere in 110,575 characters
+of source, and a $3,600/year price 12× off the founder's own.
+
+All three modules already forbade exactly this, in their own system prompts,
+in plain words. That is now three for three, which stops being a coincidence
+and starts being a design rule: **a prompt is where you say what you want, not
+where you enforce it.**
+
+**Decided — the same shape as `website/claims.py`, twice more:**
+
+- **`intelligence/report_facts.py`** checks a section against the ReACT
+  loop's own `evidence` list, which is exactly what the model was shown. One
+  retry quoting the section's sentences back; the correction is kept only if
+  strictly fewer figures are unsourced, since a section is 1,000 words of
+  otherwise-good work to gamble on one retry.
+- **`gtm/facts.py`** checks generated copy against the material string the
+  builder assembled, and **substitutes `[TODO: your number]`** rather than
+  dropping the sentence. That is precisely what the prompt asked for when the
+  material is silent, it keeps sendable copy readable, and it is *countable* —
+  so the fabrication surfaces in `placeholders_to_fill` rather than in a log.
+
+**Two judgements worth recording.** Only claim-shaped figures are checked —
+money, percentages, numbers carrying a unit of time — because these artifacts
+are read aloud and replacing "three things to say next" would do more damage
+than the invention it prevents. And a *meeting length* is exempt by context
+("Can we book 20 minutes?"), since scrubbing the ask produces a nonsense blank
+in the one line that has to work, while "a 45-minute manual hunt" is still
+caught. Both limits were found by tests, one of them by an existing suite
+catching my own false positive.
+
+**Also closed:** `placeholders_to_fill` counted two string literals, so
+artifacts reported `0` while carrying `[TODO: validated time savings]` and
+three others. It counts the shape now. The answer pack, which had no counter
+at all, has one.
+
 ## 2026-08-22 — A report delivers what was paid for, or says why
 
 Two of three reports generated on 2026-08-22 failed, and all three the day

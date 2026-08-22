@@ -56,6 +56,12 @@ from pydantic import BaseModel, Field
 
 from app.core.database import get_supabase_admin
 from app.core.llm_client import llm_structured
+from app.services.gtm.facts import (
+    MISSING_EXAMPLE,
+    MISSING_NUMBER,
+    count_placeholders,
+    scrub_unsourced,
+)
 
 log = structlog.get_logger()
 
@@ -83,8 +89,10 @@ ALWAYS_REAL_ALTERNATIVES = ("Doing nothing", "Building it in-house")
 # What the model writes where a fact would go and the input does not have one.
 # Two markers rather than one because a missing metric and a missing customer
 # story are filled by different people on different days.
-MISSING_NUMBER = "[TODO: your number]"
-MISSING_EXAMPLE = "[TODO: your example]"
+# Both now live in `gtm.facts`, so the prompts that ask for them, the
+# substitution that writes them and the counter that reports them cannot drift
+# apart. Re-exported here because the prompt text below interpolates them.
+__all__ = ["MISSING_EXAMPLE", "MISSING_NUMBER", "build_messaging_doc"]
 
 
 class ProblemDimension(BaseModel):
@@ -490,7 +498,15 @@ def _three_way_verdict(
 
 
 def _count_placeholders(payload: str) -> int:
-    return payload.count(MISSING_NUMBER) + payload.count(MISSING_EXAMPLE)
+    """Every blank, not just the two spellings this module names.
+
+    Counting only `MISSING_NUMBER` and `MISSING_EXAMPLE` meant a document
+    reported `placeholders_to_fill: 0` while its elevator pitch — the most
+    copied line in it — read "down to [TODO: validated time savings]". A
+    counter that says zero is worse than no counter: a founder reads it as a
+    promise the copy is ready to send.
+    """
+    return count_placeholders(payload)
 
 
 def _variant_lines(variants: list[dict[str, Any]]) -> str:
@@ -598,6 +614,21 @@ async def build_messaging_doc(simulation_id: str, org_id: str) -> MessagingDoc:
         [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}],
         _Generated,
     )
+
+    # The same discipline the competitor check below applies to names, applied
+    # to figures. This document is the best-behaved of the three artifacts —
+    # its own notes police claims the answer pack made — and it still converted
+    # a buyer's all-entities "15-20 hours a month" into "per month per entity",
+    # tripling the stated pain. A figure not in `user` becomes the placeholder
+    # the prompt asked for.
+    generated, invented = scrub_unsourced(generated, user)
+    if invented:
+        log.warning(
+            "messaging_doc_scrubbed_invented_figures",
+            simulation_id=simulation_id,
+            count=len(invented),
+            figures=invented[:10],
+        )
 
     notes = list(generated.notes)
 

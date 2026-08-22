@@ -51,6 +51,7 @@ from pydantic import BaseModel, Field
 
 from app.core.database import get_supabase_admin
 from app.core.llm_client import llm_structured
+from app.services.gtm.facts import count_placeholders, scrub_unsourced
 
 log = structlog.get_logger()
 
@@ -103,6 +104,11 @@ class AnswerPack(BaseModel):
     # Named so a founder knows what this was built from and when.
     built_from_objections: int = 0
     notes: list[str] = Field(default_factory=list)
+    #: Blanks the founder still has to fill before using this on a call. The
+    #: messaging doc and the outbound sequences both surfaced one and this did
+    #: not, so a pack shipped with eleven `[TODO: …]` in it and nothing saying
+    #: so.
+    placeholders_to_fill: int = 0
 
 
 class _Generated(BaseModel):
@@ -253,6 +259,21 @@ async def build_answer_pack(simulation_id: str, org_id: str) -> AnswerPack:
         _Generated,
     )
 
+    # Every figure in the script must come from `user` — the founder's words
+    # and the buyers' own. SYSTEM says so above and was overridden anyway, in
+    # copy meant to be read aloud on a call: a $150k loaded salary, a $700
+    # labour cost and a 17-hour payback, none of them in the input, for a
+    # product that has never been sold. Invented figures become the placeholder
+    # the prompt asked for, which is honest and countable.
+    generated, invented = scrub_unsourced(generated, user)
+    if invented:
+        log.warning(
+            "answer_pack_scrubbed_invented_figures",
+            simulation_id=simulation_id,
+            count=len(invented),
+            figures=invented[:10],
+        )
+
     # The measured numbers are attached here, from the database rows — never
     # taken from the model's echo of them.
     by_key = {str(o.get("objection_key")): o for o in objections}
@@ -285,15 +306,21 @@ async def build_answer_pack(simulation_id: str, org_id: str) -> AnswerPack:
     order = {str(o.get("objection_key")): i for i, o in enumerate(objections)}
     rows.sort(key=lambda r: order.get(r.objection_key, 999))
 
-    log.info(
-        "answer_pack_built",
-        simulation_id=simulation_id,
-        rows=len(rows),
-        battlecards=len(generated.battlecards),
-    )
-    return AnswerPack(
+    pack = AnswerPack(
         rows=rows,
         battlecards=generated.battlecards,
         built_from_objections=len(objections),
         notes=generated.notes,
     )
+    # Counted on the finished pack, so it includes both the blanks the model
+    # wrote and the ones substituted for an invented figure above.
+    pack.placeholders_to_fill = count_placeholders(pack.model_dump_json())
+
+    log.info(
+        "answer_pack_built",
+        simulation_id=simulation_id,
+        rows=len(rows),
+        battlecards=len(generated.battlecards),
+        placeholders=pack.placeholders_to_fill,
+    )
+    return pack
