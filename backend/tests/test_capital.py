@@ -476,10 +476,29 @@ def test_a_firm_with_a_bridge_outranks_one_without():
     """The objection bridge is weighted highest because it is the only
     dimension a list vendor cannot compute."""
     bridged = _firm("Verrill Family Office")
+    # The comparison firm has to match on something *substantive but weaker*
+    # than a bridge, or this stops testing ranking and starts testing
+    # admission. Its thesis overlaps the founder's material — compliance,
+    # regulated lenders — and it has no measured objection bridge, which is
+    # exactly the second-place case.
+    #
+    # It used to carry a thesis about "software companies with strong founding
+    # teams", which overlaps nothing, and reached the list on `sector` alone.
+    # That route closed when sector left SUBSTANTIVE_DIMENSIONS, and the test
+    # was propping up the loophole rather than the ranking.
     generic = _firm(
         "Generic AI Capital",
         domain="generic.example",
-        thesis="We invest in software companies with strong founding teams.",
+        # Overlaps the founder's *material* (credit unions, software) without
+        # speaking to the measured *objection*, which is about regulated
+        # markets adopting slowly. Getting that separation right is the whole
+        # point: an earlier draft mentioned regulated lenders and picked up a
+        # bridge of its own, which made both firms bridged and the ranking
+        # meaningless.
+        thesis=(
+            "We invest in software sold to credit unions, usually after a "
+            "first institutional round."
+        ),
         inbound=InboundPath(
             kind="submission_form",
             value="https://generic.example/apply",
@@ -891,10 +910,54 @@ def test_a_qualifier_still_counts_once_something_substantive_matches():
     ), "the fixture no longer matches on anything substantive"
 
 
-def test_the_substantive_set_is_the_three_that_carry_an_argument():
-    """Stage, cheque size and geography rule a founder out when they conflict;
-    satisfying one says only that nothing disqualifies you."""
-    assert set(m.SUBSTANTIVE_DIMENSIONS) == {"objection_bridge", "thesis", "sector"}
-    for qualifier in ("stage", "check_size", "geography"):
+def test_only_the_two_dimensions_that_need_the_firms_own_words_can_carry_a_match():
+    """Sector was in this set and has been removed — the first fix was half
+    right.
+
+    It stopped a firm matching on funding stage alone, and the very next real
+    shortlist matched a paediatric-health grant foundation to adult billing
+    software on `sector` + `stage`, with thesis and bridge both zero. The
+    reason is in this module's own weighting: sector is "table stakes:
+    necessary, and nearly free to satisfy". It matches coarse labels — a firm
+    publishing "healthcare IT" against a founder who picked "healthcare" from
+    a dropdown — so it echoes an input rather than finding anything.
+    """
+    assert set(m.SUBSTANTIVE_DIMENSIONS) == {"objection_bridge", "thesis"}
+    for qualifier in ("stage", "check_size", "geography", "sector"):
         assert qualifier not in m.SUBSTANTIVE_DIMENSIONS
         assert qualifier in m.MATCH_WEIGHTS, "a qualifier stopped being scored"
+
+
+def test_a_coarse_sector_label_is_not_a_reason_to_approach_a_firm():
+    """The production shortlist that forced the second fix: a paediatric child
+    health foundation returned as a match for adult outpatient billing
+    software, because both say "healthcare" and both say "seed"."""
+    paediatric = _firm(
+        "Hood Foundation",
+        domain="hood.example",
+        inbound=InboundPath(
+            kind="no_inbound", source_url="https://hood.example/approach"
+        ),
+        thesis="We fund paediatric child health research at academic centres.",
+        sectors=["healthcare"],
+        stages=["Seed"],
+        check_size_low=None,
+        check_size_high=None,
+        geography=[],
+    )
+    context = _context(
+        sector="healthcare",
+        stage="seed",
+        material="Prior authorization automation for outpatient clinics.",
+        check_size_needed=None,
+        geography=None,
+        objections=[],
+    )
+
+    shortlist = m.build_shortlist(context, [paediatric], now=NOW)
+
+    assert shortlist.matches == [], (
+        "a firm sharing only a dropdown sector and a funding stage was "
+        "recommended"
+    )
+    assert shortlist.considered == 1

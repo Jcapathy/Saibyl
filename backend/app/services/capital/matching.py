@@ -110,12 +110,31 @@ MATCH_WEIGHTS: dict[str, float] = {
     "geography": 0.05,
 }
 
-# The dimensions that can carry a recommendation by themselves. The three left
-# out — stage, check_size, geography — are qualifiers: they rule a founder out
+# The dimensions that can carry a recommendation by themselves.
+#
+# **Sector was here and has been removed**, because the first fix was only half
+# right. It stopped a firm matching on funding stage alone; the very next real
+# shortlist matched the same paediatric-health grant foundation to adult
+# billing software on `sector` + `stage`, with thesis and objection_bridge both
+# zero. That cleared the bar and should not have.
+#
+# The reason is in this module's own weighting a few lines above: sector is
+# "table stakes: necessary, and nearly free to satisfy". It is matched on
+# coarse labels — a firm publishing "healthcare IT" against a founder who
+# picked "healthcare" from a dropdown — so it is an echo of an input, not a
+# finding. Rendering it as *"The firm publishes this sector and it is the
+# founder's"* dresses a dropdown value as research.
+#
+# What remains are the two that require the firm's own published words to line
+# up with something real: the measured objection bridge, and a thesis overlap.
+# Checked against the shortlists already produced, this keeps every match that
+# had a genuine argument — Dolby (thesis + sector + stage), Ascend (bridge +
+# stage) — and drops only the one nobody could defend.
+#
+# Stage, check_size and geography remain qualifiers: they rule a founder out
 # when they conflict, but satisfying one says only that nothing disqualifies
-# you, which is not a reason to approach a firm. See the check at the end of
-# `_entry_for`, and the real shortlist that forced it.
-SUBSTANTIVE_DIMENSIONS: tuple[str, ...] = ("objection_bridge", "thesis", "sector")
+# you. Sector now sits with them.
+SUBSTANTIVE_DIMENSIONS: tuple[str, ...] = ("objection_bridge", "thesis")
 
 # What a firm has published about one dimension: it fits, it rules the
 # founder out, or it says nothing. A Literal rather than a bare str so a
