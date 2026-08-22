@@ -4,11 +4,39 @@ Standing rule (founder directive, 2026-08-16): every infrastructure action —
 migration applied, deploy shipped, env var added, service changed, key
 rotated — lands here, dated, with the ordering constraints that mattered.
 Newest at the top. Production project: Supabase `txmvwuekkiedgxwovorp`
-(Saibyl, us-west-2); Render services `saibyl-backend` / `saibyl-frontend`
-deploying from GitHub master via CI (`deploy.yml`, gated on the test job
-since 2026-08-16).
+(Saibyl, us-west-2); Render services `saibyl-backend` / `saibyl-frontend`.
+
+**How a deploy happens, so nobody re-derives it (corrected 2026-08-22).** Push
+to GitHub `master`. **Render's own GitHub integration watches the branch and
+deploys it** — that is the whole mechanism and it is what it is meant to be.
+Nothing here calls Render, holds a Render credential, or needs one.
+
+This header previously said deploys ran "from GitHub master via CI
+(`deploy.yml`, gated on the test job)". That is **wrong** and it cost a
+session: `deploy.yml` does carry a `deploy` job, but it posts to
+`secrets.RENDER_DEPLOY_HOOK_BACKEND` / `_FRONTEND`, which have never existed
+(`gh secret list` is empty). It therefore runs `curl -sS -X POST ""` and fails
+with exit 3 on **every** push, and has done so on every run in the workflow's
+history — while Render deployed the commit correctly anyway. The red X means
+nothing; the `test` job beside it is the real gate. Verify a deploy against
+the service, not the checkmark: `GET /health` returns the live commit.
 
 ---
+
+## 2026-08-22 — Deployed and verified against the service
+
+`b7adc57` pushed to `master`; Render's GitHub integration deployed it.
+Confirmed live rather than assumed:
+
+```
+GET https://saibyl-backend.onrender.com/health
+{"status":"ok","commit":"b7adc57","environment":"production",
+ "checks":{"database":"ok","redis":"ok","llm":"ok"}}
+```
+
+Frontend 200. The `Tests` workflow passed in 2m46s. The `Deploy to Render`
+workflow failed, as it always does — see the corrected header above; it is
+vestigial, not a signal.
 
 ## 2026-08-22 — Two columns the founder-facing surfaces needed
 
