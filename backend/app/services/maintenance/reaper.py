@@ -107,9 +107,21 @@ STUCK: tuple[StuckRule, ...] = (
         refund_states=("queued", "capturing"),
     ),
     StuckRule(
-        "page_revisions", ("queued", "running"), 45,
+        # `generating`, not `running`. The worker has always written
+        # `generating` (revision_tasks.py) and this rule has always watched
+        # `running`, a status nothing writes — so a wedged revision sat at
+        # `generating` forever: no failure sentence, **no refund of 5,000
+        # credits**, and a spinner the founder could not clear. The most
+        # expensive artifact in the product was the one the reaper could not
+        # see. `test_every_non_terminal_status_a_worker_writes_is_reapable`
+        # pins the rules against the workers so this cannot drift again.
+        "page_revisions", ("queued", "generating"), 45,
         "This revision stopped before it finished. Your original check is "
         "safe; start the revision again when you're ready.",
+        # Still `queued` only. `generating` means vision calls were made and
+        # paid for, and this list's rule is that a refund needs the state
+        # itself to prove no model ran. Reaping the row is the fix; refunding
+        # spent work would be a different decision.
         refund_states=("queued",),
     ),
     StuckRule(

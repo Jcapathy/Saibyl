@@ -285,6 +285,52 @@ async def test_a_reaped_report_now_says_why(world):
     assert "generate it again from the run" in payload["error_message"]
 
 
+def test_every_non_terminal_status_a_worker_writes_is_reapable():
+    """A rule that watches a status nothing writes protects nothing.
+
+    `page_revisions` shipped exactly that: the worker has always written
+    `generating`, the rule has always watched `running`, and nothing writes
+    `running`. A wedged revision therefore sat at `generating` forever — no
+    failure sentence, no refund of the 5,000 credits it cost, and a spinner the
+    founder could not clear. The most expensive artifact in the product was the
+    one the reaper could not see, and it read as covered because a rule with
+    its table name was sitting right there.
+
+    Read out of the worker sources rather than listed here, so a worker that
+    invents a new in-flight status fails this instead of going quiet.
+    """
+    import pathlib
+    import re
+
+    workers = pathlib.Path(reaper.__file__).parents[2] / "workers"
+    #: States a row may legitimately sit in forever. `ready` means the agents
+    #: are built and the run is waiting on the founder to start it; `stopped`
+    #: means they stopped it on purpose. Neither has a process that owes it an
+    #: ending, which is the only thing the reaper exists to supply.
+    resting = {
+        "complete", "completed", "failed", "cancelled", "canceled",
+        "ready", "stopped",
+    }
+    watched = {rule.table: set(rule.states) for rule in reaper.STUCK}
+
+    missing: list[str] = []
+    for source in workers.glob("*.py"):
+        text = source.read_text(encoding="utf-8", errors="replace")
+        for table, status in re.findall(
+            r'table\(\s*"(\w+)"\s*\)\s*\.update\(\s*\{\s*"status"\s*:\s*"(\w+)"',
+            text,
+        ):
+            if table not in watched or status in resting:
+                continue
+            if status not in watched[table]:
+                missing.append(f"{source.name}: {table}.status={status!r}")
+
+    assert not missing, (
+        "a worker parks rows in a status no reaper rule watches, so they can "
+        f"never be closed: {missing}"
+    )
+
+
 def test_every_rule_tells_the_founder_something_they_can_act_on():
     """No rule may close a row silently.
 

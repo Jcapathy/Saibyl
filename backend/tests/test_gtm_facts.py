@@ -222,6 +222,56 @@ def test_a_duration_the_material_states_with_that_unit_survives():
         assert pack.rows[0].respond == line
 
 
+def test_a_price_a_buyer_got_wrong_is_not_laundered_into_product_prose():
+    """The laundering path a live check found still open.
+
+    The material handed to the generator contains the buyers' own words, so a
+    number a buyer said counted as sourced. One buyer botched the arithmetic —
+    $1,200 per entity per month read as "$3,600/year" — and the messaging doc
+    restated it as the product's own per-entity figure, 12x off, in prose.
+    A price is a fact about the product, so the founder's words are its only
+    authority.
+    """
+    founder = "Ledgerline is $1,200 a month per entity on an annual contract."
+    material = founder + "\n their words: so it's a $3,600/year luxury, really."
+
+    pack, replaced = scrub_unsourced(
+        _Pack(rows=[_Row(respond="At $3,600/year per entity, the ROI is clear.")]),
+        material,
+        product_material=founder,
+    )
+
+    assert "$3,600" not in pack.rows[0].respond
+    assert replaced == ["$3,600"]
+
+
+def test_the_founders_own_price_still_survives_that_narrowing():
+    founder = "Ledgerline is $1,200 a month per entity on an annual contract."
+
+    pack, replaced = scrub_unsourced(
+        _Pack(rows=[_Row(respond="At $1,200 a month per entity, that is the trade.")]),
+        founder + "\n their words: too expensive.",
+        product_material=founder,
+    )
+
+    assert replaced == []
+    assert "$1,200" in pack.rows[0].respond
+
+
+def test_money_falls_back_to_the_whole_material_when_no_price_was_stated():
+    """Narrowing to founder material that names no price would blank every
+    money figure in the document — a worse trade than the rare laundered one.
+    """
+    pack, replaced = scrub_unsourced(
+        _Pack(rows=[_Row(respond="They quoted us $9,000 for the migration.")]),
+        "their words: they quoted us $9,000 for the migration.",
+        product_material="Ledgerline closes the books for multi-entity teams.",
+    )
+
+    assert replaced == []
+    assert "$9,000" in pack.rows[0].respond
+
+
 def test_a_lookback_window_in_a_request_is_not_a_claim():
     """"reply with the worst denial you've seen in the last 6 months" asks a
     question. Scrubbed, it asks for nothing."""

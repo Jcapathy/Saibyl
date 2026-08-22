@@ -52,6 +52,7 @@ reported only when its normalised form is absent from the source outright.
 from __future__ import annotations
 
 import re
+from decimal import Decimal, InvalidOperation
 
 from pydantic import BaseModel
 
@@ -223,6 +224,41 @@ def _figure_key(token: str) -> str:
     return key.rstrip(".")
 
 
+def _rounds_to(stated: str, sourced: set[str]) -> bool:
+    """Whether some source figure rounds to what the page wrote.
+
+    A page that reads `1.70269159%` off its own source and writes `1.70%` has
+    reported it, not invented it — but keyed on the string the two do not
+    match, and the founder was shown "1.70%" as a claim their page could not
+    support. That is the one failure mode this module must never have: an
+    accusation aimed at somebody for quoting themselves accurately.
+
+    Only figures are rounded. A certification either appears or does not.
+    """
+    text = stated.lstrip("$£€").rstrip("%¢").replace(",", "").strip()
+    try:
+        value = Decimal(text)
+    except (InvalidOperation, ValueError):
+        return False
+    places = len(text.split(".", 1)[1]) if "." in text else 0
+    prefix = stated[: len(stated) - len(stated.lstrip("$£€"))]
+    suffix = stated[len(stated.rstrip("%¢")) :]
+
+    for candidate in sourced:
+        raw = candidate.lstrip("$£€").rstrip("%¢")
+        try:
+            other = Decimal(raw)
+        except (InvalidOperation, ValueError):
+            continue
+        # Same unit, or the comparison is meaningless: "$2.9" does not
+        # evidence "2.9%".
+        if candidate[: len(prefix)] != prefix or not candidate.endswith(suffix):
+            continue
+        if round(other, places) == value:
+            return True
+    return False
+
+
 def _key_of(kind: str, match: re.Match[str]) -> str:
     """What makes two mentions the same claim.
 
@@ -305,6 +341,9 @@ def unsupported_claims(page_text: str, html: str) -> list[UnsupportedClaim]:
         for match in regex.finditer(rendered):
             key = _key_of(kind, match)
             if key in source_keys:
+                continue
+            # A rounded source figure is still the source figure.
+            if kind == "figure" and _rounds_to(key, source_keys):
                 continue
             _add(kind, match.group(0).strip(), key, match.start(), match.end())
 

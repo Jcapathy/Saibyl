@@ -108,6 +108,37 @@ def test_thousands_separators_and_trailing_zeros_are_typography():
     assert unsupported_claims(source, delivered) == []
 
 
+def test_a_rounded_source_figure_is_reporting_it_not_inventing_one():
+    """The one false positive a live run produced.
+
+    The source said `1.70269159%`; the page wrote `1.70%` and the founder was
+    told it was a claim their page could not support. Being accused of
+    inventing a number you quoted accurately is the worst failure this module
+    can have, because it teaches a founder to ignore the whole section.
+    """
+    source = "About 1.70269159% of global GDP is processed through Stripe."
+    delivered = "<p>1.70% of global GDP runs through Stripe.</p>"
+
+    assert unsupported_claims(source, delivered) == []
+
+
+def test_rounding_does_not_launder_a_different_figure():
+    """The tolerance is rounding at the stated precision, not fuzziness."""
+    source = "About 1.70269159% of global GDP."
+    delivered = "<p>2.40% of global GDP.</p>"
+
+    assert _texts(unsupported_claims(source, delivered)) == {"2.40%"}
+
+
+def test_a_rounded_match_must_share_the_unit():
+    """`$2.9` does not evidence `2.9%` — the symbol is what says what is being
+    measured."""
+    source = "Plans start at $2.9 per seat."
+    delivered = "<p>We take 2.9% of every charge.</p>"
+
+    assert _texts(unsupported_claims(source, delivered)) == {"2.9%"}
+
+
 def test_the_word_percent_and_the_symbol_are_the_same_claim():
     source = "We recover 30 percent of the time spent on reconciliation."
     delivered = "<p>Recover 30% of the time.</p>"

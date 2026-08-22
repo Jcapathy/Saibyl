@@ -265,7 +265,9 @@ async def build_answer_pack(simulation_id: str, org_id: str) -> AnswerPack:
     # labour cost and a 17-hour payback, none of them in the input, for a
     # product that has never been sold. Invented figures become the placeholder
     # the prompt asked for, which is honest and countable.
-    generated, invented = scrub_unsourced(generated, user)
+    generated, invented = scrub_unsourced(
+        generated, user, product_material=str(context.get("summary") or "")
+    )
     if invented:
         log.warning(
             "answer_pack_scrubbed_invented_figures",

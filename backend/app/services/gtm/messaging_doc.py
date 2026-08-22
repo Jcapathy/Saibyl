@@ -621,7 +621,9 @@ async def build_messaging_doc(simulation_id: str, org_id: str) -> MessagingDoc:
     # a buyer's all-entities "15-20 hours a month" into "per month per entity",
     # tripling the stated pain. A figure not in `user` becomes the placeholder
     # the prompt asked for.
-    generated, invented = scrub_unsourced(generated, user)
+    generated, invented = scrub_unsourced(
+        generated, user, product_material=str(context.get("summary") or "")
+    )
     if invented:
         log.warning(
             "messaging_doc_scrubbed_invented_figures",

@@ -705,7 +705,9 @@ async def build_outbound_sequences(simulation_id: str, org_id: str) -> OutboundS
         # volume pricing, and a $3,600/year price 12x off the founder's own —
         # all under notes labelling them "(factual)". A figure not in `user`
         # becomes the placeholder, which cannot be sent by accident.
-        generated, invented = scrub_unsourced(generated, user)
+        generated, invented = scrub_unsourced(
+            generated, user, product_material=str(context.get("summary") or "")
+        )
         if invented:
             log.warning(
                 "outbound_scrubbed_invented_figures",

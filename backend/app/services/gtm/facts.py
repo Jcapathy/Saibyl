@@ -265,11 +265,15 @@ def _duration_supported(span: str, durations: set[tuple[str, str]]) -> bool:
     )
 
 
+_HAS_CURRENCY = re.compile(r"[$£€]")
+
+
 def _scrub_text(
     text: str,
     sourced: set[str],
     durations: set[tuple[str, str]],
     replaced: list[str],
+    prices: set[str] | None = None,
 ) -> str:
     """One string, with unsupported claim spans replaced by the placeholder."""
     if not text:
@@ -293,13 +297,21 @@ def _scrub_text(
         # A duration must match its unit as well as its digits; money and
         # percentages are matched on the number, since the symbol already says
         # what it measures.
+        numbers = [n for n in _DIGITS.findall(span) if n.strip()]
         if _DURATION_IN_TEXT.search(span):
             if _duration_supported(span, durations):
                 return span
-        else:
-            numbers = [n for n in _DIGITS.findall(span) if n.strip()]
-            if numbers and all(_key(n) in sourced for n in numbers):
+        elif prices is not None and _HAS_CURRENCY.search(span):
+            # A price is a fact about the product, so the founder's own words
+            # are its only authority. Checking money against the whole prompt
+            # meant a buyer's arithmetic slip — "$3,600/year" for a product
+            # priced at $1,200 per entity per month — was "sourced", and the
+            # messaging doc restated it as the product's per-entity figure.
+            # Twelve times off, laundered through the room.
+            if numbers and all(_key(n) in prices for n in numbers):
                 return span
+        elif numbers and all(_key(n) in sourced for n in numbers):
+            return span
 
         replaced.append(span.strip())
         return MISSING_NUMBER
@@ -307,7 +319,9 @@ def _scrub_text(
     return _CLAIM_SPAN.sub(_one, text)
 
 
-def scrub_unsourced[M: BaseModel](payload: M, material: str) -> tuple[M, list[str]]:
+def scrub_unsourced[M: BaseModel](
+    payload: M, material: str, *, product_material: str = ""
+) -> tuple[M, list[str]]:
     """The generated payload with invented figures turned into placeholders.
 
     Walks every string in the model, including nested lists and dicts, because
@@ -322,9 +336,18 @@ def scrub_unsourced[M: BaseModel](payload: M, material: str) -> tuple[M, list[st
     durations = sourced_durations(material)
     replaced: list[str] = []
 
+    # Only narrow money to the founder's words when the founder actually stated
+    # a price. If they did not, every money figure would be scrubbed, which
+    # trades a rare laundered price for a document full of blanks.
+    prices = (
+        sourced_numbers(product_material)
+        if product_material and _HAS_CURRENCY.search(product_material)
+        else None
+    )
+
     def walk(value: object) -> object:
         if isinstance(value, str):
-            return _scrub_text(value, sourced, durations, replaced)
+            return _scrub_text(value, sourced, durations, replaced, prices)
         if isinstance(value, list):
             return [walk(item) for item in value]
         if isinstance(value, dict):
