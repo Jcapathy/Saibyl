@@ -12,14 +12,25 @@ deploys it** — that is the whole mechanism and it is what it is meant to be.
 Nothing here calls Render, holds a Render credential, or needs one.
 
 This header previously said deploys ran "from GitHub master via CI
-(`deploy.yml`, gated on the test job)". That is **wrong** and it cost a
-session: `deploy.yml` does carry a `deploy` job, but it posts to
-`secrets.RENDER_DEPLOY_HOOK_BACKEND` / `_FRONTEND`, which have never existed
-(`gh secret list` is empty). It therefore runs `curl -sS -X POST ""` and fails
-with exit 3 on **every** push, and has done so on every run in the workflow's
-history — while Render deployed the commit correctly anyway. The red X means
-nothing; the `test` job beside it is the real gate. Verify a deploy against
-the service, not the checkmark: `GET /health` returns the live commit.
+(`deploy.yml`, gated on the test job)". That was **wrong**, and `deploy.yml`
+was **deleted on 2026-08-22** (founder's call) rather than left to keep
+saying it. What it contained: a `deploy` job posting to
+`secrets.RENDER_DEPLOY_HOOK_BACKEND` / `_FRONTEND`, neither of which has ever
+existed (`gh secret list` is empty), so it ran `curl -sS -X POST ""` and
+failed with exit 3 on **every push in the workflow's entire history** while
+Render deployed the commit correctly anyway — plus a `test` job that
+duplicated `test.yml` in full.
+
+**`.github/workflows/test.yml` is now the only workflow**, and it is a strict
+superset of what was removed: identical gates (ruff, pytest, `npm run build`,
+eslint, vitest, same Redis service), split into two parallel jobs, and it runs
+on every push and pull request rather than master alone.
+
+**Known and accepted: CI does not gate the deploy, and never did.** Render
+ships whatever lands on `master` the moment it lands, pass or fail — the
+deleted job's `needs: test` only ever gated a curl to an empty string. Treat
+`master` as production. Verify a deploy against the service rather than a
+checkmark: `GET /health` returns the live commit.
 
 ---
 
@@ -35,8 +46,8 @@ GET https://saibyl-backend.onrender.com/health
 ```
 
 Frontend 200. The `Tests` workflow passed in 2m46s. The `Deploy to Render`
-workflow failed, as it always does — see the corrected header above; it is
-vestigial, not a signal.
+workflow failed, as it always did — and was deleted the same day; see the
+corrected header above.
 
 ## 2026-08-22 — Two columns the founder-facing surfaces needed
 
