@@ -7,6 +7,7 @@
 # report_section_count(measured_events, depth="standard") -> int
 # credits_for(cost_usd) -> int
 # tier_caps(plan) -> RunCaps
+# MAX_AGENTS_ANY_TIER — the largest swarm any plan can configure
 # check_credit_budget(org_id, agent_count, rounds, ...) -> BudgetCheck
 # estimate_icp_synthesis_cost() -> SynthesisCostEstimate
 # check_synthesis_budget(org_id) -> BudgetCheck
@@ -167,6 +168,20 @@ TIER_CAPS = {
     "agency": RunCaps(max_agents=250, max_rounds=12, max_platforms=6, max_variants=8),
     "enterprise": RunCaps(max_agents=1_000, max_rounds=20, max_platforms=12, max_variants=8),
 }
+
+# The largest swarm any plan can configure, derived rather than written down.
+#
+# `TIER_CAPS` is the only statement of how many people a run may put in the
+# room; this is its ceiling across every tier (1,000, at enterprise). Derived
+# for the same reason `_standard_run_credits` is: a second copy of a cap is a
+# copy that stops moving when the first one does.
+#
+# Used by any surface whose fan-out is chosen by the *caller* rather than by
+# the run's stored shape — today that is the batch-interview route, which
+# builds one model call per id it is handed. No such request can legitimately
+# name more agents than the biggest room that can exist, so this is the line
+# between "a large batch" and "a request that cannot be about a real run".
+MAX_AGENTS_ANY_TIER = max(caps.max_agents for caps in TIER_CAPS.values())
 
 # How many variant arenas the engine can actually run.
 #

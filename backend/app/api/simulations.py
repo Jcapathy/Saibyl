@@ -6,12 +6,13 @@ from typing import Literal
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.core.auth import get_current_org
 from app.core.config import settings
 from app.core.database import get_supabase_admin
 from app.core.tasks import spawn
+from app.services.billing.agent_pricing import MAX_AGENTS_ANY_TIER
 from app.services.engine.founder_stages import FOUNDER_STAGES, FounderStage
 from app.services.engine.personas.interview_engine import (
     interview_agent,
@@ -124,19 +125,91 @@ class StartSimulationBody(BaseModel):
     quote_id: str | None = None
 
 
-class InterviewBody(BaseModel):
-    agent_id: str
-    prompt: str
+# ---------------------------------------------------------------------------
+# Interviews — the one place a caller chooses how many model calls we make
+# ---------------------------------------------------------------------------
+#
+# Every interview is two calls on Saibyl's account (the answer, then the
+# sentiment read) and **none of it is metered**: no quote, no `deduct_credits`,
+# no balance check. So the only thing standing between this surface and an
+# unbounded bill is the size of the fan-out, and the size of the fan-out has to
+# be bounded here, at the boundary, on the request.
+#
+# `MAX_AGENTS_ANY_TIER` is the ceiling of `TIER_CAPS` — 1,000, at enterprise —
+# and it is the right number for three reasons rather than because it is round:
+#
+# 1. **It is what the product needs.** A batch names agents belonging to one
+#    run, and no run on any plan can hold more agents than the biggest tier
+#    allows. A request naming more than that is not a large batch, it is a
+#    request that cannot be about a real swarm.
+# 2. **It is the ceiling the sibling routes already have.** `by-persona`
+#    interviews every matching agent in the run, so its fan-out is already
+#    bounded by the swarm and cannot exceed this. Capping the caller-chosen
+#    route at the same number makes the request-driven path no worse than the
+#    shape-driven one — anything lower would refuse a batch that `by-persona`
+#    would happily run, and anything higher leaves the hole open.
+# 3. **It costs no real caller anything.** The UI sends five ids
+#    (`SimulationDetailPage.handleInterview` slices to 5). The cap exists for
+#    the request the UI never makes.
+#
+# Derived, not restated: it moves when `TIER_CAPS` moves. It is a spend
+# guardrail, not a per-plan entitlement — an org that downgrades must still be
+# able to interview the swarm of a run it already paid for, which is why this
+# is the global ceiling rather than `tier_caps(plan).max_agents`.
+MAX_INTERVIEW_BATCH = MAX_AGENTS_ANY_TIER
+
+# A question, not a payload. The prompt is re-sent in full to every agent in
+# the batch, so its length multiplies by the fan-out — 1,000 agents × an
+# unbounded string is the same defect as an unbounded id list, reached by the
+# other axis. 2,000 characters is several paragraphs of question; the field
+# behind it is a single-line input.
+MAX_INTERVIEW_PROMPT_CHARS = 2_000
 
 
-class BatchInterviewBody(BaseModel):
+class _InterviewPromptBody(BaseModel):
+    """The bound every interview request shares.
+
+    A base class rather than `max_length` written three times: the cap that is
+    restated per-route is the cap a fourth route forgets.
+    """
+
+    prompt: str = Field(min_length=1, max_length=MAX_INTERVIEW_PROMPT_CHARS)
+
+
+class InterviewBody(_InterviewPromptBody):
+    # A row id. 64 rather than 36 leaves room for a non-UUID key without
+    # leaving room for a payload.
+    agent_id: str = Field(min_length=1, max_length=64)
+
+
+class BatchInterviewBody(_InterviewPromptBody):
     agent_ids: list[str]
-    prompt: str
+
+    @field_validator("agent_ids")
+    @classmethod
+    def within_the_largest_possible_swarm(cls, v: list[str]) -> list[str]:
+        # Deduplicated before counting, and the order the caller sent is kept.
+        # `interview_batch` resolves ids with a single `IN (…)`, so repeats
+        # already collapse to one agent and one pair of model calls — counting
+        # them against the cap would refuse a harmless client bug while letting
+        # the expensive case (many *distinct* ids) sit at the same number.
+        unique = list(dict.fromkeys(id_.strip() for id_ in v if id_.strip()))
+        if not unique:
+            raise ValueError("Choose at least one person to ask.")
+        if len(unique) > MAX_INTERVIEW_BATCH:
+            raise ValueError(
+                f"You can ask up to {MAX_INTERVIEW_BATCH:,} people at once, and "
+                f"this asks {len(unique):,}. Pick the ones you want to hear "
+                f"from, or ask a whole persona group instead."
+            )
+        return unique
 
 
-class PersonaInterviewBody(BaseModel):
-    persona_type: str
-    prompt: str
+class PersonaInterviewBody(_InterviewPromptBody):
+    # Matched against a profile field, never sent to a model, so the bound is
+    # hygiene rather than spend control — but an unbounded string that nothing
+    # needs is an allowance nobody chose to make.
+    persona_type: str = Field(min_length=1, max_length=200)
 
 
 # ---------------------------------------------------------------------------
@@ -740,7 +813,15 @@ async def interview_batch_endpoint(id: str, body: BatchInterviewBody, auth: dict
 
 @router.post("/{id}/interview/by-persona")
 async def interview_by_persona_endpoint(id: str, body: PersonaInterviewBody, auth: dict = Depends(get_current_org)):
-    """Interview all agents of a specific persona type."""
+    """Interview all agents of a specific persona type.
+
+    **No request-side cap here, deliberately.** The sibling batch route needs
+    one because the caller names the agents; this one interviews whichever
+    agents of this run happen to carry the persona, so its fan-out is the run's
+    own swarm — already bounded by `TIER_CAPS`, already paid for, and never
+    larger than `MAX_INTERVIEW_BATCH`. A cap on `persona_type` would bound
+    nothing a caller controls.
+    """
     log.info("interview_by_persona", simulation_id=id, persona_type=body.persona_type)
     admin = get_supabase_admin()
     sim = (
