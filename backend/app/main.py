@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
@@ -214,6 +215,15 @@ def create_app() -> FastAPI:
         return {
             "status": status,
             "version": "1.0.0",
+            # **Which code is actually running.** Render sets
+            # RENDER_GIT_COMMIT on every deploy, and without it there is no
+            # way to tell a deployed fix from a pending one: a whole session
+            # was spent testing production behaviour against changes that may
+            # or may not have shipped yet, re-diagnosing symptoms that were
+            # already fixed in a build still being assembled. Seven characters
+            # answers it, costs nothing, and is not secret — the repository is
+            # private and a commit id reveals nothing a deploy log would not.
+            "commit": (os.environ.get("RENDER_GIT_COMMIT") or "unknown")[:7],
             "environment": settings.environment,
             "checks": checks,
         }
