@@ -213,6 +213,11 @@ async def get_reports_by_simulation(sim_id: str, auth: dict = Depends(get_curren
         "id": report["id"],
         "simulation_id": report["simulation_id"],
         "status": report.get("status"),
+        # Carried on the per-run route too, not only on `/reports/{id}`. This
+        # is the route the run page reads, so without it a founder whose
+        # report failed saw the word "failed" and no reason — which is the
+        # whole point of the column.
+        "error_message": report.get("error_message"),
         "sections": [
             {"title": s["title"], "content": strip_react_artifacts(s.get("content") or "")}
             for s in (sections_result.data or [])

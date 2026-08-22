@@ -86,23 +86,74 @@ _CLAIM_SPAN = re.compile(
     re.I,
 )
 
-_DIGITS = re.compile(r"\d[\d,]*(?:\.\d+)?\s*[km]?", re.I)
+#: `[km]\b` and not `[km]?` — without the boundary this reads "8 months" as
+#: "8 m", i.e. eight million, and then reports a duration the material plainly
+#: states as unsourced.
+_DIGITS = re.compile(r"\d[\d,]*(?:\.\d+)?\s*(?:[km]\b)?", re.I)
 
 #: A meeting length is not a claim about the product, and this copy is full of
 #: them — "Can we book 20 minutes?", "a 30-minute intro". Scrubbing those
-#: produces "Can we book [TODO: your number]?", which is worse than the thing
-#: being prevented: a nonsense blank in the one line that asks for the meeting.
-#: Distinguished by context, not by length, so "a 45-minute manual hunt" — an
-#: actual invented benchmark — is still caught.
+#: produces "Can we book [TODO: your number]?": a nonsense blank in the one
+#: line that has to work, and it catches nothing, because a meeting length was
+#: never a claim.
+#:
+#: The first version of this exemption anchored on the characters immediately
+#: before the number, and a live check found it failing on most real copy —
+#: "set up **a** 30-minute call" defeated it with an article, and "worth",
+#: "takes" and "got" were not verbs it knew. Eight damaged meeting asks reached
+#: generated sequences. It now searches a window rather than anchoring, and the
+#: verb list carries the words outbound copy actually uses.
 _BOOKING_BEFORE = re.compile(
     r"(?:book|grab|spare|schedule|hop on|jump on|set up|carve out|"
-    r"give (?:me|us)|steal)\W+$",
+    r"give (?:me|us)|steal|worth|takes?|got|have|spend|free up|block|find)\b",
+    re.I,
+)
+
+#: A lookback or lookahead window in a request — "the worst denial you've seen
+#: in the last 6 months", "anything in the next two weeks". Not a claim about
+#: the product, and scrubbing it leaves a sentence that asks for nothing.
+_WINDOW_BEFORE = re.compile(
+    r"(?:in|over|within|during)\s+the\s+(?:last|past|next|coming)\s*$"
+    r"|(?:^|\s)(?:last|past|next|coming)\s+$",
     re.I,
 )
 _MEETING_AFTER = re.compile(
-    r"^\W*(?:call|chat|meeting|demo|intro|conversation|sync|slot|window)\b", re.I
+    r"(?:call|chat|meeting|demo|intro|conversation|sync|slot|window|"
+    r"walkthrough|screen ?share|session)\b",
+    re.I,
 )
-_CONTEXT_CHARS = 26
+_CONTEXT_CHARS = 34
+
+#: A rate is always a claim and can never be a meeting ask. This is what keeps
+#: the widened verb list above from swallowing real fabrications: "Most
+#: controllers **spend** 30-50 hours **a month**" contains a booking verb, and
+#: is still checked, because no one books a meeting "a month".
+_RATE_AFTER = re.compile(
+    r"^\W*(?:an?|per|each|every)\s+(?:day|week|month|quarter|year|hour)\b", re.I
+)
+
+#: A meeting is minutes, or an hour or two. The other half of the guard: it
+#: stops "tuning **takes** 500 hours" being exempted by its verb, while leaving
+#: "**takes** 15 minutes" alone.
+_SENTENCE_SPLIT = re.compile(r"[.!?\n]")
+
+#: Every "<number> <time unit>" the material states, so a duration can be
+#: matched on both halves rather than on its digits alone. The range form is
+#: read as two pairs: "15-20 hours" sources both 15 hours and 20 hours.
+_DURATION_IN_TEXT = re.compile(
+    r"(\d[\d,]*(?:\.\d+)?)\s*(?:[-–—]\s*\d[\d,]*(?:\.\d+)?\s*)?\+?[\s-]*"
+    r"(" + _TIME_UNIT + r")\b",
+    re.I,
+)
+_DURATION_RANGE = re.compile(
+    r"(\d[\d,]*(?:\.\d+)?)\s*[-–—]\s*(\d[\d,]*(?:\.\d+)?)\s*\+?[\s-]*"
+    r"(" + _TIME_UNIT + r")\b",
+    re.I,
+)
+
+_MINUTE_UNIT = re.compile(r"\b(?:minutes?|mins?|seconds?|secs?)\b", re.I)
+_HOUR_UNIT = re.compile(r"\bhours?|hrs?\b", re.I)
+MAX_MEETING_HOURS = 2
 
 _PLACEHOLDER = re.compile(r"\[TODO:[^\]]*\]", re.I)
 
@@ -134,20 +185,122 @@ def sourced_numbers(material: str) -> set[str]:
     return {_key(raw) for raw in _ANY_NUMBER.findall(material or "") if raw.strip()}
 
 
-def _scrub_text(text: str, sourced: set[str], replaced: list[str]) -> str:
+def _canonical_unit(unit: str) -> str:
+    """`hrs`, `Hours`, `hour` are one unit."""
+    text = unit.strip().lower().rstrip(".")
+    text = {"hrs": "hour", "hr": "hour", "mins": "minute", "min": "minute",
+            "secs": "second", "sec": "second"}.get(text, text)
+    return text[:-1] if text.endswith("s") else text
+
+
+def sourced_durations(material: str) -> set[tuple[str, str]]:
+    """Durations the material states, as (number, unit) pairs.
+
+    A duration has to match **both halves**. Checking the digits alone meant
+    material containing "8 months" and "12 years" licensed a cold email
+    claiming clinics "bleed **8-12 days** waiting on prior auth" — a market
+    benchmark nobody had measured, assembled out of two unrelated numbers. The
+    number is not the claim; the number *and its unit* are.
+    """
+    text = material or ""
+    pairs: set[tuple[str, str]] = set()
+    for raw, unit in _DURATION_IN_TEXT.findall(text):
+        pairs.add((_key(raw), _canonical_unit(unit)))
+    # A range states both ends: "15-20 hours a month" sources 15 hours and 20
+    # hours, so copy quoting either end is reporting what the buyer said.
+    for low, high, unit in _DURATION_RANGE.findall(text):
+        canonical = _canonical_unit(unit)
+        pairs.add((_key(low), canonical))
+        pairs.add((_key(high), canonical))
+    return pairs
+
+
+def _is_meeting_ask(span: str, before: str, after: str) -> bool:
+    """Whether this span asks for someone's time rather than claiming a fact.
+
+    Three conditions, and all of them are load-bearing:
+
+    1. **Not a rate.** "a month", "per week" — nobody books a meeting for a
+       month. This is what allows the verb list to be generous: "controllers
+       spend 30-50 hours a month" carries a booking verb and is still checked.
+    2. **A meeting-sized duration.** Minutes, or an hour or two. Without this,
+       "tuning takes 500 hours" would be exempted by its own verb.
+    3. **Booking language around it** — a verb before ("set up", "worth",
+       "got") or a meeting noun after ("call", "walkthrough"), searched in a
+       window rather than anchored, because an article or an adjective sits
+       between them more often than not.
+    """
+    if _RATE_AFTER.match(after):
+        return False
+
+    # "…the worst denial you've seen in the last 6 months" asks a question; it
+    # claims nothing. Checked before the size test, because a window is often
+    # months or years.
+    if _WINDOW_BEFORE.search(before):
+        return True
+
+    if _MINUTE_UNIT.search(span):
+        meeting_sized = True
+    elif _HOUR_UNIT.search(span):
+        values = [float(_key(n)) for n in _DIGITS.findall(span) if _key(n).replace(".", "").isdigit()]
+        meeting_sized = bool(values) and max(values) <= MAX_MEETING_HOURS
+    else:
+        meeting_sized = False
+    if not meeting_sized:
+        return False
+
+    return bool(_BOOKING_BEFORE.search(before) or _MEETING_AFTER.search(after))
+
+
+def _duration_supported(span: str, durations: set[tuple[str, str]]) -> bool:
+    """Whether every number in a duration span was stated with *this* unit."""
+    match = _DURATION_IN_TEXT.search(span)
+    if match is None:
+        return False
+    unit = _canonical_unit(match.group(2))
+    return all(
+        (_key(number), unit) in durations
+        for number in _DIGITS.findall(span)
+        if number.strip()
+    )
+
+
+def _scrub_text(
+    text: str,
+    sourced: set[str],
+    durations: set[tuple[str, str]],
+    replaced: list[str],
+) -> str:
     """One string, with unsupported claim spans replaced by the placeholder."""
     if not text:
         return text
 
     def _one(match: re.Match[str]) -> str:
         span = match.group(0)
-        before = text[max(0, match.start() - _CONTEXT_CHARS) : match.start()]
-        after = text[match.end() : match.end() + _CONTEXT_CHARS]
-        if _BOOKING_BEFORE.search(before) or _MEETING_AFTER.match(after):
+        # Context stops at the sentence edge. Searching a flat window let
+        # "Can we book 20 minutes?" reach forward and exempt the "45-minute
+        # manual hunt" in the sentence after it — a booking verb licenses the
+        # ask it belongs to, not everything near it.
+        before = _SENTENCE_SPLIT.split(
+            text[max(0, match.start() - _CONTEXT_CHARS) : match.start()]
+        )[-1]
+        after = _SENTENCE_SPLIT.split(
+            text[match.end() : match.end() + _CONTEXT_CHARS]
+        )[0]
+        if _is_meeting_ask(span, before, after):
             return span
-        numbers = [n for n in _DIGITS.findall(span) if n.strip()]
-        if numbers and all(_key(n) in sourced for n in numbers):
-            return span
+
+        # A duration must match its unit as well as its digits; money and
+        # percentages are matched on the number, since the symbol already says
+        # what it measures.
+        if _DURATION_IN_TEXT.search(span):
+            if _duration_supported(span, durations):
+                return span
+        else:
+            numbers = [n for n in _DIGITS.findall(span) if n.strip()]
+            if numbers and all(_key(n) in sourced for n in numbers):
+                return span
+
         replaced.append(span.strip())
         return MISSING_NUMBER
 
@@ -166,11 +319,12 @@ def scrub_unsourced[M: BaseModel](payload: M, material: str) -> tuple[M, list[st
     contain numbers the material also contains — are never reached from here.
     """
     sourced = sourced_numbers(material)
+    durations = sourced_durations(material)
     replaced: list[str] = []
 
     def walk(value: object) -> object:
         if isinstance(value, str):
-            return _scrub_text(value, sourced, replaced)
+            return _scrub_text(value, sourced, durations, replaced)
         if isinstance(value, list):
             return [walk(item) for item in value]
         if isinstance(value, dict):

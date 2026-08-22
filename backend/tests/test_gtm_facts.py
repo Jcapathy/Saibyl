@@ -165,6 +165,92 @@ def test_a_meeting_length_is_not_a_claim_about_the_product():
         assert text == line
 
 
+def test_the_meeting_asks_that_were_actually_damaged_in_production():
+    """The first exemption anchored on the characters immediately before the
+    number, and a live check found it failing on most real outbound copy.
+    Every line here was generated and mangled for real; the article in "set up
+    **a** 30-minute call" alone defeated it.
+    """
+    for line in (
+        "Would it make sense to set up a 30-minute technical call with your "
+        "security lead?",
+        "Worth 20 minutes?",
+        "If you've got 15 minutes in the next few days, I can show you.",
+        "The thing I wanted to show you takes 15 minutes—and it's about your "
+        "actual traffic.",
+        "Happy to spend 20 minutes next week walking through it.",
+        "Worth a 30-minute technical walkthrough?",
+        # Found by the second live check, on the medical run.
+        "Do you have 15 minutes this week to see if it fits?",
+        "Can we spend 30 minutes walking through how your top three denial "
+        "types would flow through the system?",
+        "Would be worth 20 minutes to see if it matches.",
+        "Chartwell's worth 15 minutes.",
+    ):
+        text, replaced = _scrub(line)
+        assert replaced == [], f"scrubbed a meeting ask in: {line}"
+        assert text == line
+
+
+def test_a_duration_must_match_its_unit_not_just_its_digits():
+    """The escape a live check found.
+
+    Material holding "8 months" and "12 years" licensed a cold first-touch
+    email claiming clinics "bleed 8-12 days waiting on prior auth" — a market
+    benchmark nobody measured, assembled from two unrelated numbers. The number
+    is not the claim; the number and its unit are.
+    """
+    material = "their words: it drags on for 8 months, and we have 12 years of history."
+    pack, replaced = scrub_unsourced(
+        _Pack(rows=[_Row(respond="Most clinics bleed 8-12 days on prior auth.")]),
+        material,
+    )
+
+    assert "8-12 days" not in pack.rows[0].respond
+    assert replaced == ["8-12 days"]
+
+
+def test_a_duration_the_material_states_with_that_unit_survives():
+    """Both ends of a stated range count, and a unit whose name starts with a
+    magnitude letter ("8 months") must not be read as eight million."""
+    material = "their words: we lose 15-20 hours a month to this, over 8 months."
+
+    for line in ("It costs you 15 hours.", "That is 20 hours gone.", "After 8 months."):
+        pack, replaced = scrub_unsourced(_Pack(rows=[_Row(respond=line)]), material)
+
+        assert replaced == [], f"scrubbed a sourced duration in: {line}"
+        assert pack.rows[0].respond == line
+
+
+def test_a_lookback_window_in_a_request_is_not_a_claim():
+    """"reply with the worst denial you've seen in the last 6 months" asks a
+    question. Scrubbed, it asks for nothing."""
+    text, replaced = _scrub(
+        "Reply with the worst prior auth denial you've seen in the last 6 months."
+    )
+
+    assert replaced == []
+    assert "6 months" in text
+
+
+def test_a_rate_is_always_a_claim_even_when_it_carries_a_booking_verb():
+    """The guard that lets the verb list be generous. Nobody books a meeting
+    "a month", so "controllers spend 30-50 hours a month" stays checked even
+    though "spend" is a booking verb."""
+    text, replaced = _scrub("Most controllers spend 30-50 hours a month on this.")
+
+    assert "30-50 hours" not in text
+    assert len(replaced) == 1
+
+
+def test_a_long_duration_is_a_claim_even_when_it_carries_a_booking_verb():
+    """Without a size limit, "takes" would exempt "500 hours"."""
+    text, replaced = _scrub("Tuning an in-house system takes 500 hours.")
+
+    assert "500 hours" not in text
+    assert len(replaced) == 1
+
+
 def test_a_duration_that_is_a_claim_is_still_caught_next_to_one_that_is_not():
     """The distinction is context, not length — otherwise the exemption above
     would swallow "a 45-minute manual hunt"."""

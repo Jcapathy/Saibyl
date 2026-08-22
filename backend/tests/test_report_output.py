@@ -317,3 +317,57 @@ async def test_the_invented_figures_are_logged_with_their_values(monkeypatch):
     flagged = next(e for e in logs if e["event"] == "report_section_unsourced_figures")
     assert flagged["section"] == "Platform dynamics"
     assert set(flagged["figures"]) == {"-0.35", "-0.19"}
+
+
+# ── a section must be written, not echoed ────────────────────────────
+#
+# One of five paid sections reached a founder as 10,169 characters opening
+# `<results>[{'tool': 'simulation_analytics', ...` — no headings, no prose,
+# truncated mid-JSON. The loop accepted any non-TOOL response as the finished
+# section.
+
+
+def test_raw_tool_output_is_not_a_section():
+    """The exact shape that shipped."""
+    echoed = (
+        "<results>\n[{'tool': 'simulation_analytics', 'type': "
+        "'sentiment_over_time', 'data': {'rounds': [{'round': 1, 'mean': "
+        "-0.24}, {'round': 2, 'mean': -0.28}], 'objections_"
+    )
+
+    assert not report_agent._looks_like_prose(echoed)
+
+
+def test_a_bare_json_array_or_object_is_not_a_section():
+    assert not report_agent._looks_like_prose('[{"round": 1, "mean": -0.24}]')
+    assert not report_agent._looks_like_prose('{"tool": "simulation_analytics"}')
+
+
+def test_a_written_section_is_prose_even_without_the_answer_marker():
+    """Permissive on purpose: a section that ignored the response format is
+    still a section, and dropping it would cost the founder more than the
+    format violation does."""
+    written = (
+        "## Reception and Belief\n\n"
+        "The room split early. Buyers who arrived with a reconciliation "
+        "problem stayed engaged through round three, while the engineers "
+        "disengaged after the first pricing post. Sentiment closed at -0.27."
+    )
+
+    assert report_agent._looks_like_prose(written)
+
+
+def test_a_section_quoting_json_inline_is_still_prose():
+    """A real section may quote a payload without being one."""
+    written = (
+        "## What the room measured\n\nThe analysis artifact reports "
+        '`{"mean": -0.27}` for the run as a whole, which is the figure every '
+        "section below is anchored to. Three buyers disputed it openly."
+    )
+
+    assert report_agent._looks_like_prose(written)
+
+
+def test_an_empty_response_is_not_prose():
+    assert not report_agent._looks_like_prose("")
+    assert not report_agent._looks_like_prose("   \n  ")

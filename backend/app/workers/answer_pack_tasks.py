@@ -95,6 +95,11 @@ async def run_answer_pack(pack_id: str, simulation_id: str, org_id: str) -> None
         "battlecards": [card.model_dump() for card in pack.battlecards],
         "notes": pack.notes,
         "built_from_objections": pack.built_from_objections,
+        # Persisted, not merely computed. The builder counted this and logged
+        # it while the worker dropped it on the floor and no column existed to
+        # receive it, so a pack still reached the founder carrying five
+        # `[TODO: …]` markers and reporting nothing.
+        "placeholders_to_fill": pack.placeholders_to_fill,
         "completed_at": datetime.now(UTC).isoformat(),
     }).eq("id", pack_id).execute()
 
@@ -104,4 +109,5 @@ async def run_answer_pack(pack_id: str, simulation_id: str, org_id: str) -> None
         simulation_id=simulation_id,
         rows=len(pack.rows),
         battlecards=len(pack.battlecards),
+        placeholders=pack.placeholders_to_fill,
     )

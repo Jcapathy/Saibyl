@@ -881,6 +881,32 @@ THE SECTION YOU WROTE:
 {complaint}"""
 
 
+#: A model answer that is really an echo of its own tool results. A section
+#: shipped to a paying founder as 10,169 characters opening `<results>[{'tool':
+#: 'simulation_analytics', ...` — no headings, no prose, truncated mid-JSON.
+#: The old code accepted any non-TOOL response as the finished section.
+_TOOL_ECHO = re.compile(
+    r"^\s*(?:<results>|\[\s*\{|\{\s*['\"](?:tool|type|data|results)['\"])", re.I
+)
+
+
+def _looks_like_prose(text: str) -> bool:
+    """Whether a model response is a written section rather than tool output.
+
+    Deliberately permissive: the question is not "is this good" but "is this
+    English at all". A section that merely ignored the response format is still
+    a section and is kept; a JSON dump is not.
+    """
+    body = (text or "").strip()
+    if not body or _TOOL_ECHO.match(body):
+        return False
+    # Structural punctuation dominating the text is the other tell — a dict
+    # dump is mostly braces, quotes and colons however it starts.
+    sample = body[:2000]
+    structural = sum(sample.count(ch) for ch in "{}[]':\"")
+    return structural <= max(40, len(sample) // 20)
+
+
 async def _figure_checked(
     answer: str,
     evidence_text: str,
@@ -1020,8 +1046,8 @@ async def _run_react_loop(
                 tool_line, simulation_id, config
             )
             evidence.append(f"[Tool: {tool_line}]\n{observation}")
-        else:
-            # LLM didn't follow format — treat as final answer. Checked like
+        elif _looks_like_prose(response):
+            # Didn't follow the format but did write a section. Checked like
             # any other: a section that ignored the response format is not
             # more likely to have respected the measurement rules.
             return await _figure_checked(
@@ -1030,6 +1056,20 @@ async def _run_react_loop(
                 section_title=section.title,
                 config=config,
             )
+        else:
+            # It echoed tool output instead of writing. This branch used to
+            # accept anything as a final answer, and a paying founder received
+            # a section that was 10,169 characters of raw `<results>[{'tool':
+            # 'simulation_analytics'…` — no headings, no prose, truncated
+            # mid-JSON. Treated as an observation instead: the loop is bounded
+            # and ends at the forced answer below, so this cannot spin.
+            logger.warning(
+                "report_section_answer_was_tool_output",
+                section=section.title,
+                attempt=tool_call_num + 1,
+                preview=response.strip()[:120],
+            )
+            evidence.append(f"[Unparsed model output]\n{response.strip()[:2000]}")
 
     # Max tool calls reached — force answer
     final_prompt = _prompt(
@@ -1294,6 +1334,16 @@ async def generate_report(
         #: the finished document. Empty is the ordinary case.
         missing: list[str] = []
 
+        # The evidence for both closing calls is what they were handed: the
+        # sections themselves plus the measured polarization fields. They were
+        # bypassing the figure check entirely, and that is where the surviving
+        # fabrications were found — an executive-summary round table reading
+        # "~-0.30 / ~-0.28 / ~-0.25" against measured values that match none of
+        # them, and "5 of 6 buyer groups" in a run with four.
+        closing_evidence = sections_text + "\n" + json.dumps(
+            polarization_fields, default=str
+        )
+
         conclusion_content = await _closing_call(
             llm_complete(
                 messages=[
@@ -1312,6 +1362,13 @@ async def generate_report(
             what=conclusion_title,
             report_id=report_id,
         )
+        if conclusion_content:
+            conclusion_content = await _figure_checked(
+                conclusion_content,
+                closing_evidence,
+                section_title=conclusion_title,
+                config=config,
+            )
 
         if conclusion_content:
             admin.table("report_sections").update({
@@ -1363,6 +1420,14 @@ async def generate_report(
             what="Executive Summary",
             report_id=report_id,
         )
+        if exec_summary:
+            # The first thing a founder reads, and it was the least checked.
+            exec_summary = await _figure_checked(
+                exec_summary,
+                closing_evidence,
+                section_title="Executive Summary",
+                config=config,
+            )
 
         if exec_summary:
             # Store exec summary as a section so the frontend can find it

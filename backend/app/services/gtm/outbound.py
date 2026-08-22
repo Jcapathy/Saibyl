@@ -549,17 +549,21 @@ def _user_prompt(
     )
 
 
-def _placeholder_count(steps: list[OutboundStep]) -> int:
+def _placeholder_count(steps: list[OutboundStep], notes: list[str]) -> int:
     """How many blanks the founder still has to fill before any of this sends.
 
     Counts the `[TODO: …]` *shape*, not the two spellings this module names.
     All four live sequences reported `placeholders_to_fill: 0` while carrying
     `[TODO: benchmark hours saved]`, `[TODO: customer name]` and `[TODO: entity
     count]` — on copy whose whole purpose is to be sent to a stranger.
+
+    **Notes are counted too.** Covering step copy alone still undercounted a
+    live sequence 11 against 13, because two markers sat in the notes — and a
+    note is where the model puts the thing it could not source, which is
+    exactly what this number is for.
     """
-    return sum(
-        count_placeholders(f"{step.subject}\n{step.body}") for step in steps
-    )
+    step_text = "\n".join(f"{step.subject}\n{step.body}" for step in steps)
+    return count_placeholders(step_text) + count_placeholders("\n".join(notes))
 
 
 def _assemble(
@@ -731,7 +735,7 @@ async def build_outbound_sequences(simulation_id: str, org_id: str) -> OutboundS
                 pains_addressed=[
                     str(pains[slot].get("objection_key")) for slot in sorted(pains)
                 ],
-                placeholders_to_fill=_placeholder_count(steps),
+                placeholders_to_fill=_placeholder_count(steps, generated.notes),
                 notes=generated.notes,
             )
         )
