@@ -18,11 +18,20 @@ product is held to (`test_report_vocabulary.py`); "patent", "trademark",
 Both functions are pure over their inputs. Everything factual in them arrived
 from USPTO client responses or from LLM analysis of client-fetched claim
 text — nothing here invents a number, a title, an owner, or a date.
+
+**One thing is removed, and only one.** `build_artifact` returns its payload
+through `privacy.scrub_clearance_artifact`, which replaces personal contact
+channels — emails, phone numbers, postal addresses — with a visible marker.
+Names of record are untouched: an inventor or assignee name *is* the prior-art
+finding, and a report that hides it is a report a founder cannot act on. Read
+`clearance/privacy.py` before changing either half of that; it is the write-side
+half of a boundary whose other half is `GET /api/clearance/{run_id}`.
 """
 from __future__ import annotations
 
 import re
 
+from app.services.clearance.privacy import scrub_clearance_artifact
 from app.services.clearance.tracks import ClearanceResult
 
 SKILL_NAME = "ip-clearance-search"
@@ -82,9 +91,16 @@ def build_artifact(
 
     Every key of the contract is present on every run; absent findings are
     empty lists or null, never missing keys.
+
+    Scrubbed of personal contact detail before it is returned, which is what
+    makes it safe to store: the worker writes this dict to `clearance_runs`,
+    flattens it into `clearance_findings`, and composes the report from it, so
+    scrubbing here covers all three. See `clearance/privacy.py` for what is
+    removed, what is deliberately kept, and why the two are not the same rule
+    the GTM module applies.
     """
     trademark = result.trademark
-    return {
+    return scrub_clearance_artifact({
         "skill": SKILL_NAME,
         "version": SCHEMA_VERSION,
         "search_date": search_date,
@@ -156,7 +172,7 @@ def build_artifact(
         ],
         "limitations": list(LIMITATIONS),
         "disclaimer": DISCLAIMER,
-    }
+    })
 
 
 # ---------------------------------------------------------------------------

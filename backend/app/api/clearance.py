@@ -216,6 +216,12 @@ async def list_clearance_runs(
     The artifact is fetched only to lift the headline risk tier out of it; it
     is dropped before the response, because a list of 50 runs each carrying a
     full artifact is a detail view pretending to be an index.
+
+    No personal-data scrub here, and that is a consequence of the line above
+    rather than an omission: the only value taken out of the artifact is
+    `patents.overall_risk`, which is one of GREEN/YELLOW/RED. If this route
+    ever starts lifting a name, a title or a query out of the artifact, it
+    joins the boundary — scrub it the way `get_clearance_run` does.
     """
     admin = get_supabase_admin()
     query = (
@@ -243,7 +249,19 @@ async def list_clearance_runs(
 
 @router.get("/{run_id}")
 async def get_clearance_run(run_id: str, auth: dict = Depends(get_current_org)):
-    """One run, with its artifact and report once complete."""
+    """One run, with its artifact and report once complete.
+
+    **The serving half of the personal-data boundary.** `build_artifact` scrubs
+    on the way in, so anything written since that landed is already clean and
+    this pass is a no-op on it. It is here for the rows that were not: runs
+    completed before the scrub existed are still in this table and are served
+    from storage rather than rebuilt, and a rule enforced only at write time
+    cannot protect a row some later ingestion path inserts.
+
+    Scrubbing rather than withholding, for the reason `clearance/privacy.py`
+    gives at length: a founder paid for this answer, and the parts of a USPTO
+    record that identify a reference are the answer. Only contact channels go.
+    """
     admin = get_supabase_admin()
     rows = (
         admin.table("clearance_runs")
@@ -255,4 +273,18 @@ async def get_clearance_run(run_id: str, auth: dict = Depends(get_current_org)):
     ).data or []
     if not rows:
         raise HTTPException(status_code=404, detail="Clearance run not found")
-    return rows[0]
+
+    # Imported here, not at module top, for the reason the worker does the
+    # same: this router loads at startup even when the clearance services are
+    # absent, which is the assumption the 503 guard above is built on.
+    from app.services.clearance.privacy import (
+        scrub_clearance_artifact,
+        scrub_clearance_report,
+    )
+
+    run = dict(rows[0])
+    if isinstance(run.get("artifact"), dict):
+        run["artifact"] = scrub_clearance_artifact(run["artifact"])
+    if isinstance(run.get("report_markdown"), str):
+        run["report_markdown"] = scrub_clearance_report(run["report_markdown"])
+    return run
