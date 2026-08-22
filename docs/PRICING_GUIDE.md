@@ -189,7 +189,7 @@ kind of claim this guide exists to prevent.
 
 | Tier | Price | COGS grant | Credits | ≈ standard runs | Margin |
 |---|---:|---:|---:|---:|---:|
-| Free trial | $0 (one run) | $1.50 | 1,500 | 1 capped | — |
+| Free trial | $0 (one service) | $2.00 | 2,000 | 1 capped | — |
 | Founder | $99 | $19.80 | 19,800 | 6 | 80% |
 | Growth | $299 | $59.80 | 59,800 | 19 | 80% |
 | Agency | $999 | $199.80 | 199,800 | 66 | 80% |
@@ -209,6 +209,15 @@ because it has now gone stale three times.
 > founder uploading their deck, the free tier's whole promise, would have hit
 > "not enough credits" at signup. The grant moved to **1,500**, and a free run at
 > the tier cap now costs **1,273**, leaving **227 credits — 15% of the grant**.
+>
+> ⬆️ **Raised again to 2,000 on 2026-08-22, for a different reason.** Headroom
+> against the idea evaluation was never the whole question. 1,500 could not buy
+> a **website check at 1,750** — so the grant covered the service it was sized
+> against and refused the flagship one. The grant now buys **any one entry
+> service**, and the sizing rule is no longer "one free run" but "one free
+> thing, whichever they pick". See DECISIONS_LOG 2026-08-22; three tests hold
+> it, so the next service priced above the grant fails in CI rather than at a
+> stranger's signup.
 > This is the third time the grant has been raised for exactly this reason, and
 > the failure mode is worth restating: the free tier is the most sensitive of all
 > of them to any main-model stage being added or repriced, because those stages

@@ -143,6 +143,105 @@ def test_cache_reads_are_cheaper_than_fresh_input():
     assert cached < fresh
 
 
+def test_the_free_grant_buys_any_one_entry_service():
+    """The founder's rule, 2026-08-22: the grant buys ONE service of the
+    founder's choosing — not one idea evaluation.
+
+    The old 1,500 was sized against the capped idea evaluation alone (1,273)
+    and could not buy a website check at 1,750. A founder who wanted to spend
+    their one free thing on the flagship module was told they had insufficient
+    credits, which is the opposite of a loss leader.
+
+    Each of these must be affordable on the grant with nothing else bought.
+    A new entry service priced above the grant fails here rather than at a
+    stranger's signup.
+    """
+    from app.services.billing.agent_pricing import (
+        TIER_CREDIT_GRANTS,
+        answer_pack_credits,
+        capped_run_credits,
+        clearance_credits,
+        messaging_doc_credits,
+        website_check_credits,
+    )
+
+    grant = TIER_CREDIT_GRANTS["free"]
+    entry_services = {
+        "idea evaluation (capped)": capped_run_credits("free"),
+        "answer pack": answer_pack_credits(),
+        "messaging doc": messaging_doc_credits(),
+        "website check": website_check_credits(),
+        "USPTO QUICK": clearance_credits("QUICK"),
+        "USPTO STANDARD": clearance_credits("STANDARD"),
+    }
+
+    unaffordable = {
+        name: price for name, price in entry_services.items() if price > grant
+    }
+    assert not unaffordable, (
+        f"the free grant is {grant:,} credits and cannot buy {unaffordable} — "
+        f"a founder choosing that service is refused at signup"
+    )
+
+
+def test_the_leftover_is_too_small_to_buy_a_second_service():
+    """The remainder is designed, not incidental.
+
+    A balance that can do nothing is a better argument for topping up than a
+    balance of zero, which reads as the trial simply being over. But it must
+    genuinely buy nothing — a grant that stretched to two services would give
+    away the second one and remove the reason to pay.
+    """
+    from app.services.billing.agent_pricing import (
+        TIER_CREDIT_GRANTS,
+        answer_pack_credits,
+        capped_run_credits,
+        website_check_credits,
+    )
+
+    grant = TIER_CREDIT_GRANTS["free"]
+    cheapest_paid = min(
+        capped_run_credits("free"), answer_pack_credits(), website_check_credits()
+    )
+
+    for name, price in (
+        ("idea evaluation", capped_run_credits("free")),
+        ("website check", website_check_credits()),
+        ("answer pack", answer_pack_credits()),
+    ):
+        leftover = grant - price
+        assert leftover >= 0, f"{name} is not affordable on the grant"
+        assert leftover < cheapest_paid, (
+            f"after {name} the founder has {leftover:,} credits left, which "
+            f"still buys something at {cheapest_paid:,} — the grant is giving "
+            f"away a second service"
+        )
+
+
+def test_the_grant_stops_short_of_the_downstream_services():
+    """The funnel, stated as a rule. The grant buys the diagnosis; the founder
+    pays for the cure. A free website check leading to a paid revision is the
+    path the pricing is built around, and it only exists while the revision
+    stays out of reach of the grant."""
+    from app.services.billing.agent_pricing import (
+        TIER_CREDIT_GRANTS,
+        capital_shortlist_credits,
+        outbound_sequence_credits,
+        website_revision_credits,
+    )
+
+    grant = TIER_CREDIT_GRANTS["free"]
+    for name, price in (
+        ("website revision", website_revision_credits()),
+        ("capital shortlist", capital_shortlist_credits()),
+        ("outbound sequence", outbound_sequence_credits()),
+    ):
+        assert price > grant, (
+            f"{name} costs {price:,}, which the {grant:,} grant now covers — "
+            f"the loss leader is giving away a downstream service"
+        )
+
+
 def test_the_free_grant_covers_one_free_run():
     """A grant that does not cover one free run makes the tier unusable.
 
@@ -177,10 +276,10 @@ def test_the_free_grant_covers_one_free_run():
     )
 
     # The bound is >= 0 rather than a headroom percentage because the grant is a
-    # commercial number and not this test's to set. It is worth knowing that the
-    # margin is 227 credits — 15%, since the grant moved to 1,500 alongside the
-    # distillation — so the message reports it on the way past. It was 20 credits
-    # at the 1,200 grant, and one new stage consumed it.
+    # commercial number and not this test's to set. The margin was 20 credits at
+    # the 1,200 grant and one new stage consumed it; 227 at 1,500; and it is
+    # wider again since the grant moved to 2,000 on 2026-08-22 to cover a
+    # website check. The message reports it on the way past either way.
     headroom = TIER_CREDIT_GRANTS["free"] - free_run.credits
     assert headroom >= 0, (
         f"free grant is {TIER_CREDIT_GRANTS['free']} credits but a free run at "

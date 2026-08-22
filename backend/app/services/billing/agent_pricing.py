@@ -106,9 +106,32 @@ STANDARD_RUN = (100, 5, 2, 1)  # agents, rounds, platforms, variants
 # stages that barely shrink with run size, so they dominate a very small run.
 # That is why the free tier is the most sensitive of all of them to any
 # main-model stage being added or repriced.
+# **The free grant buys ONE service of the founder's choosing, not one run.**
+# Founder decision, 2026-08-22, revising the 2026-08-17 sizing.
+#
+# The old 1,500 was sized against the free-tier idea evaluation alone (1,273).
+# It could not buy a website check, which costs 1,750 — so a founder who wanted
+# to spend their one free thing on the flagship module was told they had
+# insufficient credits, which is the opposite of a loss leader.
+#
+# 2,000 covers every entry service: the capped idea evaluation (1,273), the
+# answer pack and messaging doc (1,500), the website check (1,750) and a
+# STANDARD USPTO search (2,000). QUICK clearance is free and costs nothing
+# against it.
+#
+# It deliberately does NOT cover the downstream services — outbound (2,500),
+# the capital shortlist (3,000), a page revision (5,000). That is the funnel
+# rather than a gap: the grant buys the diagnosis and the founder pays for the
+# cure, which is exactly the path a free website check into a paid revision
+# describes.
+#
+# The remainder is the point, and it is designed. Every entry service leaves
+# between 0 and 727 credits — visible, and too small to buy anything else. A
+# balance that can do nothing is a better argument for topping up than a
+# balance of zero, which just reads as the trial being over.
 TIER_CREDIT_GRANTS = {
-    "free": 1_500,
-    "trial": 1_500,
+    "free": 2_000,
+    "trial": 2_000,
     "founder": 19_800,
     "starter": 19_800,
     "growth": 59_800,

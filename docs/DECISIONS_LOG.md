@@ -8,6 +8,42 @@ choices.
 
 ---
 
+## 2026-08-22 — The free grant buys one service, not one run (1,500 → 2,000)
+
+Founder's decision, and it revises the 2026-08-17 entry below, which called
+the 1,500 grant "correctly sized and not a bug". That sizing was right about
+the thing it measured and wrong about the thing it did not.
+
+**The defect.** 1,500 was sized against the free-tier idea evaluation alone
+(1,273). A website check costs **1,750**. So a founder who wanted to spend
+their one free thing on the flagship module was told they had insufficient
+credits — a loss leader that refuses the customer at the counter.
+
+**The rule now:** the grant buys **one entry service of the founder's
+choosing**. At 2,000 that is the capped idea evaluation (1,273), the answer
+pack or messaging doc (1,500), the website check (1,750), or a STANDARD USPTO
+search (2,000). QUICK clearance is free and costs nothing against it.
+
+**What it deliberately does not reach**, and this is the funnel rather than a
+gap: outbound (2,500), the capital shortlist (3,000), a page revision (5,000),
+COMPREHENSIVE clearance (6,000). The grant buys the diagnosis; the founder
+pays for the cure. A free website check leading to a paid revision is the path
+the whole thing is built around.
+
+**The remainder is designed.** Every entry service leaves between 0 and 727
+credits — visible, and too small to buy anything else. The founder's own
+argument, and it is a good one: a balance that can do nothing is a better
+reason to top up than a balance of zero, which just reads as the trial being
+over.
+
+Three tests now hold the shape rather than a comment: every entry service is
+affordable on the grant, the leftover buys nothing, and the downstream
+services stay out of reach. A new service priced above the grant fails in CI
+instead of at a stranger's signup — which is how the original defect reached
+production.
+
+---
+
 ## 2026-08-21 — We build the family-office bank; we do not license one
 
 Founder's decision, stated as a correction and binding: **route 1B is build
