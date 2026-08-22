@@ -21,10 +21,16 @@ number is reported as what it is.
 
 The generator is under the same honesty discipline as the critics:
 
-- **The page's real words are the only source of facts.** The prompt carries
-  the extracted page text and forbids inventing claims, prices, customers, or
-  features; a needed-but-missing fact becomes a visible `[OWNER: fill in]`
-  placeholder instead of a plausible fabrication.
+- **The page's real words are the only source of facts, and that is checked
+  rather than asked for.** The prompt carries the extracted page text and
+  forbids inventing claims, prices, customers or features; a needed-but-missing
+  fact becomes a visible `[OWNER: fill in]` placeholder. Because a live fintech
+  revision ignored exactly that instruction and shipped invented certifications
+  (2026-08-22), every generated document is then scanned by `claims`, a pure
+  function with no model call: anything claim-shaped that is absent from the
+  source triggers one retry naming the sentences, a page still claiming a
+  certification loses the best-round tie-break to an honest one, and whatever
+  survives rides on `RevisionResult.unsupported_claims` to the founder.
 - **The critique is the work order.** Every finding's fix rides in the prompt
   as an instruction to apply, grouped by dimension, and every strength rides
   as something the new page must not lose (three live critic rounds showed
@@ -58,6 +64,11 @@ from pydantic import BaseModel, Field
 from app.core.llm_client import llm_vision
 from app.services.billing.usage_ledger import usage_context
 from app.services.website.capture import WebsiteCapture, capture_html
+from app.services.website.claims import (
+    UnsupportedClaim,
+    claim_complaint,
+    unsupported_claims,
+)
 from app.services.website.critics import CritiqueResult, run_critic_gauntlet
 from app.services.website.verticals import brief_section, classify_vertical
 
@@ -98,6 +109,11 @@ class RevisionResult(BaseModel):
     critique_after: dict  # the best round's full critique
     capture_after: WebsiteCapture  # the best round's render
     fix_prompts: list[dict]  # compose_fix_prompts(...) of the original critique
+    #: Claims the delivered page makes that the founder's page never made, after
+    #: the retry that tried to remove them. Empty is the ordinary case; a
+    #: non-empty list must reach the founder, not just the log — an unreported
+    #: fabrication is worse than a reported one, because they publish it.
+    unsupported_claims: list[UnsupportedClaim] = []
 
 
 class RevisionError(Exception):
@@ -353,24 +369,55 @@ def _parse_document(raw: str) -> str | None:
     return text[: end + len("</html>")]
 
 
-async def _generate_html(prompt: str, evidence: bytes) -> str:
-    """One vision call producing the page; unreadable output gets exactly one
-    retry that names the complaint, then a founder-readable failure."""
+async def _generate_html(
+    prompt: str, evidence: bytes, page_text: str
+) -> tuple[str, list[UnsupportedClaim]]:
+    """One vision call producing the page, plus what it claimed without basis.
+
+    Two things can be wrong with an answer, and they share one retry so the
+    round's cost stays at two calls: the answer is not a document, or it is a
+    document that invents facts. Either way the retry carries the specific
+    complaint rather than a repeat of the question.
+
+    The claims check is not advisory. The prompt already forbids invention in
+    two separate sections and was overridden in production anyway (see
+    `claims`), so the deterministic scan — not the instruction — is what makes
+    the honesty rule real. Surviving claims come back with the page rather than
+    raising: a page with a flagged figure is still worth more to the founder
+    than no page, provided the flag travels with it.
+    """
     try:
         raw = await llm_vision(prompt, [evidence], max_tokens=_GENERATION_MAX_TOKENS)
         html = _parse_document(raw)
-        if html is None:
+        claims = unsupported_claims(page_text, html) if html is not None else []
+
+        complaint = _HTML_COMPLAINT if html is None else (
+            claim_complaint(claims) if claims else None
+        )
+        if complaint is not None:
             raw = await llm_vision(
-                prompt + "\n\n" + _HTML_COMPLAINT, [evidence], max_tokens=_GENERATION_MAX_TOKENS
+                prompt + "\n\n" + complaint, [evidence], max_tokens=_GENERATION_MAX_TOKENS
             )
-            html = _parse_document(raw)
+            retried = _parse_document(raw)
+            # An unreadable retry leaves the first document standing when there
+            # was one — losing a whole page to fix a percentage is a worse
+            # trade than reporting the percentage.
+            if retried is not None:
+                html = retried
+                claims = unsupported_claims(page_text, html)
     except Exception as exc:
         raise RevisionError(
             _GENERATION_FAILED_ERROR.format(error=f"{type(exc).__name__}: {exc}")
         ) from exc
     if html is None:
         raise RevisionError(_UNPARSEABLE_ERROR)
-    return html
+    if claims:
+        logger.warning(
+            "website_revision_unsupported_claims",
+            count=len(claims),
+            certifications=[c.text for c in claims if c.kind == "certification"],
+        )
+    return html, claims
 
 
 # ── the gauntlet loop ────────────────────────────────────────────────
@@ -393,6 +440,34 @@ class _Round(BaseModel):
     html: str
     render: WebsiteCapture
     verdict: CritiqueResult
+    claims: list[UnsupportedClaim] = []
+
+    @property
+    def forged_badges(self) -> int:
+        """How many certifications this round claimed without basis."""
+        return sum(1 for c in self.claims if c.kind == "certification")
+
+
+def _is_better(candidate: _Round, incumbent: _Round | None) -> bool:
+    """Whether a round should replace the best one so far.
+
+    **Fewest invented certifications first, and only then the score.** The
+    gauntlet cannot see the founder's real page, so it scores a page that
+    claims SOC 2 exactly as it scores one that holds it — on the live fintech
+    run the fabricating round was scored *up*, credibility unmoved at 82.
+    Ranking on score alone therefore means knowingly shipping the fabricating
+    page whenever it lands two points higher, and "it scored better" is not an
+    answer a founder can give a regulator.
+
+    Only certifications are disqualifying. A figure or a customer count is
+    reported to the founder but does not override the score: those are noisier
+    to detect, and far cheaper to be wrong about in either direction.
+    """
+    if incumbent is None:
+        return True
+    if candidate.forged_badges != incumbent.forged_badges:
+        return candidate.forged_badges < incumbent.forged_badges
+    return candidate.verdict.overall_score > incumbent.verdict.overall_score
 
 
 async def generate_revision(
@@ -440,7 +515,10 @@ async def generate_revision(
                 reference=reference,
                 previous_html=previous_html,
             )
-            html = await _generate_html(prompt, evidence)
+            # Always measured against the founder's own page, never against the
+            # previous revision: a fabrication that survives round one would
+            # otherwise become its own evidence in round two.
+            html, claims = await _generate_html(prompt, evidence, capture.dom_text)
 
             try:
                 render = await capture_html(html)
@@ -469,9 +547,16 @@ async def generate_revision(
                     dimension_scores={d.key: d.score for d in verdict.dimensions},
                 )
             )
-            if best is None or verdict.overall_score > best.verdict.overall_score:
-                best = _Round(number=round_no, html=html, render=render, verdict=verdict)
-            if verdict.overall_score >= target_overall:
+            candidate = _Round(
+                number=round_no, html=html, render=render, verdict=verdict, claims=claims
+            )
+            if _is_better(candidate, best):
+                best = candidate
+            # A page that clears the target while claiming a certification the
+            # founder does not hold has not finished: spend the remaining
+            # rounds trying to get an honest one, since the score the target
+            # measures was earned partly by the fabrication.
+            if verdict.overall_score >= target_overall and not candidate.forged_badges:
                 break
 
             previous_html = html
@@ -489,6 +574,8 @@ async def generate_revision(
         overall_before=scores_before.get("overall"),
         overall_after=scores_after.get("overall"),
         target_overall=target_overall,
+        unsupported_claims=len(best.claims),
+        forged_badges=best.forged_badges,
     )
     return RevisionResult(
         html=best.html,
@@ -499,6 +586,7 @@ async def generate_revision(
         critique_after=best.verdict.model_dump(),
         capture_after=best.render,
         fix_prompts=compose_fix_prompts(critique, dna),
+        unsupported_claims=best.claims,
     )
 
 

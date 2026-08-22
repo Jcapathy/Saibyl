@@ -504,6 +504,10 @@ async def get_page_revision_bundle(
         page_text=html_text,
         dna=_revision_design_dna(row["snapshot_id"], auth["org_id"]),
         scores_after=row.get("scores_after"),
+        # Anything the rewrite claimed that the founder's own page never
+        # claimed. This is the surface that matters most for it: the bundle is
+        # what gets handed to whoever publishes the page.
+        unsupported_claims=row.get("unsupported_claims"),
     )
 
     buffer = io.BytesIO()

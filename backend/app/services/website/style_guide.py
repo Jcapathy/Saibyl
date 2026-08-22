@@ -194,12 +194,65 @@ def _score_line(scores_after: object) -> str:
     return f"The critics scored this page **{overall}** overall{detail}."
 
 
+_CLAIM_HEADINGS = {
+    "certification": "Certifications, licences and regulators",
+    "figure": "Prices and percentages",
+    "scale": "Customer counts",
+}
+
+_CLAIM_INTRO = """\
+**Check these before you publish.** The rewrite put the statements below on
+your page, and none of them appear anywhere in the words we read off your
+current site. Some may be true and simply absent from the page we captured —
+if so, this is your reminder to say them somewhere provable. Any that are not
+true have to come out before this page goes live."""
+
+_CLAIM_WARNING = """\
+The first group is the dangerous one. A certification, licence or regulator
+named on a page you did not earn is not a wording problem — customers and
+regulators act on it. Delete anything in that group you cannot evidence."""
+
+
+def _claims_section(unsupported_claims: object) -> list[str]:
+    """The claims block, rendered from stored rows.
+
+    Takes plain dicts rather than `claims.UnsupportedClaim` so this module
+    never imports `claims` — `claims` imports `visible_copy` from here, and the
+    other direction would close the cycle.
+    """
+    rows = [c for c in (unsupported_claims or []) if isinstance(c, dict)]
+    if not rows:
+        return []
+
+    out = ["## Claims to verify before you publish", "", _CLAIM_INTRO, ""]
+    if any(row.get("kind") == "certification" for row in rows):
+        out += [_CLAIM_WARNING, ""]
+
+    for kind in ("certification", "figure", "scale"):
+        group = [row for row in rows if row.get("kind") == kind]
+        if not group:
+            continue
+        out += [f"### {_CLAIM_HEADINGS[kind]}", ""]
+        for row in group:
+            text = str(row.get("text") or "").strip()
+            quote = str(row.get("quote") or "").strip()
+            line = f"- **{text}**"
+            if quote:
+                # The quote is what makes this actionable — the founder searches
+                # index.html for it rather than hunting for the claim.
+                line += f' — on the page as: "{quote}"'
+            out.append(line)
+        out.append("")
+    return out
+
+
 def build_style_guide(
     *,
     url: str,
     page_text: str,
     dna: object = None,
     scores_after: object = None,
+    unsupported_claims: object = None,
 ) -> str:
     """The guide that ships beside the page."""
     tokens = extract_tokens(page_text)
@@ -219,6 +272,11 @@ def build_style_guide(
     verdict = _score_line(scores_after)
     if verdict:
         out += [verdict, ""]
+
+    # Placed above everything else on purpose. A founder skims a style guide;
+    # they must not have to reach the colour table before learning the page
+    # claims a certification they may not hold.
+    out += _claims_section(unsupported_claims)
 
     out += [
         "## Who this page is for",

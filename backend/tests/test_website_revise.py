@@ -866,3 +866,143 @@ def test_the_jargon_scan_would_catch_a_regression():
     assert _hits("Simulations") == ["simulation"]
     assert _hits("The founder rewrites the page.") == []
     assert len(_revise_strings()) == 21 + 2 * len(revise._FIX_TITLES)
+
+
+# ---------------------------------------------------------------------------
+# Invented facts: caught, retried, and never allowed to win on score
+#
+# The regression is live. On 2026-08-22 a fintech revision shipped a page
+# claiming SOC 2 Type II, ISO 27001, PCI DSS Level 1 and authorisation by the
+# Central Bank of Ireland, none of it in the captured source. The prompt
+# forbade exactly that in two separate sections. The gauntlet — which judges a
+# screenshot and never sees the source page's facts — scored it *up*.
+# ---------------------------------------------------------------------------
+
+
+def _doc_saying(n: int, body: str) -> str:
+    return (
+        f'<!doctype html>\n<html lang="en"><head><title>Round {n}</title></head>'
+        f"<body><main>{body}</main></body></html>"
+    )
+
+
+#: A badge the founder's page (`_capture().dom_text`) never mentions.
+_FORGED = "We are SOC 2 Type II certified and ISO 27001 certified."
+
+
+async def test_a_clean_page_is_not_retried(monkeypatch):
+    vision, _render, _gauntlet = _install(
+        monkeypatch, replies=[_doc(1)], verdicts=[_verdict(80)]
+    )
+
+    result = await generate_revision(_capture(), ORIGINAL_CRITIQUE, DNA)
+
+    assert len(vision.calls) == 1, "an honest page paid for a retry it did not need"
+    assert result.unsupported_claims == []
+
+
+async def test_an_invented_certification_gets_one_retry_that_names_it(monkeypatch):
+    vision, _render, _gauntlet = _install(
+        monkeypatch,
+        replies=[_doc_saying(1, _FORGED), _doc(1)],
+        verdicts=[_verdict(80)],
+    )
+
+    result = await generate_revision(_capture(), ORIGINAL_CRITIQUE, DNA)
+
+    assert len(vision.calls) == 2
+    complaint = vision.calls[1].prompt
+    assert "SOC 2" in complaint and "ISO 27001" in complaint
+    assert _FORGED.lower() in complaint.lower(), "the model was not quoted to itself"
+    assert "[OWNER: fill in]" in complaint, "the complaint named no correct answer"
+    # The retry removed them, so nothing rides out with the page.
+    assert result.unsupported_claims == []
+
+
+async def test_a_fabrication_that_survives_the_retry_rides_out_with_the_page(
+    monkeypatch,
+):
+    """Reported, never silently dropped — the founder is about to publish it."""
+    _install(
+        monkeypatch,
+        replies=[_doc_saying(1, _FORGED), _doc_saying(1, _FORGED)],
+        verdicts=[_verdict(80)],
+    )
+
+    result = await generate_revision(_capture(), ORIGINAL_CRITIQUE, DNA, max_rounds=1)
+
+    assert result.html, "a flagged page is still worth more than no page"
+    assert {c.text for c in result.unsupported_claims} == {"SOC 2", "ISO 27001"}
+    assert all(c.kind == "certification" for c in result.unsupported_claims)
+
+
+async def test_an_honest_page_beats_a_higher_scoring_fabrication(monkeypatch):
+    """The heart of it.
+
+    Round one forges two badges and scores 84 — above the target. Round two is
+    clean and scores 78. Ranking on score alone ships the forgery, and "it
+    scored six points better" is not an answer a founder can give a regulator.
+    """
+    _install(
+        monkeypatch,
+        # round 1: forged, and forged again on the retry — then round 2, clean.
+        replies=[_doc_saying(1, _FORGED), _doc_saying(1, _FORGED), _doc(2)],
+        verdicts=[_verdict(84), _verdict(78)],
+    )
+
+    result = await generate_revision(_capture(), ORIGINAL_CRITIQUE, DNA, max_rounds=2)
+
+    assert len(result.rounds) == 2, (
+        "round one cleared the target while forging a badge and the loop stopped "
+        "there, so the score the target measured was earned by the fabrication"
+    )
+    assert result.best_round == 2
+    assert result.scores_after["overall"] == 78
+    assert "soc 2" not in result.html.lower()
+    assert result.unsupported_claims == []
+    # Both rounds stay on the record regardless of which one shipped.
+    assert [r.overall_score for r in result.rounds] == [84, 78]
+
+
+async def test_a_price_is_reported_but_does_not_override_the_score(monkeypatch):
+    """Only certifications are disqualifying.
+
+    A figure is noisier to detect and far cheaper to be wrong about in either
+    direction, so it is reported to the founder and left at that.
+    """
+    _install(
+        monkeypatch,
+        replies=[
+            _doc_saying(1, "Just $99 a month."),
+            _doc_saying(1, "Just $99 a month."),
+        ],
+        verdicts=[_verdict(84)],
+    )
+
+    result = await generate_revision(_capture(), ORIGINAL_CRITIQUE, DNA, max_rounds=2)
+
+    assert len(result.rounds) == 1, "a flagged figure should not cost an extra round"
+    assert [c.kind for c in result.unsupported_claims] == ["figure"]
+    assert result.unsupported_claims[0].text == "$99"
+
+
+async def test_claims_are_measured_against_the_founders_page_not_the_last_round(
+    monkeypatch,
+):
+    """Otherwise a fabrication that survives round one becomes its own evidence."""
+    _install(
+        monkeypatch,
+        replies=[
+            _doc_saying(1, _FORGED),
+            _doc_saying(1, _FORGED),
+            _doc_saying(2, _FORGED),
+            _doc_saying(2, _FORGED),
+        ],
+        verdicts=[_verdict(60), _verdict(62)],
+    )
+
+    result = await generate_revision(_capture(), ORIGINAL_CRITIQUE, DNA, max_rounds=2)
+
+    # Round two carried round one's HTML in its prompt. If the check read that
+    # instead of the capture, the badges would count as supported and vanish.
+    assert {c.text for c in result.unsupported_claims} == {"SOC 2", "ISO 27001"}

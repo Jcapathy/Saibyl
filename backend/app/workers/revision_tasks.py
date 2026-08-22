@@ -178,6 +178,11 @@ async def run_page_revision(revision_id: str, organization_id: str) -> None:
             "scores_after": _scores_from_critique(result.critique_after or {}),
             "critique_after": result.critique_after,
             "fix_prompts": result.fix_prompts,
+            # What the new page claims that the founder's page never claimed.
+            # Stored even when empty: [] is "the scan ran and found nothing",
+            # null is "this row predates the scan", and the founder-facing
+            # surfaces need to tell those apart before they promise a clean page.
+            "unsupported_claims": [c.model_dump() for c in result.unsupported_claims],
             "html_path": paths["html"],
             "screenshot_desktop_path": paths["desktop"],
             "screenshot_mobile_path": paths["mobile"],
@@ -190,6 +195,7 @@ async def run_page_revision(revision_id: str, organization_id: str) -> None:
             organization_id=organization_id,
             rounds=len(result.rounds),
             best_round=result.best_round,
+            unsupported_claims=len(result.unsupported_claims),
         )
     except Exception:
         logger.exception("page_revision_failed", revision_id=revision_id)

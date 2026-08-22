@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  AlertTriangle,
   ArrowDown,
   ArrowRight,
   ArrowUp,
@@ -18,7 +19,9 @@ import {
   fixPrompts,
   overallScore,
   scoreDeltas,
+  unsupportedClaims,
   type SiteRevisionRow,
+  type UnsupportedClaim,
 } from './types';
 
 /**
@@ -274,6 +277,7 @@ export default function SiteRevision({
   const rounds = Number(revision.rounds);
   const bestRound = Number(revision.best_round);
   const prompts = fixPrompts(revision);
+  const claims = unsupportedClaims(revision);
   const critiqueAfter =
     revision.critique_after &&
     Array.isArray(revision.critique_after.dimensions)
@@ -385,6 +389,15 @@ export default function SiteRevision({
           </ul>
         )}
       </div>
+
+      {/* ── Claims the new page makes that the old one never made ──
+          Directly under the score on purpose. The score is the thing a founder
+          reads first and trusts most, and it is precisely the number that
+          cannot see this: the reviewers judge a screenshot of the new page and
+          never read the old page's facts, so on the run that produced this
+          check they scored an invented SOC 2 badge *up*. The warning has to sit
+          against the number it contradicts, not below the fold. */}
+      {claims.length > 0 && <ClaimsWarning claims={claims} />}
 
       {/* ── The proof, side by side ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
@@ -512,6 +525,97 @@ export default function SiteRevision({
           </div>
         </details>
       )}
+    </div>
+  );
+}
+
+const CLAIM_GROUPS: { kind: string; heading: string }[] = [
+  { kind: 'certification', heading: 'Certifications, licences and regulators' },
+  { kind: 'figure', heading: 'Prices and percentages' },
+  { kind: 'scale', heading: 'Customer counts' },
+];
+
+/**
+ * Statements on the new page that the founder's own page never made.
+ *
+ * Deliberately not a red error box. Some of these will be true and simply
+ * absent from the page we read — a founder who genuinely holds SOC 2 but never
+ * said so on their homepage should be prompted to say it somewhere provable,
+ * not accused. The heading asks them to check; the certification group alone
+ * gets the harder sentence, because that is the one a customer or a regulator
+ * acts on.
+ *
+ * Never collapsed behind a `<details>`: a warning a founder has to click to
+ * discover is a warning they publish without.
+ */
+function ClaimsWarning({ claims }: { claims: UnsupportedClaim[] }) {
+  const known = new Set(CLAIM_GROUPS.map((g) => g.kind));
+  const groups = CLAIM_GROUPS.map(({ kind, heading }) => ({
+    heading,
+    kind,
+    rows: claims.filter((c) => c.kind === kind),
+  }))
+    // A kind this build has never heard of still describes a real claim, so it
+    // is shown rather than dropped.
+    .concat({
+      heading: 'Other claims',
+      kind: 'other',
+      rows: claims.filter((c) => !known.has(c.kind)),
+    })
+    .filter((g) => g.rows.length > 0);
+
+  const forged = claims.some((c) => c.kind === 'certification');
+
+  return (
+    <div className="rounded-2xl border border-saibyl-warning/40 bg-saibyl-warning/[0.06] p-5">
+      <div className="flex items-start gap-2.5">
+        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-saibyl-warning" />
+        <div className="min-w-0">
+          <p className="text-[13px] font-medium text-saibyl-platinum">
+            Check these before you publish
+          </p>
+          <p className="text-[12.5px] text-saibyl-silver mt-1 leading-relaxed">
+            The rewrite put the statements below on your page, and none of them
+            appear in the words we read off your current site. Some may be true
+            and simply missing from the page we captured &mdash; if so, this is
+            your reminder to say them somewhere provable. Anything that
+            isn&rsquo;t true has to come out first.
+          </p>
+          {forged && (
+            <p className="text-[12.5px] text-saibyl-platinum mt-2 leading-relaxed">
+              A certification, licence or regulator named on a page you
+              haven&rsquo;t earned isn&rsquo;t a wording problem &mdash;
+              customers and regulators act on it.
+            </p>
+          )}
+
+          {groups.map((group) => (
+            <div key={group.kind} className="mt-3.5">
+              <p className="text-[11px] font-medium text-saibyl-silver uppercase tracking-wider">
+                {group.heading}
+              </p>
+              <ul className="mt-1.5 space-y-1.5">
+                {group.rows.map((claim, index) => (
+                  <li
+                    key={`${claim.kind}-${claim.text}-${index}`}
+                    className="text-[12.5px] leading-relaxed"
+                  >
+                    <span className="font-medium text-saibyl-platinum">
+                      {claim.text}
+                    </span>
+                    {claim.quote && (
+                      <span className="text-saibyl-muted">
+                        {' '}
+                        &mdash; on the page as: &ldquo;{claim.quote}&rdquo;
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

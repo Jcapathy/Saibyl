@@ -220,3 +220,70 @@ def test_a_page_with_no_url_still_produces_a_guide():
     """The url is a label, never a dependency — an empty one costs a heading
     word, not the download."""
     assert build_style_guide(url="", page_text=PAGE).startswith("# Style guide —")
+
+
+# ---------------------------------------------------------------------------
+# Claims the rewrite made that the founder's page never made
+#
+# The bundle is what gets handed to whoever publishes the page, so it is the
+# surface that matters most for a fabricated certification. A live fintech
+# revision shipped SOC 2, ISO 27001 and PCI DSS claims with no basis in the
+# source (2026-08-22); the guide beside that page said nothing about them.
+# ---------------------------------------------------------------------------
+
+_CLAIMS = [
+    {"kind": "certification", "text": "SOC 2",
+     "quote": "soc 2 type ii report available under nda."},
+    {"kind": "figure", "text": "2.9%",
+     "quote": "2.9% + 30c per successful card charge."},
+]
+
+
+def test_the_guide_warns_about_claims_the_page_could_not_support():
+    guide = build_style_guide(
+        url="https://acme.example", page_text=PAGE, unsupported_claims=_CLAIMS
+    )
+
+    assert "## Claims to verify before you publish" in guide
+    assert "**SOC 2**" in guide and "**2.9%**" in guide
+    # The quote is what makes it actionable: the founder searches index.html.
+    assert "soc 2 type ii report available under nda." in guide
+
+
+def test_the_warning_lands_before_the_founder_has_read_anything_else():
+    """A founder skims a style guide. The section is worthless below the fold."""
+    guide = build_style_guide(
+        url="https://acme.example", page_text=PAGE, unsupported_claims=_CLAIMS
+    )
+
+    assert guide.index("Claims to verify") < guide.index("## Who this page is for")
+    assert guide.index("Claims to verify") < guide.index("## Colour")
+
+
+def test_certifications_are_called_out_as_the_dangerous_group():
+    guide = build_style_guide(url="https://a.example", page_text=PAGE,
+                              unsupported_claims=_CLAIMS)
+
+    assert "### Certifications, licences and regulators" in guide
+    assert "customers and\nregulators act on it" in guide
+
+
+def test_a_page_with_only_a_figure_gets_no_certification_warning():
+    """Absence is absence here too — an over-stated warning is its own noise."""
+    guide = build_style_guide(
+        url="https://a.example",
+        page_text=PAGE,
+        unsupported_claims=[_CLAIMS[1]],
+    )
+
+    assert "## Claims to verify before you publish" in guide
+    assert "### Certifications, licences and regulators" not in guide
+    assert "regulators act on it" not in guide
+
+
+def test_a_clean_page_gets_no_claims_section_at_all():
+    for value in (None, [], "not a list"):
+        guide = build_style_guide(
+            url="https://a.example", page_text=PAGE, unsupported_claims=value
+        )
+        assert "Claims to verify" not in guide

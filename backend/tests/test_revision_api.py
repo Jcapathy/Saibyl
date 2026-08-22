@@ -39,6 +39,7 @@ from app.api import website as website_api
 from app.core.auth import get_current_org
 from app.core.config import settings
 from app.services.billing.agent_pricing import website_revision_credits
+from app.services.website.claims import UnsupportedClaim
 from app.workers import revision_tasks
 
 ORG = "11111111-1111-1111-1111-111111111111"
@@ -237,6 +238,15 @@ CRITIQUE_AFTER = {
     ],
 }
 
+#: A badge the rewrite put on the page that the founder's page never carried.
+#: The live case that made this necessary shipped SOC 2, ISO 27001 and PCI DSS
+#: claims with no basis in the source (2026-08-22).
+UNSUPPORTED_CLAIM = UnsupportedClaim(
+    kind="certification",
+    text="SOC 2",
+    quote="soc 2 type ii report available under nda.",
+)
+
 FIX_PROMPTS = [
     {
         "title": "Name the buyer in the headline",
@@ -349,6 +359,10 @@ def _install_services(
         critique_after=CRITIQUE_AFTER,
         capture_after=after_capture,
         fix_prompts=FIX_PROMPTS,
+        # The real model, not another namespace: the worker serialises these
+        # with `model_dump`, and a stub that merely holds the attribute would
+        # let a shape change through unnoticed.
+        unsupported_claims=[UNSUPPORTED_CLAIM],
     )
 
     async def generate_revision(
@@ -674,6 +688,17 @@ async def test_the_worker_revises_uploads_and_completes(monkeypatch):
     assert row["scores_after"] == SCORES_AFTER
     assert row["critique_after"] == CRITIQUE_AFTER
     assert row["fix_prompts"] == FIX_PROMPTS
+    # What the new page claims that the founder's page never claimed, stored as
+    # plain rows so the bundle and the UI can both read it. Serialised here
+    # rather than passed through, because a model object would not survive the
+    # round trip to Postgres.
+    assert row["unsupported_claims"] == [
+        {
+            "kind": "certification",
+            "text": "SOC 2",
+            "quote": "soc 2 type ii report available under nda.",
+        }
+    ]
     base = f"website/{ORG}/revisions/{REV}"
     assert row["html_path"] == f"{base}/revision.html"
     assert row["screenshot_desktop_path"] == f"{base}/desktop.png"

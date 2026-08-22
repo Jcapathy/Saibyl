@@ -272,6 +272,24 @@ export interface FixPrompt {
   prompt: string;
 }
 
+/**
+ * A statement on the new page with no basis in the founder's own page.
+ *
+ * The rewrite is told twice, in plain words, never to invent a fact. A live
+ * fintech revision did it anyway — SOC 2, ISO 27001, PCI DSS, a banking
+ * regulator, a whole fee table — and the six critics scored that page *up*,
+ * because they judge a screenshot and never see the source page's facts. The
+ * backend now scans every generated document and sends what it finds here.
+ */
+export interface UnsupportedClaim {
+  /** `certification` is the dangerous one: a badge is acted on, not just read. */
+  kind: 'certification' | 'figure' | 'scale' | string;
+  /** The claim itself — "SOC 2", "2.9%", "4,000 teams". */
+  text: string;
+  /** The sentence it sits in, so the founder can find it on the page. */
+  quote: string;
+}
+
 /** `POST /website/revision`, `GET /website/revision/{id}` — the draft row. */
 export interface SiteRevisionRow {
   id: string;
@@ -284,6 +302,13 @@ export interface SiteRevisionRow {
   /** Same shape as a check's critique, for the page as it now reads. */
   critique_after?: SiteCritiqueResult | null;
   fix_prompts?: unknown;
+  /**
+   * Claims the new page makes that the founder's page never made. `null` on
+   * rows written before the scan existed, `[]` once it has run and found
+   * nothing — the two must not be conflated, since only the second is a
+   * clean bill of health.
+   */
+  unsupported_claims?: unknown;
   error_message?: string | null;
   created_at?: string | null;
 }
@@ -419,6 +444,31 @@ export function asRevisionListItem(raw: unknown): SiteRevisionListItem | null {
       overallScore(row.scores_after as RevisionScores | null | undefined),
     created_at: typeof row.created_at === 'string' ? row.created_at : '',
   };
+}
+
+/**
+ * The unsupported claims off a draft row, with malformed entries dropped.
+ *
+ * Kind is passed through rather than validated against a list: a kind this
+ * build has never heard of still describes a real claim, and dropping it would
+ * hide a fabrication from the one person who can check it.
+ */
+export function unsupportedClaims(row: SiteRevisionRow): UnsupportedClaim[] {
+  const raw = row.unsupported_claims;
+  if (!Array.isArray(raw)) return [];
+  const out: UnsupportedClaim[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const c = entry as Record<string, unknown>;
+    const text = typeof c.text === 'string' ? c.text.trim() : '';
+    if (!text) continue;
+    out.push({
+      kind: typeof c.kind === 'string' ? c.kind : 'figure',
+      text,
+      quote: typeof c.quote === 'string' ? c.quote.trim() : '',
+    });
+  }
+  return out;
 }
 
 /** The prompt blocks off a draft row, with malformed entries dropped. */
