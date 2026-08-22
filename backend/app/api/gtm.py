@@ -19,7 +19,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app.core.auth import get_current_org
+from app.core.auth import get_current_org, require_can_destroy, require_can_spend
 from app.core.database import get_supabase_admin
 from app.services.gtm import store
 from app.services.gtm.discovery import (
@@ -246,7 +246,7 @@ async def estimate(
 
 
 @router.post("/discover")
-async def discover(body: DiscoverBody, auth: dict = Depends(get_current_org)):
+async def discover(body: DiscoverBody, auth: dict = Depends(require_can_spend)):
     """Find real companies for one ICP.
 
     Runs inline. Background jobs in this codebase are not durable — no queue, no
@@ -282,7 +282,7 @@ async def discover(body: DiscoverBody, auth: dict = Depends(get_current_org)):
 
 
 @router.post("/purge")
-async def purge(body: PurgeBody, auth: dict = Depends(get_current_org)):
+async def purge(body: PurgeBody, auth: dict = Depends(require_can_destroy)):
     """Delete every candidate and contact this org holds.
 
     Rows are deleted, not flagged. Discovery runs survive, stamped `purged_at`:
@@ -395,7 +395,7 @@ async def get_candidate(id: str, auth: dict = Depends(get_current_org)):
 
 
 @router.delete("/candidates/{id}")
-async def delete_candidate(id: str, auth: dict = Depends(get_current_org)):
+async def delete_candidate(id: str, auth: dict = Depends(require_can_destroy)):
     """Delete one candidate and every contact attached to it. Rows, not flags."""
     removed = store.delete_candidate(id, auth["org_id"])
     if removed is None:

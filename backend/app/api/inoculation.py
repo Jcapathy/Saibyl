@@ -7,7 +7,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.core.auth import get_current_org
+from app.core.auth import get_current_org, require_can_destroy, require_can_spend
 from app.core.database import get_supabase_admin
 
 log = structlog.get_logger()
@@ -81,7 +81,7 @@ def _verify_simulation(simulation_id: str, org_id: str) -> dict:
 async def draft(
     simulation_id: str,
     body: DraftBody | None = None,
-    auth: dict = Depends(get_current_org),
+    auth: dict = Depends(require_can_spend),
 ):
     """Draft counter-assets for this run's load-bearing objections."""
     from app.services.billing.agent_pricing import (
@@ -174,7 +174,7 @@ async def update_asset(
 
 
 @router.delete("/assets/{asset_id}")
-async def delete_asset(asset_id: str, auth: dict = Depends(get_current_org)):
+async def delete_asset(asset_id: str, auth: dict = Depends(require_can_destroy)):
     admin = get_supabase_admin()
     admin.table("inoculation_assets").delete().eq("id", asset_id).eq(
         "organization_id", auth["org_id"]

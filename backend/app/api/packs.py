@@ -15,7 +15,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.core.auth import get_current_org
+from app.core.auth import get_current_org, require_can_destroy
 from app.core.database import get_supabase_admin
 from app.services.engine.personas import persona_store
 from app.services.engine.personas.pack_loader import PackLookupError, PersonaPack
@@ -156,7 +156,7 @@ async def rename_pack(pack_id: str, body: RenameBody, auth: dict = Depends(get_c
 
 
 @router.delete("/{pack_id}")
-async def delete_pack(pack_id: str, auth: dict = Depends(get_current_org)):
+async def delete_pack(pack_id: str, auth: dict = Depends(require_can_destroy)):
     """Delete a library pack.
 
     Simulations that used it keep their history: agents are materialised at

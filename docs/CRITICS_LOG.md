@@ -11,6 +11,45 @@ your check could only have passed for the reason you think it did.*
 
 ---
 
+## 2026-08-22 — Three defect classes an audit found, and what transfers
+
+**A concurrency limit is not a spend limit.** `interview_batch` held a
+`Semaphore(5)` and read as bounded. It bounds how many calls run *at once*,
+not how many run — ten thousand ids meant twenty thousand model calls, five
+at a time, all of them on Saibyl's account and none of them metered. Transfer:
+whenever a request body carries a list that becomes work, find the thing that
+limits the *total*. If the only limit you can point at is a semaphore, a pool
+size, or a rate limiter, there isn't one.
+
+**A field that carries a value nobody asked for is still a field you now own.**
+The clearance artifact was "the skill's output contract byte for byte", which
+was true and beside the point: `owner` and `assignee` come from USPTO records
+that also carry inventor and attorney addresses, and nothing scanned. The
+codebase already had the right instinct twice (`gtm/privacy`,
+`capital/schema`) and clearance simply never inherited it — because it was
+built as a faithful port of a skill, and fidelity to an upstream contract
+reads as a reason not to change the payload. Transfer: **a port inherits the
+source's shape, not its data-protection posture.** Ask separately what the new
+system is now storing.
+
+**And the fix can be worse than the defect.** The obvious remedy — apply
+`rejects_as_personal_data` and drop anything that trips it — would have
+deleted prior-art findings, silently, on the exact runs where the finding
+mattered most. The two rules look identical and are not: refusing is right
+when Saibyl chose to collect, redacting is right when the user asked a
+question whose answer is a public register. Transfer: before reusing a rule
+from another module, check whether its *premise* holds, not just whether its
+shape fits.
+
+**A returned field that nothing reads is a permission nobody granted.**
+`get_current_org` had returned `role` since V1. Five routes read it; forty-odd
+did not, so a `viewer` could spend 5,000 credits or purge the org's GTM data.
+Nothing was broken — the data was simply never consulted, which no test could
+notice because every test fixture built its auth dict as `{"org_id": ORG}` and
+the absence of `role` was itself the assertion. Transfer: **grep for the
+readers of a security-relevant field, not for its writers**, and treat a test
+fixture that omits a field as a claim that the field does not matter.
+
 ## 2026-08-17 — The app-shell restyle (waves 0–2): lessons and the critic round
 
 - **A name-stable token remap flips an app wholesale.** Keeping the dark-era

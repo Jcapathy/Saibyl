@@ -8,6 +8,34 @@ running delta record.
 
 ---
 
+## 2026-08-22 — Two new boundaries: role gates, and clearance personal data
+
+- **`core/auth.py` gains two dependencies**, `require_can_spend` and
+  `require_can_destroy`, built by a shared `_role_gate` factory over
+  `SPENDING_ROLES` / `DESTRUCTIVE_ROLES`. They are *dependencies*, not helpers
+  a handler calls, so a route cannot hold `auth` without having passed one —
+  the same "enforced by construction, not by convention" shape
+  `capital/schema` uses. Applied to the 13 routes that spend and the 9 that
+  destroy. `admin.py::require_platform_admin` is unchanged and stays
+  cross-tenant (it gates on the platform owner's org id, so it is not a
+  reusable in-org gate); the five pre-existing inline `auth["role"]` checks in
+  `organizations.py` and `billing.py` are left as they are, and the invariant
+  test accepts either form.
+- **New `services/clearance/privacy.py`** — the clearance module's answer to
+  `gtm/privacy.py`, and deliberately *not* the same rule. It redacts personal
+  contact channels (email, phone, postal address) and keeps names of record,
+  because an inventor or assignee name is the prior-art finding. Enforced at
+  both ends of the artifact's life: `artifact.build_artifact` returns through
+  it (so `clearance_runs.artifact`, `clearance_findings` and `report_markdown`
+  are all clean at rest) and `GET /api/clearance/{run_id}` re-runs it (so rows
+  written before this existed are served clean too). The pass is idempotent,
+  so the two do not fight.
+- **`agent_pricing.MAX_AGENTS_ANY_TIER`** — the ceiling of `TIER_CAPS`,
+  derived. The bound for any surface whose fan-out is chosen by the caller
+  rather than by a run's stored shape; today that is the batch-interview
+  route, which was building one model call per id with nothing limiting the
+  total.
+
 ## 2026-08-21 — The family-office bank fills itself, and three shapes change
 
 **`services/capital/discovery.py`** — the bank had been deployed and empty

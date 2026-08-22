@@ -178,9 +178,17 @@ def _fake_billing(monkeypatch, balance: int = 10_000) -> list:
 
 @pytest.fixture
 def authed_client(app):
+    """A caller who is allowed to spend.
+
+    `role` was absent until `POST /api/clearance` was role-gated, and its
+    absence was an assertion: these tests passed while a `viewer` could order a
+    6,000-credit COMPREHENSIVE search. It is `owner` now because that is who
+    these tests are about — the refusal side is
+    `test_role_gates.py::test_a_viewer_cannot_order_a_clearance_search`.
+    """
     from fastapi.testclient import TestClient
 
-    app.dependency_overrides[get_current_org] = lambda: {"org_id": ORG}
+    app.dependency_overrides[get_current_org] = lambda: {"org_id": ORG, "role": "owner"}
     try:
         yield TestClient(app)
     finally:

@@ -6,7 +6,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app.core.auth import get_current_org
+from app.core.auth import get_current_org, require_can_destroy, require_can_spend
 from app.core.database import get_supabase_admin
 from app.services.engine.personas.icp_schema import ICPProfile
 
@@ -109,7 +109,7 @@ def _with_promotions(row: dict, org_id: str) -> dict:
 # ---------------------------------------------------------------------------
 
 @router.post("/synthesize")
-async def synthesize(body: SynthesizeBody, auth: dict = Depends(get_current_org)):
+async def synthesize(body: SynthesizeBody, auth: dict = Depends(require_can_spend)):
     """Derive an ICP from the project's uploaded material.
 
     Runs inline rather than as a background task. It is a single main-model call
@@ -296,7 +296,7 @@ async def confirm_profile(id: str, auth: dict = Depends(get_current_org)):
 
 
 @router.delete("/{id}")
-async def delete_profile(id: str, auth: dict = Depends(get_current_org)):
+async def delete_profile(id: str, auth: dict = Depends(require_can_destroy)):
     """Delete an ICP profile.
 
     Simulations that used it keep running: `simulations.icp_profile_id` is

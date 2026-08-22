@@ -8,7 +8,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 
-from app.core.auth import get_current_org
+from app.core.auth import get_current_org, require_can_destroy, require_can_spend
 from app.core.config import settings
 from app.core.database import get_supabase_admin
 from app.core.tasks import spawn
@@ -452,7 +452,7 @@ async def get_simulation(id: str, auth: dict = Depends(get_current_org)):
 
 
 @router.delete("/{id}")
-async def delete_simulation(id: str, auth: dict = Depends(get_current_org)):
+async def delete_simulation(id: str, auth: dict = Depends(require_can_destroy)):
     """Delete a simulation and everything derived from it."""
     log.info("delete_simulation", simulation_id=id, org_id=auth["org_id"])
     admin = get_supabase_admin()
@@ -512,7 +512,7 @@ async def prepare_simulation(id: str, auth: dict = Depends(get_current_org)):
 async def start_simulation(
     id: str,
     body: StartSimulationBody | None = None,
-    auth: dict = Depends(get_current_org),
+    auth: dict = Depends(require_can_spend),
 ):
     """Start running a simulation, redeeming its quote."""
     log.info("start_simulation", simulation_id=id, org_id=auth["org_id"])

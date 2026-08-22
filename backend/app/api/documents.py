@@ -19,7 +19,7 @@ import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.core.auth import get_current_org
+from app.core.auth import get_current_org, require_can_destroy
 from app.core.database import get_supabase_admin
 from app.core.tasks import spawn
 from app.services.billing.storage_billing import check_storage_quota, update_org_storage_usage
@@ -467,7 +467,7 @@ async def update_document(
 
 
 @router.delete("/{id}")
-async def delete_document(id: str, auth: dict = Depends(get_current_org)):
+async def delete_document(id: str, auth: dict = Depends(require_can_destroy)):
     """Delete a document and its storage files."""
     log.info("delete_document", document_id=id)
     return delete_upload(id, auth["org_id"])

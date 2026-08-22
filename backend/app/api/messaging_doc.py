@@ -25,7 +25,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from app.core.auth import get_current_org
+from app.core.auth import get_current_org, require_can_spend
 from app.core.database import get_supabase_admin
 from app.core.tasks import spawn
 from app.services.billing.agent_pricing import (
@@ -61,7 +61,7 @@ def _mark_failed(doc_id: str) -> Callable[[Exception], None]:
 
 
 @router.post("")
-async def build_doc(body: BuildBody, auth: dict = Depends(get_current_org)):
+async def build_doc(body: BuildBody, auth: dict = Depends(require_can_spend)):
     """Fill the messaging worksheet from one run's measurement."""
     admin = get_supabase_admin()
     org_id = auth["org_id"]

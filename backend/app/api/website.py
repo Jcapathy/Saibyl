@@ -28,7 +28,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.core.auth import get_current_org
+from app.core.auth import get_current_org, require_can_spend
 from app.core.database import get_supabase_admin
 from app.core.tasks import spawn
 from app.services.billing.agent_pricing import (
@@ -119,7 +119,7 @@ def _looks_like_web_address(url: str) -> bool:
 
 @router.post("/check")
 async def create_website_check(
-    body: CreateWebsiteCheckBody, auth: dict = Depends(get_current_org)
+    body: CreateWebsiteCheckBody, auth: dict = Depends(require_can_spend)
 ):
     """Create a website check, charge it, and hand it to the worker."""
     log.info(
@@ -292,7 +292,7 @@ _CHECK_IMAGES = {
 
 @router.post("/revision")
 async def create_page_revision(
-    body: CreatePageRevisionBody, auth: dict = Depends(get_current_org)
+    body: CreatePageRevisionBody, auth: dict = Depends(require_can_spend)
 ):
     """Create a page revision, charge it, and hand it to the worker."""
     log.info(

@@ -6,7 +6,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from app.core.auth import get_current_org
+from app.core.auth import get_current_org, require_can_spend
 from app.core.database import get_supabase_admin
 from app.services.billing.agent_pricing import (
     CREDITS_PER_USD,
@@ -111,7 +111,9 @@ async def checkout(body: CheckoutRequest, auth: dict = Depends(get_current_org))
 
 
 @router.post("/flash-report")
-async def flash_report_checkout(body: FlashReportCheckoutRequest, auth: dict = Depends(get_current_org)):
+async def flash_report_checkout(
+    body: FlashReportCheckoutRequest, auth: dict = Depends(require_can_spend)
+):
     """Create Stripe Checkout session for a one-time Flash Report purchase."""
     try:
         url = await create_flash_report_checkout(auth["org_id"], body.report_type)
@@ -169,13 +171,17 @@ async def topup_quote(body: TopupRequest, auth: dict = Depends(get_current_org))
 
 
 @router.post("/topup")
-async def topup(body: TopupRequest, auth: dict = Depends(get_current_org)):
+async def topup(body: TopupRequest, auth: dict = Depends(require_can_spend)):
     """Open Checkout for a one-off credit top-up of any amount.
 
     Not restricted to owners and admins, unlike `/checkout`. A subscription
     changes what the organisation is committed to every month; a top-up adds
     credits once, and a member who has run out mid-task should not have to find
     an admin to spend $10.
+
+    `require_can_spend` states the other half of that decision, which was
+    previously left implicit: members yes, **viewers no**. Nothing about the
+    reasoning above applies to an account whose whole grant is to read.
     """
     try:
         url = await create_topup_checkout(

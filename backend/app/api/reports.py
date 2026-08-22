@@ -4,7 +4,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from app.core.auth import get_current_org
+from app.core.auth import get_current_org, require_can_destroy
 from app.core.database import get_supabase_admin
 from app.core.tasks import spawn
 from app.services.engine.document_processor import _extract_text
@@ -319,7 +319,7 @@ async def chat_with_report_endpoint(id: str, body: ChatBody, auth: dict = Depend
 
 
 @router.delete("/{id}")
-async def delete_report(id: str, auth: dict = Depends(get_current_org)):
+async def delete_report(id: str, auth: dict = Depends(require_can_destroy)):
     """Delete a report and its sections."""
     log.info("delete_report", report_id=id)
     admin = get_supabase_admin()

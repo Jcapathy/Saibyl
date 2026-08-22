@@ -7,7 +7,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from app.core.auth import get_current_org
+from app.core.auth import get_current_org, require_can_destroy
 from app.core.database import fetch_all, get_supabase_admin
 
 log = structlog.get_logger()
@@ -143,7 +143,7 @@ async def update_project(id: str, body: UpdateProjectBody, auth: dict = Depends(
 
 
 @router.delete("/{id}")
-async def delete_project(id: str, auth: dict = Depends(get_current_org)):
+async def delete_project(id: str, auth: dict = Depends(require_can_destroy)):
     """Archive a project (soft delete)."""
     log.info("delete_project", project_id=id)
     admin = get_supabase_admin()

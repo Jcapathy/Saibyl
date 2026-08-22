@@ -43,6 +43,44 @@ instead of at a stranger's signup — which is how the original defect reached
 production.
 
 ---
+## 2026-08-22 — Three security decisions, with their reasoning
+
+1. **Batch-interview cap = `MAX_AGENTS_ANY_TIER` (1,000), derived from
+   `TIER_CAPS`.** A batch names agents of one run; no plan can configure a
+   swarm larger than enterprise's 1,000, so a request naming more cannot be
+   about a real run. It is also the ceiling `by-persona` already has, so the
+   caller-driven route is now no worse than the shape-driven one. Derived, not
+   written down, so it tracks `TIER_CAPS`. Deliberately the *global* ceiling
+   rather than the org's own tier cap: an org that downgrades must still be
+   able to interview a run it already paid for.
+
+2. **Clearance keeps names of record and removes contact channels.** The rest
+   of the codebase refuses personal data whole (`gtm/privacy`,
+   `capital/schema`); that rule is right there and wrong here. In GTM, Saibyl
+   chose to go looking and a contact detail is evidence the crawl went
+   somewhere it should not have — dropping the record costs one lead. In
+   clearance the founder asked a specific question and the answer is a US
+   register entry published by statute; dropping it costs the finding, and a
+   report that silently omits the reference that blocks you is worse than no
+   report. So: **redact, don't reject.** Names stay (they are also excluded
+   from "personal information" under CCPA §1798.140(v)(2) as government-record
+   data); emails, phones and postal addresses never enter storage and never
+   leave it. The founder's own `item` text is deliberately untouched — it is
+   their data, stored verbatim in its own column, and rewriting only the copy
+   we hand back would be theatre.
+
+3. **Who may spend, who may destroy.** Spending is **owner, admin, member**;
+   destruction is **owner, admin**; a viewer does neither. The member call is
+   the judgement one and turns on recoverability: a member who mis-spends
+   3,000 credits has bought something and can be topped up, while a member who
+   calls `DELETE /simulations/{id}` destroys the artifact *and* the money that
+   bought it, cascading through reports, sections, events and agents, with no
+   undo. Locking members out of spending would also make every invitation
+   decorative — `InviteMemberBody` offers only `member` and `viewer`. Kept
+   separate from `POST /billing/checkout` and `/portal`, already owner/admin:
+   buying commits the org's money, spending commits capacity it already owns.
+   `POST /billing/topup` keeps its documented member allowance and now states
+   the other half of that decision explicitly — members yes, viewers no.
 
 ## 2026-08-21 — We build the family-office bank; we do not license one
 

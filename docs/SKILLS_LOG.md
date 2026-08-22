@@ -8,6 +8,21 @@ product features that began as skills.
 
 ---
 
+## 2026-08-22 — `ip-clearance-search`: the port now deviates from the skill
+
+The clearance artifact still matches the skill's output contract **key for
+key** — every key present on every run, `queries_run` complete, disclaimer
+verbatim. It no longer matches it **value for value**: personal contact
+channels (email, phone, postal address) inside `owner`, `assignee`, `title`,
+`claim_requirements`, `differences`, `query` and the watch list are replaced
+with `[contact detail removed]` by `services/clearance/privacy.py`. Names of
+record are untouched.
+
+Recorded here because the port's fidelity to the upstream contract is what
+kept anyone from looking at what it was storing (see CRITICS_LOG, same date).
+A future session comparing Saibyl's output against a raw skill run will see
+this difference and should not "fix" it.
+
 ## 2026-08-17 — Authed-app screenshot rig (restyle proof harness)
 
 Reusable playwright scripts for reading the deployed-quality app by eye,

@@ -19,7 +19,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 
-from app.core.auth import get_current_org
+from app.core.auth import get_current_org, require_can_spend
 from app.core.config import settings
 from app.core.database import get_supabase_admin
 from app.core.tasks import spawn
@@ -104,7 +104,7 @@ class CreateClearanceBody(BaseModel):
 
 @router.post("")
 async def create_clearance_run(
-    body: CreateClearanceBody, auth: dict = Depends(get_current_org)
+    body: CreateClearanceBody, auth: dict = Depends(require_can_spend)
 ):
     """Create a clearance run, charge it, and hand it to the worker."""
     log.info(

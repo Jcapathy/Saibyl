@@ -40,7 +40,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app.core.auth import get_current_org
+from app.core.auth import get_current_org, require_can_spend
 from app.core.database import get_supabase_admin
 from app.services.billing.agent_pricing import (
     capital_shortlist_credits,
@@ -284,7 +284,7 @@ def _product_summary(simulation_id: str, org_id: str) -> str:
 
 
 @router.post("/shortlist")
-async def create_shortlist(body: ShortlistBody, auth: dict = Depends(get_current_org)):
+async def create_shortlist(body: ShortlistBody, auth: dict = Depends(require_can_spend)):
     """Build the shortlist for one product, charging at create."""
     admin = get_supabase_admin()
     org_id = auth["org_id"]
