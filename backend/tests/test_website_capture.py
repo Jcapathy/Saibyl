@@ -94,6 +94,20 @@ class _FakePage:
             raise raises
         self.url = self._spec.get("final_url", url)
 
+    async def wait_for_load_state(self, state, timeout=None):
+        """The settle after `domcontentloaded`.
+
+        Modelled rather than left off the fake: without it the capture's
+        `try/except` swallowed an AttributeError and every test passed while
+        never exercising the settle at all. `settle_raises` lets a test say
+        "this page's network never goes quiet", which is the normal case for a
+        commercial page full of analytics.
+        """
+        self._calls.append(("settle", self._viewport["width"], state, timeout))
+        raises = self._spec.get("settle_raises")
+        if raises is not None:
+            raise raises
+
     async def title(self):
         return self._spec.get("title", "")
 
@@ -266,6 +280,50 @@ async def test_a_redirect_landing_on_a_private_address_is_rejected(monkeypatch):
 # ---------------------------------------------------------------------------
 # Claim 3: the captured evidence is faithful
 # ---------------------------------------------------------------------------
+
+async def test_navigation_does_not_wait_for_every_tracker_to_finish(monkeypatch):
+    """`load` waits for every subresource — analytics beacons, chat widgets,
+    lazily-loaded video. On a real commercial marketing page those keep the
+    load event pending long after the page is visually done, which is how
+    simplepractice.com and stripe.com exhausted a 45-second budget while
+    example.com completed in 94 seconds end to end."""
+    monkeypatch.setattr(
+        security.socket, "getaddrinfo", _resolving({"acme.example": _PUBLIC_IP})
+    )
+    calls, _browser = _install_fake_playwright(monkeypatch, {"page_height": 900})
+
+    await capture_website("https://acme.example/", timeout_s=45)
+
+    gotos = [c for c in calls if c[0] == "goto"]
+    assert gotos, "the page was never navigated"
+    for call in gotos:
+        assert call[4] == "domcontentloaded", (
+            f"navigation waited on {call[4]!r}, which a page full of trackers "
+            f"may never reach"
+        )
+    assert [c for c in calls if c[0] == "settle"], (
+        "nothing waited for the page to settle, so a screenshot could be taken "
+        "before the hero image painted"
+    )
+
+
+async def test_a_page_whose_network_never_goes_quiet_is_still_captured(monkeypatch):
+    """The settle is a courtesy, not a requirement. A page whose analytics
+    chatter forever is shot as it stands."""
+    monkeypatch.setattr(
+        security.socket, "getaddrinfo", _resolving({"acme.example": _PUBLIC_IP})
+    )
+    _calls, _browser = _install_fake_playwright(monkeypatch, {
+        "dom_text": "Welcome to Acme.",
+        "page_height": 900,
+        "settle_raises": TimeoutError("networkidle never reached"),
+    })
+
+    result = await capture_website("https://acme.example/", timeout_s=45)
+
+    assert result.dom_text == "Welcome to Acme."
+    assert result.screenshot_desktop
+
 
 async def test_a_capture_returns_the_rendered_evidence(monkeypatch):
     monkeypatch.setattr(

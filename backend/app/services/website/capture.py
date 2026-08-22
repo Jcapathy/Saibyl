@@ -68,6 +68,12 @@ MAX_SCREENSHOT_HEIGHT_PX = 8_000
 # a context window. Truncation is likewise noted in `meta`.
 DOM_TEXT_MAX_CHARS = 100_000
 
+# How long to let the network go quiet after the document is parsed, before
+# measuring and shooting the page. Long enough for hero images and webfonts,
+# short enough that a page whose analytics never stop chattering is captured
+# rather than waited on.
+_SETTLE_MS = 8_000
+
 # Scripts as module constants: each carries a distinctive marker string
 # ("scrollHeight", "innerText", "querySelectorAll('meta')") that tests key on
 # to fake `page.evaluate` without a browser.
@@ -429,7 +435,27 @@ async def _render(
             await context.route("**/*", _abort_external_request)
             await page.set_content(html, timeout=timeout_s * 1000, wait_until="load")
         else:
-            await page.goto(url, timeout=timeout_s * 1000, wait_until="load")
+            # `domcontentloaded`, then settle — not `load`.
+            #
+            # `load` waits for **every** subresource, and on a real commercial
+            # marketing page that includes analytics beacons, chat widgets,
+            # lazily-loaded video and third-party pixels. Those keep the load
+            # event pending long after the page is visually finished, which is
+            # why simplepractice.com and stripe.com exhausted a 45-second
+            # navigation budget while example.com completed in 94 seconds
+            # end to end.
+            #
+            # The screenshot still wants images painted, so the settle below
+            # waits for the network to go quiet — but only briefly, and its
+            # expiry is not an error. A page whose trackers never go idle is
+            # normal, and shooting it as it stands is the right answer.
+            await page.goto(
+                url, timeout=timeout_s * 1000, wait_until="domcontentloaded"
+            )
+            try:
+                await page.wait_for_load_state("networkidle", timeout=_SETTLE_MS)
+            except Exception:  # noqa: BLE001 - never going idle is not a failure
+                logger.info("website_capture_settle_skipped", url=url)
 
         result: dict[str, Any] = {"final_url": page.url}
         if not mobile:
