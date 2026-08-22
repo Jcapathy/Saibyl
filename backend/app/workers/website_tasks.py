@@ -252,9 +252,20 @@ async def _upload_reference_screenshot(
     org-scoped prefix, named so nothing that globs the snapshot's own
     screenshots ever confuses the two.
     """
+    # Imported here rather than at module top, like every other website
+    # service in this file: the module must load where no browser runtime
+    # exists.
+    from app.services.website.store import run_off_loop
+
     path = f"website/{organization_id}/{snapshot_id}/reference-desktop.png"
     bucket = get_supabase_admin().storage.from_(SCREENSHOT_BUCKET)
-    bucket.upload(path, capture.screenshot_desktop, {"content-type": "image/png"})
+    # Off the event loop, for the reason `store.run_off_loop` documents at
+    # length: the Supabase client is synchronous, and this upload sits inside
+    # the same `capturing` window that stalled the whole service.
+    await run_off_loop(
+        bucket.upload, path, capture.screenshot_desktop,
+        {"content-type": "image/png"}, what="the reference screenshot",
+    )
     logger.info(
         "website_reference_screenshot_stored",
         organization_id=organization_id,

@@ -60,20 +60,34 @@ MAX_ACTIONS_STREAMED_PER_ROUND = 60
 _CONTENT_PREVIEW_CHARS = 400
 
 
-async def _publish(simulation_id: str, payload: dict[str, Any]) -> None:
-    """One message onto the run's channel. Never raises."""
-    try:
+_client: Any = None
+
+
+def _redis() -> Any:
+    """One connection pool for the process, not one per event.
+
+    The first version opened and closed a Redis connection for every message.
+    A single run publishes a round-start, a round-end and up to sixty actions
+    per round — roughly eighty connections built and torn down for one run,
+    on a half-CPU instance, purely to draw a progress bar. `from_url` returns
+    a pooled client that is safe to share and reuse.
+    """
+    global _client
+    if _client is None:
         import redis.asyncio as aioredis
 
         from app.core.config import settings
 
-        client = aioredis.from_url(settings.redis_url, decode_responses=True)
-        try:
-            await client.publish(
-                f"simulation:{simulation_id}:events", json.dumps(payload)
-            )
-        finally:
-            await client.aclose()
+        _client = aioredis.from_url(settings.redis_url, decode_responses=True)
+    return _client
+
+
+async def _publish(simulation_id: str, payload: dict[str, Any]) -> None:
+    """One message onto the run's channel. Never raises."""
+    try:
+        await _redis().publish(
+            f"simulation:{simulation_id}:events", json.dumps(payload)
+        )
     except Exception:  # noqa: BLE001 - a progress bar is never worth a run
         log.warning(
             "simulation_stream_publish_failed",

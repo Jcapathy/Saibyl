@@ -185,6 +185,9 @@ async def test_a_dead_redis_costs_a_progress_bar_never_the_run(monkeypatch):
     def _explode(*_args, **_kwargs):
         raise ConnectionError("redis is gone")
 
+    # Clear the cached pool first, or an earlier test's client would be reused
+    # and this would assert nothing about a dead Redis.
+    monkeypatch.setattr(pub, "_client", None)
     monkeypatch.setattr(aioredis, "from_url", _explode)
 
     # None of these may raise.

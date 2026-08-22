@@ -312,7 +312,16 @@ def _install_services(
             "mobile": f"website/{organization_id}/{snapshot_id}/mobile.png",
         }
 
+    async def run_off_loop(fn, *args, what: str):
+        """The real module runs blocking Supabase storage calls on a thread,
+        because the client is synchronous and a multi-megabyte upload on the
+        event loop stalls the whole service. The stand-in keeps the signature
+        so the worker's reference-screenshot upload takes the same path it
+        takes in production."""
+        return fn(*args)
+
     store_mod.upload_screenshots = upload_screenshots
+    store_mod.run_off_loop = run_off_loop
 
     critics_mod = types.ModuleType("app.services.website.critics")
 
