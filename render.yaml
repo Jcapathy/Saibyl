@@ -3,7 +3,20 @@ services:
   - type: web
     name: saibyl-backend
     runtime: docker
-    plan: starter
+    # Standard (1 vCPU, 2 GB), raised from `starter` on 2026-08-22 and NOT a
+    # preference — the Website Gauntlet does not work below it.
+    #
+    # A headless Chromium wants 300–500 MB and real CPU to lay a page out. On
+    # starter (0.5 vCPU, 512 MB) no commercial website ever captured
+    # successfully: stripe.com and simplepractice.com failed or wedged on every
+    # attempt for four days. On Standard they capture in 11 and 21 seconds, and
+    # two at once leave the rest of the API answering normally.
+    #
+    # This line is written down because the upgrade was made in the dashboard,
+    # and a Blueprint sync from a file still saying `starter` would silently
+    # take it back and break the flagship module again. If this ever comes
+    # down, `WEBSITE_CAPTURE_CONCURRENCY` must come down with it.
+    plan: standard
     region: oregon
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend

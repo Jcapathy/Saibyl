@@ -474,9 +474,37 @@ and three checks starting within four minutes on one instance was enough. The
 whole capture now runs under a hard deadline, and at most two browsers run per
 process — the deadline makes the failure honest, the pool stops it happening.
 
-### S-6 · The Website Gauntlet cannot read a real website — **OPEN, needs a decision**
+### S-6 · The Website Gauntlet cannot read a real website — **CLOSED 2026-08-22**
 
-**The most serious finding of the exercise, and the flagship module.**
+**Resolved.** The founder moved the instance to Standard (1 vCPU, 2 GB) and
+the flagship module reads real websites for the first time. Measured against a
+commit confirmed through `/health`:
+
+| site | capture | full check | text | critique |
+|---|---|---|---|---|
+| stripe.com | 11s | 136s | 12,084 chars | 79 |
+| simplepractice.com | 21s | 156s | 4,636 chars | 67 |
+
+Both had **never once completed** in the entire production history. Every
+attempt before this failed or wedged.
+
+**And the case that used to kill the service now holds.** Two heavy captures
+started together: both completed (150s, 160s) while an unrelated billing
+endpoint was polled throughout — **48 calls, 0 failures**. On the old plan
+that combination returned 502 across every endpoint. Concurrency raised from
+one browser to two, which is what the 2 GB buys.
+
+It took both halves. The code fixes below made the failures legible and
+bounded; the CPU is what moved a capture from "never finishes" to eleven
+seconds. Neither alone would have been enough — and the code fixes had to come
+first, because until the event loop was unblocked every symptom pointed at the
+wrong cause.
+
+The history is kept below because the wrong turns are the useful part.
+
+---
+
+**The original finding, and the investigation that corrected it:**
 
 Read off the production table rather than inferred: the last website check to
 complete was **2026-08-17**. Since then, twelve failures and none finished.

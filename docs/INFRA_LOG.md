@@ -43,6 +43,39 @@ check able to hang at `capturing` indefinitely. Details in PRELAUNCH_BUGS.
 `outbound_sequence` 2,500, `capital_shortlist` 3,000 all now served by
 `GET /billing/prices`, which had omitted all three.
 
+## 2026-08-22 — Standard plan, and the Website Gauntlet works
+
+**`saibyl-backend` moved from `starter` (0.5 vCPU / 512 MB) to Standard
+(1 vCPU / 2 GB).** Founder's action. Measured immediately after, against a
+commit confirmed through `/health`:
+
+- **stripe.com** — capture 11s, full check complete 136s, 12,084 chars, 79.
+- **simplepractice.com** — capture 21s, full check complete 156s, 4,636
+  chars, 67.
+
+Neither had ever completed before, on any day, in the whole production table.
+
+**The concurrency test that used to kill the box now passes.** Two heavy
+captures started together: both completed (150s, 160s) while `/billing/credits`
+was polled throughout — **48 calls, 0 failures**. On the old plan that
+combination produced 502 on every endpoint. `WEBSITE_CAPTURE_CONCURRENCY`
+default raised 1 → 2 to match the memory; still env-tunable, and it must come
+back down if the plan ever does.
+
+**What this settles about the diagnosis.** It took both halves and in this
+order: the code fixes (synchronous storage off the event loop, bounded capture
+steps, evidence before extras, a layout-free text fallback, the reaper) made
+the failures legible and bounded, and the CPU is what moved a capture from
+"never finishes" to eleven seconds. Until the loop was unblocked every symptom
+pointed at the wrong cause — which is why "just raise the plan" would have
+been the wrong first move even though the plan did need raising.
+
+`WEBSITE_CAPTURE_DEADLINE_S` stays at 300. It only bites on failure, and a
+generous ceiling costs nothing when captures take eleven seconds, while a
+tight one would fail real customers on genuinely slow sites.
+
+---
+
 ## 2026-08-21 (later) — "Do we need memory, or is something leaking?"
 
 Founder's question, and the honest answer is neither — the first diagnosis in
