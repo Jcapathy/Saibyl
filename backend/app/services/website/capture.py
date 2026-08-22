@@ -284,22 +284,23 @@ async def capture_website(url: str, *, timeout_s: int = 45) -> WebsiteCapture:
 
 # How many captures may hold a browser at once, per process.
 #
-# **One, because the box is 512 MB.** `render.yaml` puts saibyl-backend on the
-# `starter` plan; a headless Chromium wants 300–500 MB on its own. Two do not
-# fit, and the failure is not a slow capture — it is the whole service being
-# killed and restarted. Measured twice: three sample products reaching their
-# website checks together produced hung captures on the first run and
-# `502 Bad Gateway` across every endpoint on the second, taking down runs and
-# billing calls that had nothing to do with the browser.
+# **Two, since the instance moved to Standard (1 vCPU, 2 GB) on 2026-08-22.**
+# A headless Chromium wants 300–500 MB, so two fit in 2 GB with room for the
+# API beside them; on the old 512 MB `starter` plan they did not, and the
+# failure was not a slow capture but the whole service being killed —
+# `502 Bad Gateway` across every endpoint, taking down runs and billing calls
+# that had nothing to do with a browser.
 #
-# So the cost of the wrong number here is not paid by the founder whose check
-# is slow. It is paid by every other founder on the platform.
+# The cost of the wrong number here is not paid by the founder whose check is
+# slow. It is paid by every other founder on the platform. So it is raised
+# only against measurement: on the new plan a capture of stripe.com takes
+# about 11 seconds and simplepractice.com about 21, where both previously
+# never finished at all.
 #
-# Tunable by env because the right value is a property of the instance rather
-# than of this code: on a plan with room for two browsers, set
-# WEBSITE_CAPTURE_CONCURRENCY=2 and the queue halves.
+# Still env-tunable, because the right value is a property of the instance
+# rather than of this code.
 MAX_CONCURRENT_CAPTURES = max(
-    1, int(os.environ.get("WEBSITE_CAPTURE_CONCURRENCY", "1") or 1)
+    1, int(os.environ.get("WEBSITE_CAPTURE_CONCURRENCY", "2") or 2)
 )
 
 # How Chromium is started inside a container, and the reason the flagship

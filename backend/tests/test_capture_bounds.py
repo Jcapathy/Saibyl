@@ -131,15 +131,20 @@ def test_both_launch_sites_pass_the_container_flags():
 
 
 def test_the_default_fits_the_instance_the_service_actually_runs_on():
-    """`render.yaml` puts saibyl-backend on the `starter` plan: 512 MB. A
-    headless Chromium wants 300-500 MB on its own, so two do not fit — and the
-    failure is not a slow capture, it is the whole service being killed. Two
-    sample runs proved it: hung captures the first time, `502 Bad Gateway`
-    across every endpoint the second, taking down runs and billing calls that
-    had nothing to do with the browser."""
-    assert cap.MAX_CONCURRENT_CAPTURES == 1, (
-        "more than one browser at a time does not fit in 512 MB; raise this "
-        "only alongside the Render plan"
+    """The instance moved to Standard (1 vCPU, 2 GB) on 2026-08-22, and this
+    number moved with it — not before it.
+
+    A headless Chromium wants 300-500 MB. Two fit in 2 GB with room for the
+    API; on the old 512 MB `starter` plan they did not, and the failure was
+    not a slow capture but the whole service killed — 502 across every
+    endpoint, taking down runs and billing calls that had nothing to do with a
+    browser. The cost of the wrong number here is paid by every *other*
+    founder on the platform, which is why it tracks the plan rather than
+    optimism.
+    """
+    assert cap.MAX_CONCURRENT_CAPTURES == 2, (
+        "two browsers fit the Standard plan; this must not exceed what the "
+        "instance can hold, and must come down if the plan does"
     )
 
 
@@ -187,8 +192,14 @@ async def test_a_wedged_capture_cannot_swallow_every_check_behind_it(monkeypatch
     async def _wedged():
         await asyncio.sleep(3600)
 
-    # Hold the only slot with something that will not finish.
-    stuck = asyncio.create_task(cap._bounded(_wedged(), "stuck", 45))
+    # Fill EVERY slot, however many the plan allows. Written against
+    # `MAX_CONCURRENT_CAPTURES` rather than against "one", so that raising the
+    # concurrency with the instance cannot quietly turn this into a test that
+    # holds one slot of two and asserts nothing.
+    stuck = [
+        asyncio.create_task(cap._bounded(_wedged(), f"stuck-{i}", 45))
+        for i in range(cap.MAX_CONCURRENT_CAPTURES)
+    ]
     await asyncio.sleep(0.05)
 
     async def _fine():
@@ -201,7 +212,8 @@ async def test_a_wedged_capture_cannot_swallow_every_check_behind_it(monkeypatch
         "a queued capture must say the checker is busy, not that its own page "
         "was too heavy — they are different problems with different fixes"
     )
-    stuck.cancel()
+    for task in stuck:
+        task.cancel()
     cap._capture_slots = None
 
 
