@@ -71,9 +71,15 @@ _ANY_NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?\s*[km]?\b", re.I)
 #: inside them, so a range never degrades into "[TODO: your number]-50 hours".
 _CLAIM_SPAN = re.compile(
     r"(?:"
-    # money, with optional k/m and an optional range partner
-    r"[$£€]\s?\d[\d,]*(?:\.\d+)?\s*[km]?"
-    r"(?:\s*[-–—]\s*[$£€]?\s?\d[\d,]*(?:\.\d+)?\s*[km]?)?"
+    # money, with optional k/m and an optional range partner.
+    #
+    # `[km]\b`, not `[km]?` — the same boundary `_DIGITS` needed and this
+    # pattern did not get. Without it the span eats the first letter of the
+    # next word: "$35 kit" matched as "$35 k", which keys as 35,000, is absent
+    # from the material, and so scrubbed a correctly-sourced price *and* left
+    # "[TODO: your number]it" in shipped copy.
+    r"[$£€]\s?\d[\d,]*(?:\.\d+)?(?:\s*[km]\b)?"
+    r"(?:\s*[-–—]\s*[$£€]?\s?\d[\d,]*(?:\.\d+)?(?:\s*[km]\b)?)?"
     r"|"
     # percentage, with an optional range partner
     r"\d[\d,]*(?:\.\d+)?\s*(?:[-–—]\s*\d[\d,]*(?:\.\d+)?\s*)?%"
@@ -104,10 +110,20 @@ _DIGITS = re.compile(r"\d[\d,]*(?:\.\d+)?\s*(?:[km]\b)?", re.I)
 #: generated sequences. It now searches a window rather than anchoring, and the
 #: verb list carries the words outbound copy actually uses.
 _BOOKING_BEFORE = re.compile(
-    r"(?:book|grab|spare|schedule|hop on|jump on|set up|carve out|"
-    r"give (?:me|us)|steal|worth|takes?|got|have|spend|free up|block|find)\b",
+    r"(?:book|book in|grab|spare|schedule|hop on|jump on|set up|carve out|"
+    r"give (?:me|us)|steal|worth|takes?|got|get|have|spend|free up|block|"
+    r"find|need|want)\b",
     re.I,
 )
+
+#: A bare meeting length standing as its own clause — "15 minutes—let's settle
+#: it.", "(20 minutes, free tier)". Both halves of the verb-before /
+#: noun-after test fail here by construction: the sentence split leaves
+#: `before` empty and the punctuation that follows carries no noun. Two of
+#: these reached sendable copy, one of them a line meant to be read down a
+#: phone. A duration alone in a clause is an offer of time, not a claim about
+#: a product — nothing measurable is being asserted.
+_STANDS_ALONE = re.compile(r"^\s*[—–\-,)(]|^\s*$")
 
 #: A lookback or lookahead window in a request — "the worst denial you've seen
 #: in the last 6 months", "anything in the next two weeks". Not a claim about
@@ -249,6 +265,12 @@ def _is_meeting_ask(span: str, before: str, after: str) -> bool:
     if not meeting_sized:
         return False
 
+    # A meeting-sized duration alone in its clause offers time; it asserts
+    # nothing. Only reached once the rate and size tests above have passed, so
+    # "30-50 hours a month" and "500 hours" cannot arrive here.
+    if not before.strip() and _STANDS_ALONE.match(after):
+        return True
+
     return bool(_BOOKING_BEFORE.search(before) or _MEETING_AFTER.search(after))
 
 
@@ -279,8 +301,22 @@ def _scrub_text(
     if not text:
         return text
 
+    # Regions the model already marked as blanks. Substituting inside one
+    # nests a marker in a marker, and `count_placeholders` stops at the first
+    # `]` — so the outer marker is truncated and the rest of its text is
+    # orphaned in the shipped artifact. A live run delivered
+    # "[TODO: … 2x/week tutoring at [TODO: your number]/hour is [TODO: your
+    # number]/month …]". A blank the model wrote is already honest; there is
+    # nothing in it left to verify.
+    blanks = [m.span() for m in _PLACEHOLDER.finditer(text)]
+
+    def _inside_a_blank(start: int, end: int) -> bool:
+        return any(low <= start and end <= high for low, high in blanks)
+
     def _one(match: re.Match[str]) -> str:
         span = match.group(0)
+        if _inside_a_blank(match.start(), match.end()):
+            return span
         # Context stops at the sentence edge. Searching a flat window let
         # "Can we book 20 minutes?" reach forward and exempt the "45-minute
         # manual hunt" in the sentence after it — a booking verb licenses the
@@ -356,6 +392,30 @@ def scrub_unsourced[M: BaseModel](
 
     scrubbed = walk(payload.model_dump())
     return type(payload).model_validate(scrubbed), replaced
+
+
+def founder_material(icp_row: dict) -> str:
+    """Everything the *founder* said about their own product, and nothing the
+    room said about it.
+
+    Two fields, because the price lives in whichever one the run happened to
+    populate: the `product_summary` column, and the `product_summary` key
+    inside the `profile` blob. A live devtools run had the column at 314
+    characters with no price in it while `$40 per developer per month` sat in
+    the blob — so the money check found no price to anchor on, silently fell
+    back to the whole prompt, and the 12x-off-price defence was inert.
+
+    Deliberately excludes `archetypes`, `adversarial` and `gaps`: those are the
+    buyers' side, and letting them in is the laundering route this exists to
+    close.
+    """
+    if not isinstance(icp_row, dict):
+        return ""
+    parts = [str(icp_row.get("product_summary") or "")]
+    profile = icp_row.get("profile")
+    if isinstance(profile, dict):
+        parts.append(str(profile.get("product_summary") or ""))
+    return "\n".join(part for part in parts if part.strip())
 
 
 def count_placeholders(text: str) -> int:

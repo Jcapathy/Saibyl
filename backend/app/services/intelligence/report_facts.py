@@ -94,7 +94,15 @@ _ANY_NUMBER = re.compile(r"-?\d[\d,]*(?:\.\d+)?")
 # the engine backtracks to satisfy the percent lookahead, matching "80.5"
 # inside "80.56%" — a figure nobody wrote, reported as a fabrication, in the
 # one place precision matters most.
-_DECIMAL = re.compile(r"-?\d[\d,]*\.\d+(?!\d)(?!\s*%)")
+#
+# The two lookbehinds stop a *range* being read as a negative number.
+# `_normalise` folds en-dashes to hyphens, so the correctly-reported CI
+# "0.659–0.765" became "0.659-0.765" and the upper bound was read as -0.765 —
+# absent from the evidence, and duly reported as invented. Both figures were
+# right, and the section that wrote them had followed the measurement rules
+# exactly. A minus sign directly after a digit, or after a digit and a space,
+# is a range separator.
+_DECIMAL = re.compile(r"(?<!\d)(?<!\d )-?\d[\d,]*\.\d+(?!\d)(?!\s*%)")
 _PERCENT = re.compile(r"-?\d[\d,]*(?:\.\d+)?(?=\s*%)")
 _COUNT_OF = re.compile(r"\b(\d[\d,]*)\s+(?:of|out of)\s+(\d[\d,]*)\b", re.I)
 

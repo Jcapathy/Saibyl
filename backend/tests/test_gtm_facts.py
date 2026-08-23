@@ -272,6 +272,37 @@ def test_money_falls_back_to_the_whole_material_when_no_price_was_stated():
     assert "$9,000" in pack.rows[0].respond
 
 
+def test_a_blank_the_model_already_wrote_is_left_alone():
+    """Nesting a marker inside a marker corrupts the artifact.
+
+    `count_placeholders` stops at the first `]`, so the outer blank is
+    truncated and the rest of its text is orphaned. A live run shipped
+    "[TODO: … 2x/week tutoring at [TODO: your number]/hour is [TODO: your
+    number]/month …]" — unusable copy the founder cannot even repair, because
+    the number that was there is gone.
+    """
+    written = (
+        "[TODO: We can show the ROI math: 2x/week tutoring at $80/hour is "
+        "$640/month against our $69/year.]"
+    )
+
+    pack, replaced = scrub_unsourced(_Pack(rows=[_Row(respond=written)]), MATERIAL)
+
+    assert pack.rows[0].respond == written
+    assert replaced == []
+    assert count_placeholders(pack.rows[0].respond) == 1
+
+
+def test_a_claim_outside_a_blank_is_still_scrubbed_on_the_same_line():
+    written = "[TODO: your example] and we save you 40 hours a month."
+
+    pack, replaced = scrub_unsourced(_Pack(rows=[_Row(respond=written)]), MATERIAL)
+
+    assert "[TODO: your example]" in pack.rows[0].respond
+    assert "40 hours" not in pack.rows[0].respond
+    assert replaced == ["40 hours"]
+
+
 def test_a_lookback_window_in_a_request_is_not_a_claim():
     """"reply with the worst denial you've seen in the last 6 months" asks a
     question. Scrubbed, it asks for nothing."""

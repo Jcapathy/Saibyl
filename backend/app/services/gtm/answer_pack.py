@@ -51,7 +51,11 @@ from pydantic import BaseModel, Field
 
 from app.core.database import get_supabase_admin
 from app.core.llm_client import llm_structured
-from app.services.gtm.facts import count_placeholders, scrub_unsourced
+from app.services.gtm.facts import (
+    count_placeholders,
+    founder_material,
+    scrub_unsourced,
+)
 
 log = structlog.get_logger()
 
@@ -176,10 +180,14 @@ def _load_context(simulation_id: str, org_id: str) -> dict[str, Any]:
 
     competitors: list[str] = []
     summary = ""
+    founder = ""
     if sim.get("icp_profile_id"):
         icp = (
             admin.table("icp_profiles")
-            .select("competitors, product_summary")
+            # `profile` too: the founder's stated price lives in whichever of
+            # the two summaries the run populated, and the money check has no
+            # anchor without it (see `facts.founder_material`).
+            .select("competitors, product_summary, profile")
             .eq("id", sim["icp_profile_id"])
             .single()
             .execute()
@@ -188,11 +196,15 @@ def _load_context(simulation_id: str, org_id: str) -> dict[str, Any]:
         if isinstance(raw, list):
             competitors = [str(c) for c in raw if str(c).strip()]
         summary = str(icp.get("product_summary") or "")
+        founder = founder_material(icp)
 
     return {
         "name": sim.get("name") or "",
         "goal": sim.get("prediction_goal") or "",
         "summary": summary,
+        # The founder's own words only — never the room's. Used to decide which
+        # money figures this document may state, not to build the prompt.
+        "founder_material": founder,
         "competitors": competitors,
     }
 
@@ -266,7 +278,7 @@ async def build_answer_pack(simulation_id: str, org_id: str) -> AnswerPack:
     # product that has never been sold. Invented figures become the placeholder
     # the prompt asked for, which is honest and countable.
     generated, invented = scrub_unsourced(
-        generated, user, product_material=str(context.get("summary") or "")
+        generated, user, product_material=str(context.get("founder_material") or "")
     )
     if invented:
         log.warning(

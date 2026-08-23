@@ -74,7 +74,11 @@ from pydantic import BaseModel, Field
 
 from app.core.database import get_supabase_admin
 from app.core.llm_client import llm_structured
-from app.services.gtm.facts import count_placeholders, scrub_unsourced
+from app.services.gtm.facts import (
+    count_placeholders,
+    founder_material,
+    scrub_unsourced,
+)
 from app.services.gtm.schema import contains_personal_contact_detail
 
 log = structlog.get_logger()
@@ -356,6 +360,7 @@ def _load_context(simulation_id: str, org_id: str) -> dict[str, Any]:
     ).data or {}
 
     summary = ""
+    founder = ""
     category = ""
     archetypes: list[dict[str, Any]] = []
     if sim.get("icp_profile_id"):
@@ -373,6 +378,10 @@ def _load_context(simulation_id: str, org_id: str) -> dict[str, Any]:
                 profile = json.loads(profile)
             except ValueError:
                 profile = {}
+        # The founder's own words only, never the room's — the authority for
+        # which money figures sendable copy may state. The price lives in
+        # whichever summary the run populated (see `facts.founder_material`).
+        founder = founder_material({"product_summary": summary, "profile": profile})
         if isinstance(profile, dict):
             category = str(profile.get("category") or "")
             raw = profile.get("archetypes")
@@ -387,6 +396,7 @@ def _load_context(simulation_id: str, org_id: str) -> dict[str, Any]:
         "name": sim.get("name") or "",
         "goal": sim.get("prediction_goal") or "",
         "summary": summary,
+        "founder_material": founder,
         "category": category,
         "archetypes": archetypes,
     }
@@ -706,7 +716,7 @@ async def build_outbound_sequences(simulation_id: str, org_id: str) -> OutboundS
         # all under notes labelling them "(factual)". A figure not in `user`
         # becomes the placeholder, which cannot be sent by accident.
         generated, invented = scrub_unsourced(
-            generated, user, product_material=str(context.get("summary") or "")
+            generated, user, product_material=str(context.get("founder_material") or "")
         )
         if invented:
             log.warning(

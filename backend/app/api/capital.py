@@ -46,6 +46,7 @@ from app.services.billing.agent_pricing import (
     capital_shortlist_credits,
     deduct_credits,
     get_credit_balance,
+    refund_credits,
 )
 from app.services.capital.matching import (
     FounderContext,
@@ -397,6 +398,29 @@ async def create_shortlist(body: ShortlistBody, auth: dict = Depends(require_can
         raise HTTPException(status_code=500, detail=GENERIC_FAILURE_MESSAGE) from exc
 
     payload = shortlist.model_dump(mode="json")
+
+    # A shortlist with nothing on it is a finding about the bank's coverage,
+    # not a deliverable — and the module says so in its own notes. Charging
+    # 3,000 credits for it is charging for the sentence "we could not help
+    # you". Two of three sample products hit this in one day, each paying full
+    # price for an empty list drawn from a bank of seven firms.
+    #
+    # The refusals still ship, because *why* a firm was rejected is worth
+    # reading. It is the price that was wrong, not the answer.
+    charged = credits
+    if not shortlist.matches:
+        refund_credits(
+            org_id, credits, reason=f"capital:no_matches:{row['id']}"
+        )
+        charged = 0
+        log.info(
+            "capital_shortlist_refunded_empty",
+            shortlist_id=row["id"],
+            org_id=org_id,
+            considered=shortlist.considered,
+            credits=credits,
+        )
+
     completed = (
         admin.table("capital_shortlists")
         .update({
@@ -408,6 +432,7 @@ async def create_shortlist(body: ShortlistBody, auth: dict = Depends(require_can
             "firms_considered": shortlist.considered,
             "matches_count": len(shortlist.matches),
             "refusals_count": len(shortlist.refusals),
+            "credits_charged": charged,
             "completed_at": datetime.now(UTC).isoformat(),
         })
         .eq("id", row["id"])

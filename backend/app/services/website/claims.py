@@ -158,10 +158,20 @@ _CENTS = re.compile(r"\d[\d,]*(?:\.\d+)?\s?¢")
 
 #: Countable social proof. Deliberately requires the noun: "4,000" alone is a
 #: number, "4,000 customers" is a claim about the business.
+#: Widened after a live marketplace run found this family nearly inert on its
+#: own category: of 17 nouns tested, 13 were missing, so "Trusted by 50,000
+#: creators" would have gone unflagged on a creator marketplace — the exact
+#: category the run was chosen to exercise. Social proof is counted in whatever
+#: noun the category uses, so the list has to reach the categories the product
+#: actually serves rather than the ones B2B software happens to use.
 _SCALE_NOUNS = (
     "customers|companies|teams|businesses|users|developers|clinics|hospitals|"
     "practices|banks|merchants|institutions|organisations|organizations|"
-    "startups|founders|patients|providers|firms|brands|stores"
+    "startups|founders|patients|providers|firms|brands|stores|"
+    "creators|sellers|buyers|designers|makers|artists|shops|storefronts|"
+    "listings|subscribers|members|vendors|freelancers|agencies|engineers|"
+    "students|learners|schools|districts|accounts|workspaces|"
+    "repos|repositories|projects|sites|apps|installs|downloads|signups"
 )
 
 #: A unit of time between the number and the noun means the number is not

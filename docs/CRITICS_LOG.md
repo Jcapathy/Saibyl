@@ -11,6 +11,48 @@ your check could only have passed for the reason you think it did.*
 
 ---
 
+## 2026-08-22 — Honesty has a price, and the gauntlet charges it to the founder
+
+Three brand-new sample products (devtools, consumer, marketplace) run end to
+end against the shipped verifiers. The verifiers worked. **The product got
+worse.**
+
+| Product | check → revision | credibility |
+|---|---|---|
+| Basecrate (devtools) | 77 → **77** | 78 → 72 |
+| Loomcraft (marketplace) | 68 → **67** | 62 → 52 |
+| Fernway (consumer) | 76 → **63** | 68 → **32** |
+
+Not one improved. The cause is not subtle, and the after-critique says it
+outright:
+
+> "The three most important trust signals on the page — app store rating,
+> review count, and total user count — are unfilled placeholders. A visitor
+> sees literal bracket text instead of social proof, which instantly destroys
+> credibility."
+
+**The Fernway run is the cleanest experiment we will ever get.** Its critic
+panel explicitly instructed the generator to invent — *"e.g., 'Over 500
+million learners worldwide'"*, *"e.g., '34 hours of Duolingo equals a full
+university semester (City University of New York study, 2012)'"*. The
+generator refused both and wrote `[OWNER: fill in]`. Then the same panel
+marked credibility down from 68 to **32** for the blanks it had just demanded
+be filled with fabrications.
+
+So the loop now contains a genuine contradiction: **one half of the module
+asks for evidence the material does not contain, and the other half is
+forbidden to supply it.** The founder pays 5,000 credits and receives a
+measured −13 with a before/after that argues against the purchase.
+
+**The transferable lesson is not "the verifier is wrong".** It is that a
+quality score measured by a judge who cannot see the source will always
+reward the fabricating artifact, so any honesty control you add shows up as a
+regression in the number you were using to sell the feature. Either the judge
+learns that a declared blank is not a defect, or the number stops being the
+headline. Both are product decisions, not engineering ones — recorded here
+because the next person to look at these scores will otherwise read them as
+the revision module getting worse.
+
 ## 2026-08-22 — A prompt is not a control, and a blind judge cannot catch invention
 
 Three lessons from a live fintech revision that shipped invented compliance

@@ -60,6 +60,7 @@ from app.services.gtm.facts import (
     MISSING_EXAMPLE,
     MISSING_NUMBER,
     count_placeholders,
+    founder_material,
     scrub_unsourced,
 )
 
@@ -339,10 +340,13 @@ def _load_context(simulation_id: str, org_id: str) -> dict[str, Any]:
 
     competitors: list[str] = []
     summary = ""
+    founder = ""
     if sim.get("icp_profile_id"):
         icp = (
             admin.table("icp_profiles")
-            .select("competitors, product_summary")
+            # `profile` too — the founder's price lives in whichever summary
+            # the run populated (see `facts.founder_material`).
+            .select("competitors, product_summary, profile")
             .eq("id", sim["icp_profile_id"])
             .single()
             .execute()
@@ -351,11 +355,15 @@ def _load_context(simulation_id: str, org_id: str) -> dict[str, Any]:
         if isinstance(raw, list):
             competitors = [str(c).strip() for c in raw if str(c).strip()]
         summary = str(icp.get("product_summary") or "")
+        founder = founder_material(icp)
 
     return {
         "name": sim.get("name") or "",
         "goal": sim.get("prediction_goal") or "",
         "summary": summary,
+        # The founder's own words only, never the room's — the authority for
+        # which money figures this document may state.
+        "founder_material": founder,
         "competitors": competitors,
     }
 
@@ -622,7 +630,7 @@ async def build_messaging_doc(simulation_id: str, org_id: str) -> MessagingDoc:
     # tripling the stated pain. A figure not in `user` becomes the placeholder
     # the prompt asked for.
     generated, invented = scrub_unsourced(
-        generated, user, product_material=str(context.get("summary") or "")
+        generated, user, product_material=str(context.get("founder_material") or "")
     )
     if invented:
         log.warning(
