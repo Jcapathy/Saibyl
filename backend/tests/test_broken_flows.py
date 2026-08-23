@@ -40,6 +40,12 @@ class _TableStub:
         self._single = False
         self._update: dict | None = None
         self._in: dict[str, tuple] = {}
+        # Every filter this query was narrowed by, in order, as
+        # `(operator, column, value)`. Recorded rather than applied: these
+        # stubs serve canned rows, and the thing worth asserting is what the
+        # endpoint *asked the database for* — a filter built from the wrong
+        # value still returns the canned page.
+        self.filters: list[tuple[str, str, object]] = []
         touched.append(name)
 
     def select(self, *_a, **_k):
@@ -51,11 +57,17 @@ class _TableStub:
         self._update = payload
         return self
 
-    def eq(self, *_a, **_k):
+    def eq(self, column=None, value=None, *_a, **_k):
+        self.filters.append(("eq", column, value))
+        return self
+
+    def ilike(self, column, pattern):
+        self.filters.append(("ilike", column, pattern))
         return self
 
     def in_(self, column, values):
         self._in[column] = tuple(values)
+        self.filters.append(("in", column, tuple(values)))
         return self
 
     def order(self, *_a, **_k):
@@ -96,10 +108,15 @@ class _AdminStub:
     def __init__(self, tables: dict[str, tuple[list[dict], int | None]]):
         self._tables = tables
         self.touched: list[str] = []
+        #: Every `_TableStub` handed out, so a test can read back the filters a
+        #: query was built with.
+        self.queries: list[_TableStub] = []
 
     def table(self, name: str):
         rows, count = self._tables.get(name, ([], None))
-        return _TableStub(rows, count, self.touched, name)
+        stub = _TableStub(rows, count, self.touched, name)
+        self.queries.append(stub)
+        return stub
 
 
 def _simulation(**overrides) -> dict:
@@ -428,6 +445,87 @@ async def test_listing_simulations_returns_the_total_it_already_computed(monkeyp
     assert result["limit"] == 20
     assert result["offset"] == 0
     assert [row["id"] for row in result["items"]] == [row["id"] for row in page]
+
+
+@pytest.mark.asyncio
+async def test_searching_runs_filters_in_the_database_not_in_the_browser(monkeypatch):
+    """The search box used to filter the current page and count all of them.
+
+    `SimulationsPage` fetched twenty rows, filtered those twenty in the browser,
+    and rendered a pager built from the server's count of everything. Searching
+    for a run that happened to sit on page 2 answered "Nothing matches what you
+    have filtered to" — a confident false statement about the account. Filtering
+    and counting have to be done by the same query.
+    """
+    admin = _AdminStub({"simulations": ([{"id": "sim-1"}], 1)})
+    monkeypatch.setattr(simulations_api, "get_supabase_admin", lambda: admin)
+
+    await simulations_api.list_simulations(
+        limit=20, offset=0, project_id=None, search="  pricing  ", status=None, auth=AUTH
+    )
+
+    built = admin.queries[0].filters
+    assert ("ilike", "name", "%pricing%") in built, (
+        "the name filter never reached the query — it is being applied to the page again"
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_search_term_cannot_smuggle_a_wildcard(monkeypatch):
+    """`%` and `_` are `LIKE` wildcards, so an unescaped term matches too much.
+
+    A founder searching for a run called `Q3_pricing` would otherwise also match
+    `Q3-pricing` and `Q3xpricing`. Not unsafe — but a wrong answer that looks
+    exactly like a right one.
+    """
+    admin = _AdminStub({"simulations": ([], 0)})
+    monkeypatch.setattr(simulations_api, "get_supabase_admin", lambda: admin)
+
+    await simulations_api.list_simulations(
+        limit=20, offset=0, project_id=None, search="Q3_pricing 50%", status=None, auth=AUTH
+    )
+
+    built = dict(((op, col), val) for op, col, val in admin.queries[0].filters)
+    assert built[("ilike", "name")] == r"%Q3\_pricing 50\%%"
+
+
+@pytest.mark.asyncio
+async def test_filtering_for_finished_runs_matches_both_spellings(monkeypatch):
+    """The column holds `complete` **and** `completed`, and neither was backfilled.
+
+    Matching one of them would hide half the finished runs in an account behind
+    a filter whose whole job is to show them.
+    """
+    admin = _AdminStub({"simulations": ([], 0)})
+    monkeypatch.setattr(simulations_api, "get_supabase_admin", lambda: admin)
+
+    await simulations_api.list_simulations(
+        limit=20, offset=0, project_id=None, search=None, status="complete", auth=AUTH
+    )
+
+    assert ("in", "status", ("complete", "completed")) in admin.queries[0].filters
+
+
+@pytest.mark.asyncio
+async def test_an_omitted_filter_does_not_become_a_filter(monkeypatch):
+    """FastAPI resolves a default on a request; a direct call does not.
+
+    Omitted parameters arrive as the `Query(...)` object itself, which is
+    truthy — so a naive `if search:` filters on a sentinel. That is exactly what
+    broke the two tests above this one when `search` was first added, and
+    `project_id` had carried the same latent hazard since it was introduced.
+    """
+    admin = _AdminStub({"simulations": ([{"id": "sim-1"}], 1)})
+    monkeypatch.setattr(simulations_api, "get_supabase_admin", lambda: admin)
+
+    # Deliberately omitting all three optional parameters.
+    result = await simulations_api.list_simulations(limit=20, offset=0, auth=AUTH)
+
+    assert result["total"] == 1
+    narrowed = [(op, col) for op, col, _ in admin.queries[0].filters]
+    assert narrowed == [("eq", "organization_id")], (
+        f"an unset parameter became a filter: {admin.queries[0].filters}"
+    )
 
 
 @pytest.mark.asyncio

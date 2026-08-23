@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '@/lib/api';
 import { PLATFORM_NAMES, TERMINAL_STATUSES, ACTIVE_STATUSES, IDLE_STATUSES } from '@/lib/constants';
@@ -109,6 +109,33 @@ export default function SimulationDetailPage() {
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [runStatus, setRunStatus] = useState('');
+
+  /* The timers `handleRunNow` starts, and whether this screen is still here.
+     `handleRunNow` opens a 4-second poll and a 5-minute stop-timer, and before
+     either of those it sits in a loop that sleeps 3 seconds up to sixty times.
+     All three were local to the function with no unmount cleanup, so leaving
+     the page mid-run left an interval hitting `GET /simulations/{id}` every
+     four seconds for the rest of the session — and every tick called `setSim`
+     on a component that no longer exists.
+
+     `alive` is set in the effect body rather than only at declaration because
+     StrictMode mounts, unmounts and remounts in development: a ref that is only
+     ever set false by a cleanup would stay false for the real mount. */
+  const runTimers = useRef<{
+    poll?: ReturnType<typeof setInterval>;
+    giveUp?: ReturnType<typeof setTimeout>;
+  }>({});
+  const alive = useRef(true);
+
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      if (runTimers.current.poll) clearInterval(runTimers.current.poll);
+      if (runTimers.current.giveUp) clearTimeout(runTimers.current.giveUp);
+      runTimers.current = {};
+    };
+  }, []);
   const [error, setError] = useState('');
   const [eventCount, setEventCount] = useState(0);
   const [events, setEvents] = useState<Record<string, unknown>[]>([]);
@@ -315,11 +342,16 @@ export default function SimulationDetailPage() {
     try {
       await api.post(`/simulations/${id}/prepare`);
 
-      // Wait for prepare to finish (poll for ready/failed)
+      // Wait for prepare to finish (poll for ready/failed).
+      // Sixty three-second sleeps is three minutes of polling; without the
+      // `alive` check it carried on after the founder left the page, calling
+      // `setSim` on an unmounted component every three seconds.
       let ready = false;
       for (let i = 0; i < 60; i++) {
         await new Promise((r) => setTimeout(r, 3000));
+        if (!alive.current) return;
         const r = await api.get(`/simulations/${id}`);
+        if (!alive.current) return;
         setSim(r.data);
         if (r.data.status === 'ready') { ready = true; break; }
         if (r.data.status === 'failed') {
@@ -347,20 +379,35 @@ export default function SimulationDetailPage() {
 
       setRunStatus('Starting…');
       await api.post(`/simulations/${id}/start`, { quote_id: takeQuoteId(id) });
+      if (!alive.current) return;
       setRunStatus('Running — checking for new reactions…');
-      // Poll until complete
+
+      // Poll until complete. Both timers are held on the component so the
+      // unmount cleanup above can stop them; a run left polling after the
+      // founder navigated away is a request every four seconds, forever.
       const poll = setInterval(async () => {
         try {
           const r = await api.get(`/simulations/${id}`);
+          if (!alive.current) return;
           setSim(r.data);
           if (TERMINAL_STATUSES.includes(r.data.status)) {
             clearInterval(poll);
+            if (runTimers.current.giveUp) clearTimeout(runTimers.current.giveUp);
+            runTimers.current = {};
             setRunning(false);
             setRunStatus('');
           }
         } catch { /* keep polling */ }
       }, 4000);
-      setTimeout(() => { clearInterval(poll); setRunning(false); setRunStatus(''); }, 300000);
+      runTimers.current.poll = poll;
+
+      runTimers.current.giveUp = setTimeout(() => {
+        clearInterval(poll);
+        runTimers.current = {};
+        if (!alive.current) return;
+        setRunning(false);
+        setRunStatus('');
+      }, 300000);
     } catch (err) {
       setError(getErrorMessage(err, 'We could not start this run.'));
       setRunning(false);

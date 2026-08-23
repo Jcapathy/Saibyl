@@ -8,6 +8,47 @@ running delta record.
 
 ---
 
+## 2026-08-23 — Four defects the sweep surfaced, fixed
+
+Found by the agents restyling these pages; each is a claim the product made and
+could not keep.
+
+- **`GET /simulations` now filters.** `search` and `status` are new query
+  parameters, applied in the query that also counts. They were applied in the
+  browser, to whichever twenty rows the page held, while the pager reported the
+  server's count of everything — so searching for a run on page 2 answered
+  "Nothing matches what you have filtered to". `status=complete` matches both
+  `complete` and `completed`, because the column holds both and neither was
+  backfilled; `search` escapes `%` and `_` so a run named `Q3_pricing` does not
+  also match `Q3-pricing`. Sorting stays page-local and the code says so.
+
+  **A latent hazard came with it.** FastAPI substitutes a declared default on a
+  real request; a *direct call* does not, and this module is tested by calling
+  its endpoints directly — so an omitted parameter arrives as the `Query(...)`
+  object, which is truthy. `project_id` had carried that since it was added and
+  never fired because every caller passed it. All three optional parameters are
+  now normalised once at the top of the function, so the next one added
+  inherits the fix rather than the bug. Four tests, each mutation-checked.
+
+- **`ProjectDetailPage` no longer empties its file list on a failed poll.** It
+  was `.catch(() => setDocuments([]))` under a comment arguing `documentsLoaded`
+  stays false — true on the first load only. After one success the flag is
+  permanently true and the page polls every three seconds, so a single dropped
+  poll rendered "Nothing uploaded yet" over files that exist. The last good list
+  is kept and the failure is reported.
+
+- **`SimulationDetailPage` stopped leaking its run timers.** A 4s poll, a 5m
+  stop-timer and a 60×3s prepare loop were all local to `handleRunNow` with no
+  unmount cleanup: leaving the page mid-run left an interval hitting the API for
+  the rest of the session, calling `setSim` on an unmounted component each time.
+
+- **The timezone picker is gone rather than plumbed.** `POST /simulations` never
+  sent it, `CreateSimulationBody` has no such field, and the only backend reader
+  of a run's timezone is `json_exporter` — which therefore always emitted the
+  column default. Nothing in the swarm has a concept of time of day, so wiring
+  it would have made the export truthful and left the *control* just as false.
+  The column and the exporter line stay; a timezone-aware run is a feature.
+
 ## 2026-08-23 — The theme flipped in name only, and the app-wide sweep off it
 
 The founder's word for the restyled app was **"sterile"**, and the cause was

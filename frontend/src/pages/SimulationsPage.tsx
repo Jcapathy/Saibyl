@@ -158,11 +158,52 @@ export default function SimulationsPage() {
   /* --- fetch ------------------------------------------------------ */
   const [fetchKey, setFetchKey] = useState(0);
 
+  /* The search box, settled.
+
+     Typing re-runs the query, so every keystroke would otherwise be a request.
+     250ms is the same debounce the discovery estimate uses. */
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  /* Changing a filter goes back to page 1.
+     Without it, filtering while on page 3 asks the server for rows 40–59 of a
+     set that may hold four, and the founder gets an empty table for a filter
+     that matches plenty.
+
+     Done in the handlers rather than in an effect on purpose: a `setPage(1)`
+     in an effect body is the cascading render this codebase's lint rule
+     forbids, and it would also fight the pager — clicking "next" would set the
+     page and an effect would immediately set it back. */
+  const changeSearch = useCallback((value: string) => {
+    setSearch(value);
+    setPage(1);
+  }, []);
+
+  const changeStatus = useCallback((value: StatusFilter) => {
+    setStatusFilter(value);
+    setPage(1);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     api
       .get('/simulations', {
-        params: { offset: (page - 1) * PER_PAGE, limit: PER_PAGE },
+        /* **Filtering happens on the server, with the counting.**
+           These two were applied in the browser, to whichever twenty rows this
+           page happened to hold, while the pager reported the server's count of
+           everything. Searching for a run that sat on page 2 therefore answered
+           "Nothing matches what you have filtered to" — a confident false
+           statement about the account. Filter and count have to be done by the
+           same query or they describe different sets. */
+        params: {
+          offset: (page - 1) * PER_PAGE,
+          limit: PER_PAGE,
+          ...(debouncedSearch ? { search: debouncedSearch } : {}),
+          ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
+        },
       })
       .then((res) => {
         if (cancelled) return;
@@ -181,7 +222,7 @@ export default function SimulationsPage() {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [page, fetchKey]);
+  }, [page, fetchKey, debouncedSearch, statusFilter]);
 
   const refetchSims = useCallback(() => {
     setLoading(true);
@@ -205,22 +246,19 @@ export default function SimulationsPage() {
   }, []);
 
   /* --- derived ---------------------------------------------------- */
+  /* Sorting only, now. The search and the status filter moved into the request
+     above; re-applying them here would filter the filtered set, which is
+     harmless but would quietly hide a mismatch between the two rules instead of
+     letting it show.
+
+     **Sort is deliberately still page-local, and the header says so.** Ordering
+     twenty rows the server chose by recency is a different operation from
+     ordering the whole account, and a control that silently does the first
+     while looking like the second is the defect this page has just been fixed
+     for. Server-side ordering is a small backend change and belongs with the
+     decision to make it. */
   const filteredSims = useMemo(() => {
-    let list = sims;
-
-    // search
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter((s) => s.name.toLowerCase().includes(q));
-    }
-
-    // status filter
-    if (statusFilter !== 'all') {
-      list = list.filter((s) => normalizeStatus(s.status) === statusFilter);
-    }
-
-    // sort
-    list = [...list].sort((a, b) => {
+    const list = [...sims].sort((a, b) => {
       let cmp = 0;
       if (sortField === 'name') cmp = a.name.localeCompare(b.name);
       else if (sortField === 'status') cmp = a.status.localeCompare(b.status);
@@ -230,9 +268,13 @@ export default function SimulationsPage() {
     });
 
     return list;
-  }, [sims, search, statusFilter, sortField, sortDir]);
+  }, [sims, sortField, sortDir]);
 
-  /* status counts (computed from ALL fetched data, not filtered) */
+  /* Counts for the filter chips, over the rows this page holds.
+     They are **not** labelled as workspace totals anywhere — see the header,
+     which reports `total` from the server and nothing derived from `sims`.
+     Mixing the two produced a line that read as an account summary and was
+     computed from twenty rows. */
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = { all: sims.length };
     for (const s of sims) {
@@ -396,7 +438,7 @@ export default function SimulationsPage() {
                   type="text"
                   placeholder="Search your runs…"
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(e) => changeSearch(e.target.value)}
                   className="bg-white border border-saibyl-border-light rounded-xl pl-9 pr-4 py-2 text-sm text-saibyl-ink placeholder:text-saibyl-muted/70 focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20 transition-colors w-64"
                 />
               </div>
@@ -409,7 +451,7 @@ export default function SimulationsPage() {
                   return (
                     <button
                       key={f}
-                      onClick={() => setStatusFilter(f)}
+                      onClick={() => changeStatus(f)}
                       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                         active
                           ? 'bg-saibyl-blue/[0.10] text-saibyl-ink'

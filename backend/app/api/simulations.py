@@ -445,23 +445,87 @@ async def list_founder_stages(auth: dict = Depends(get_current_org)):
     return [spec.model_dump() for spec in FOUNDER_STAGES.values()]
 
 
+#: Spellings that all mean "this run is over and it worked".
+#:
+#: The column has carried both since before the rename and neither was
+#: backfilled, so a status filter that matched one of them would hide half the
+#: finished runs in an account. Mirrors ``RUN_DONE`` in
+#: ``frontend/src/lib/status.ts``.
+_FINISHED_SPELLINGS = ("complete", "completed")
+
+
+def _escape_like(value: str) -> str:
+    """Make ``value`` a literal in a PostgREST ``ilike`` pattern.
+
+    ``%`` and ``_`` are wildcards, so a founder searching for a run named
+    ``Q3_pricing`` would otherwise match ``Q3-pricing`` and ``Q3xpricing`` too —
+    a wrong answer rather than an unsafe one, but a wrong answer that looks
+    right.
+    """
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 @router.get("")
 async def list_simulations(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     project_id: str | None = Query(None),
+    search: str | None = Query(None, max_length=200),
+    status: str | None = Query(None, max_length=40),
     auth: dict = Depends(get_current_org),
 ):
-    """List simulations (paginated, optionally filtered by project)."""
-    log.info("list_simulations", org_id=auth["org_id"], limit=limit, offset=offset, project_id=project_id)
+    """List simulations (paginated; optionally filtered by product, name or state).
+
+    ``search`` and ``status`` are applied **here**, not by the caller.
+
+    They used to be applied in the browser, to whichever twenty rows the current
+    page happened to hold, while the pager reported the server's count of
+    everything. So searching for a run that sat on page 2 answered "Nothing
+    matches what you have filtered to" — a confident false statement about the
+    account, produced by filtering one page and counting all of them. Filtering
+    and counting have to happen in the same place, and this is the only place
+    that can see every row.
+    """
+    # FastAPI substitutes the declared default on a real request. A **direct
+    # call** does not — and this module is tested by calling its endpoints
+    # directly — so an omitted parameter arrives as the `Query(...)` object
+    # itself, which is truthy. A naive `if search:` therefore filtered on a
+    # sentinel and raised `'Query' object has no attribute 'strip'`.
+    #
+    # `project_id` has carried the same hazard since it was added; it only
+    # never fired because every existing caller passes it explicitly. Both are
+    # normalised here rather than guarded at each use, so the next parameter
+    # added to this signature inherits the fix instead of the bug.
+    product = project_id if isinstance(project_id, str) else None
+    name_query = search.strip() if isinstance(search, str) else ""
+    state = status.strip() if isinstance(status, str) else ""
+
+    log.info(
+        "list_simulations",
+        org_id=auth["org_id"],
+        limit=limit,
+        offset=offset,
+        project_id=product,
+        has_search=bool(name_query),
+        status=state or None,
+    )
     admin = get_supabase_admin()
     query = (
         admin.table("simulations")
         .select("*", count="exact")
         .eq("organization_id", auth["org_id"])
     )
-    if project_id:
-        query = query.eq("project_id", project_id)
+    if product:
+        query = query.eq("project_id", product)
+    if name_query:
+        query = query.ilike("name", f"%{_escape_like(name_query)}%")
+    if state:
+        # `count="exact"` is applied to the filtered set, so the pager counts
+        # the same rows the founder is looking at.
+        if state in _FINISHED_SPELLINGS:
+            query = query.in_("status", list(_FINISHED_SPELLINGS))
+        else:
+            query = query.eq("status", state)
     result = (
         query
         .order("created_at", desc=True)

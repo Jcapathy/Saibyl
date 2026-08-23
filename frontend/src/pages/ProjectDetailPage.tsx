@@ -164,6 +164,10 @@ export default function ProjectDetailPage() {
     simply not rendered.
   */
   const [documentsLoaded, setDocumentsLoaded] = useState(false);
+  /* Why the file list could not be re-read, when it could not. Distinct from
+     `documents.length === 0`, which is a claim about the account rather than
+     about the request — see `loadDocuments`. */
+  const [documentsError, setDocumentsError] = useState('');
   const [simulationsLoaded, setSimulationsLoaded] = useState(false);
   const [runsLoaded, setRunsLoaded] = useState(false);
 
@@ -211,11 +215,25 @@ export default function ProjectDetailPage() {
       .then((r) => {
         setDocuments(unwrapList<ProjectDocument>(r.data).items);
         setDocumentsLoaded(true);
+        setDocumentsError('');
       })
-      // Left as it was found — a failed read shows no files, and
-      // `documentsLoaded` stays false so nothing on the page claims there are
-      // none. Deliberately not `setDocumentsLoaded(true)` here.
-      .catch(() => setDocuments([]));
+      /* **A failed read must not empty the list.**
+         This was `.catch(() => setDocuments([]))`, under a comment arguing that
+         `documentsLoaded` stays false so nothing claims there are no files.
+         That is true on the *first* load and false ever after: once one read
+         has succeeded the flag is permanently true, and this page polls every
+         three seconds while anything is still processing. So one dropped poll
+         — a sleeping laptop, a redeploy, a flaky network — replaced a real list
+         of files with "Nothing uploaded yet", over files that exist. That is
+         the same class of confident false claim this file's own header says it
+         was written to end.
+         Keeping the last good list is the correct answer to a transient
+         failure: it is the most recent thing known to be true. The failure is
+         reported rather than swallowed, so a founder who is genuinely offline
+         is told so instead of being shown a stale list with no explanation. */
+      .catch((err) =>
+        setDocumentsError(getErrorMessage(err, 'We could not re-read your files just now.')),
+      );
   }
 
   /* Files are staged rather than uploaded on selection, because each one has to
@@ -653,6 +671,27 @@ export default function ProjectDetailPage() {
                   </div>
                 )}
               </Card>
+
+              {/* A read that failed, reported without throwing away what is on
+                  screen. It sits above the list rather than replacing it: the
+                  list is the last state known to be true, and a founder who is
+                  briefly offline should keep seeing his files with a note that
+                  they are not being refreshed — not an empty page. */}
+              {documentsError && (
+                <Notice
+                  tone="thin"
+                  title="We could not re-read your files just now"
+                  className="mb-4"
+                  action={
+                    <Action kind="quiet" onClick={loadDocuments}>
+                      Try again
+                    </Action>
+                  }
+                >
+                  {documentsError} What is listed below is what we last read
+                  successfully, so it may be out of date.
+                </Notice>
+              )}
 
               {/* Document list. "Nothing here yet" is only said once the list has
                   actually come back — a failed read has no idea whether there are

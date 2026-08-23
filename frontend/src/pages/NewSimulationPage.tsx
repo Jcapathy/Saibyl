@@ -169,7 +169,6 @@ export default function NewSimulationPage() {
     variants: 1,
     depth: 'standard',
   });
-  const [timezone, setTimezone] = useState('America/New_York');
   const [quoteError, setQuoteError] = useState('');
 
   // Step 4 — the Founder lens. A run with no stage and no ICP is an unlensed
@@ -675,19 +674,24 @@ export default function NewSimulationPage() {
                   onQuote={handleQuote}
                 />
 
-                <div>
-                  <label className={fieldLabel}>Timezone</label>
-                  <select
-                    value={timezone}
-                    onChange={(e) => setTimezone(e.target.value)}
-                    className={`${inputClass} ${inputBg} appearance-none`}
-                    style={{ colorScheme: 'light' }}
-                  >
-                    {['America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'UTC', 'Europe/London', 'Europe/Berlin', 'Asia/Tokyo', 'Asia/Shanghai'].map((tz) => (
-                      <option key={tz} value={tz} className="bg-white text-saibyl-ink">{tz}</option>
-                    ))}
-                  </select>
-                </div>
+                {/* A timezone picker stood here, and the Review step listed the
+                    answer back to the founder among the settings he was about to
+                    pay for.
+
+                    **It changed nothing, anywhere.** `POST /simulations` never
+                    sent it — `CreateSimulationBody` has no such field — so it
+                    was not stored, and the only thing in the backend that reads
+                    a run's timezone is `json_exporter`, which therefore always
+                    emitted the column default. Nothing in the swarm has a
+                    concept of time of day at all.
+
+                    Wiring it through would have made the export truthful and
+                    left the control just as false, because the review screen's
+                    real claim is "your run happens in this timezone" and no
+                    code makes that true. So it is gone rather than plumbed.
+                    The `simulations.timezone` column and the exporter line stay
+                    — a timezone-aware run is a feature to build, and this comes
+                    back with it. */}
               </div>
             )}
 
@@ -741,7 +745,10 @@ export default function NewSimulationPage() {
                         'One — add more on the run’s page before you start it',
                       ],
                       ['Report depth', sentenceCase(shape.depth)],
-                      ['Timezone', timezone],
+                      // No 'Timezone' row. The review step's job is to list what
+                      // the founder is paying for, and a setting that reaches
+                      // neither the request nor the run is the one line here
+                      // that was not true.
                     ] as [string, string][]
                   )
                     .filter(([, value]) => value !== '')
