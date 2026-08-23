@@ -79,7 +79,7 @@ export default function GroupBreakdown({
           return (
             <div key={label}>
               <div className="flex justify-between items-baseline text-[13px] mb-1.5 gap-3">
-                <span className="text-saibyl-platinum font-medium leading-tight line-clamp-2">{label}</span>
+                <span className="text-saibyl-ink font-medium leading-tight line-clamp-2">{label}</span>
                 <span className="text-saibyl-silver text-[11px] whitespace-nowrap">
                   {valence.n < 2 ? (
                     <span className="text-saibyl-muted">
@@ -141,7 +141,7 @@ export default function GroupBreakdown({
                     key={key}
                     type="button"
                     onClick={onDrillDown ? () => onDrillDown([key], label) : undefined}
-                    className="px-1.5 py-0.5 rounded bg-saibyl-gold/10 text-saibyl-gold hover:bg-saibyl-gold/20 transition-colors"
+                    className="px-1.5 py-0.5 rounded bg-saibyl-blue/10 text-saibyl-blue hover:bg-saibyl-blue/20 transition-colors"
                   >
                     {objectionLabels?.[key] ?? key}
                   </button>

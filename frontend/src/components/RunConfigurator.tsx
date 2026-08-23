@@ -195,7 +195,7 @@ function Slider({
                 commit((e.target as HTMLInputElement).value);
               }
             }}
-            className="w-20 rounded-lg bg-white border border-saibyl-border-light px-2 py-1 text-right text-[13px] font-bold tabular-nums text-saibyl-gold focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20"
+            className="w-20 rounded-lg bg-white border border-saibyl-border-light px-2 py-1 text-right text-[13px] font-bold tabular-nums text-saibyl-blue focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20"
           />
         </div>
       </div>
@@ -208,7 +208,7 @@ function Slider({
         max={ceiling}
         value={shown}
         onChange={(e) => onChange(clamp(Number(e.target.value), min, ceiling))}
-        className="w-full accent-saibyl-gold"
+        className="w-full accent-saibyl-blue"
       />
       <div className="flex justify-between text-[10px] text-saibyl-muted mt-1">
         <span>{min}</span>
@@ -492,7 +492,7 @@ export default function RunConfigurator({
             <dl className="space-y-2 text-[13px]">
               <div className="flex justify-between gap-4">
                 <dt className="text-saibyl-muted">This run will use</dt>
-                <dd className="text-saibyl-platinum font-semibold tabular-nums">
+                <dd className="text-saibyl-ink font-semibold tabular-nums">
                   {estimate.credits.toLocaleString()} credits
                 </dd>
               </div>
@@ -502,7 +502,7 @@ export default function RunConfigurator({
                   {budget.credits_remaining.toLocaleString()} →{' '}
                   <span
                     className={
-                      budget.allowed ? 'text-saibyl-platinum' : 'text-saibyl-negative'
+                      budget.allowed ? 'text-saibyl-ink' : 'text-saibyl-negative'
                     }
                   >
                     {budget.credits_after.toLocaleString()} after
@@ -520,7 +520,7 @@ export default function RunConfigurator({
             </dl>
 
             {/* The honesty line. */}
-            <p className="text-[12px] text-saibyl-gold mt-3 pt-3 border-t border-saibyl-border">
+            <p className="text-[12px] text-saibyl-blue mt-3 pt-3 border-t border-saibyl-border">
               ≈ {estimate.standard_run_equivalents.toFixed(1)} standard runs&rsquo; worth of
               capacity
             </p>
@@ -551,7 +551,7 @@ export default function RunConfigurator({
                   variants: data.largest_affordable!.variants,
                 }))
               }
-              className="mt-3 px-3 py-1.5 rounded-lg text-[12px] font-medium bg-saibyl-gold text-saibyl-void hover:bg-saibyl-gold-hover transition-colors"
+              className="mt-3 px-3 py-1.5 rounded-lg text-[12px] font-medium bg-saibyl-blue text-saibyl-paper hover:bg-saibyl-blue-hover transition-colors"
             >
               Reduce to fit my balance (
               {count(data.largest_affordable.agent_count, 'person', 'people')},{' '}

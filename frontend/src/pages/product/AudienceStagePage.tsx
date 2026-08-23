@@ -15,6 +15,7 @@ import {
   StageError,
 } from '@/components/stages/StagePrimitives';
 import { useProduct, useStage } from '@/components/stages/useProduct';
+import { Card } from '@/components/design';
 import { SiteStatusChip } from '@/components/website/chips';
 import SiteCheckForm from '@/components/website/SiteCheckForm';
 import SiteCritique from '@/components/website/SiteCritique';
@@ -284,8 +285,8 @@ export default function AudienceStagePage() {
       {error && <StageError message={error} retry={retry} />}
 
       {/* ── Your material ── */}
-      <section id="material" className="glass rounded-2xl p-6 scroll-mt-6">
-        <h2 className="text-[15px] font-medium text-saibyl-platinum">
+      <Card carries="stage" as="section" id="material" className="p-6 scroll-mt-6">
+        <h2 className="text-[15px] font-medium text-saibyl-ink">
           What you have written
         </h2>
         <p className="text-[12.5px] text-saibyl-muted mt-1 leading-relaxed">
@@ -307,7 +308,7 @@ export default function AudienceStagePage() {
                 })),
               )
             }
-            className="text-[13px] text-saibyl-muted file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-saibyl-gold/20 file:text-saibyl-gold file:font-medium file:cursor-pointer hover:file:bg-saibyl-gold/30"
+            className="text-[13px] text-saibyl-muted file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-saibyl-blue/20 file:text-saibyl-blue file:font-medium file:cursor-pointer hover:file:bg-saibyl-blue/30"
           />
           <p className="text-[11px] text-saibyl-muted/70 mt-2">
             PDF, Word, plain text or Markdown. Up to 50MB each.
@@ -316,7 +317,7 @@ export default function AudienceStagePage() {
 
         {pending.length > 0 && (
           <div className="mt-5 space-y-3">
-            <p className="text-[13px] text-saibyl-platinum">
+            <p className="text-[13px] text-saibyl-ink">
               Whose is this? We ask so we know what the simulated buyers are allowed
               to say.
             </p>
@@ -325,7 +326,7 @@ export default function AudienceStagePage() {
                 key={`${item.file.name}-${i}`}
                 className="rounded-xl border border-saibyl-border bg-saibyl-elevated p-4"
               >
-                <p className="text-[13px] text-saibyl-platinum truncate mb-2.5">
+                <p className="text-[13px] text-saibyl-ink truncate mb-2.5">
                   {item.file.name}
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -345,13 +346,13 @@ export default function AudienceStagePage() {
                         }
                         className={`text-left p-3 rounded-lg border transition-all ${
                           selected
-                            ? 'border-saibyl-gold/50 bg-saibyl-gold/10'
+                            ? 'border-saibyl-blue/50 bg-saibyl-blue/10'
                             : 'border-saibyl-border bg-white hover:border-saibyl-border-light'
                         }`}
                       >
                         <span
                           className={`block text-[13px] font-medium ${
-                            selected ? 'text-saibyl-white' : 'text-saibyl-platinum'
+                            selected ? 'text-saibyl-ink' : 'text-saibyl-ink'
                           }`}
                         >
                           {option.label}
@@ -367,7 +368,7 @@ export default function AudienceStagePage() {
             ))}
 
             {pending.some((p) => p.kind === 'competitor') && (
-              <div className="px-4 py-3 rounded-xl border border-saibyl-gold/25 bg-saibyl-gold/[0.06]">
+              <div className="px-4 py-3 rounded-xl border border-saibyl-blue/25 bg-saibyl-blue/[0.06]">
                 <p className="text-[11px] text-saibyl-muted leading-relaxed">
                   Marking something as a rival&rsquo;s lets simulated skeptics name
                   that company and quote it, using only what the document actually
@@ -405,7 +406,7 @@ export default function AudienceStagePage() {
                 <button
                   type="button"
                   onClick={() => fileInput.current?.click()}
-                  className="text-saibyl-gold hover:underline"
+                  className="text-saibyl-blue hover:underline"
                 >
                   Choose a file
                 </button>
@@ -419,7 +420,7 @@ export default function AudienceStagePage() {
                   <button
                     type="button"
                     onClick={() => setShowBrief(true)}
-                    className="text-saibyl-gold hover:underline"
+                    className="text-saibyl-blue hover:underline"
                   >
                     Answer the five questions
                   </button>
@@ -431,7 +432,7 @@ export default function AudienceStagePage() {
               {documents.map((doc) => (
                 <li key={doc.id} className="flex items-center gap-2.5 text-[12.5px]">
                   <FileText className="w-3.5 h-3.5 text-saibyl-muted shrink-0" />
-                  <span className="text-saibyl-platinum truncate">{doc.filename}</span>
+                  <span className="text-saibyl-ink truncate">{doc.filename}</span>
                   <span
                     className={
                       doc.processing_status === 'failed'
@@ -465,7 +466,7 @@ export default function AudienceStagePage() {
               <button
                 type="button"
                 onClick={() => setShowSite(true)}
-                className="text-saibyl-gold hover:underline"
+                className="text-saibyl-blue hover:underline"
               >
                 Or paste your site
               </button>
@@ -475,12 +476,12 @@ export default function AudienceStagePage() {
           {(activeCheck !== null || checks.length > 0) && (
             <div className="mt-4 space-y-3">
               <div className="flex flex-wrap items-center gap-3">
-                <p className="text-[13px] text-saibyl-platinum">Your site</p>
+                <p className="text-[13px] text-saibyl-ink">Your site</p>
                 {!showSite && (
                   <button
                     type="button"
                     onClick={() => setShowSite(true)}
-                    className="text-[12px] text-saibyl-gold hover:underline"
+                    className="text-[12px] text-saibyl-blue hover:underline"
                   >
                     Check another page
                   </button>
@@ -508,7 +509,7 @@ export default function AudienceStagePage() {
                       className="flex flex-wrap items-center gap-2.5 text-[12.5px]"
                     >
                       <Globe className="w-3.5 h-3.5 text-saibyl-muted shrink-0" />
-                      <span className="text-saibyl-platinum truncate">
+                      <span className="text-saibyl-ink truncate">
                         {row.url}
                       </span>
                       <SiteStatusChip status={status} />
@@ -521,7 +522,7 @@ export default function AudienceStagePage() {
                         <button
                           type="button"
                           onClick={() => openCheck(row.id)}
-                          className="text-saibyl-gold hover:underline"
+                          className="text-saibyl-blue hover:underline"
                         >
                           See what we found
                         </button>
@@ -540,7 +541,7 @@ export default function AudienceStagePage() {
 
               {activeCheck?.status === 'complete' && (
                 <details open>
-                  <summary className="cursor-pointer text-[12.5px] text-saibyl-gold hover:underline select-none">
+                  <summary className="cursor-pointer text-[12.5px] text-saibyl-blue hover:underline select-none">
                     What we found on {activeCheck.url}
                   </summary>
                   <div className="mt-3">
@@ -560,7 +561,7 @@ export default function AudienceStagePage() {
             </div>
           )}
         </div>
-      </section>
+      </Card>
 
       {/* ── Who buys this ── */}
       <section className="space-y-4">
@@ -587,8 +588,8 @@ export default function AudienceStagePage() {
               }
             />
           ) : (
-            <div className="glass rounded-2xl p-6">
-              <h2 className="text-[15px] font-medium text-saibyl-platinum">
+            <Card carries="meaning" className="p-6">
+              <h2 className="text-[15px] font-medium text-saibyl-ink">
                 Ready to work out who buys this
               </h2>
               <p className="text-[12.5px] text-saibyl-muted mt-1.5 mb-4 leading-relaxed">
@@ -603,7 +604,7 @@ export default function AudienceStagePage() {
                 busy={working}
                 busyLabel="Reading your material…"
               />
-            </div>
+            </Card>
           )
         ) : editing ? (
           <AudienceReview
@@ -618,8 +619,8 @@ export default function AudienceStagePage() {
             onClose={() => setEditing(false)}
           />
         ) : (
-          <div className="glass rounded-2xl p-6">
-            <h2 className="text-[15px] font-medium text-saibyl-platinum">
+          <Card carries="meaning" className="p-6">
+            <h2 className="text-[15px] font-medium text-saibyl-ink">
               Here&rsquo;s who we think will buy this
             </h2>
             <p className="text-[12.5px] text-saibyl-muted mt-1.5 leading-relaxed">
@@ -635,7 +636,7 @@ export default function AudienceStagePage() {
                   key={archetype.id}
                   className="rounded-xl border border-saibyl-border bg-saibyl-elevated px-4 py-3"
                 >
-                  <p className="text-[13.5px] text-saibyl-platinum">
+                  <p className="text-[13.5px] text-saibyl-ink">
                     {archetype.label || 'Unnamed buyer'}
                   </p>
                   {archetype.role && (
@@ -664,7 +665,7 @@ export default function AudienceStagePage() {
               <button
                 type="button"
                 onClick={() => setEditing(true)}
-                className="text-[12.5px] text-saibyl-gold hover:underline"
+                className="text-[12.5px] text-saibyl-blue hover:underline"
               >
                 Something&rsquo;s wrong with this
               </button>
@@ -674,7 +675,7 @@ export default function AudienceStagePage() {
                 tone="quiet"
               />
             </div>
-          </div>
+          </Card>
         )}
       </section>
     </div>

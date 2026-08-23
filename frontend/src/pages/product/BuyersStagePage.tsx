@@ -121,7 +121,7 @@ export default function BuyersStagePage() {
                   <div className="flex items-baseline justify-between gap-3">
                     <Link
                       to={`/app/prospects/${row.id}`}
-                      className="text-[13.5px] text-saibyl-platinum hover:text-saibyl-gold transition-colors"
+                      className="text-[13.5px] text-saibyl-ink hover:text-saibyl-blue transition-colors"
                     >
                       {row.company_name}
                     </Link>
@@ -145,7 +145,7 @@ export default function BuyersStagePage() {
                         href={row.source_url}
                         target="_blank"
                         rel="noreferrer noopener"
-                        className="inline-flex items-center gap-1 text-[11px] text-saibyl-gold hover:underline"
+                        className="inline-flex items-center gap-1 text-[11px] text-saibyl-blue hover:underline"
                       >
                         {host}
                         <ExternalLink className="w-3 h-3" />
@@ -159,7 +159,7 @@ export default function BuyersStagePage() {
 
           <Link
             to={`/app/prospects?project_id=${product.id}`}
-            className="inline-block text-[12.5px] text-saibyl-gold hover:underline"
+            className="inline-block text-[12.5px] text-saibyl-blue hover:underline"
           >
             See all of them, with the evidence for each
           </Link>

@@ -147,7 +147,7 @@ function BuyerCard({
     <div className="rounded-xl border border-saibyl-border bg-white p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[14px] font-medium text-saibyl-platinum">
+          <p className="text-[14px] font-medium text-saibyl-ink">
             {archetype.label || 'Unnamed buyer'}
           </p>
           {archetype.role && (
@@ -204,7 +204,7 @@ function BuyerCard({
             <button
               type="button"
               onClick={() => setEditing(true)}
-              className="text-[12px] text-saibyl-gold hover:underline"
+              className="text-[12px] text-saibyl-blue hover:underline"
             >
               This isn&rsquo;t quite right
             </button>
@@ -343,7 +343,7 @@ function BuyerCard({
           <button
             type="button"
             onClick={() => setEditing(false)}
-            className="text-[12px] text-saibyl-gold hover:underline"
+            className="text-[12px] text-saibyl-blue hover:underline"
           >
             Done with this one
           </button>
@@ -406,7 +406,7 @@ export default function AudienceReview({
         <button
           type="button"
           onClick={onClose}
-          className="mt-3 text-[12px] text-saibyl-gold hover:underline"
+          className="mt-3 text-[12px] text-saibyl-blue hover:underline"
         >
           Close
         </button>
@@ -427,7 +427,7 @@ export default function AudienceReview({
         <button
           type="button"
           onClick={onClose}
-          className="mt-3 text-[12px] text-saibyl-gold hover:underline"
+          className="mt-3 text-[12px] text-saibyl-blue hover:underline"
         >
           Close
         </button>
@@ -479,10 +479,10 @@ export default function AudienceReview({
   };
 
   return (
-    <div className="rounded-xl border border-saibyl-gold/20 bg-white p-5 space-y-5">
+    <div className="rounded-xl border border-saibyl-blue/20 bg-white p-5 space-y-5">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-[15px] font-medium text-saibyl-platinum">
+          <h3 className="text-[15px] font-medium text-saibyl-ink">
             Here&rsquo;s who we think will buy this
           </h3>
           <p className="text-[12px] text-saibyl-muted mt-1 leading-relaxed max-w-xl">
@@ -494,7 +494,7 @@ export default function AudienceReview({
         <button
           type="button"
           onClick={onClose}
-          className="text-[12px] text-saibyl-muted hover:text-saibyl-platinum shrink-0"
+          className="text-[12px] text-saibyl-muted hover:text-saibyl-ink shrink-0"
         >
           Close
         </button>
@@ -511,8 +511,8 @@ export default function AudienceReview({
       </div>
 
       {draft.gaps.length > 0 && (
-        <div className="rounded-xl border border-saibyl-gold/20 bg-saibyl-gold/[0.06] p-4">
-          <p className="text-[11px] font-medium text-saibyl-gold mb-1.5">
+        <div className="rounded-xl border border-saibyl-blue/20 bg-saibyl-blue/[0.06] p-4">
+          <p className="text-[11px] font-medium text-saibyl-blue mb-1.5">
             Things your documents never said
           </p>
           <ul className="space-y-1">
@@ -560,7 +560,7 @@ export default function AudienceReview({
                 key={adv.id}
                 className="rounded-xl border border-saibyl-border bg-white px-4 py-3"
               >
-                <p className="text-[13px] text-saibyl-platinum">{adv.label}</p>
+                <p className="text-[13px] text-saibyl-ink">{adv.label}</p>
                 {adv.core_argument && (
                   <p className="text-[11px] text-saibyl-muted mt-1 leading-relaxed">
                     {adv.core_argument}
@@ -623,7 +623,7 @@ export default function AudienceReview({
           {saving ? (
             <span
               aria-live="polite"
-              className="flex items-center gap-2 px-5 py-2 rounded-xl bg-saibyl-gold text-saibyl-void font-semibold text-[13px]"
+              className="flex items-center gap-2 px-5 py-2 rounded-xl bg-saibyl-blue text-saibyl-paper font-semibold text-[13px]"
             >
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
               Saving&hellip;
@@ -636,7 +636,7 @@ export default function AudienceReview({
             <button
               type="button"
               onClick={save}
-              className="flex items-center gap-2 px-5 py-2 rounded-xl bg-saibyl-gold text-saibyl-void font-semibold text-[13px] transition-colors hover:bg-saibyl-gold-hover"
+              className="flex items-center gap-2 px-5 py-2 rounded-xl bg-saibyl-blue text-saibyl-paper font-semibold text-[13px] transition-colors hover:bg-saibyl-blue-hover"
             >
               Save my changes
             </button>
@@ -648,7 +648,7 @@ export default function AudienceReview({
                 setDraft(profile.profile);
                 setError('');
               }}
-              className="text-[12px] text-saibyl-muted hover:text-saibyl-platinum"
+              className="text-[12px] text-saibyl-muted hover:text-saibyl-ink"
             >
               Undo my changes
             </button>

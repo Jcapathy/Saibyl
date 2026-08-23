@@ -64,6 +64,41 @@ without anyone opening the folder — because nothing in the repo pointed at it.
    design primitives. Prose gets lost to a compaction summary; a red suite does
    not. This rule exists because the failure already happened.
 
+**Second amendment, same day: the whole app swept, and four things deleted.**
+
+Twenty pages converted (five agents, disjoint file sets, plus How this works by
+hand). `AWAITING_THE_SWEEP` is **empty** and asserted to stay so.
+
+Four deletions, each under "a dead end is a defect" — in every case there was no
+capability to lose, only a control that implied one:
+
+- **"Continue with Google", on Login and Signup.** It called
+  `supabase.auth.signInWithOAuth` and there is no callback route in `App.tsx` to
+  exchange the returned session for the app's own tokens. A founder who pressed
+  it left Saibyl, authenticated with Google, returned to the `*` catch-all and
+  landed on the marketing page, signed out, with no explanation — worse than a
+  button that does nothing. **This is a real feature to build**, not a decision
+  against SSO; it comes back with the callback.
+- **Export, Archive (bulk), Duplicate and Archive (row) on Your runs.** Four
+  `onClick={() => { /* TODO */ }}` handlers. A control that swallows a click
+  teaches a founder that the app is unreliable rather than that the feature is
+  unbuilt. No archive endpoint exists; export is per-report and lives on Your
+  reports.
+- **The particle field and node-graph SVG on the way-in pages** — a dark-era
+  motif on no artboard, animating forever under no reduced-motion guard, on the
+  one screen with no navigation to leave by.
+- **`HeadlineStats`**, replaced by `Room` rather than left as a second renderer
+  of the same four figures.
+
+**How this works was teaching a product we no longer ship.** Its step 4 was
+"Find real companies that match" — the Companies module removed the same day —
+and its tips were the V1 news-reaction oracle, jettisoned by decision on
+2026-08-16. It was the last surface in the app still selling that positioning.
+Rewritten around the five stages. Two claims cut under the honesty floor: that
+a focus group costs $5,000–$15,000 and takes 2–4 weeks. Both were stated as
+fact, neither was sourced, and the page cannot check either. Saibyl's own
+timings stay, because those are measured.
+
 **Amendment, same day, after the founder read the five pages live:**
 
 - **The stage header is a front door, and the density rule does not govern it.**

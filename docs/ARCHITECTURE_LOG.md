@@ -8,6 +8,63 @@ running delta record.
 
 ---
 
+## 2026-08-23 — The theme flipped in name only, and the app-wide sweep off it
+
+The founder's word for the restyled app was **"sterile"**, and the cause was
+mechanical rather than aesthetic. Two findings, both systemic.
+
+**1. `canvas.json`'s annotations are a change list, not the specification.**
+The text reads *"The four changes, applied everywhere"* — the delta between the
+artboards and what shipped on 2026-08-20. `CLAUDE.md` had called it "the design
+law", so every page built under that sentence carried exactly four things — a
+washed ground, a card shadow, a dotted eyebrow, a serif phrase — applied to
+flat white cards. The **artboards** are the specification, and they carry eight
+gradients used structurally, layered depth with inset highlights, radii scaled
+per element (11–36px), colour that carries state, hover lift, and continuous
+motion alongside entrance motion. `CLAUDE.md` §1 now says so, and
+`design_primitives.test.ts` asserts each gradient exists in `design/*.dc.html`
+before it is allowed in `design.css` — so the system cannot invent one.
+
+New in `components/design/`: **`Action`** (the gradient control with its blue
+glow, plus a white `quiet` variant), **`Notice`** (violet blocked / amber thin /
+cyan live), inset highlights on `.sb-stage` and `.sb-meaning`, and `.sb-hero`
+for a panel with a ground of its own. `Card` and `Action` are polymorphic via
+`as` and now forward arbitrary props — `Card` could previously be told to render
+as a `Link` and then had no way to be given the destination.
+
+**2. Saibyl was dark once, and the token names never followed the theme.**
+`tailwind.config.js` kept `void`, `white`, `platinum` and `gold` alive and
+remapped their values (`void → paper`, `white/platinum → ink`, `gold → the blue
+accent`). That was correct for the flip and is exactly how the problem hid:
+**246 legacy aliases across 25 files** kept resolving to sensible light values,
+so pages written for the dark theme rendered as ink on paper while never having
+been *designed* as ink on paper. `bg-saibyl-void` on a page root actively
+painted a flat panel over the radial wash `<body>` carries — canvas rule 1,
+switched off, on Home and on Your reports.
+
+- The aliases **stay** in the token file. Deleting them would turn every one a
+  sweep missed into a class resolving to nothing, which fails invisibly.
+  `ia.test.ts` §7 bans the *usage* instead, and asserts the aliases still exist
+  so nobody "fixes" it the wrong way round.
+- `'blue-hover'` is new. `gold-hover` existed and `blue-hover` did not, so the
+  rename would have silently dropped the hover state on every button that had
+  one.
+- `StagePrimitives`' three buttons and `Guarded` now wear `sb-action`, which is
+  why one edit moved the primary control on every stage page in the app.
+- `Missing`'s `degrading` tone was rendering **wrong**: its colour was
+  `saibyl-gold`, so a caution about a thinner answer had been rendering in the
+  same blue as every ordinary link since the theme flipped. It is amber now,
+  via `noticeSurface('thin')`.
+
+**Two ratchets that had holes.** `ia.test.ts` §6 matched pages by `<h1>`, but
+`PageHeader` renders the `<h1>` itself — so a converted page dropped out of the
+scan entirely and left by the same door as a page with no heading. It matches
+`<PageHeader>` too now. And §3's no-grey-button rule scanned `railFiles()` only;
+widened to all source, it immediately found three live grey buttons in
+`founder/` and `marketing/`, each greyed by a precondition with no reason beside
+it. `disabled={busy}` stays allowed and is distinguished by name — a
+double-submit guard is not a capability block.
+
 ## 2026-08-23 — The app behind the login becomes the journey, and gets a design layer
 
 Front-end only. No endpoint, table or service changed; every module kept its

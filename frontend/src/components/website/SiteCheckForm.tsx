@@ -98,7 +98,7 @@ export default function SiteCheckForm({
       <div>
         <label
           htmlFor="site-check-url"
-          className="block text-[14px] font-medium text-saibyl-platinum"
+          className="block text-[14px] font-medium text-saibyl-ink"
         >
           Have a site already? Paste the address &mdash; we&rsquo;ll read it
           like a buyer would.
@@ -164,7 +164,7 @@ export default function SiteCheckForm({
           {error.billing && (
             <Link
               to="/app/settings/billing"
-              className="inline-flex items-center gap-1.5 mt-3 px-3.5 py-1.5 rounded-lg bg-saibyl-gold text-saibyl-void text-[12px] font-semibold hover:bg-saibyl-gold-hover transition-colors"
+              className="inline-flex items-center gap-1.5 mt-3 px-3.5 py-1.5 rounded-lg bg-saibyl-blue text-saibyl-paper text-[12px] font-semibold hover:bg-saibyl-blue-hover transition-colors"
             >
               Add credits
               <ArrowRight className="w-3.5 h-3.5" />

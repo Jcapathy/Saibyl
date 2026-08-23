@@ -312,7 +312,7 @@ export default function ClearanceCard({ products }: { products: ProductOption[] 
               <button
                 type="button"
                 onClick={() => setUpAgain(selected)}
-                className="inline-flex items-center gap-1.5 mt-4 px-4 py-2 rounded-xl bg-saibyl-gold text-saibyl-void text-[13px] font-semibold hover:bg-saibyl-gold-hover transition-colors"
+                className="inline-flex items-center gap-1.5 mt-4 px-4 py-2 rounded-xl bg-saibyl-blue text-saibyl-paper text-[13px] font-semibold hover:bg-saibyl-blue-hover transition-colors"
               >
                 Set this search up again
               </button>
@@ -336,7 +336,7 @@ export default function ClearanceCard({ products }: { products: ProductOption[] 
               <button
                 type="button"
                 onClick={() => setUpAgain(selected)}
-                className="inline-flex items-center gap-1.5 mt-4 px-4 py-2 rounded-xl bg-saibyl-gold text-saibyl-void text-[13px] font-semibold hover:bg-saibyl-gold-hover transition-colors"
+                className="inline-flex items-center gap-1.5 mt-4 px-4 py-2 rounded-xl bg-saibyl-blue text-saibyl-paper text-[13px] font-semibold hover:bg-saibyl-blue-hover transition-colors"
               >
                 Set this search up again
               </button>

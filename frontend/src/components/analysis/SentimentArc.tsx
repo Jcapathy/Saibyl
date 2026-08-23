@@ -209,7 +209,7 @@ export default function SentimentArc({
           <button
             type="button"
             onClick={() => setShowTable((open) => !open)}
-            className="text-[11px] text-saibyl-gold hover:underline whitespace-nowrap"
+            className="text-[11px] text-saibyl-blue hover:underline whitespace-nowrap"
             aria-expanded={showTable}
           >
             {showTable ? 'Hide the numbers' : 'Show the numbers'}
@@ -331,7 +331,7 @@ export default function SentimentArc({
                   </th>
                   {slot.value ? (
                     <>
-                      <td className="py-1.5 pr-4 text-saibyl-platinum">
+                      <td className="py-1.5 pr-4 text-saibyl-ink">
                         {formatSigned(slot.value.mean)}
                       </td>
                       <td className="py-1.5 pr-4 text-saibyl-silver">{rangeText(slot.value)}</td>

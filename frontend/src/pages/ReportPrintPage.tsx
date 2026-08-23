@@ -20,6 +20,7 @@ import SectionRenderer from '@/components/report/SectionRenderer';
 import { groupLabel } from '@/lib/groups';
 import { PRINT_PIE_COLORS, PRINT_PLATFORM_COLORS } from '@/lib/constants';
 import { cleanContent, stripDuplicateTitle } from '@/lib/utils';
+import { PageHeader } from '@/components/design';
 import {
   TRAJECTORY_COPY,
   formatSigned,
@@ -49,9 +50,24 @@ const PLATFORM_NAMES: Record<string, string> = {
   custom: 'Custom',
 };
 
-const INK = '#1a1a1a';
-const MUTED = '#666';
-const RULE = '#e0e0e0';
+/**
+ * The document's four colours, and they are the design system's own.
+ *
+ * Until 2026-08-23 they were neutral greys — `#1a1a1a`, `#666`, `#e0e0e0` —
+ * with a dozen more (`#333`, `#444`, `#555`, `#999`) spelled inline beside
+ * them, so the exported PDF was the one Saibyl artefact printed in a palette
+ * nothing else in the product uses. These are `tailwind.config.js`'s
+ * `saibyl-ink`, `saibyl-muted` and the hairline, which is what the reader sees
+ * on screen five seconds before they hit print.
+ *
+ * Nothing else about this page changed with them. It carries no wash, no
+ * gradient, no glass and no motion: none of those print, and several of them
+ * come out of a laser printer as a grey slab. `@media print` below turns
+ * colour rendering on precisely so these four survive the trip.
+ */
+const INK = '#14294a';
+const MUTED = '#60718e';
+const RULE = '#dbe3ef';
 const BRAND = '#8b73ee';
 
 /* ------------------------------------------------------------------ */
@@ -74,6 +90,25 @@ const BRAND = '#8b73ee';
  * The V1 section structure (Source Material → Executive Summary → Data &
  * Analysis → Detailed Findings → Strategic Implications) is preserved; only the
  * charts inside it changed.
+ *
+ * ---
+ *
+ * **On 2026-08-23 this page was brought onto the design system's palette and
+ * no further.** It is read on paper, and most of what the system is made of
+ * does not survive the trip: a radial wash prints as a smudge, `backdrop-filter`
+ * prints as nothing, a soft blue shadow prints as a grey slab, and an entrance
+ * animation prints as whatever frame the browser happened to be on. So there
+ * is no `Ground` here, no `Card`, no `sb-hero`, no `Deal` and no `Rise`.
+ *
+ * Two things did change, and both are about ink:
+ *
+ * 1. The four colour constants and the dozen loose hex literals beside them
+ *    became `saibyl-ink`, `saibyl-muted` and the system hairline. This
+ *    document had been printing in a neutral-grey palette used nowhere else
+ *    in the product.
+ * 2. The cover heading composes `PageHeader` — static, and the only primitive
+ *    in the folder that is. See the comment at its render site for exactly
+ *    what that does and does not bring with it.
  */
 export default function ReportPrintPage() {
   const { id: simId } = useParams<{ id: string }>();
@@ -291,18 +326,41 @@ export default function ReportPrintPage() {
 
           <hr style={{ border: 'none', borderTop: `2px solid ${BRAND}`, margin: '32px 0' }} />
 
-          <h1 style={{ fontSize: 32, fontWeight: 800, margin: '40px 0 8px', lineHeight: 1.2 }}>
-            {simulation.name}
-          </h1>
-          {/* No `SIM-{first four characters of the id}` line. It read as a
-              reference number and was not one — four characters off the front
-              of a UUID identify nothing and collide between runs, and a founder
-              reported three different runs all showing the same "SIM-1111". On
-              a document that gets forwarded, a fake identifier is worse than
-              none: someone will quote it back. */}
-          <p style={{ fontSize: 14, color: MUTED, fontWeight: 500, margin: '0 0 40px' }}>
-            What people said before you launched
-          </p>
+          {/* The one thing on this page composed from `components/design`, and
+              the choice is narrow on purpose.
+
+              `PageHeader` renders a heading, an explanation and one Playfair
+              italic line — three static elements. It emits no animation class,
+              no gradient and no shadow, and its two colours (`saibyl-ink`,
+              `saibyl-violet`) are already this document's own INK and BRAND.
+              Its 2rem heading is the 32px this cover already used. So it costs
+              the printed page nothing and gives it canvas rule 4, which a
+              document that leaves the product and gets forwarded is the last
+              place that should be missing it.
+
+              `eyebrow` is deliberately not passed. `Eyebrow`'s dot is drawn
+              with a `box-shadow` glow, and a glow on paper is a fuzzy grey
+              ring and wasted toner. Everything else on this page stays
+              hand-rolled and inline-styled for the same reason: no `Ground`
+              (a radial wash is wrong on paper), no `Card` (`sb-stage` is
+              glass), no `Deal`/`Rise`, no `sb-hero`.
+
+              No `SIM-{first four characters of the id}` line either. It read
+              as a reference number and was not one — four characters off the
+              front of a UUID identify nothing and collide between runs, and a
+              founder reported three different runs all showing the same
+              "SIM-1111". On a document that gets forwarded, a fake identifier
+              is worse than none: someone will quote it back. */}
+          <PageHeader
+            title={simulation.name}
+            phrase="They argued about it before your customers ever could."
+            className="mt-10 mb-10"
+          >
+            <p>
+              Who was in the room, what they kept coming back to, and the
+              sentences behind every number in this document.
+            </p>
+          </PageHeader>
 
           <div
             style={{
@@ -310,7 +368,7 @@ export default function ReportPrintPage() {
               gridTemplateColumns: '1fr 1fr',
               gap: '12px 32px',
               fontSize: 13,
-              color: '#333',
+              color: INK,
             }}
           >
             <Field label="Printed" value={format(new Date(), 'MMMM d, yyyy')} />
@@ -376,7 +434,7 @@ export default function ReportPrintPage() {
             style={{
               marginTop: analysis ? 60 : 120,
               fontSize: 10,
-              color: '#999',
+              color: MUTED,
               textAlign: 'center',
               letterSpacing: '0.15em',
               textTransform: 'uppercase',
@@ -390,7 +448,7 @@ export default function ReportPrintPage() {
         <div style={{ pageBreakAfter: 'always' }}>
           <SectionHeader number="1" title="What went in" />
 
-          <p style={{ fontSize: 14, fontWeight: 600, color: '#333', marginBottom: 8 }}>
+          <p style={{ fontSize: 14, fontWeight: 600, color: INK, marginBottom: 8 }}>
             What we asked
           </p>
           {simulation.prediction_goal.length > 300 ? (
@@ -403,7 +461,7 @@ export default function ReportPrintPage() {
 
           {report.source_documents && report.source_documents.length > 0 && (
             <>
-              <p style={{ fontSize: 14, fontWeight: 600, color: '#333', marginBottom: 8 }}>
+              <p style={{ fontSize: 14, fontWeight: 600, color: INK, marginBottom: 8 }}>
                 What you gave us to read
               </p>
               {report.source_documents.map((doc) => (
@@ -421,7 +479,7 @@ export default function ReportPrintPage() {
                     {doc.filename} ({doc.file_type.toUpperCase()}
                     {doc.word_count > 0 ? ` — ${doc.word_count.toLocaleString()} words` : ''})
                   </p>
-                  <div style={{ fontSize: 12, color: '#444', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                  <div style={{ fontSize: 12, color: INK, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
                     {doc.text}
                   </div>
                 </div>
@@ -429,7 +487,7 @@ export default function ReportPrintPage() {
             </>
           )}
 
-          <p style={{ fontSize: 14, fontWeight: 600, color: '#333', margin: '20px 0 8px' }}>
+          <p style={{ fontSize: 14, fontWeight: 600, color: INK, margin: '20px 0 8px' }}>
             How this run was set up
           </p>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -460,7 +518,7 @@ export default function ReportPrintPage() {
                 ],
               ].map(([label, value]) => (
                 <tr key={label}>
-                  <td style={{ ...cellStyle, fontWeight: 600, color: '#555', width: '35%' }}>
+                  <td style={{ ...cellStyle, fontWeight: 600, color: MUTED, width: '35%' }}>
                     {label}
                   </td>
                   <td style={cellStyle}>{value}</td>
@@ -532,7 +590,7 @@ export default function ReportPrintPage() {
                     lineHeight: 1.7,
                   }}
                 >
-                  <strong style={{ color: '#333' }}>What this run can and cannot tell you</strong>
+                  <strong style={{ color: INK }}>What this run can and cannot tell you</strong>
                   <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
                     {analysis.quality.caveats.map((caveat) => (
                       <li key={caveat}>{caveat}</li>
@@ -582,7 +640,7 @@ export default function ReportPrintPage() {
                 margin={{ left: 10, right: 20, top: 10, bottom: 10 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke={RULE} />
-                <XAxis dataKey="round" tick={{ fill: '#333', fontSize: 12 }} />
+                <XAxis dataKey="round" tick={{ fill: INK, fontSize: 12 }} />
                 <YAxis domain={[-1, 1]} tick={{ fill: MUTED, fontSize: 11 }} />
                 <ReferenceLine y={0} stroke="#999" />
                 <Tooltip
@@ -632,7 +690,7 @@ export default function ReportPrintPage() {
                 <YAxis
                   dataKey="name"
                   type="category"
-                  tick={{ fill: '#333', fontSize: 12 }}
+                  tick={{ fill: INK, fontSize: 12 }}
                   width={90}
                 />
                 <ReferenceLine x={0} stroke="#999" />
@@ -752,7 +810,7 @@ export default function ReportPrintPage() {
                           paddingLeft: 12,
                           margin: '6px 0',
                           fontSize: 12,
-                          color: '#444',
+                          color: INK,
                           fontStyle: 'italic',
                         }}
                       >
@@ -800,7 +858,7 @@ export default function ReportPrintPage() {
           {detailedSections.map((section) => (
             <div key={section.title} style={{ marginBottom: 24 }}>
               <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>{section.title}</h3>
-              <div style={{ fontSize: 14, lineHeight: 1.7, color: '#333' }}>
+              <div style={{ fontSize: 14, lineHeight: 1.7, color: INK }}>
                 <SectionRenderer
                   content={stripDuplicateTitle(section.title, cleanContent(section.content))}
                   printMode
@@ -849,12 +907,12 @@ const centeredStyle: React.CSSProperties = {
 };
 
 const quoteBlockStyle: React.CSSProperties = {
-  background: '#f7f7f7',
+  background: '#f4f8fd',
   border: `1px solid ${RULE}`,
   borderRadius: 8,
   padding: '16px 20px',
   fontSize: 12,
-  color: '#444',
+  color: INK,
   lineHeight: 1.7,
   whiteSpace: 'pre-wrap',
   marginBottom: 20,
@@ -862,7 +920,7 @@ const quoteBlockStyle: React.CSSProperties = {
 
 const cellStyle: React.CSSProperties = {
   padding: '6px 8px',
-  borderBottom: '1px solid #eee',
+  borderBottom: `1px solid ${RULE}`,
   color: INK,
   verticalAlign: 'top',
 };
@@ -879,7 +937,7 @@ const noticeStyle: React.CSSProperties = {
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <span style={{ color: '#999', fontWeight: 600 }}>{label}</span>
+      <span style={{ color: MUTED, fontWeight: 600 }}>{label}</span>
       <br />
       {value}
     </div>
@@ -888,7 +946,7 @@ function Field({ label, value }: { label: string; value: string }) {
 
 function ChartTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h4 style={{ fontSize: 14, fontWeight: 700, color: '#333', marginBottom: 4 }}>{children}</h4>
+    <h4 style={{ fontSize: 14, fontWeight: 700, color: INK, marginBottom: 4 }}>{children}</h4>
   );
 }
 
@@ -924,7 +982,7 @@ function MetricBox({ label, value, sub }: { label: string; value: string; sub?: 
       <div
         style={{
           fontSize: 10,
-          color: '#999',
+          color: MUTED,
           fontWeight: 600,
           textTransform: 'uppercase',
           letterSpacing: '0.05em',

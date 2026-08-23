@@ -1,14 +1,43 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { Lightbulb } from 'lucide-react';
 import api, { unwrapList } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
 import { listPacks } from '@/lib/packs';
 import RunConfigurator, { type RunShape } from '@/components/RunConfigurator';
 import FounderLensStep, { type FounderConfig } from '@/components/founder/FounderLensStep';
+import {
+  Action,
+  Card,
+  Eyebrow,
+  Ground,
+  Notice,
+  PageHeader,
+  Rise,
+  dealDelayMs,
+} from '@/components/design';
 import type { FounderStage } from '@/lib/founder';
 import type { OrgPersonaPack, PersonaPack, Project } from '@/types';
+
+/**
+ * Setting a run up, in six steps.
+ *
+ * Two things were wrong here beyond the colours, and both were founder rules
+ * rather than taste:
+ *
+ * 1. **Six `disabled` attributes.** Back on step 1, Next on an incomplete step,
+ *    Cancel and Build inside the custom-audience modal, and Start on the review
+ *    step. Every one of them was a grey rectangle with no sentence beside it —
+ *    the exact rendering the standing rule forbids: "a control either runs and
+ *    states what its answer will be missing, or it is blocked with the reason
+ *    and the button that unblocks it." There is no third rendering, so all six
+ *    are gone. Where a step genuinely cannot be left, the control is replaced
+ *    by a violet `Notice tone="blocked"` that says what is missing.
+ * 2. **Twenty-eight legacy dark-theme aliases** — `saibyl-void`, `saibyl-white`,
+ *    `saibyl-platinum`, `saibyl-gold`. They still resolve, because the token
+ *    file remapped them to light values when the theme flipped, which is
+ *    precisely why nobody noticed this page had never been converted.
+ */
 
 const PLATFORMS = [
   { id: 'twitter_x', name: 'Twitter / X', desc: 'Hot takes travel fastest' },
@@ -47,6 +76,31 @@ const LAST_STEP = STEPS.length - 1;
 const inputClass = 'w-full rounded-xl px-4 py-3 text-[14px] text-saibyl-ink placeholder:text-saibyl-muted/70 focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20 transition';
 const inputBg = 'bg-white border border-saibyl-border-light';
 
+/** The uppercase caption above a field. Not an `Eyebrow`: the dot marks where a
+    *block* begins, and dotting nine form labels in a row turns a dense form
+    into a constellation — which the canvas's density constraint rules out. */
+const fieldLabel = 'block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-2';
+
+/** A selectable tile — a platform, a ready-made group, a saved audience. */
+function tileClass(selected: boolean): string {
+  return `text-left p-4 rounded-xl border transition-all duration-200 ${
+    selected
+      ? 'border-saibyl-blue/45 bg-saibyl-blue/[0.07]'
+      : 'border-saibyl-border bg-white hover:border-saibyl-border-light'
+  }`;
+}
+
+/** The tick on a chosen tile. Blue, because blue is what "chosen" means here. */
+function Tick() {
+  return (
+    <div className="w-5 h-5 rounded-full bg-saibyl-blue flex items-center justify-center shrink-0">
+      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+      </svg>
+    </div>
+  );
+}
+
 /**
  * `pre_launch_positioning` → `Pre launch positioning`.
  *
@@ -59,10 +113,18 @@ function sentenceCase(value: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
+/**
+ * Advice, and deliberately not a `Notice`.
+ *
+ * The three notice tones each report a *state* — blocked, thinner, live — and a
+ * hint reports none of them. It was amber (`saibyl-gold`, the legacy alias for
+ * blue), which read as the artboard's "this will run, but thinner" warning on
+ * every step of a wizard where nothing was wrong.
+ */
 function Hint({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-saibyl-gold/5 border border-saibyl-gold/15 mb-5">
-      <Lightbulb className="w-3.5 h-3.5 text-saibyl-gold mt-0.5 shrink-0" />
+    <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-saibyl-blue/[0.05] border border-saibyl-blue/15 mb-5">
+      <Lightbulb className="w-3.5 h-3.5 text-saibyl-blue mt-0.5 shrink-0" />
       <p className="text-[12px] text-saibyl-muted leading-relaxed">{children}</p>
     </div>
   );
@@ -241,25 +303,67 @@ export default function NewSimulationPage() {
     return true;
   };
 
+  /*
+    Why this step cannot be left, when it cannot — and the control that fixes
+    it, when one exists on another screen.
+
+    This is the whole of the no-grey-button rule in one value. Either `blocked`
+    is null and the forward control renders, or it is set and the violet block
+    renders in the control's place. There is no state in which a founder sees a
+    dead rectangle and has to guess.
+  */
+  const blocked: { title: string; body: string; action?: React.ReactNode } | null =
+    step === 0 && !canNext()
+      ? {
+          title: 'Three things before we can go on',
+          body: 'Name this run, say which product it is about, and write down what you want to know. All three go into the room with your message — without them we would be guessing at the question as well as the answer.',
+          action:
+            projects.length === 0 ? (
+              <Action kind="quiet" onClick={() => navigate('/app/projects')}>
+                Add your product first
+              </Action>
+            ) : undefined,
+        }
+      : step === LAST_STEP && quoteError
+        ? {
+            title: 'This run can’t start yet',
+            body: `${quoteError} Nothing starts until we can tell you what it will cost you.`,
+          }
+        : null;
+
   return (
-    <div className="p-8 bg-saibyl-void min-h-full">
+    <Ground className="p-6 lg:p-8 min-h-full">
       <div className="max-w-3xl mx-auto">
-        <h1 className="text-h1 text-saibyl-white mb-2">Start a new run</h1>
-        <p className="text-small mb-8">
-          {STEPS.length} steps to set it up. Then we put it in front of the room and
-          tell you what they push back on.
-        </p>
+        <Rise>
+          <PageHeader
+            eyebrow="New run"
+            title="Start a new run"
+            mark={`${STEPS.length} steps`}
+            phrase="Set the room, then find out what it says back."
+          >
+            <p>
+              A run puts one message in front of one room of buyers and reports
+              what they push back on. These {STEPS.length} steps decide who is in
+              the room, where they see it and how long they argue &mdash; and the
+              last one shows you the exact cost before anything starts.
+            </p>
+          </PageHeader>
+        </Rise>
 
         {/* Step indicator */}
-        <div className="flex items-center mb-8 gap-1">
+        <div className="flex items-center mt-7 mb-6 gap-1">
           {STEPS.map((label, i) => (
             <div key={label} className="flex items-center">
               <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-[12px] font-mono font-bold transition-colors ${
-                i < step ? 'bg-saibyl-positive text-white' : i === step ? 'bg-saibyl-gold text-white' : 'bg-[#14294a]/[0.04] text-saibyl-muted'
+                i < step
+                  ? 'bg-saibyl-positive text-white'
+                  : i === step
+                    ? 'bg-saibyl-blue text-white shadow-[0_6px_14px_rgba(40,108,240,0.24)]'
+                    : 'bg-[#14294a]/[0.04] text-saibyl-muted'
               }`}>
                 {i < step ? '✓' : i + 1}
               </div>
-              <span className={`ml-1.5 text-[13px] hidden sm:inline whitespace-nowrap ${i <= step ? 'text-saibyl-platinum' : 'text-saibyl-muted'}`}>{label}</span>
+              <span className={`ml-1.5 text-[13px] hidden sm:inline whitespace-nowrap ${i <= step ? 'text-saibyl-ink' : 'text-saibyl-muted'}`}>{label}</span>
               {i < STEPS.length - 1 && <div className={`w-3 sm:w-8 h-px mx-1 sm:mx-2 ${i < step ? 'bg-saibyl-positive/40' : 'bg-saibyl-border'}`} />}
             </div>
           ))}
@@ -269,456 +373,448 @@ export default function NewSimulationPage() {
           <div className="mb-4 px-4 py-3 rounded-xl bg-saibyl-negative/10 border border-saibyl-negative/20 text-saibyl-negative text-sm">{error}</div>
         )}
 
-        <motion.div
-          key={step}
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.25 }}
-          className="glass rounded-2xl p-8"
-        >
-          {/* ── Step 1: Setup ── */}
-          {step === 0 && (
-            <div className="space-y-5">
-              <Hint>
-                Ask one specific question. The narrower it is, the sharper the answer —
-                instead of &ldquo;How will people react?&rdquo;, try &ldquo;Would solo
-                founders pay $49 a month for this, or say they could build it themselves
-                in a weekend?&rdquo;
-              </Hint>
-              <div>
-                <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-2">Name this run</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. New pricing page, before launch"
-                  className={`${inputClass} ${inputBg}`}
-                />
-              </div>
-              <div>
-                <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-2">Product</label>
-                {projects.length === 0 ? (
-                  <div className={`${inputClass} ${inputBg} text-saibyl-muted`}>
-                    Nothing here yet — <button onClick={() => navigate('/app/projects')} className="text-saibyl-gold hover:underline">add your product first</button>
-                  </div>
-                ) : (
-                  <div className="relative">
-                    <select
-                      value={projectId}
-                      onChange={(e) => setProjectId(e.target.value)}
-                      className={`${inputClass} ${inputBg} appearance-none cursor-pointer`}
-                      style={{ colorScheme: 'light' }}
-                    >
-                      <option value="" className="bg-white text-saibyl-muted">Choose a product…</option>
-                      {projects.map((p) => (
-                        <option key={p.id} value={p.id} className="bg-white text-saibyl-platinum">{p.name}</option>
-                      ))}
-                    </select>
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-saibyl-muted">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+        {/* The one panel this screen is about — `carries="stage"`, once, and it
+            re-rises whenever the step changes. Keyed on `step` exactly as the
+            framer-motion wrapper it replaces was, so the subtree remounts the
+            same way; what changed is that the movement is now the artboard's
+            own keyframe and collapses under `prefers-reduced-motion`. */}
+        <Rise key={step} delayMs={dealDelayMs(1)}>
+          <Card carries="stage" className="p-8">
+            {/* ── Step 1: Setup ── */}
+            {step === 0 && (
+              <div className="space-y-5">
+                <Hint>
+                  Ask one specific question. The narrower it is, the sharper the answer —
+                  instead of &ldquo;How will people react?&rdquo;, try &ldquo;Would solo
+                  founders pay $49 a month for this, or say they could build it themselves
+                  in a weekend?&rdquo;
+                </Hint>
+                <div>
+                  <label className={fieldLabel}>Name this run</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g. New pricing page, before launch"
+                    className={`${inputClass} ${inputBg}`}
+                  />
+                </div>
+                <div>
+                  <label className={fieldLabel}>Product</label>
+                  {projects.length === 0 ? (
+                    <div className={`${inputClass} ${inputBg} text-saibyl-muted`}>
+                      Nothing here yet — <button onClick={() => navigate('/app/projects')} className="text-saibyl-blue hover:underline">add your product first</button>
                     </div>
-                  </div>
-                )}
-              </div>
-              <div>
-                <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-2">What do you want to know</label>
-                <textarea
-                  value={predictionGoal}
-                  onChange={(e) => setPredictionGoal(e.target.value)}
-                  rows={4}
-                  placeholder="In your own words. e.g. 'If I launch this on Reddit and Hacker News at $49 a month, what will solo founders object to — the price, the fact that it needs my API key, or that they could wire this up themselves?'"
-                  className={`${inputClass} ${inputBg} resize-none`}
-                />
-                <p className="text-[11px] text-saibyl-muted mt-1.5">{predictionGoal.length} characters</p>
-              </div>
-            </div>
-          )}
-
-          {/* ── Step 2: Platforms ── */}
-          {step === 1 && (
-            <div>
-              <Hint>
-                Each place behaves differently — X amplifies hot takes, Reddit rewards
-                depth, LinkedIn buries anything negative. Picking more of them tells you
-                more, and takes longer to run.
-              </Hint>
-              <p className="text-[14px] text-saibyl-muted mb-5">Where will this be seen? Each one is modelled on how that place actually behaves.</p>
-              <div className="grid grid-cols-2 gap-3">
-                {PLATFORMS.map((p) => {
-                  const selected = selectedPlatforms.includes(p.id);
-                  return (
-                    <button
-                      key={p.id}
-                      onClick={() => togglePlatform(p.id)}
-                      className={`text-left p-4 rounded-xl border transition-all duration-200 ${
-                        selected
-                          ? 'border-saibyl-blue/45 bg-saibyl-blue/[0.07]'
-                          : 'border-saibyl-border bg-white hover:border-saibyl-border-light'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className={`font-medium text-[14px] ${selected ? 'text-saibyl-white' : 'text-saibyl-platinum'}`}>{p.name}</span>
-                        {selected && <div className="w-5 h-5 rounded-full bg-saibyl-gold flex items-center justify-center"><svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg></div>}
-                      </div>
-                      <p className="text-[11px] text-saibyl-muted mt-1">{p.desc}</p>
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="text-[12px] text-saibyl-muted mt-4">{selectedPlatforms.length} platform{selectedPlatforms.length !== 1 ? 's' : ''} selected</p>
-            </div>
-          )}
-
-          {/* ── Step 3: Persona Packs ── */}
-          {step === 2 && (
-            <div>
-              <Hint>
-                Mixing groups is where the useful arguments come from. Put tech workers and
-                finance people in the same room and they will disagree with each other —
-                that disagreement is usually the thing you needed to see. You can also
-                describe a group of your own.
-              </Hint>
-              <p className="text-[14px] text-saibyl-muted mb-5">Who is in the room? Pick as many ready-made groups as you like, or describe your own.</p>
-              {packs.length === 0 ? (
-                <div className="text-center py-8 text-saibyl-muted">Loading…</div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* Create Custom card */}
-                  <button
-                    onClick={() => setShowCustomModal(true)}
-                    className="text-left p-4 rounded-xl border border-dashed border-saibyl-gold/30 bg-saibyl-gold/5 hover:border-saibyl-gold/50 hover:bg-saibyl-gold/10 transition-all duration-200"
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      <svg className="w-5 h-5 text-saibyl-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                      <span className="font-medium text-[14px] text-saibyl-gold">Describe your own group</span>
-                    </div>
-                    <p className="text-[11px] text-saibyl-muted leading-relaxed">Tell us who they are and we&rsquo;ll build out a room of them — ages, jobs, temperaments, and how they behave online.</p>
-                  </button>
-
-                  {packs.map((pack) => {
-                    const selected = selectedPacks.includes(pack.id);
-                    return (
-                      <button
-                        key={pack.id}
-                        onClick={() => togglePack(pack.id)}
-                        className={`text-left p-4 rounded-xl border transition-all duration-200 ${
-                          selected
-                            ? 'border-saibyl-blue/45 bg-saibyl-blue/[0.07]'
-                            : 'border-saibyl-border bg-white hover:border-saibyl-border-light'
-                        }`}
+                  ) : (
+                    <div className="relative">
+                      <select
+                        value={projectId}
+                        onChange={(e) => setProjectId(e.target.value)}
+                        className={`${inputClass} ${inputBg} appearance-none cursor-pointer`}
+                        style={{ colorScheme: 'light' }}
                       >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className={`font-medium text-[14px] ${selected ? 'text-saibyl-white' : 'text-saibyl-platinum'}`}>{pack.name}</span>
-                          {selected && <div className="w-5 h-5 rounded-full bg-saibyl-gold flex items-center justify-center"><svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg></div>}
+                        <option value="" className="bg-white text-saibyl-muted">Choose a product…</option>
+                        {projects.map((p) => (
+                          <option key={p.id} value={p.id} className="bg-white text-saibyl-ink">{p.name}</option>
+                        ))}
+                      </select>
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-saibyl-muted">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label className={fieldLabel}>What do you want to know</label>
+                  <textarea
+                    value={predictionGoal}
+                    onChange={(e) => setPredictionGoal(e.target.value)}
+                    rows={4}
+                    placeholder="In your own words. e.g. 'If I launch this on Reddit and Hacker News at $49 a month, what will solo founders object to — the price, the fact that it needs my API key, or that they could wire this up themselves?'"
+                    className={`${inputClass} ${inputBg} resize-none`}
+                  />
+                  <p className="text-[11px] text-saibyl-muted mt-1.5">{predictionGoal.length} characters</p>
+                </div>
+              </div>
+            )}
+
+            {/* ── Step 2: Platforms ── */}
+            {step === 1 && (
+              <div>
+                <Hint>
+                  Each place behaves differently — X amplifies hot takes, Reddit rewards
+                  depth, LinkedIn buries anything negative. Picking more of them tells you
+                  more, and takes longer to run.
+                </Hint>
+                <p className="text-[14px] text-saibyl-muted mb-5">Where will this be seen? Each one is modelled on how that place actually behaves.</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {PLATFORMS.map((p) => {
+                    const selected = selectedPlatforms.includes(p.id);
+                    return (
+                      <button key={p.id} onClick={() => togglePlatform(p.id)} className={tileClass(selected)}>
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-[14px] text-saibyl-ink">{p.name}</span>
+                          {selected && <Tick />}
                         </div>
-                        <p className="text-[11px] text-saibyl-muted leading-relaxed">{pack.description}</p>
-                        <div className="flex items-center gap-2 mt-2">
-                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#14294a]/[0.04] text-saibyl-muted">{pack.category}</span>
-                          <span className="text-[10px] text-saibyl-muted">
-                            {pack.archetype_count === 1
-                              ? '1 kind of person'
-                              : `${pack.archetype_count} kinds of people`}
-                          </span>
-                        </div>
+                        <p className="text-[11px] text-saibyl-muted mt-1">{p.desc}</p>
                       </button>
                     );
                   })}
                 </div>
-              )}
-              {/* ── Audiences this org already worked out and kept ── */}
-              <div className="mt-6 pt-6 border-t border-saibyl-border">
-                <div className="flex items-baseline justify-between mb-1">
-                  <h3 className="text-[14px] font-medium text-saibyl-platinum">
-                    Audiences you&rsquo;ve saved
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={() => navigate('/app/audiences')}
-                    className="text-[12px] text-saibyl-gold hover:underline"
-                  >
-                    Manage
-                  </button>
-                </div>
-                <p className="text-[12px] text-saibyl-muted mb-3 leading-relaxed">
-                  Buyers Saibyl worked out for one of your products and you kept. Pick as many
-                  as you like — the run mixes them in with anything selected above.
-                </p>
+                <p className="text-[12px] text-saibyl-muted mt-4">{selectedPlatforms.length} platform{selectedPlatforms.length !== 1 ? 's' : ''} selected</p>
+              </div>
+            )}
 
-                {orgPacksError ? (
-                  <p className="text-[12px] text-saibyl-muted">
-                    {orgPacksError} Nothing is listed here because we don&rsquo;t know what you
-                    have, not because you have none.
-                  </p>
-                ) : orgPacks.length === 0 ? (
-                  <p className="text-[12px] text-saibyl-muted">
-                    Nothing saved yet. Work out your buyers on the next step and you can keep
-                    them for every other product you build.
-                  </p>
+            {/* ── Step 3: Persona Packs ── */}
+            {step === 2 && (
+              <div>
+                <Hint>
+                  Mixing groups is where the useful arguments come from. Put tech workers and
+                  finance people in the same room and they will disagree with each other —
+                  that disagreement is usually the thing you needed to see. You can also
+                  describe a group of your own.
+                </Hint>
+                <p className="text-[14px] text-saibyl-muted mb-5">Who is in the room? Pick as many ready-made groups as you like, or describe your own.</p>
+                {packs.length === 0 ? (
+                  <div className="text-center py-8 text-saibyl-muted">Loading…</div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {orgPacks.map((pack) => {
+                    {/* Create Custom card */}
+                    <button
+                      onClick={() => setShowCustomModal(true)}
+                      className="text-left p-4 rounded-xl border border-dashed border-saibyl-blue/35 bg-saibyl-blue/[0.05] hover:border-saibyl-blue/55 hover:bg-saibyl-blue/[0.09] transition-all duration-200"
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <svg className="w-5 h-5 text-saibyl-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                        <span className="font-medium text-[14px] text-saibyl-blue">Describe your own group</span>
+                      </div>
+                      <p className="text-[11px] text-saibyl-muted leading-relaxed">Tell us who they are and we&rsquo;ll build out a room of them — ages, jobs, temperaments, and how they behave online.</p>
+                    </button>
+
+                    {packs.map((pack) => {
                       const selected = selectedPacks.includes(pack.id);
                       return (
-                        <button
-                          key={pack.id}
-                          onClick={() => togglePack(pack.id)}
-                          className={`text-left p-4 rounded-xl border transition-all duration-200 ${
-                            selected
-                              ? 'border-saibyl-blue/45 bg-saibyl-blue/[0.07]'
-                              : 'border-saibyl-border bg-white hover:border-saibyl-border-light'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-2 mb-1">
-                            <span className={`font-medium text-[14px] ${selected ? 'text-saibyl-white' : 'text-saibyl-platinum'}`}>{pack.name}</span>
-                            {selected && <div className="w-5 h-5 rounded-full bg-saibyl-gold flex items-center justify-center shrink-0"><svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg></div>}
+                        <button key={pack.id} onClick={() => togglePack(pack.id)} className={tileClass(selected)}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-medium text-[14px] text-saibyl-ink">{pack.name}</span>
+                            {selected && <Tick />}
                           </div>
-                          {pack.description && (
-                            <p className="text-[11px] text-saibyl-muted leading-relaxed line-clamp-2">{pack.description}</p>
-                          )}
-                          {/* Shown only when the server sent a count. A zero
-                              here would read as an audience containing nobody. */}
-                          {pack.archetype_count != null && (
-                            <span className="block text-[10px] text-saibyl-muted mt-2">
-                              {pack.archetype_count} group{pack.archetype_count === 1 ? '' : 's'} of people
+                          <p className="text-[11px] text-saibyl-muted leading-relaxed">{pack.description}</p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#14294a]/[0.04] text-saibyl-muted">{pack.category}</span>
+                            <span className="text-[10px] text-saibyl-muted">
+                              {pack.archetype_count === 1
+                                ? '1 kind of person'
+                                : `${pack.archetype_count} kinds of people`}
                             </span>
-                          )}
+                          </div>
                         </button>
                       );
                     })}
                   </div>
                 )}
-              </div>
+                {/* ── Audiences this org already worked out and kept ── */}
+                <div className="mt-6 pt-6 border-t border-saibyl-border">
+                  <div className="flex items-baseline justify-between mb-1">
+                    <h3 className="text-[14px] font-medium text-saibyl-ink">
+                      Audiences you&rsquo;ve saved
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => navigate('/app/audiences')}
+                      className="text-[12px] text-saibyl-blue hover:underline"
+                    >
+                      Manage
+                    </button>
+                  </div>
+                  <p className="text-[12px] text-saibyl-muted mb-3 leading-relaxed">
+                    Buyers Saibyl worked out for one of your products and you kept. Pick as many
+                    as you like — the run mixes them in with anything selected above.
+                  </p>
 
-              <p className="text-[12px] text-saibyl-muted mt-4">{selectedPacks.length} group{selectedPacks.length !== 1 ? 's' : ''} selected</p>
-
-              {/* Custom Persona Modal */}
-              {showCustomModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#14294a]/40 backdrop-blur-sm">
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="glass rounded-2xl p-8 w-full max-w-lg mx-4"
-                  >
-                    <h3 className="text-[18px] font-semibold text-saibyl-white mb-1">Describe your own group</h3>
-                    <p className="text-[12px] text-saibyl-muted mb-6">Tell us who these people are and we&rsquo;ll build out a room of them — the different kinds of person in it, their ages, jobs and temperaments, and how they behave online.</p>
-
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-2">What would you call them?</label>
-                        <input
-                          type="text"
-                          value={customName}
-                          onChange={(e) => setCustomName(e.target.value)}
-                          placeholder="e.g. Solo SaaS founders, Agency owners, Heads of RevOps"
-                          className={`${inputClass} ${inputBg}`}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-2">Who are they?</label>
-                        <textarea
-                          value={customDesc}
-                          onChange={(e) => setCustomDesc(e.target.value)}
-                          rows={4}
-                          placeholder="What they do, what drives them, how they behave online, what they already pay for. The more you write here, the more like real people they come out."
-                          className={`${inputClass} ${inputBg} resize-none`}
-                        />
-                      </div>
+                  {orgPacksError ? (
+                    <p className="text-[12px] text-saibyl-muted">
+                      {orgPacksError} Nothing is listed here because we don&rsquo;t know what you
+                      have, not because you have none.
+                    </p>
+                  ) : orgPacks.length === 0 ? (
+                    <p className="text-[12px] text-saibyl-muted">
+                      Nothing saved so far. Work out your buyers on the next step and you can keep
+                      them for every other product you build.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {orgPacks.map((pack) => {
+                        const selected = selectedPacks.includes(pack.id);
+                        return (
+                          <button key={pack.id} onClick={() => togglePack(pack.id)} className={tileClass(selected)}>
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <span className="font-medium text-[14px] text-saibyl-ink">{pack.name}</span>
+                              {selected && <Tick />}
+                            </div>
+                            {pack.description && (
+                              <p className="text-[11px] text-saibyl-muted leading-relaxed line-clamp-2">{pack.description}</p>
+                            )}
+                            {/* Shown only when the server sent a count. A zero
+                                here would read as an audience containing nobody. */}
+                            {pack.archetype_count != null && (
+                              <span className="block text-[10px] text-saibyl-muted mt-2">
+                                {pack.archetype_count} group{pack.archetype_count === 1 ? '' : 's'} of people
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
-
-                    <div className="flex justify-end gap-3 mt-6">
-                      <button
-                        onClick={() => { setShowCustomModal(false); setCustomName(''); setCustomDesc(''); }}
-                        className="px-5 py-2.5 text-[14px] text-saibyl-muted hover:text-saibyl-platinum transition-colors"
-                        disabled={creatingCustom}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={handleCreateCustomPack}
-                        disabled={creatingCustom || !customName.trim() || !customDesc.trim()}
-                        className="px-6 py-2.5 rounded-xl bg-saibyl-gold text-white font-medium text-sm disabled:bg-[#e2ebf9] disabled:text-[#60718e] transition-all hover:bg-saibyl-gold-hover hover:-translate-y-0.5"
-                      >
-                        {creatingCustom ? 'Building…' : 'Build this group'}
-                      </button>
-                    </div>
-                  </motion.div>
+                  )}
                 </div>
-              )}
-            </div>
-          )}
 
-          {/* ── Step 4: Lens ── */}
-          {step === 3 && (
-            <div>
-              {/* Written to the reader, not to the team. This said "a run with no
-                  lens behaves exactly as it did before, which is what every run
-                  made before this feature existed did" — a sentence about our
-                  release history, addressed to somebody who has no before. */}
-              <Hint>
-                This step is optional, and it is the one that makes the answers about
-                your product rather than about the topic. Tell us where you are with
-                it and we&rsquo;ll read what you&rsquo;ve uploaded to work out who your
-                buyers are and who will argue against you. Skip it and the run just
-                uses the groups you picked on the last step.
-              </Hint>
-              <FounderLensStep
-                projectId={projectId}
-                platforms={selectedPlatforms}
-                value={founder}
-                onChange={setFounder}
-              />
-            </div>
-          )}
+                <p className="text-[12px] text-saibyl-muted mt-4">{selectedPacks.length} group{selectedPacks.length !== 1 ? 's' : ''} selected</p>
 
-          {/* ── Step 5: Configure ── */}
-          {step === 4 && (
-            <div className="space-y-6">
-              <Hint>
-                More people narrow the range on every finding; more rounds let
-                objections spread between them. Both cost credits, and the exact
-                cost is shown below before you commit to anything. The numbers you
-                set here are the numbers that get built — type an exact figure into
-                the box if the slider will not land on it.
-              </Hint>
+                {/* Custom Persona Modal */}
+                {showCustomModal && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#14294a]/40 backdrop-blur-sm">
+                    <Rise className="w-full max-w-lg mx-4">
+                      {/* `meaning`, not `stage`: while this is open it sits over
+                          the step panel, and two stages on screen at once means
+                          neither of them is the subject. */}
+                      <Card carries="meaning" className="p-8">
+                        <h3 className="text-[18px] font-semibold text-saibyl-ink mb-1">Describe your own group</h3>
+                        <p className="text-[12px] text-saibyl-muted mb-6">Tell us who these people are and we&rsquo;ll build out a room of them — the different kinds of person in it, their ages, jobs and temperaments, and how they behave online.</p>
 
-              <RunConfigurator
-                shape={shape}
-                platformCount={selectedPlatforms.length}
-                onChange={setShape}
-                onQuote={handleQuote}
-              />
+                        <div className="space-y-4">
+                          <div>
+                            <label className={fieldLabel}>What would you call them?</label>
+                            <input
+                              type="text"
+                              value={customName}
+                              onChange={(e) => setCustomName(e.target.value)}
+                              placeholder="e.g. Solo SaaS founders, Agency owners, Heads of RevOps"
+                              className={`${inputClass} ${inputBg}`}
+                            />
+                          </div>
+                          <div>
+                            <label className={fieldLabel}>Who are they?</label>
+                            <textarea
+                              value={customDesc}
+                              onChange={(e) => setCustomDesc(e.target.value)}
+                              rows={4}
+                              placeholder="What they do, what drives them, how they behave online, what they already pay for. The more you write here, the more like real people they come out."
+                              className={`${inputClass} ${inputBg} resize-none`}
+                            />
+                          </div>
+                        </div>
 
+                        <div className="flex justify-end items-center gap-3 mt-6">
+                          <button
+                            onClick={() => { setShowCustomModal(false); setCustomName(''); setCustomDesc(''); }}
+                            className="px-5 py-2.5 text-[14px] text-saibyl-muted hover:text-saibyl-ink transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          {creatingCustom ? (
+                            /* Announced, not disabled. A `<span>` cannot be
+                               clicked twice into two rooms, and it says what is
+                               happening instead of going grey. */
+                            <Action as="span" aria-live="polite" className="opacity-70">
+                              Building…
+                            </Action>
+                          ) : customName.trim() && customDesc.trim() ? (
+                            <Action onClick={handleCreateCustomPack}>Build this group</Action>
+                          ) : (
+                            <span className="text-[12px] text-saibyl-violet max-w-[16rem] leading-relaxed">
+                              Both boxes need something in them before we can build anybody.
+                            </span>
+                          )}
+                        </div>
+                      </Card>
+                    </Rise>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Step 4: Lens ── */}
+            {step === 3 && (
               <div>
-                <label className="block text-[12px] font-medium text-saibyl-muted uppercase tracking-wide mb-2">Timezone</label>
-                <select
-                  value={timezone}
-                  onChange={(e) => setTimezone(e.target.value)}
-                  className={`${inputClass} ${inputBg} appearance-none`}
-                  style={{ colorScheme: 'light' }}
-                >
-                  {['America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'UTC', 'Europe/London', 'Europe/Berlin', 'Asia/Tokyo', 'Asia/Shanghai'].map((tz) => (
-                    <option key={tz} value={tz} className="bg-saibyl-deep text-saibyl-platinum">{tz}</option>
-                  ))}
-                </select>
+                {/* Written to the reader, not to the team. This said "a run with no
+                    lens behaves exactly as it did before, which is what every run
+                    made before this feature existed did" — a sentence about our
+                    release history, addressed to somebody who has no before. */}
+                <Hint>
+                  This step is optional, and it is the one that makes the answers about
+                  your product rather than about the topic. Tell us where you are with
+                  it and we&rsquo;ll read what you&rsquo;ve uploaded to work out who your
+                  buyers are and who will argue against you. Skip it and the run just
+                  uses the groups you picked on the last step.
+                </Hint>
+                <FounderLensStep
+                  projectId={projectId}
+                  platforms={selectedPlatforms}
+                  value={founder}
+                  onChange={setFounder}
+                />
               </div>
-            </div>
-          )}
+            )}
 
-          {/* ── Step 6: Review ── */}
-          {step === LAST_STEP && (
-            <div>
-              <h2 className="text-[18px] font-semibold text-saibyl-platinum mb-5">One last look</h2>
-              {/* Every row here is something the reader chose. A row with
-                  nothing behind it is dropped rather than filled with an em
-                  dash: five of these used to render "—", which reads as a
-                  setting whose value is a dash instead of a setting that was
-                  never reached.
+            {/* ── Step 5: Configure ── */}
+            {step === 4 && (
+              <div className="space-y-6">
+                <Hint>
+                  More people narrow the range on every finding; more rounds let
+                  objections spread between them. Both cost credits, and the exact
+                  cost is shown below before you commit to anything. The numbers you
+                  set here are the numbers that get built — type an exact figure into
+                  the box if the slider will not land on it.
+                </Hint>
 
-                  `capitalize` also came off the value: it is on the shared span
-                  and it title-cased whole sentences, so the product name and
-                  "One — add more on the run's page before you start it" came
-                  out with a capital on every word. The one value that wanted it
-                  is capitalised where it is built. */}
-              <div className="space-y-3">
-                {(
-                  [
-                    ['Name', name.trim()],
-                    ['Product', projects.find((p) => p.id === projectId)?.name ?? ''],
-                    ['Your question', predictionGoal.trim()],
-                    [
-                      'Where',
-                      selectedPlatforms
-                        .map((id) => PLATFORMS.find((p) => p.id === id)?.name || id)
-                        .join(', ') || 'Twitter / X',
-                    ],
-                    [
-                      'Groups picked',
-                      selectedPacks.length === 1 ? '1 group' : `${selectedPacks.length} groups`,
-                    ],
-                    ['Where you are', founder.stage ? sentenceCase(founder.stage) : ''],
-                    [
-                      'Your own buyers',
-                      founder.icpProfileId ? 'Worked out from what you uploaded' : '',
-                    ],
-                    [
-                      'Arguing against you',
-                      founder.icpProfileId
-                        ? `${(founder.adversarialShare * 100).toFixed(0)}% of the room`
-                        : '',
-                    ],
-                    ['People in the room', String(shape.agent_count)],
-                    ['Rounds', String(shape.rounds)],
-                    [
-                      'Messages tested',
-                      'One — add more on the run’s page before you start it',
-                    ],
-                    ['Report depth', sentenceCase(shape.depth)],
-                    ['Timezone', timezone],
-                  ] as [string, string][]
-                )
-                  .filter(([, value]) => value !== '')
-                  .map(([label, value]) => (
-                    <div key={label} className="flex items-start gap-4 py-2 border-b border-saibyl-border last:border-0">
-                      <span className="text-[13px] text-saibyl-muted w-36 shrink-0">{label}</span>
-                      <span className="text-[13px] text-saibyl-platinum flex-1">{value}</span>
-                    </div>
-                  ))}
-              </div>
-
-              {/* Re-priced here rather than echoing the figure from step 4: a
-                  run is never started without its current cost on screen. */}
-              <div className="mt-6">
                 <RunConfigurator
                   shape={shape}
                   platformCount={selectedPlatforms.length}
                   onChange={setShape}
                   onQuote={handleQuote}
-                  readOnly
                 />
-              </div>
-            </div>
-          )}
 
-          {/* ── Navigation ── */}
-          <div className="flex justify-between mt-8 pt-5 border-t border-saibyl-border">
-            <button
-              onClick={() => setStep((s) => s - 1)}
-              disabled={step === 0}
-              className="px-5 py-2.5 text-[14px] text-saibyl-muted hover:text-saibyl-platinum disabled:opacity-60 transition-colors"
-            >
-              ← Back
-            </button>
-            {step < LAST_STEP ? (
-              <button
-                onClick={() => setStep((s) => s + 1)}
-                disabled={!canNext()}
-                className="bg-saibyl-gold text-white px-6 py-2.5 rounded-xl text-[14px] font-medium hover:bg-saibyl-gold-hover disabled:bg-[#e2ebf9] disabled:text-[#60718e] transition-all"
-              >
-                Next →
-              </button>
-            ) : (
-              /* The reason a run cannot start is written next to the button
-                 rather than hidden in a `title`. A tooltip is no explanation on
-                 a touch screen and invisible in a screenshot, and this is the
-                 last screen before money is spent. */
-              <div className="flex items-center gap-3">
-                {quoteError && (
-                  <span className="text-[12px] text-saibyl-warning">
-                    {quoteError} Nothing can start until we can tell you what it costs.
-                  </span>
-                )}
-                <button
-                  onClick={handleSubmit}
-                  disabled={submitting || !!quoteError}
-                  className="px-8 py-2.5 rounded-xl bg-saibyl-gold text-saibyl-void font-semibold text-[14px] disabled:bg-[#e2ebf9] disabled:text-[#60718e] transition-all hover:bg-saibyl-gold-hover hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(40,108,240,0.3)]"
-                >
-                  {submitting ? 'Starting…' : 'Start this run →'}
-                </button>
+                <div>
+                  <label className={fieldLabel}>Timezone</label>
+                  <select
+                    value={timezone}
+                    onChange={(e) => setTimezone(e.target.value)}
+                    className={`${inputClass} ${inputBg} appearance-none`}
+                    style={{ colorScheme: 'light' }}
+                  >
+                    {['America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'UTC', 'Europe/London', 'Europe/Berlin', 'Asia/Tokyo', 'Asia/Shanghai'].map((tz) => (
+                      <option key={tz} value={tz} className="bg-white text-saibyl-ink">{tz}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             )}
-          </div>
-        </motion.div>
+
+            {/* ── Step 6: Review ── */}
+            {step === LAST_STEP && (
+              <div>
+                <Eyebrow>Review</Eyebrow>
+                <h2 className="text-[18px] font-semibold text-saibyl-ink mt-2 mb-5">One last look</h2>
+                {/* Every row here is something the reader chose. A row with
+                    nothing behind it is dropped rather than filled with an em
+                    dash: five of these used to render "—", which reads as a
+                    setting whose value is a dash instead of a setting that was
+                    never reached.
+
+                    `capitalize` also came off the value: it is on the shared span
+                    and it title-cased whole sentences, so the product name and
+                    "One — add more on the run's page before you start it" came
+                    out with a capital on every word. The one value that wanted it
+                    is capitalised where it is built. */}
+                <div className="space-y-3">
+                  {(
+                    [
+                      ['Name', name.trim()],
+                      ['Product', projects.find((p) => p.id === projectId)?.name ?? ''],
+                      ['Your question', predictionGoal.trim()],
+                      [
+                        'Where',
+                        selectedPlatforms
+                          .map((id) => PLATFORMS.find((p) => p.id === id)?.name || id)
+                          .join(', ') || 'Twitter / X',
+                      ],
+                      [
+                        'Groups picked',
+                        selectedPacks.length === 1 ? '1 group' : `${selectedPacks.length} groups`,
+                      ],
+                      ['Where you are', founder.stage ? sentenceCase(founder.stage) : ''],
+                      [
+                        'Your own buyers',
+                        founder.icpProfileId ? 'Worked out from what you uploaded' : '',
+                      ],
+                      [
+                        'Arguing against you',
+                        founder.icpProfileId
+                          ? `${(founder.adversarialShare * 100).toFixed(0)}% of the room`
+                          : '',
+                      ],
+                      ['People in the room', String(shape.agent_count)],
+                      ['Rounds', String(shape.rounds)],
+                      [
+                        'Messages tested',
+                        'One — add more on the run’s page before you start it',
+                      ],
+                      ['Report depth', sentenceCase(shape.depth)],
+                      ['Timezone', timezone],
+                    ] as [string, string][]
+                  )
+                    .filter(([, value]) => value !== '')
+                    .map(([label, value]) => (
+                      <div key={label} className="flex items-start gap-4 py-2 border-b border-saibyl-border last:border-0">
+                        <span className="text-[13px] text-saibyl-muted w-36 shrink-0">{label}</span>
+                        <span className="text-[13px] text-saibyl-ink flex-1">{value}</span>
+                      </div>
+                    ))}
+                </div>
+
+                {/* Re-priced here rather than echoing the figure from step 4: a
+                    run is never started without its current cost on screen. */}
+                <div className="mt-6">
+                  <RunConfigurator
+                    shape={shape}
+                    platformCount={selectedPlatforms.length}
+                    onChange={setShape}
+                    onQuote={handleQuote}
+                    readOnly
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* ── Navigation ──
+                The reason a step cannot be left is written where the control
+                would have been, rather than hidden in a `title` or spelled as a
+                grey rectangle. A tooltip is no explanation on a touch screen and
+                invisible in a screenshot, and the last of these is the screen
+                before money is spent. */}
+            <div className="mt-8 pt-5 border-t border-saibyl-border">
+              {blocked && (
+                <Notice
+                  tone="blocked"
+                  title={blocked.title}
+                  action={blocked.action}
+                  className="mb-4"
+                >
+                  {blocked.body}
+                </Notice>
+              )}
+              <div className="flex justify-between items-center gap-4">
+                {step > 0 ? (
+                  <button
+                    onClick={() => setStep((s) => s - 1)}
+                    className="px-5 py-2.5 text-[14px] text-saibyl-muted hover:text-saibyl-ink transition-colors"
+                  >
+                    ← Back
+                  </button>
+                ) : (
+                  /* Nothing to go back to on step 1, so there is nothing here.
+                     The spacer keeps the forward control on the right. */
+                  <span />
+                )}
+
+                {/* Exactly one gradient action is ever on screen: Next while
+                    there are steps left, Start on the last one. They are
+                    mutually exclusive, so the screen never carries two. */}
+                {blocked ? null : step < LAST_STEP ? (
+                  <Action onClick={() => setStep((s) => s + 1)}>Next →</Action>
+                ) : submitting ? (
+                  <Action as="span" aria-live="polite" className="opacity-70">
+                    Starting…
+                  </Action>
+                ) : (
+                  <Action onClick={handleSubmit}>Start this run →</Action>
+                )}
+              </div>
+            </div>
+          </Card>
+        </Rise>
       </div>
-    </div>
+    </Ground>
   );
 }

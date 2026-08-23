@@ -42,7 +42,7 @@ import {
  */
 
 const quietBtn =
-  'inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-saibyl-border-light text-saibyl-platinum text-[13px] hover:bg-[#14294a]/[0.04] transition-colors';
+  'inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-saibyl-border-light text-saibyl-ink text-[13px] hover:bg-[#14294a]/[0.04] transition-colors';
 
 /* ------------------------------------------------------------------ */
 /*  Small pieces                                                       */
@@ -121,7 +121,7 @@ function CopyPromptButton({ text }: { text: string }) {
     <button
       type="button"
       onClick={() => void copy()}
-      className="text-[12px] text-saibyl-gold hover:underline"
+      className="text-[12px] text-saibyl-blue hover:underline"
     >
       Copy
     </button>
@@ -353,7 +353,7 @@ export default function SiteRevision({
             <p className="text-[11px] font-medium text-saibyl-silver uppercase tracking-wider">
               What a first-time reader takes away now
             </p>
-            <p className="text-[13.5px] text-saibyl-platinum mt-1 leading-relaxed">
+            <p className="text-[13.5px] text-saibyl-ink mt-1 leading-relaxed">
               &ldquo;{takeaway}&rdquo;
             </p>
           </div>
@@ -478,7 +478,7 @@ export default function SiteRevision({
       {/* ── Do it yourself instead ── */}
       {prompts.length > 0 && (
         <div className="rounded-xl border border-saibyl-border bg-white p-4">
-          <p className="text-[13.5px] font-medium text-saibyl-platinum">
+          <p className="text-[13.5px] font-medium text-saibyl-ink">
             Prefer to fix it yourself?
           </p>
           <p className="text-[12px] text-saibyl-muted mt-0.5 leading-relaxed">
@@ -490,7 +490,7 @@ export default function SiteRevision({
                 key={`${prompt.title}-${i}`}
                 className="rounded-lg border border-saibyl-border bg-saibyl-elevated"
               >
-                <summary className="cursor-pointer select-none px-3 py-2.5 text-[12.5px] font-medium text-saibyl-platinum hover:text-saibyl-blue">
+                <summary className="cursor-pointer select-none px-3 py-2.5 text-[12.5px] font-medium text-saibyl-ink hover:text-saibyl-blue">
                   {prompt.title}
                 </summary>
                 <div className="px-3 pb-3">
@@ -499,7 +499,7 @@ export default function SiteRevision({
                       {prompt.scope}
                     </p>
                   )}
-                  <pre className="mt-2 rounded-md border border-saibyl-border-light bg-white p-3 font-mono text-[11.5px] text-saibyl-platinum leading-relaxed whitespace-pre-wrap break-words overflow-x-auto">
+                  <pre className="mt-2 rounded-md border border-saibyl-border-light bg-white p-3 font-mono text-[11.5px] text-saibyl-ink leading-relaxed whitespace-pre-wrap break-words overflow-x-auto">
                     {prompt.prompt}
                   </pre>
                   <div className="mt-2">
@@ -515,7 +515,7 @@ export default function SiteRevision({
       {/* ── What still stands against it ── */}
       {critiqueAfter && critiqueAfter.dimensions.length > 0 && (
         <details>
-          <summary className="cursor-pointer text-[12.5px] text-saibyl-gold hover:underline select-none">
+          <summary className="cursor-pointer text-[12.5px] text-saibyl-blue hover:underline select-none">
             What the reviewers still flagged on the new page
           </summary>
           <div className="mt-3 grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
@@ -571,7 +571,7 @@ function ClaimsWarning({ claims }: { claims: UnsupportedClaim[] }) {
       <div className="flex items-start gap-2.5">
         <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-saibyl-warning" />
         <div className="min-w-0">
-          <p className="text-[13px] font-medium text-saibyl-platinum">
+          <p className="text-[13px] font-medium text-saibyl-ink">
             Check these before you publish
           </p>
           <p className="text-[12.5px] text-saibyl-silver mt-1 leading-relaxed">
@@ -582,7 +582,7 @@ function ClaimsWarning({ claims }: { claims: UnsupportedClaim[] }) {
             isn&rsquo;t true has to come out first.
           </p>
           {forged && (
-            <p className="text-[12.5px] text-saibyl-platinum mt-2 leading-relaxed">
+            <p className="text-[12.5px] text-saibyl-ink mt-2 leading-relaxed">
               A certification, licence or regulator named on a page you
               haven&rsquo;t earned isn&rsquo;t a wording problem &mdash;
               customers and regulators act on it.
@@ -600,7 +600,7 @@ function ClaimsWarning({ claims }: { claims: UnsupportedClaim[] }) {
                     key={`${claim.kind}-${claim.text}-${index}`}
                     className="text-[12.5px] leading-relaxed"
                   >
-                    <span className="font-medium text-saibyl-platinum">
+                    <span className="font-medium text-saibyl-ink">
                       {claim.text}
                     </span>
                     {claim.quote && (

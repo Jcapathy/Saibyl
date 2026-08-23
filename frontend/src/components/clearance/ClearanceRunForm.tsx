@@ -8,6 +8,7 @@ import { getErrorMessage } from '@/lib/errors';
 import { Guarded } from '@/components/stages/StagePrimitives';
 import PriceTag from '@/components/billing/PriceTag';
 import { usePrices } from '@/lib/prices';
+import { Card } from '@/components/design';
 import {
   TIER_LABELS,
   type ClearanceRun,
@@ -119,11 +120,11 @@ export default function ClearanceRunForm({
   }
 
   return (
-    <div className="glass rounded-2xl p-6 space-y-5">
+    <Card carries="stage" className="p-6 space-y-5">
       <div>
         <label
           htmlFor="clearance-item"
-          className="block text-[13px] font-medium text-saibyl-platinum mb-1.5"
+          className="block text-[13px] font-medium text-saibyl-ink mb-1.5"
         >
           What should we check?
         </label>
@@ -196,7 +197,7 @@ export default function ClearanceRunForm({
       </div>
 
       <div>
-        <p className="text-[13px] font-medium text-saibyl-platinum mb-2">
+        <p className="text-[13px] font-medium text-saibyl-ink mb-2">
           How deep should we look?
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -210,13 +211,13 @@ export default function ClearanceRunForm({
                 onClick={() => setTier(option.value)}
                 className={`text-left p-3 rounded-lg border transition-all ${
                   selected
-                    ? 'border-saibyl-gold/50 bg-saibyl-gold/10'
+                    ? 'border-saibyl-blue/50 bg-saibyl-blue/10'
                     : 'border-saibyl-border bg-white hover:border-saibyl-border-light'
                 }`}
               >
                 <span
                   className={`block text-[13px] font-medium ${
-                    selected ? 'text-saibyl-white' : 'text-saibyl-platinum'
+                    selected ? 'text-saibyl-ink' : 'text-saibyl-ink'
                   }`}
                 >
                   {option.label}
@@ -238,7 +239,7 @@ export default function ClearanceRunForm({
           {error.billing && (
             <Link
               to="/app/settings/billing"
-              className="inline-flex items-center gap-1.5 mt-3 px-3.5 py-1.5 rounded-lg bg-saibyl-gold text-saibyl-void text-[12px] font-semibold hover:bg-saibyl-gold-hover transition-colors"
+              className="inline-flex items-center gap-1.5 mt-3 px-3.5 py-1.5 rounded-lg bg-saibyl-blue text-saibyl-paper text-[12px] font-semibold hover:bg-saibyl-blue-hover transition-colors"
             >
               Add credits
               <ArrowRight className="w-3.5 h-3.5" />
@@ -257,6 +258,6 @@ export default function ClearanceRunForm({
         busy={submitting}
         busyLabel="Sending it to the search queue…"
       />
-    </div>
+    </Card>
   );
 }

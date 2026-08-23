@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import api from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
+import { actionSurface } from '@/components/design';
 import type { Objective } from '@/lib/analysis';
 
 const GOLD = '#286cf0';
@@ -102,6 +103,21 @@ export default function VariantSetup({
   };
 
   const save = async () => {
+    /* Never a grey button. This used to be `disabled={saving || filled === 1}`,
+       which is the third rendering the founder's rule says does not exist: the
+       reason was printed above the control and the control itself just sat
+       there greyed, so a founder who did not connect the two had a button that
+       silently refused to work.
+       It runs now and says why it cannot — the same sentence, at the moment it
+       is actually relevant. `saving` still guards the button, because that is a
+       double-submit guard rather than a precondition: the click already landed
+       and the answer is on its way. */
+    if (filled === 1) {
+      setError(
+        'One version on its own is not a comparison. Add a second, or delete it and the run goes ahead with a single message.',
+      );
+      return;
+    }
     setSaving(true);
     setError('');
     const payload = variants
@@ -253,12 +269,15 @@ export default function VariantSetup({
       {error && <p className="text-[12px] text-saibyl-negative">{error}</p>}
 
       <div className="flex items-center gap-3">
+        {/* The system's gradient, not a hand-typed hex fill. `GOLD` was a
+            module-local `'#286cf0'` — the accent's value, copied into this file
+            and given the dark theme's name for it, which is two dialects in one
+            constant. */}
         <button
           type="button"
           onClick={save}
-          disabled={saving || filled === 1}
-          className="px-4 py-2 rounded-xl text-[12px] font-semibold disabled:opacity-40"
-          style={{ backgroundColor: GOLD, color: '#ffffff' }}
+          disabled={saving}
+          className={`px-4 py-2 rounded-xl text-[12px] font-extrabold transition-colors sb-lift disabled:opacity-40 ${actionSurface('primary')}`}
         >
           {saving ? 'Saving…' : 'Save these versions'}
         </button>

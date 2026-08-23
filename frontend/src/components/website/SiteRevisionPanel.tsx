@@ -178,7 +178,7 @@ export default function SiteRevisionPanel({
           {panelError.billing && (
             <Link
               to="/app/settings/billing"
-              className="inline-flex items-center gap-1.5 mt-3 px-3.5 py-1.5 rounded-lg bg-saibyl-gold text-saibyl-void text-[12px] font-semibold hover:bg-saibyl-gold-hover transition-colors"
+              className="inline-flex items-center gap-1.5 mt-3 px-3.5 py-1.5 rounded-lg bg-saibyl-blue text-saibyl-paper text-[12px] font-semibold hover:bg-saibyl-blue-hover transition-colors"
             >
               Add credits
               <ArrowRight className="w-3.5 h-3.5" />
@@ -190,7 +190,7 @@ export default function SiteRevisionPanel({
       {/* ── The way in ── */}
       {revision === null && (
         <div className="rounded-xl border border-saibyl-border bg-white p-5">
-          <p className="text-[14px] font-medium text-saibyl-platinum">Fix it</p>
+          <p className="text-[14px] font-medium text-saibyl-ink">Fix it</p>
           <p className="text-[12.5px] text-saibyl-muted mt-1 leading-relaxed">
             Have Saibyl draft the improved page &mdash; the reviewers score it
             again so you see the difference in numbers.
@@ -291,7 +291,7 @@ export default function SiteRevisionPanel({
                   <button
                     type="button"
                     onClick={() => openDraft(row.id)}
-                    className="text-saibyl-gold hover:underline"
+                    className="text-saibyl-blue hover:underline"
                   >
                     See this draft
                   </button>
@@ -390,8 +390,8 @@ function RoomRun({
   }
 
   return (
-    <div className="rounded-xl border border-saibyl-gold/25 bg-saibyl-gold/[0.06] p-5">
-      <p className="text-[14px] font-medium text-saibyl-platinum">
+    <div className="rounded-xl border border-saibyl-blue/25 bg-saibyl-blue/[0.06] p-5">
+      <p className="text-[14px] font-medium text-saibyl-ink">
         Prove it with the room
       </p>
       <p className="text-[12.5px] text-saibyl-muted mt-1 leading-relaxed">
@@ -406,7 +406,7 @@ function RoomRun({
           {error.billing && (
             <Link
               to="/app/settings/billing"
-              className="inline-flex items-center gap-1.5 mt-3 px-3.5 py-1.5 rounded-lg bg-saibyl-gold text-saibyl-void text-[12px] font-semibold hover:bg-saibyl-gold-hover transition-colors"
+              className="inline-flex items-center gap-1.5 mt-3 px-3.5 py-1.5 rounded-lg bg-saibyl-blue text-saibyl-paper text-[12px] font-semibold hover:bg-saibyl-blue-hover transition-colors"
             >
               Add credits
               <ArrowRight className="w-3.5 h-3.5" />
@@ -423,7 +423,7 @@ function RoomRun({
                 ? `/app/simulations/${started.childId}/run`
                 : `/app/products/${productId}/reactions`
             }
-            className="inline-flex items-center gap-2 text-[13px] text-saibyl-gold hover:underline"
+            className="inline-flex items-center gap-2 text-[13px] text-saibyl-blue hover:underline"
           >
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
             The room is reading the new page &mdash; watch it in Reactions

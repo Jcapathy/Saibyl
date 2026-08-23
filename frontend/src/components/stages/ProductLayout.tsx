@@ -44,21 +44,21 @@ function RailItem({
       to={stageHref(productId, stage.id)}
       className={`block rounded-xl border px-3.5 py-3 transition-colors ${
         active
-          ? 'border-saibyl-gold/40 bg-saibyl-gold/[0.07]'
+          ? 'border-saibyl-blue/40 bg-saibyl-blue/[0.07]'
           : 'border-saibyl-border bg-white hover:border-saibyl-border-light'
       }`}
     >
       <div className="flex items-baseline gap-2.5">
         <span
           className={`font-mono text-[13px] tabular-nums ${
-            active ? 'text-saibyl-gold' : 'text-saibyl-muted'
+            active ? 'text-saibyl-blue' : 'text-saibyl-muted'
           }`}
         >
           {stage.number}
         </span>
         <span
           className={`text-[13px] font-medium ${
-            active ? 'text-saibyl-white' : 'text-saibyl-platinum'
+            active ? 'text-saibyl-ink' : 'text-saibyl-ink'
           }`}
         >
           {stage.label}
@@ -147,7 +147,7 @@ export default function ProductLayout() {
         />
         <Link
           to="/app/home"
-          className="inline-flex items-center gap-1.5 mt-4 text-[13px] text-saibyl-gold hover:underline"
+          className="inline-flex items-center gap-1.5 mt-4 text-[13px] text-saibyl-blue hover:underline"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           Back to your products
@@ -157,18 +157,18 @@ export default function ProductLayout() {
   }
 
   return (
-    <div className="p-6 lg:p-8 bg-saibyl-void min-h-full">
+    <div className="p-6 lg:p-8 bg-saibyl-paper min-h-full">
       <div className="max-w-6xl mx-auto">
         <Link
           to="/app/home"
-          className="inline-flex items-center gap-1.5 text-[12px] text-saibyl-muted hover:text-saibyl-platinum transition-colors"
+          className="inline-flex items-center gap-1.5 text-[12px] text-saibyl-muted hover:text-saibyl-ink transition-colors"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           Your products
         </Link>
 
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mt-3 mb-6">
-          <h1 className="text-h1 text-saibyl-white">{product.name}</h1>
+          <h1 className="text-h1 text-saibyl-ink">{product.name}</h1>
           <span className="text-[12px] text-saibyl-muted">
             {product.stages_ready} of {product.stages.length} steps have what they
             need

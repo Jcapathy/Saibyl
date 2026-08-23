@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { Card } from '@/components/design';
 
 /**
  * The last thing between a render-time throw and a blank white page.
@@ -56,7 +57,7 @@ export default class ErrorBoundary extends Component<Props, State> {
 
     return (
       <div className="min-h-screen bg-saibyl-paper flex items-center justify-center p-6">
-        <div className="glass rounded-2xl max-w-lg w-full p-8 text-center">
+        <Card carries="stage" className="max-w-lg w-full p-8 text-center">
           <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-saibyl-muted">
             This screen
           </p>
@@ -72,7 +73,7 @@ export default class ErrorBoundary extends Component<Props, State> {
             <button
               type="button"
               onClick={this.reset}
-              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-saibyl-blue text-white font-semibold text-[13px] hover:bg-saibyl-gold-hover transition-colors"
+              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-saibyl-blue text-white font-semibold text-[13px] hover:bg-saibyl-blue-hover transition-colors"
             >
               Try this screen again
             </button>
@@ -92,7 +93,7 @@ export default class ErrorBoundary extends Component<Props, State> {
               {error.message || String(error)}
             </pre>
           </details>
-        </div>
+        </Card>
       </div>
     );
   }

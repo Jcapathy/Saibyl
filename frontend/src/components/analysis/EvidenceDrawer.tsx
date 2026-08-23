@@ -62,13 +62,13 @@ export default function EvidenceDrawer({
         className="flex-1 bg-[#14294a]/25 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="w-full max-w-[520px] h-full bg-saibyl-void border-l border-saibyl-border flex flex-col shadow-2xl">
+      <div className="w-full max-w-[520px] h-full bg-saibyl-paper border-l border-saibyl-border flex flex-col shadow-2xl">
         <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-saibyl-border">
           <div className="min-w-0">
             <p className="text-[10px] uppercase tracking-wider text-saibyl-muted">
               What was actually said
             </p>
-            <h3 className="text-[15px] font-semibold text-saibyl-platinum truncate">
+            <h3 className="text-[15px] font-semibold text-saibyl-ink truncate">
               {label}
             </h3>
             <p className="text-[11px] text-saibyl-muted mt-0.5">
@@ -80,7 +80,7 @@ export default function EvidenceDrawer({
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded-lg text-saibyl-muted hover:text-saibyl-platinum hover:bg-saibyl-surface transition-colors"
+            className="p-1 rounded-lg text-saibyl-muted hover:text-saibyl-ink hover:bg-saibyl-surface transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -102,7 +102,7 @@ export default function EvidenceDrawer({
               className="bg-saibyl-surface border border-saibyl-border rounded-xl p-4"
             >
               <div className="flex items-baseline justify-between gap-3 mb-1.5">
-                <span className="text-[12px] font-semibold text-saibyl-platinum truncate">
+                <span className="text-[12px] font-semibold text-saibyl-ink truncate">
                   @{event.agent.username ?? 'unknown'}
                   {event.agent.archetype ? (
                     <span className="text-saibyl-muted font-normal">

@@ -10,6 +10,7 @@ import MomentPicker from '@/components/stages/MomentPicker';
 import StageHeader from '@/components/stages/StageHeader';
 import { EmptyState, Guarded, StageError } from '@/components/stages/StagePrimitives';
 import { useProduct, useStage } from '@/components/stages/useProduct';
+import { Card } from '@/components/design';
 
 /**
  * Step 2 — will anyone want this, and what will they say against it?
@@ -108,8 +109,8 @@ export default function ReactionsStagePage() {
 
       {error && <StageError message={error} retry={retry} />}
 
-      <section className="glass rounded-2xl p-6">
-        <h2 className="text-[15px] font-medium text-saibyl-platinum">
+      <Card carries="stage" as="section" className="p-6">
+        <h2 className="text-[15px] font-medium text-saibyl-ink">
           Put this in front of the room
         </h2>
         <p className="text-[12.5px] text-saibyl-muted mt-1.5 leading-relaxed">
@@ -126,7 +127,7 @@ export default function ReactionsStagePage() {
           {inFlight ? (
             <Link
               to={`/app/simulations/${inFlight.id}/run`}
-              className="inline-flex items-center gap-2 text-[13px] text-saibyl-gold hover:underline"
+              className="inline-flex items-center gap-2 text-[13px] text-saibyl-blue hover:underline"
             >
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
               A run is going now — watch it
@@ -135,10 +136,10 @@ export default function ReactionsStagePage() {
             <Guarded label="Start a run" to={startHref} />
           )}
         </div>
-      </section>
+      </Card>
 
       <section className="space-y-3">
-        <h2 className="text-[15px] font-medium text-saibyl-platinum">
+        <h2 className="text-[15px] font-medium text-saibyl-ink">
           What they objected to
         </h2>
 
@@ -174,7 +175,7 @@ export default function ReactionsStagePage() {
                   className="rounded-xl border border-saibyl-border bg-white px-4 py-3.5"
                 >
                   <div className="flex items-baseline justify-between gap-3">
-                    <p className="text-[13.5px] text-saibyl-platinum">{row.label}</p>
+                    <p className="text-[13.5px] text-saibyl-ink">{row.label}</p>
                     {/* Rendered only when the count is a real number. A dash
                         here would read as "nobody", which is a finding. */}
                     {typeof row.agent_count === 'number' && (
@@ -200,7 +201,7 @@ export default function ReactionsStagePage() {
               {finished && (
                 <Link
                   to={`/app/simulations/${finished.id}`}
-                  className="text-[12.5px] text-saibyl-gold hover:underline"
+                  className="text-[12.5px] text-saibyl-blue hover:underline"
                 >
                   See everything from that run
                 </Link>

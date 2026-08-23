@@ -76,16 +76,16 @@ export default function ObjectionMap({
                   )}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline justify-between gap-3">
-                      <span className="text-[14px] font-semibold text-saibyl-platinum group-hover:text-saibyl-gold transition-colors">
+                      <span className="text-[14px] font-semibold text-saibyl-ink group-hover:text-saibyl-blue transition-colors">
                         {objection.label}
                       </span>
-                      <span className="text-[11px] font-mono text-saibyl-gold whitespace-nowrap">
+                      <span className="text-[11px] font-mono text-saibyl-blue whitespace-nowrap">
                         {objection.load_bearing_score.toFixed(1)}
                       </span>
                     </div>
                     <div className="h-1.5 bg-[#14294a]/[0.06] rounded-full mt-1.5 overflow-hidden">
                       <div
-                        className="h-full bg-saibyl-gold rounded-full"
+                        className="h-full bg-saibyl-blue rounded-full"
                         style={{
                           width: `${(objection.load_bearing_score / maxScore) * 100}%`,
                         }}
@@ -149,7 +149,7 @@ export default function ObjectionMap({
                       {objection.quotes.map((quote) => (
                         <blockquote
                           key={quote.event_id}
-                          className="border-l-2 border-saibyl-gold/40 pl-3 py-0.5"
+                          className="border-l-2 border-saibyl-blue/40 pl-3 py-0.5"
                         >
                           <p className="text-[12px] text-saibyl-silver italic leading-relaxed">
                             <Quote className="w-3 h-3 inline -mt-1 mr-1 text-saibyl-muted" />

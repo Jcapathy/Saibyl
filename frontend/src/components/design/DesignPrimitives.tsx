@@ -259,6 +259,7 @@ export function Card({
   className,
   style,
   children,
+  ...rest
 }: {
   carries: CardCarries;
   lift?: boolean;
@@ -266,10 +267,20 @@ export function Card({
   className?: string;
   style?: CSSProperties;
   children?: ReactNode;
+  /* Whatever the rendered element needs — `to` when `as={Link}`, `href`,
+     `onClick`, `aria-*`. `as` was polymorphic from the start and this was
+     missing, which made it half a prop: a card could be told to render as a
+     Link and then had no way to be given the destination. Typed loosely
+     because the caller chooses the element. */
+  [prop: string]: unknown;
 }) {
   const Tag: ElementType = as;
   return (
-    <Tag className={cn(cardSurface(carries), lift && 'sb-lift', className)} style={style}>
+    <Tag
+      className={cn(cardSurface(carries), lift && 'sb-lift', className)}
+      style={style}
+      {...rest}
+    >
       {children}
     </Tag>
   );

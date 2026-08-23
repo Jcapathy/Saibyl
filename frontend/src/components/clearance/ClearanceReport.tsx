@@ -1,5 +1,6 @@
 import { ExternalLink } from 'lucide-react';
 
+import { Card } from '@/components/design';
 import { RiskChip } from './RiskChip';
 import {
   FALLBACK_DISCLAIMER,
@@ -36,13 +37,13 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="glass rounded-2xl p-6">
-      <h2 className="text-[15px] font-medium text-saibyl-platinum">{heading}</h2>
+    <Card carries="meaning" as="section" className="p-6">
+      <h2 className="text-[15px] font-medium text-saibyl-ink">{heading}</h2>
       {sub && (
         <p className="text-[12px] text-saibyl-muted mt-1 leading-relaxed">{sub}</p>
       )}
       <div className="mt-4">{children}</div>
-    </section>
+    </Card>
   );
 }
 
@@ -147,11 +148,11 @@ export default function ClearanceReport({ artifact }: { artifact: ClearanceArtif
       <div className={`rounded-2xl border p-6 ${BANNER_STYLES[pat.overall_risk]}`}>
         <div className="flex flex-wrap items-center gap-3">
           <RiskChip risk={pat.overall_risk} />
-          <p className="text-[15px] font-medium text-saibyl-white min-w-0">
+          <p className="text-[15px] font-medium text-saibyl-ink min-w-0">
             {artifact.item}
           </p>
         </div>
-        <p className="text-[13px] text-saibyl-platinum mt-2.5 leading-relaxed">
+        <p className="text-[13px] text-saibyl-ink mt-2.5 leading-relaxed">
           {BANNER_READINGS[pat.overall_risk]}
         </p>
         <p className="text-[11.5px] text-saibyl-muted mt-2">{NOT_LEGAL_ADVICE}</p>
@@ -200,7 +201,7 @@ export default function ClearanceReport({ artifact }: { artifact: ClearanceArtif
                 href={tm.official_search_link}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1 text-saibyl-gold hover:underline"
+                className="inline-flex items-center gap-1 text-saibyl-blue hover:underline"
               >
                 Run the official USPTO search yourself
                 <ExternalLink className="w-3 h-3" />
@@ -230,7 +231,7 @@ export default function ClearanceReport({ artifact }: { artifact: ClearanceArtif
                 className="rounded-xl border border-saibyl-border bg-white p-4"
               >
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[13.5px] font-medium text-saibyl-platinum">
+                  <span className="text-[13.5px] font-medium text-saibyl-ink">
                     {c.mark}
                   </span>
                   <span
@@ -279,7 +280,7 @@ export default function ClearanceReport({ artifact }: { artifact: ClearanceArtif
                 className="rounded-xl border border-saibyl-border bg-white p-4"
               >
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-[12px] text-saibyl-gold">
+                  <span className="font-mono text-[12px] text-saibyl-blue">
                     {art.number}
                   </span>
                   <RiskChip risk={art.risk} />
@@ -287,7 +288,7 @@ export default function ClearanceReport({ artifact }: { artifact: ClearanceArtif
                     {ART_STATUS_WORDS[art.status] ?? art.status}
                   </span>
                 </div>
-                <p className="text-[13.5px] text-saibyl-platinum mt-1.5 leading-snug">
+                <p className="text-[13.5px] text-saibyl-ink mt-1.5 leading-snug">
                   {art.title}
                 </p>
                 <dl className="mt-2 space-y-1">
@@ -339,12 +340,12 @@ export default function ClearanceReport({ artifact }: { artifact: ClearanceArtif
                 className="rounded-xl border border-saibyl-border bg-white px-4 py-3"
               >
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-[12px] text-saibyl-gold">{p.app}</span>
+                  <span className="font-mono text-[12px] text-saibyl-blue">{p.app}</span>
                   {p.status && (
                     <span className="text-[11px] text-saibyl-muted">{p.status}</span>
                   )}
                 </div>
-                <p className="text-[13px] text-saibyl-platinum mt-1 leading-snug">
+                <p className="text-[13px] text-saibyl-ink mt-1 leading-snug">
                   {p.title}
                 </p>
                 {p.assignee && (
@@ -445,7 +446,7 @@ export default function ClearanceReport({ artifact }: { artifact: ClearanceArtif
                 key={w.target}
                 className="rounded-xl border border-saibyl-border bg-white px-4 py-3"
               >
-                <p className="text-[13px] text-saibyl-platinum">{w.target}</p>
+                <p className="text-[13px] text-saibyl-ink">{w.target}</p>
                 <p className="text-[12px] text-saibyl-muted mt-0.5 leading-relaxed">
                   {w.reason}
                 </p>
@@ -461,7 +462,7 @@ export default function ClearanceReport({ artifact }: { artifact: ClearanceArtif
         sub="Every query this run made, with hit counts — so the search can be repeated and checked."
       >
         <details className="group">
-          <summary className="cursor-pointer text-[12.5px] text-saibyl-gold hover:underline select-none">
+          <summary className="cursor-pointer text-[12.5px] text-saibyl-blue hover:underline select-none">
             Show all {artifact.queries_run.length} queries
           </summary>
           <div className="mt-3 overflow-x-auto">
@@ -485,7 +486,7 @@ export default function ClearanceReport({ artifact }: { artifact: ClearanceArtif
                     <td className="py-1.5 pr-4 text-saibyl-silver font-mono text-[11.5px]">
                       {q.query}
                     </td>
-                    <td className="py-1.5 text-right text-saibyl-platinum font-mono tabular-nums">
+                    <td className="py-1.5 text-right text-saibyl-ink font-mono tabular-nums">
                       {q.hits.toLocaleString()}
                     </td>
                   </tr>

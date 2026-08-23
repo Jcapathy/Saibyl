@@ -1,33 +1,47 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import { getErrorMessage } from '@/lib/errors';
-import { supabase } from '@/lib/supabase';
+import { Action, Card, Eyebrow, Ground, PageHeader, Rise } from '@/components/design';
 
-/* ── Particle data for the brand panel ── */
-const PARTICLES: { x: string; y: string; color: string; duration: string; delay: string }[] = [
-  { x: '12%', y: '18%', color: '#8b73ee', duration: '14s', delay: '0s' },
-  { x: '78%', y: '24%', color: '#286cf0', duration: '18s', delay: '-3s' },
-  { x: '34%', y: '65%', color: '#8b73ee', duration: '16s', delay: '-7s' },
-  { x: '88%', y: '72%', color: '#286cf0', duration: '20s', delay: '-2s' },
-  { x: '22%', y: '85%', color: '#8b73ee', duration: '15s', delay: '-5s' },
-  { x: '62%', y: '42%', color: '#286cf0', duration: '17s', delay: '-9s' },
-  { x: '48%', y: '12%', color: '#8b73ee', duration: '19s', delay: '-4s' },
-  { x: '92%', y: '52%', color: '#286cf0', duration: '13s', delay: '-6s' },
-];
+/**
+ * The way in — and the handover from the public page to the app.
+ *
+ * **Restyled onto the design system on 2026-08-23.** It was on neither system:
+ * it never imported `pages/landing.css`, and it never imported the app's
+ * primitives. What it had instead were hand-rolled *copies* of the landing
+ * page's values — a `PAPER_WASH` constant retyping the two radial gradients, a
+ * serif-italic `<em>` retyping the accent, a flat `bg-saibyl-blue` submit — and
+ * copies are how one system becomes two dialects of itself.
+ *
+ * Four things went with the restyle, and each is worth naming:
+ *
+ * 1. **The particle field and the node-graph SVG.** Eight drifting dots and
+ *    twenty-eight connecting lines, animating forever. They are a dark-era
+ *    "AI network" motif: the landing page has no such thing, no artboard has
+ *    one, and — the part that actually mattered — `animate-drift` is not
+ *    covered by any `prefers-reduced-motion` block, so a reader with
+ *    vestibular sensitivity got permanent motion on the one screen with no
+ *    navigation to leave by.
+ * 2. **The framer-motion entrances**, replaced by `Rise`. One arrival
+ *    vocabulary per product; `design.css` collapses this one under a
+ *    reduced-motion preference and framer-motion's `initial/animate` did not.
+ * 3. **The `<h1>` moved into the form column.** It used to live in the brand
+ *    panel, which is `hidden lg:flex` — so below 1024px this page had no
+ *    heading at all. The form renders at every width, so the heading now does.
+ * 4. **"Forgot password?" was a button with a TODO and no handler.** A control
+ *    that does nothing is worse than the grey button the founder's rule bans,
+ *    because it looks like it worked. Settings already states that password
+ *    changes are handled by email, so this now does the thing that surface
+ *    promises rather than pretending to a flow that does not exist.
+ */
 
-const NODE_POSITIONS = [
-  [12, 18], [78, 24], [34, 65], [88, 72],
-  [22, 85], [62, 42], [48, 12], [92, 52],
-] as const;
-
-/* ── Paper ground with the landing page's radial washes ── */
-const PAPER_WASH =
-  'radial-gradient(circle at 87% 1%, rgba(127,184,255,.19), transparent 22rem), radial-gradient(circle at 2% 26%, rgba(143,119,245,.10), transparent 26rem), #f8fbff';
-
-/* ── Brand mark — gradient square, Playfair "S" ── */
+/* ── Brand mark — gradient square, Playfair "S" ──
+   The artboard's own lockup (`design/Main.dc.html`, the rail header), value
+   for value. It is duplicated on the signup page and in `AppLayout`; three
+   copies of one mark wants a `BrandMark` primitive in `components/design/`,
+   which is a separate change to a shared file. */
 const BRAND_MARK_STYLE = {
   background: 'linear-gradient(135deg, #2f75ef 5%, #705ee3 95%)',
   boxShadow: 'inset 0 1px rgba(255,255,255,.4), 0 5px 14px rgba(75,98,221,.28)',
@@ -37,20 +51,14 @@ const BRAND_MARK_STYLE = {
 const INPUT_CLASS =
   'w-full px-3.5 py-2.5 rounded-xl border border-saibyl-border-light bg-white text-[14px] text-saibyl-ink placeholder:text-saibyl-muted/70 outline-none transition-all duration-200 focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20';
 
-/* ── Stats data ── */
-/* The stats bar was four claims and three of them were false.
-
-   "1M Max Agents" against an enforced ceiling of 1,000 - a 1,000x
-   overstatement, and the exact claim the landing page was cleaned of in the
-   same pass, still live on the page that CTA sends every visitor to. "8
-   Platforms" contradicted this file's own hero copy ("across 12 platforms")
-   and the 12 shipped adapters. "42 Archetypes" and "<3pp Precision" trace to
-   no constant anywhere.
-
-   Removed rather than corrected. A number on a signup page is an advertised
-   claim, and the honest set here is empty until someone decides which numbers
-   are worth advertising and checks them against `agent_pricing.TIER_CAPS`. */
-const STATS: { value: string; label: string }[] = [];
+/* A stats bar of four claims used to sit under the tagline, and three of them
+   were false: "1M Max Agents" against an enforced ceiling of 1,000, "8
+   Platforms" against this file's own copy and the 12 shipped adapters, and two
+   figures that traced to no constant anywhere. It was deleted rather than
+   corrected, and nothing replaces it. A number on the way-in page is an
+   advertised claim; the honest set is empty until somebody decides which
+   numbers are worth advertising and checks them against
+   `agent_pricing.TIER_CAPS`. */
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -63,6 +71,12 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    /* The submit control is replaced by an announced "Signing you in…" for the
+       duration, so it cannot be pressed twice — but a form with a text input
+       still submits on Enter, and the `disabled` attribute this replaced was
+       what stopped that. Guarded here instead. Not a silent no-op: the screen
+       is already saying what is happening. */
+    if (loading) return;
     setError('');
     setLoading(true);
     try {
@@ -88,279 +102,202 @@ export default function LoginPage() {
     }
   };
 
-  const handleGoogleSSO = async () => {
-    // TODO: After Supabase OAuth callback, exchange session for app JWT tokens via backend endpoint
-    await supabase.auth.signInWithOAuth({ provider: 'google' });
-  };
-
   return (
-    <div
-      className="grid grid-cols-1 lg:grid-cols-2 min-h-screen bg-saibyl-paper"
-      style={{ background: PAPER_WASH }}
-    >
+    /* Canvas rule 1, through the primitive rather than through a copy of its
+       numbers. `<body>` already carries this wash; the page paints its own so
+       the grid is opaque over it at every breakpoint. */
+    <Ground className="grid grid-cols-1 lg:grid-cols-2 min-h-screen">
       {/* ═══════════════════════════════════════════════════
-          LEFT PANEL — Brand
+          LEFT PANEL — Brand. Hidden below lg, which is exactly why the page's
+          heading lives on the right.
          ═══════════════════════════════════════════════════ */}
-      <div className="hidden lg:flex relative flex-col justify-center px-16 xl:px-20 overflow-hidden">
-        {/* Radial gradient accents */}
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-[20%] left-[10%] w-[60%] h-[60%] rounded-full bg-[radial-gradient(ellipse,rgba(40,108,240,0.07)_0%,transparent_70%)]" />
-          <div className="absolute bottom-[10%] right-[5%] w-[50%] h-[50%] rounded-full bg-[radial-gradient(ellipse,rgba(139,115,238,0.06)_0%,transparent_70%)]" />
-        </div>
-
-        {/* Particle animation */}
-        {PARTICLES.map((p, i) => (
+      <Rise className="hidden lg:flex flex-col justify-center px-16 xl:px-20">
+        {/* Logo lockup — the rail's, including the line that says whose
+            product this is. */}
+        <div className="flex items-center gap-3 mb-10">
           <div
-            key={i}
-            className="absolute w-[4px] h-[4px] rounded-full animate-drift"
-            style={{
-              left: p.x,
-              top: p.y,
-              backgroundColor: p.color,
-              animationDuration: p.duration,
-              animationDelay: p.delay,
-              opacity: 0.5,
-            }}
-          />
-        ))}
-
-        {/* Connection lines SVG */}
-        <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ opacity: 0.07 }}>
-          {NODE_POSITIONS.map(([x1, y1], i) =>
-            NODE_POSITIONS.slice(i + 1).map(([x2, y2], j) => (
-              <line
-                key={`${i}-${j}`}
-                x1={`${x1}%`}
-                y1={`${y1}%`}
-                x2={`${x2}%`}
-                y2={`${y2}%`}
-                stroke="#8b73ee"
-                strokeWidth="1"
-              />
-            )),
-          )}
-        </svg>
-
-        {/* Content */}
-        <div className="relative z-10">
-          {/* Logo lockup */}
-          <div className="flex items-center gap-3 mb-10">
-            <div
-              aria-hidden="true"
-              className="w-8 h-8 rounded-[9px] flex items-center justify-center shrink-0"
-              style={BRAND_MARK_STYLE}
-            >
-              <span className="font-serif font-bold text-white text-[19px] leading-none">S</span>
-            </div>
+            aria-hidden="true"
+            className="w-8 h-8 rounded-[9px] flex items-center justify-center shrink-0"
+            style={BRAND_MARK_STYLE}
+          >
+            <span className="font-serif font-bold text-white text-[19px] leading-none">S</span>
+          </div>
+          <span className="flex flex-col">
             <span
-              className="text-saibyl-ink font-extrabold text-[1.75rem]"
+              className="text-saibyl-ink font-extrabold text-[1.75rem] leading-none"
               style={{ letterSpacing: '-0.04em' }}
             >
               Saibyl
             </span>
-          </div>
-
-          {/* Trust line */}
-          <div className="flex items-center gap-2 mb-6">
-            <span className="block w-[6px] h-[6px] rounded-full bg-saibyl-green animate-pulse-dot" />
-            <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-saibyl-muted">
-              Buyer intelligence for founders
+            <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-saibyl-muted mt-1">
+              By Saido Labs
             </span>
-          </div>
-
-          {/* Tagline */}
-          <h1 className="text-[2.75rem] font-extrabold tracking-tight leading-[1.1] text-saibyl-ink mb-5">
-            Test your startup on a{' '}
-            <em className="font-serif italic text-saibyl-violet">synthetic market.</em>
-          </h1>
-
-          {/* Subtitle */}
-          <p className="text-saibyl-silver text-base leading-relaxed max-w-md mb-12">
-            A room of AI buyers built from your own material reads your pitch.
-            Every number traces to what a buyer said.
-          </p>
-
-          {/* Stats row */}
-          <div className="grid grid-cols-4 gap-6">
-            {STATS.map((s) => (
-              <div key={s.label} className="glass rounded-xl px-4 py-3">
-                <div
-                  className="text-saibyl-blue text-2xl font-bold"
-                  style={{ fontFamily: "'DM Mono', monospace" }}
-                >
-                  {s.value}
-                </div>
-                <div
-                  className="text-saibyl-muted text-[10px] uppercase tracking-widest mt-1"
-                  style={{ fontFamily: "'DM Mono', monospace" }}
-                >
-                  {s.label}
-                </div>
-              </div>
-            ))}
-          </div>
+          </span>
         </div>
-      </div>
+
+        <Eyebrow>Buyer intelligence for founders</Eyebrow>
+
+        {/* The tagline the landing page hands over, in Manrope. The page's one
+            Playfair line is spent in the header on the right — rule 4 is one
+            accent phrase per heading, and this panel is not a heading. */}
+        <p className="mt-5 text-[2.5rem] font-extrabold tracking-[-0.04em] leading-[1.1] text-saibyl-ink">
+          Test your startup on a synthetic market.
+        </p>
+
+        <p className="mt-5 max-w-md text-[15px] leading-relaxed text-saibyl-silver">
+          A room of AI buyers built from your own material reads your pitch.
+          Every number traces back to something a buyer said.
+        </p>
+      </Rise>
 
       {/* ═══════════════════════════════════════════════════
           RIGHT PANEL — Form
          ═══════════════════════════════════════════════════ */}
       <div className="flex items-center justify-center lg:border-l lg:border-saibyl-border px-6 py-12">
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-          className="w-full max-w-[440px] glass rounded-2xl p-8 sm:p-9 shadow-[0_18px_40px_rgba(52,96,164,0.08)]"
-        >
-          {/* Mobile logo — only on small screens */}
-          <div className="flex lg:hidden items-center justify-center gap-2.5 mb-10">
-            <div
-              aria-hidden="true"
-              className="w-8 h-8 rounded-[9px] flex items-center justify-center shrink-0"
-              style={BRAND_MARK_STYLE}
-            >
-              <span className="font-serif font-bold text-white text-[19px] leading-none">S</span>
-            </div>
-            <span
-              className="text-saibyl-ink font-extrabold text-xl"
-              style={{ letterSpacing: '-0.04em' }}
-            >
-              Saibyl
-            </span>
-          </div>
-
-          {/* Header */}
-          <h2 className="text-2xl font-extrabold tracking-tight text-saibyl-ink mb-1">Welcome back</h2>
-          <p className="text-sm text-saibyl-muted mb-8">
-            Sign in to access your intelligence dashboard
-          </p>
-
-          {/* Error display */}
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mb-6 flex items-start gap-3 px-4 py-3 rounded-xl bg-saibyl-rose/10 border border-saibyl-negative/25"
-            >
-              <AlertCircle className="w-4 h-4 text-saibyl-negative mt-0.5 shrink-0" />
-              <span className="text-sm text-saibyl-negative">{error}</span>
-            </motion.div>
-          )}
-
-          {/* Google SSO */}
-          <button
-            type="button"
-            onClick={handleGoogleSSO}
-            className="w-full flex items-center justify-center gap-3 px-4 py-2.5 rounded-xl border border-saibyl-border-light bg-white text-sm font-semibold text-saibyl-ink transition-all duration-200 hover:border-saibyl-blue/40 hover:bg-saibyl-paper"
-          >
-            {/* Google "G" icon */}
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <path
-                d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"
-                fill="#4285F4"
-              />
-              <path
-                d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"
-                fill="#34A853"
-              />
-              <path
-                d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.997 8.997 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"
-                fill="#FBBC05"
-              />
-              <path
-                d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"
-                fill="#EA4335"
-              />
-            </svg>
-            Continue with Google
-          </button>
-
-          {/* Divider */}
-          <div className="flex items-center gap-4 my-6">
-            <div className="flex-1 h-px bg-saibyl-border" />
-            <span
-              className="text-[11px] text-saibyl-silver uppercase tracking-[0.18em]"
-              style={{ fontFamily: "'DM Mono', monospace" }}
-            >
-              or
-            </span>
-            <div className="flex-1 h-px bg-saibyl-border" />
-          </div>
-
-          {/* Login form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Email */}
-            <div>
-              <label
-                className="block text-[11px] font-medium text-saibyl-silver uppercase tracking-wider mb-2"
-                style={{ fontFamily: "'DM Mono', monospace" }}
+        <Rise className="w-full max-w-[440px]" delayMs={70}>
+          {/* `stage` — the one panel this screen is about. The glass, the
+              hairline and the deep shadow are the artboard's, rather than a
+              `.glass` div wearing a hand-typed box-shadow. */}
+          <Card carries="stage" className="p-8 sm:p-9">
+            {/* Mobile logo — only where the brand panel is not rendered. */}
+            <div className="flex lg:hidden items-center justify-center gap-2.5 mb-8">
+              <div
+                aria-hidden="true"
+                className="w-8 h-8 rounded-[9px] flex items-center justify-center shrink-0"
+                style={BRAND_MARK_STYLE}
               >
-                Email
-              </label>
-              <input
-                type="email"
-                name="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@company.com"
-                className={INPUT_CLASS}
-              />
+                <span className="font-serif font-bold text-white text-[19px] leading-none">S</span>
+              </div>
+              <span
+                className="text-saibyl-ink font-extrabold text-xl"
+                style={{ letterSpacing: '-0.04em' }}
+              >
+                Saibyl
+              </span>
             </div>
 
-            {/* Password */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label
-                  className="block text-[11px] font-medium text-saibyl-silver uppercase tracking-wider"
-                  style={{ fontFamily: "'DM Mono', monospace" }}
-                >
-                  Password
-                </label>
-                {/* TODO: Wire to password reset flow */}
-                <button
-                  type="button"
-                  className="text-[11px] font-semibold text-saibyl-blue hover:text-saibyl-gold-hover transition-colors"
-                >
-                  Forgot password?
-                </button>
+            <PageHeader
+              eyebrow="Sign in"
+              title="Welcome back"
+              phrase="The room is exactly where you left it."
+              className="mb-8"
+            />
+
+            {/* Error display */}
+            {error && (
+              <div
+                role="alert"
+                className="mb-6 flex items-start gap-3 px-4 py-3 rounded-xl border border-saibyl-negative/25 bg-saibyl-negative/[0.07]"
+              >
+                <AlertCircle className="w-4 h-4 text-saibyl-negative mt-0.5 shrink-0" />
+                <span className="text-sm text-saibyl-negative">{error}</span>
               </div>
-              <div className="relative">
+            )}
+
+            {/* "Continue with Google" stood here, on both way-in pages.
+
+                **It could not sign anybody in, and it was worse than a button
+                that does nothing.** `handleGoogleSSO` called
+                `supabase.auth.signInWithOAuth`, which really does redirect to
+                Google — and there is no callback route in `App.tsx` to exchange
+                the returned Supabase session for this app's JWTs. The TODO
+                above the call said so. A founder who pressed it left Saibyl,
+                authenticated with Google, came back to the `*` catch-all and
+                landed on the marketing page, signed out, with no explanation.
+
+                Removed rather than disabled: there is no capability to lose.
+                When the callback exists this comes back with it. */}
+
+            {/* Divider */}
+            <div className="flex items-center gap-4 my-6">
+              <div className="flex-1 h-px bg-saibyl-border" />
+              <span className="font-mono text-[11px] text-saibyl-silver uppercase tracking-[0.18em]">
+                or
+              </span>
+              <div className="flex-1 h-px bg-saibyl-border" />
+            </div>
+
+            {/* Login form */}
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Email */}
+              <div>
+                {/* `htmlFor`, which none of these labels carried: an unassociated
+                    <label> is announced as loose text and clicking it does not
+                    focus the field. */}
+                <label
+                  htmlFor="login-email"
+                  className="block font-mono text-[11px] font-medium text-saibyl-silver uppercase tracking-wider mb-2"
+                >
+                  Email
+                </label>
                 <input
-                  type={showPassword ? 'text' : 'password'}
-                  name="password"
-                  autoComplete="current-password"
+                  id="login-email"
+                  type="email"
+                  name="email"
+                  autoComplete="email"
                   required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@company.com"
                   className={INPUT_CLASS}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-saibyl-muted hover:text-saibyl-ink transition-colors"
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
               </div>
-            </div>
 
-            {/* Sign In button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-2.5 rounded-xl bg-saibyl-blue text-white text-sm font-extrabold transition-all duration-200 hover:bg-saibyl-gold-hover hover:shadow-[0_6px_18px_rgba(40,108,240,0.30)] hover:-translate-y-[1px] disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <svg
-                    className="animate-spin w-4 h-4"
-                    viewBox="0 0 24 24"
-                    fill="none"
+              {/* Password */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label
+                    htmlFor="login-password"
+                    className="block font-mono text-[11px] font-medium text-saibyl-silver uppercase tracking-wider"
                   >
+                    Password
+                  </label>
+                  {/* Was a `<button type="button">` with a TODO and no handler
+                      — a control that silently did nothing. Password changes
+                      really are handled by email today (Settings → Account says
+                      so), so this says the same thing and works. */}
+                  <a
+                    href="mailto:info@saidolabs.com?subject=Password%20reset"
+                    className="text-[11px] font-semibold text-saibyl-blue hover:underline transition-colors"
+                  >
+                    Forgot password?
+                  </a>
+                </div>
+                <div className="relative">
+                  <input
+                    id="login-password"
+                    type={showPassword ? 'text' : 'password'}
+                    name="password"
+                    autoComplete="current-password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className={INPUT_CLASS}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-saibyl-muted hover:text-saibyl-ink transition-colors"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* The one gradient on this screen, and no `disabled` on it.
+                  While the request is in flight the control is replaced by an
+                  announced span carrying the same shape — the app's `Guarded`
+                  pattern — rather than by a greyed-out rectangle that says
+                  nothing about why it stopped working. */}
+              {loading ? (
+                <Action
+                  as="span"
+                  aria-live="polite"
+                  className="w-full justify-center text-sm opacity-80 pointer-events-none"
+                >
+                  <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                     <circle
                       className="opacity-25"
                       cx="12"
@@ -375,37 +312,43 @@ export default function LoginPage() {
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                     />
                   </svg>
-                  Signing in...
-                </>
+                  Signing you in…
+                </Action>
               ) : (
-                'Sign In'
+                <Action
+                  as="button"
+                  type="submit"
+                  className="w-full justify-center text-sm"
+                >
+                  Sign in
+                </Action>
               )}
-            </button>
-          </form>
+            </form>
 
-          {/* Signup link */}
-          <p className="mt-6 text-center text-sm text-saibyl-muted">
-            Don&apos;t have an account?{' '}
-            <Link
-              to="/signup"
-              className="text-saibyl-blue hover:text-saibyl-gold-hover hover:underline transition-colors font-semibold"
-            >
-              Start free
-            </Link>
-          </p>
+            {/* Signup link */}
+            <p className="mt-6 text-center text-sm text-saibyl-muted">
+              Don&apos;t have an account?{' '}
+              <Link
+                to="/signup"
+                className="text-saibyl-blue hover:underline transition-colors font-semibold"
+              >
+                Start free
+              </Link>
+            </p>
 
-          {/* Was "256-bit TLS encryption · SOC 2 compliant". The TLS half is
-              true and unremarkable; the SOC 2 half was an unearned compliance
-              claim — there is no audit, no report and no auditor, and the only
-              "SOC 2" anywhere in this codebase is a simulated enterprise buyer
-              asking whether we have one. It was removed from the landing page in
-              the same pass and survived here, which is the duplicated-claim
-              pattern that kept "1M agents" alive for months. Nothing replaces it:
-              a security badge that says nothing is better than one that is not
-              true, and the right time to put it back is when there is a report to
-              link to. */}
-        </motion.div>
+            {/* Was "256-bit TLS encryption · SOC 2 compliant". The TLS half is
+                true and unremarkable; the SOC 2 half was an unearned compliance
+                claim — there is no audit, no report and no auditor, and the only
+                "SOC 2" anywhere in this codebase is an enterprise buyer in a run
+                asking whether we have one. It was removed from the landing page in
+                the same pass and survived here, which is the duplicated-claim
+                pattern that kept "1M agents" alive for months. Nothing replaces it:
+                a security badge that says nothing is better than one that is not
+                true, and the right time to put it back is when there is a report to
+                link to. */}
+          </Card>
+        </Rise>
       </div>
-    </div>
+    </Ground>
   );
 }

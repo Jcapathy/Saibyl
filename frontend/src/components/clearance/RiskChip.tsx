@@ -35,7 +35,7 @@ export function RiskChip({ risk }: { risk: RiskTier }) {
 
 const STATUS_STYLES: Record<ClearanceStatus, string> = {
   queued: 'border-saibyl-border-light bg-[#14294a]/[0.04] text-saibyl-silver',
-  running: 'border-saibyl-gold/40 bg-saibyl-gold/10 text-saibyl-gold',
+  running: 'border-saibyl-blue/40 bg-saibyl-blue/10 text-saibyl-blue',
   complete: 'border-saibyl-green/40 bg-saibyl-green/10 text-saibyl-positive',
   failed: 'border-saibyl-rose/40 bg-saibyl-rose/10 text-saibyl-negative',
 };

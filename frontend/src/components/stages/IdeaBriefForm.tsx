@@ -111,7 +111,7 @@ export default function IdeaBriefForm({
   return (
     <div className="rounded-xl border border-saibyl-border bg-saibyl-elevated p-5 space-y-5">
       <div>
-        <h3 className="text-[14px] font-medium text-saibyl-platinum">
+        <h3 className="text-[14px] font-medium text-saibyl-ink">
           Five short questions
         </h3>
         <p className="text-[12px] text-saibyl-muted mt-1 leading-relaxed">

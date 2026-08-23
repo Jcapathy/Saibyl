@@ -1,107 +1,148 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Building2,
-  FlaskConical,
-  FileText,
-  Clock,
-  Users,
-  RotateCcw,
-  Layers,
-  ChevronDown,
-  Lightbulb,
-  Zap,
-  Target,
-  MessageSquare,
-  BarChart3,
-} from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 
-const stagger = (i: number) => ({ delay: i * 0.06 });
+import { Action, Card, Deal, Eyebrow, Ground, Notice, PageHeader, Rise } from '@/components/design';
+import { dealDelayMs } from '@/components/design';
 
-/* ── How it works ──
-   These are the five steps the product actually has, in the order each one
-   consumes the last. It described a different four - "Create a Project",
-   "Configure a Simulation" - which was the old shape and pointed the reader at
-   the superseded pages. A guide that explains a product you no longer ship is
-   worse than no guide: the reader trusts it and ends up somewhere else. */
-const STEPS = [
-  {
-    num: 1,
-    title: 'Work out who buys this',
-    desc: 'Upload the deck, the landing page or the pricing page. Saibyl reads it and proposes the groups of people likely to buy — what they do, what they already use, and what would make them doubt you. You confirm it or correct it.',
-    Icon: Users,
-    color: 'text-saibyl-blue',
-    link: '/app/home',
-    linkLabel: 'Go to your products',
-  },
-  {
-    num: 2,
-    title: 'Find out what they object to',
-    desc: 'Those buyers read your material and argue about it. You get back what they said and the things they pushed back on, ranked by how much of the room carried each one — not by how often the words appeared.',
-    Icon: MessageSquare,
-    color: 'text-saibyl-gold',
-  },
-  {
-    num: 3,
-    title: 'Answer the objections, and find out if it worked',
-    desc: 'Draft the material that answers each objection, publish it, and put the same room through it again. Answers that moved nothing are reported as moving nothing.',
-    Icon: FlaskConical,
-    color: 'text-saibyl-blue',
-  },
-  {
-    num: 4,
-    title: 'Find real companies that match',
-    desc: 'Your buyers become web searches, and the search brings back real companies with the page that says so attached to each one. A company you cannot trace back is a lead you cannot act on.',
-    Icon: Building2,
-    color: 'text-saibyl-blue',
-  },
-  {
-    num: 5,
-    title: 'Test which message wins',
-    desc: 'Put several versions of the same pitch in front of one shared room, so the difference you see is the wording rather than who happened to be listening. When the versions are too close to call, it says so instead of naming a winner.',
-    Icon: FileText,
-    color: 'text-saibyl-gold',
-  },
-];
+/**
+ * How this works — the guide, teaching the product Saibyl actually is.
+ *
+ * **It was teaching a different one.** Restyling this page was the smaller half
+ * of the job. On 2026-08-23 it still described the old five-step rail, and its
+ * fourth step was *"Find real companies that match"* — the Companies module,
+ * which the founder had removed from the product that same day. A founder who
+ * read the guide and went looking for step 4 would have found nothing there.
+ *
+ * Its tips were older still, and belonged to a product that no longer exists:
+ * *"How will mid-career software engineers on Twitter and Reddit react to a
+ * major tech company announcing 30% of coding roles will be automated by
+ * 2027?"* That is the V1 news-reaction oracle, jettisoned by explicit decision
+ * — and this page was the last surface in the app still selling it.
+ *
+ * Two claims are gone rather than restyled, under the honesty floor: that a
+ * focus group costs $5,000–$15,000, and that it takes 2–4 weeks. Both were
+ * stated as fact, neither was sourced, and this page cannot check either.
+ * Saibyl's own numbers stay, because those are measured.
+ *
+ * The guide now teaches the five stages the landing page sells and the
+ * navigation lists, in that order, with each card leading to its stage — the
+ * whole point of a guide being that the reader can leave it for the thing it
+ * describes.
+ */
 
-/* ── Speed & cost factors ── */
-const SPEED_FACTORS = [
-  { factor: 'Agent Count', low: '10 agents', high: '100 agents', impact: 'More agents = richer debate but longer run time', Icon: Users },
-  { factor: 'Rounds', low: '3 rounds', high: '15 rounds', impact: 'More rounds = deeper sentiment evolution', Icon: RotateCcw },
-  { factor: 'Platforms', low: '1 platform', high: '5+ platforms', impact: 'Each platform adds cross-platform dynamics', Icon: Layers },
-  { factor: 'Report Depth', low: 'Standard', high: 'Exhaustive', impact: 'Deeper analysis = more tool calls per section', Icon: BarChart3 },
-];
+/** The journey, in the marks and words the landing page and the nav both use. */
+const STAGES = [
+  {
+    mark: '◎',
+    name: 'Validate',
+    when: 'Idea stage',
+    body:
+      'Describe what you are building. Saibyl reads your deck, your page or five answers and works out who would buy it — what they do, what they already use, and what would make them doubt you. Then a room of those buyers reads your idea and argues about it, and you find out whether the pain is real before you build for it.',
+    to: '/app/validate',
+  },
+  {
+    mark: '✦',
+    name: 'Position',
+    when: 'Pre-launch',
+    body:
+      'The room reads your live page and tells you what stopped them, ranked by how many it stopped rather than by how often the words appeared. Saibyl rewrites the page to answer the worst of it, then puts the new version in front of that same room — so what you get back is a measured difference, and an answer that moved nothing is reported as moving nothing.',
+    to: '/app/position',
+  },
+  {
+    mark: '⌁',
+    name: 'Launch',
+    when: 'Go to market',
+    body:
+      'Write up to eight versions of the same pitch. One room reads all of them, so the only thing that differs is your wording and not who happened to be listening. When the versions are too close to call it says so instead of naming a winner — and the messaging document and outbound sequences underneath are written from what the room measured.',
+    to: '/app/launch',
+  },
+  {
+    mark: '↗',
+    name: 'Grow',
+    when: 'Traction',
+    body:
+      'You have customers, so every decision now costs something to get wrong. A price rise, a feature you cut, a market you move into — rehearse the move in front of the buyers you already measured and read the reaction before you commit to it.',
+    to: '/app/grow',
+  },
+  {
+    mark: '◈',
+    name: 'Raise',
+    when: 'Fundraise',
+    body:
+      'Investors ask the questions your buyers already asked, in a harder register. See which firms actually fit what you are building — matched on your sector, your stage and the objections real buyers raised — and how your story reads to them.',
+    to: '/app/capital',
+  },
+] as const;
 
-/* ── Tips ── */
+/**
+ * What makes a run take longer, and what the extra time buys.
+ *
+ * Named the way a founder would say it. The old table's rows were
+ * "Agent Count", "Rounds", "Platforms" and "Report Depth" — the configurator's
+ * own field names, which is a table that explains the form rather than the
+ * decision.
+ */
+const WHAT_COSTS_TIME = [
+  {
+    choice: 'How many people are in the room',
+    quick: '10',
+    full: '100',
+    buys: 'More people means the smaller groups are actually represented, rather than inferred from two of them.',
+  },
+  {
+    choice: 'How many rounds they argue for',
+    quick: '3',
+    full: '15',
+    buys: 'More rounds is how you see somebody change their mind — which is the only evidence that an answer worked.',
+  },
+  {
+    choice: 'How many places at once',
+    quick: '1',
+    full: '5+',
+    buys: 'Each one adds how the same pitch reads to a different crowd, and where those crowds disagree.',
+  },
+  {
+    choice: 'How deep the report goes',
+    quick: 'Standard',
+    full: 'Deep',
+    buys: 'Deep gathers twice the evidence per section and goes back for the reasoning behind each number.',
+  },
+] as const;
+
+/** Where a founder actually loses time, from what the runs show. */
 const TIPS = [
   {
-    title: 'Write specific prediction goals',
-    body: 'Instead of "How will people react to AI?", try "How will mid-career software engineers on Twitter and Reddit react to a major tech company announcing 30% of coding roles will be automated by 2027?" Specificity drives sharper results.',
+    title: 'Upload something before you answer questions',
+    body:
+      'Saibyl derives your buyers from what you have already written — a deck, a landing page, a pricing page. Answer the five questions instead and it is working from your description of your buyer rather than from your product, which is the one input you are least able to be objective about.',
   },
   {
-    title: 'Mix your persona packs',
-    body: 'Combining different persona packs (e.g. "Tech Workers" + "Policy Analysts") creates realistic cross-demographic debates. The friction between groups is where the best insights live.',
+    title: 'Start at 20 people and 5 rounds',
+    body:
+      'That finishes in about three minutes and is enough to see the top two or three objections. Scale up once you know which one you are chasing — a 100-person run is worth spending when you have a specific question, and wasted when you are still looking around.',
   },
   {
     title: 'Test more than one version of your message',
-    body: 'Write more than one version of the same pitch and the room reacts to each of them from scratch — so the only thing that differed is your wording, not who happened to be listening. The report names a winner only when the evidence actually separates them.',
+    body:
+      'Write several versions of the same pitch and one room reads all of them, so the only thing that differed is your wording. The report names a winner only when the evidence actually separates them, and tells you how many more people it would take when it does not.',
   },
   {
-    title: 'Start with 20 agents and 5 rounds',
-    body: 'This is the sweet spot for fast iteration. You\'ll get results in ~3 minutes. Once you find an interesting signal, scale up to 50-100 agents with 10+ rounds for the full picture.',
+    title: 'Re-run the same room after you change the page',
+    body:
+      'The delta is the point. A revision judged on its own is a new opinion; a revision judged by the room that objected in the first place is a measurement of whether you fixed anything.',
   },
   {
-    title: 'Use "Deep" report depth for rich analysis',
-    body: 'Standard is quick and gives you the headline and the objections. Deep gathers twice as much evidence per section and goes back to more people for their reasoning, so you get how feeling moved round by round and how it split between different kinds of buyer.',
+    title: 'Read the sentences under the numbers',
+    body:
+      'Every figure in a report opens into the things people actually said to produce it. A number you cannot trace back is a number you should not act on, which is why they all open.',
   },
-];
+] as const;
 
-/* ── FAQ ── */
 const FAQ = [
   {
-    q: 'What are "agents"?',
-    a: 'Agents are AI-generated personas with unique demographics, personality traits, political leanings, and social media behavior patterns. They debate and react to your prediction goal as if they were real people on the platforms you selected.',
+    q: 'Who are these buyers, exactly?',
+    a: 'Written characters with their own job, seniority, budget, tooling and temperament, built from what you uploaded rather than picked off a shelf. They argue in written threads with each other, and nothing is ever posted anywhere real.',
   },
   {
     q: 'How long does a run take?',
@@ -109,201 +150,188 @@ const FAQ = [
   },
   {
     q: 'How is this different from a focus group?',
-    a: 'Traditional focus groups cost $5,000-$15,000, take 2-4 weeks to recruit and run, and cover 8-12 people. Saibyl simulates 20-100 diverse personas in minutes at a fraction of the cost — and you can re-run with different variables instantly.',
+    a: 'A focus group is eight to twelve people, recruited once, and you get one shot at the questions. This is twenty to a hundred, in minutes, and you can change one word and run the same room again — which is the part that is genuinely hard to do with people, not just the part that is expensive.',
   },
   {
-    q: 'What are "persona packs"?',
-    a: 'Ready-made rooms of people, grouped by who they are — "Tech Workers", "Retail Investors", "Healthcare Professionals". Each one holds a mix of ages, jobs and temperaments rather than one kind of person repeated. You can also describe a group of your own, and if you have uploaded your material we work your actual buyers out instead.',
+    q: 'What are audience packs?',
+    a: 'Ready-made rooms grouped by who they are — tech workers, retail investors, healthcare professionals. Each holds a mix of ages, jobs and temperaments rather than one kind of person repeated. You can describe a group of your own, and if you have uploaded your material Saibyl works your actual buyers out instead.',
   },
   {
     q: 'What does the report include?',
     a: 'A summary you can read in a minute, how the room felt round by round, how that differed by place and by kind of buyer, the moments that turned it, and what people objected to — with the sentences behind every one of them.',
   },
   {
-    q: 'Can I chat with the report?',
-    a: 'Yes. Once the report is written you can ask it follow-up questions, and it answers from what was actually said in the run rather than from general knowledge.',
+    q: 'Can I ask the report questions?',
+    a: 'Yes. Once it is written you can ask follow-up questions, and it answers from what was actually said in your run rather than from general knowledge.',
   },
   {
     q: 'What is a message test?',
-    a: 'Put two or more versions of the same message in front of one shared room. Everyone reacts to every version, so the comparison is like for like — and when the versions are too close to call, the report says so instead of picking one.',
+    a: 'Two or more versions of the same message in front of one shared room. Everyone reacts to every version, so the comparison is like for like — and when the versions are too close to call, the report says so instead of picking one.',
   },
-];
+] as const;
+
+/** A section heading, on the system's eyebrow rather than an uppercase h2. */
+function Section({
+  eyebrow,
+  title,
+  children,
+  delayMs = 0,
+}: {
+  eyebrow: string;
+  title: string;
+  children: React.ReactNode;
+  delayMs?: number;
+}) {
+  return (
+    <Rise as="section" delayMs={delayMs} className="mb-12">
+      <Eyebrow>{eyebrow}</Eyebrow>
+      <h2 className="text-[1.375rem] font-bold tracking-[-0.02em] font-display text-saibyl-ink mt-2 mb-5">
+        {title}
+      </h2>
+      {children}
+    </Rise>
+  );
+}
 
 export default function GuidePage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   return (
-    <div className="p-8 bg-saibyl-void min-h-full">
+    <Ground className="p-6 lg:p-8 min-h-full">
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-10"
-        >
-          <h1 className="text-h1 text-saibyl-white mb-2">Getting Started</h1>
-          <p className="text-[15px] text-saibyl-muted leading-relaxed max-w-2xl">
-            Find out what buyers will object to before you launch. Saibyl builds a room of AI buyers from
-            your material and shows you what they push back on — in minutes, at a fraction of the cost of
-            focus groups, ad testing, or polling.
-          </p>
-        </motion.div>
+        <Rise className="mb-11">
+          <PageHeader
+            eyebrow="How this works"
+            title="How this works"
+            phrase="Find out what they object to, before you launch and not after."
+          >
+            <p>
+              Saibyl builds a room of the buyers you are trying to reach, puts
+              what you have written in front of them, and reports what they
+              pushed back on &mdash; with the sentences behind every number.
+              Five stages, in the order each one feeds the next. You do not have
+              to do them in order, but each one is better with the last one
+              behind it.
+            </p>
+          </PageHeader>
+        </Rise>
 
-        {/* ── Section 1: How It Works ── */}
-        <section className="mb-12">
-          <div className="flex items-center gap-2 mb-6">
-            <Zap className="w-4 h-4 text-saibyl-gold" />
-            <h2 className="text-[16px] font-semibold text-saibyl-white uppercase tracking-wide">How It Works</h2>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {STEPS.map((s, i) => (
-              <motion.div
-                key={s.num}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={stagger(i)}
-                className="glass rounded-2xl p-6 relative overflow-hidden group"
-              >
-                {/* Step number watermark */}
-                <span className="absolute top-3 right-4 text-[48px] font-display font-extrabold text-[#14294a]/[0.05] select-none leading-none">
-                  {s.num}
-                </span>
-
-                <div className="flex items-center gap-3 mb-3">
-                  <div className={`w-9 h-9 rounded-xl bg-[#14294a]/[0.04] flex items-center justify-center ${s.color}`}>
-                    <s.Icon className="w-4.5 h-4.5" />
+        {/* ── The journey ── */}
+        <Section eyebrow="The five stages" title="Where you are, and what happens there" delayMs={dealDelayMs(1)}>
+          <div className="space-y-3">
+            {STAGES.map((stage, i) => (
+              <Deal key={stage.name} index={i}>
+                {/* `meaning`, and it lifts — each card is the door to its own
+                    stage. A guide whose cards cannot be left for the thing they
+                    describe is a guide the reader has to navigate around. */}
+                <Card carries="meaning" lift as={Link} to={stage.to} className="block p-5">
+                  <div className="flex items-start gap-4">
+                    <span
+                      aria-hidden
+                      className="mt-0.5 w-7 shrink-0 text-center text-[17px] leading-7 text-saibyl-blue"
+                    >
+                      {stage.mark}
+                    </span>
+                    <div>
+                      <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+                        <h3 className="text-[15px] font-semibold text-saibyl-ink">
+                          {stage.name}
+                        </h3>
+                        <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-saibyl-muted">
+                          {stage.when}
+                        </span>
+                      </div>
+                      <p className="text-[13px] text-saibyl-muted leading-relaxed mt-1.5">
+                        {stage.body}
+                      </p>
+                    </div>
                   </div>
-                  <h3 className="text-[15px] font-semibold text-saibyl-platinum">{s.title}</h3>
-                </div>
-                <p className="text-[13px] text-saibyl-muted leading-relaxed">{s.desc}</p>
-                {s.link && (
-                  <Link
-                    to={s.link}
-                    className="inline-block mt-3 text-[12px] text-saibyl-gold hover:text-saibyl-blue transition-colors"
-                  >
-                    {s.linkLabel} &rarr;
-                  </Link>
-                )}
-              </motion.div>
+                </Card>
+              </Deal>
             ))}
           </div>
-        </section>
+        </Section>
 
-        {/* ── Section 2: Speed & Cost ── */}
-        <section className="mb-12">
-          <div className="flex items-center gap-2 mb-6">
-            <Clock className="w-4 h-4 text-saibyl-blue" />
-            <h2 className="text-[16px] font-semibold text-saibyl-white uppercase tracking-wide">What Affects Speed</h2>
-          </div>
+        {/* ── What a run costs you in time ── */}
+        <Section eyebrow="Time and cost" title="What makes a run longer, and what that buys" delayMs={dealDelayMs(2)}>
+          <Notice tone="live" title="Start at 20 people, 5 rounds, one place" className="mb-4">
+            That finishes in about three minutes and is enough to see your top
+            two or three objections. Scale up once you know which one you are
+            chasing.
+          </Notice>
 
-          {/* Key callout */}
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="rounded-2xl p-5 mb-5 border border-saibyl-gold/20 bg-saibyl-gold/5"
-          >
-            <div className="flex items-start gap-3">
-              <Target className="w-5 h-5 text-saibyl-gold mt-0.5 shrink-0" />
-              <div>
-                <p className="text-[14px] text-saibyl-platinum font-medium mb-1">The sweet spot: 20 agents, 5 rounds, 1-2 platforms</p>
-                <p className="text-[13px] text-saibyl-muted leading-relaxed">
-                  Delivers actionable insights in <span className="text-saibyl-blue font-medium">~3 minutes</span>.
-                  That's what would take a focus group 2-4 weeks and $5,000-$15,000.
-                  Scale up when you need deeper analysis — even 100 people over 15 rounds finishes in under 20 minutes.
-                </p>
-              </div>
+          {/* A dense table: hairlines, no shadow per row. */}
+          <Card carries="density" className="overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-[13px]">
+                <thead>
+                  <tr className="border-b border-saibyl-border">
+                    {['What you choose', 'Quick', 'Full', 'What the extra time buys'].map((h) => (
+                      <th
+                        key={h}
+                        className="text-left px-5 py-3 font-mono text-[10px] uppercase tracking-[0.16em] text-saibyl-muted font-medium"
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {WHAT_COSTS_TIME.map((row) => (
+                    <tr key={row.choice} className="border-b border-saibyl-border last:border-0">
+                      <td className="px-5 py-3.5 text-saibyl-ink font-medium">{row.choice}</td>
+                      <td className="px-5 py-3.5 font-mono tabular-nums text-saibyl-positive">
+                        {row.quick}
+                      </td>
+                      <td className="px-5 py-3.5 font-mono tabular-nums text-saibyl-muted">
+                        {row.full}
+                      </td>
+                      <td className="px-5 py-3.5 text-saibyl-muted leading-relaxed">{row.buys}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </motion.div>
+          </Card>
+        </Section>
 
-          <div className="glass rounded-2xl overflow-hidden">
-            <table className="w-full text-[13px]">
-              <thead>
-                <tr className="border-b border-saibyl-border">
-                  <th className="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-saibyl-muted font-medium">Factor</th>
-                  <th className="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-saibyl-muted font-medium">Faster</th>
-                  <th className="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-saibyl-muted font-medium">Slower</th>
-                  <th className="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-saibyl-muted font-medium">What You Get</th>
-                </tr>
-              </thead>
-              <tbody>
-                {SPEED_FACTORS.map((f, i) => (
-                  <motion.tr
-                    key={f.factor}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={stagger(i)}
-                    className="border-b border-saibyl-border last:border-0"
-                  >
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-2">
-                        <f.Icon className="w-3.5 h-3.5 text-saibyl-gold shrink-0" />
-                        <span className="text-saibyl-platinum font-medium">{f.factor}</span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3.5 text-saibyl-positive">{f.low}</td>
-                    <td className="px-5 py-3.5 text-saibyl-muted">{f.high}</td>
-                    <td className="px-5 py-3.5 text-saibyl-muted">{f.impact}</td>
-                  </motion.tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        {/* ── Section 3: Tips ── */}
-        <section className="mb-12">
-          <div className="flex items-center gap-2 mb-6">
-            <Lightbulb className="w-4 h-4 text-saibyl-gold" />
-            <h2 className="text-[16px] font-semibold text-saibyl-white uppercase tracking-wide">Tips for Best Results</h2>
-          </div>
-
+        {/* ── Tips ── */}
+        <Section eyebrow="Getting more out of it" title="Where founders lose time" delayMs={dealDelayMs(3)}>
           <div className="space-y-3">
             {TIPS.map((tip, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={stagger(i)}
-                className="glass rounded-xl p-5"
-              >
+              <Card key={tip.title} carries="density" className="p-5">
                 <div className="flex items-start gap-3">
-                  <span className="w-6 h-6 rounded-lg bg-saibyl-gold/10 flex items-center justify-center shrink-0 mt-0.5">
-                    <span className="text-[11px] font-bold text-saibyl-gold">{i + 1}</span>
+                  <span className="w-6 h-6 rounded-lg bg-saibyl-blue/[0.09] flex items-center justify-center shrink-0 mt-0.5">
+                    <span className="font-mono text-[11px] font-bold text-saibyl-blue tabular-nums">
+                      {i + 1}
+                    </span>
                   </span>
                   <div>
-                    <h3 className="text-[14px] font-medium text-saibyl-platinum mb-1">{tip.title}</h3>
+                    <h3 className="text-[13.5px] font-semibold text-saibyl-ink mb-1">
+                      {tip.title}
+                    </h3>
                     <p className="text-[13px] text-saibyl-muted leading-relaxed">{tip.body}</p>
                   </div>
                 </div>
-              </motion.div>
+              </Card>
             ))}
           </div>
-        </section>
+        </Section>
 
-        {/* ── Section 4: FAQ ── */}
-        <section className="mb-12">
-          <div className="flex items-center gap-2 mb-6">
-            <MessageSquare className="w-4 h-4 text-saibyl-blue" />
-            <h2 className="text-[16px] font-semibold text-saibyl-white uppercase tracking-wide">Frequently Asked Questions</h2>
-          </div>
-
+        {/* ── FAQ ── */}
+        <Section eyebrow="Questions" title="The ones people actually ask" delayMs={dealDelayMs(4)}>
           <div className="space-y-2">
             {FAQ.map((item, i) => {
               const isOpen = openFaq === i;
               return (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={stagger(i)}
-                  className="glass rounded-xl overflow-hidden"
-                >
+                <Card key={item.q} carries="density" className="overflow-hidden">
                   <button
+                    type="button"
                     onClick={() => setOpenFaq(isOpen ? null : i)}
+                    aria-expanded={isOpen}
                     className="w-full flex items-center justify-between px-5 py-4 text-left group"
                   >
-                    <span className="text-[14px] font-medium text-saibyl-platinum group-hover:text-saibyl-white transition-colors">
+                    <span className="text-[13.5px] font-medium text-saibyl-ink group-hover:text-saibyl-blue transition-colors">
                       {item.q}
                     </span>
                     <ChevronDown
@@ -312,44 +340,38 @@ export default function GuidePage() {
                       }`}
                     />
                   </button>
-                  <AnimatePresence>
-                    {isOpen && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="overflow-hidden"
-                      >
-                        <p className="px-5 pb-4 text-[13px] text-saibyl-muted leading-relaxed">
-                          {item.a}
-                        </p>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
+                  {/* Height is not animated. The old version tweened `height:
+                      auto` on every answer, which is a per-item micro-interaction
+                      — the canvas asks for one orchestrated arrival per screen,
+                      not a page that moves every time it is touched. */}
+                  {isOpen && (
+                    <p className="px-5 pb-4 text-[13px] text-saibyl-muted leading-relaxed">
+                      {item.a}
+                    </p>
+                  )}
+                </Card>
               );
             })}
           </div>
-        </section>
+        </Section>
 
-        {/* ── CTA ── */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="text-center pb-8"
-        >
-          <Link
-            to="/app/home"
-            className="inline-flex items-center gap-2 px-8 py-3 rounded-xl bg-saibyl-blue text-white font-semibold text-[15px] hover:bg-[#1e5ad9] transition-all hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(40,108,240,0.3)]"
-          >
-            <FlaskConical className="w-4 h-4" />
-            Add your first product
-          </Link>
-          <p className="text-[12px] text-saibyl-muted mt-3">Results in minutes, not weeks.</p>
-        </motion.div>
+        {/* ── The way out ── */}
+        <Rise delayMs={dealDelayMs(5)} className="pb-8">
+          <Card carries="stage" className="sb-hero p-7 text-center">
+            <h2 className="text-[1.375rem] font-bold tracking-[-0.02em] font-display text-saibyl-ink">
+              Nothing here is worth reading twice
+            </h2>
+            <p className="text-[13px] text-saibyl-muted leading-relaxed mt-2 max-w-xl mx-auto">
+              The first run tells you more than this page can. Name what you are
+              building &mdash; a sentence is enough &mdash; and the first room is
+              about three minutes away.
+            </p>
+            <Action as={Link} to="/app/validate" className="mt-5">
+              Start with Validate
+            </Action>
+          </Card>
+        </Rise>
       </div>
-    </div>
+    </Ground>
   );
 }

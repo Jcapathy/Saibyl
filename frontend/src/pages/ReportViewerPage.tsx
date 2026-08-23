@@ -28,8 +28,17 @@ import ObjectionMap from '@/components/analysis/ObjectionMap';
 import FlashpointList from '@/components/analysis/FlashpointList';
 import VariantScoreboardPanel from '@/components/analysis/VariantScoreboard';
 import EvidenceDrawer from '@/components/analysis/EvidenceDrawer';
-import Panel, { NoData } from '@/components/analysis/Panel';
+import Panel from '@/components/analysis/Panel';
 import InoculationWorkbench from '@/components/founder/InoculationWorkbench';
+import {
+  Action,
+  Card,
+  Ground,
+  Notice,
+  PageHeader,
+  Rise,
+  dealDelayMs,
+} from '@/components/design';
 import type { Simulation, SimulationReport } from '@/types';
 
 /* ------------------------------------------------------------------ */
@@ -100,7 +109,11 @@ function statusColor(status: string): string {
   switch (status.toLowerCase()) {
     case 'running':
     case 'analyzing':
-      return 'bg-saibyl-gold/15 text-saibyl-gold border-saibyl-gold/30';
+      /* Cyan, the system's colour for "this is happening right now" — the same
+         one `sb-note-live` wears. It was `saibyl-gold`, a legacy dark-theme
+         alias that resolves to the blue accent, so a run in progress was
+         wearing the colour the app reserves for things you press. */
+      return 'bg-saibyl-cyan/[0.12] text-[#127f8a] border-saibyl-cyan/40';
     case 'failed':
       return 'bg-saibyl-negative/15 text-saibyl-negative border-saibyl-negative/30';
     default:
@@ -155,6 +168,37 @@ function runStateWord(status: string): string {
  *
  * Prose and measurement are also now visibly separate. The narrative sits in
  * its own tab, and the charts never depend on it having been written.
+ *
+ * ---
+ *
+ * **Restyled onto the shared design system on 2026-08-23.** `design/Report.dc.html`
+ * is this page's artboard, and the gap between it and what shipped was not a
+ * matter of taste:
+ *
+ * 1. The root painted `bg-saibyl-void` — a flat `#f8fbff` panel laid over the
+ *    radial wash — so canvas rule 1 was switched off on the page the room is
+ *    reported on. `Ground` re-lays it.
+ * 2. Every colour was a legacy dark-theme alias (`saibyl-void`, `saibyl-gold`,
+ *    `saibyl-platinum`, `saibyl-gold-hover`). Those names still resolve to
+ *    light values, which is exactly why nobody noticed the page had never been
+ *    converted.
+ * 3. The heading was a hand-rolled `<h1>` with no eyebrow and no accent
+ *    phrase. The artboard opens with a dotted mono line, a title and one
+ *    Playfair italic sentence; `PageHeader` is that, and it pulses its dot
+ *    while the write-up is still being put together.
+ * 4. Three states — the write-up failed, the write-up is still coming, nothing
+ *    has been measured — were all said in the same grey body text as
+ *    everything else. They are `Notice` blocks now, in the tone the state
+ *    actually has.
+ * 5. `disabled` is gone. Where a control is mid-flight the control is replaced
+ *    by what is happening, which stops the double submit the grey rectangle
+ *    used to and leaves no third rendering.
+ *
+ * The page also stopped nesting its own scroll container. `AppLayout`'s
+ * `<main>` already scrolls; a second `h-screen`/`overflow-auto` inside it gave
+ * the report two scrollbars and pinned a header that the artboard scrolls
+ * away. The tab bar is `sticky` instead, which keeps it reachable without
+ * spending the viewport on chrome.
  */
 export default function ReportViewerPage() {
   const { id: simId } = useParams<{ id: string }>();
@@ -305,7 +349,12 @@ export default function ReportViewerPage() {
 
   const sendChat = async (e: FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim() || !report || chatNotReady) return;
+    /* `chatLoading` joins the guard for the same reason `regenerating` guards
+       the write-up: the `disabled` attribute that used to hold this line is
+       gone, and a second question posted while the first is still in flight
+       appends both to the transcript out of order. Cheaper than a report, but
+       the same defect. */
+    if (!chatInput.trim() || !report || chatNotReady || chatLoading) return;
     const msg = chatInput.trim();
     setChatMessages((prev) => [...prev, { role: 'user', content: msg }]);
     setChatInput('');
@@ -361,6 +410,15 @@ export default function ReportViewerPage() {
    */
   const regenerateReport = async () => {
     if (!simId) return;
+    /* The guard the `disabled` attribute used to be, and it has to live here
+       rather than on the button.
+       Removing `disabled` from a control that spends money is only safe once
+       the handler itself refuses to re-enter: `POST /reports/generate` starts a
+       paid write-up, and a double click landing inside one render is a second
+       one. Reading `regenerating` from state is enough because React batches
+       within an event and these clicks are separate events — the flag is set
+       before the first `await` and stays set until `finally`. */
+    if (regenerating) return;
     setRegenerating(true);
     setRegenerateError('');
     try {
@@ -401,7 +459,7 @@ export default function ReportViewerPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col h-screen bg-saibyl-void">
+      <Ground className="min-h-full">
         <div className="flex items-center gap-2 px-8 py-3 border-b border-saibyl-border">
           <div className="h-3 w-24 bg-saibyl-border rounded animate-pulse" />
           <div className="h-3 w-32 bg-saibyl-border rounded animate-pulse" />
@@ -413,100 +471,136 @@ export default function ReportViewerPage() {
             <div className="h-5 w-28 bg-saibyl-border rounded-full animate-pulse" />
           </div>
         </div>
-        <div className="flex-1 p-8 space-y-6">
+        <div className="p-8 space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             {Array.from({ length: 4 }).map((_, i) => (
               <div
                 key={i}
-                className="h-28 bg-saibyl-surface border border-saibyl-border rounded-2xl animate-pulse"
+                className="h-28 bg-white border border-saibyl-border rounded-2xl animate-pulse"
               />
             ))}
           </div>
-          <div className="h-64 bg-saibyl-surface border border-saibyl-border rounded-2xl animate-pulse" />
+          <div className="h-64 bg-white border border-saibyl-border rounded-2xl animate-pulse" />
         </div>
-      </div>
+      </Ground>
     );
   }
 
   if (error || !report) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-saibyl-void gap-4">
-        <p className="text-[18px] font-bold text-saibyl-platinum">
-          There is nothing written up for this run
-        </p>
-        <p className="text-[13px] text-saibyl-muted max-w-md text-center leading-relaxed">
-          The run itself is safe — everyone in the room has already been read and
-          measured. It is only the write-up that did not finish, and writing it
-          again costs nothing: nobody goes back in the room.
-        </p>
-        {/*
-          The button this screen was missing.
+      <Ground className="min-h-full flex items-center justify-center p-8">
+        <Rise className="w-full max-w-lg">
+          {/*
+            The reason, the cost, and the button that fixes it — in the one
+            rendering the founder's standing rule allows. It used to be an
+            18px bold line, a grey paragraph and a flat blue rectangle, which
+            is three registers saying one thing.
 
-          It said the write-up "has not been started again" and then offered no
-          way to start it — a dead end at the worst possible moment, because a
-          founder reaches it having already spent the credits the run charged.
-          On the free tier that is the entire grant, so "go back to your runs"
-          was the whole remedy for a paid run with no report.
+            The button itself was the fix this screen was missing entirely: it
+            said the write-up "has not been started again" and then offered no
+            way to start it — a dead end at the worst possible moment, because
+            a founder reaches it having already spent the credits the run
+            charged. On the free tier that is the entire grant, so "go back to
+            your runs" was the whole remedy for a paid run with no report.
+          */}
+          <Notice
+            tone="blocked"
+            title="There is nothing written up for this run"
+            action={
+              regenerating ? (
+                /* No `disabled`, and no second POST either: while it is
+                   running the control is replaced by what is happening. */
+                <span className="text-[12.5px] font-extrabold text-saibyl-violet">
+                  Writing it up again…
+                </span>
+              ) : (
+                <Action onClick={regenerateReport}>
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Write it up again
+                </Action>
+              )
+            }
+          >
+            The run itself is safe &mdash; everyone in the room has already been
+            read and measured. It is only the write-up that did not finish, and
+            writing it again costs nothing: nobody goes back in the room.
+          </Notice>
 
-          `regenerateReport` already existed and is free; it was simply never
-          reachable from the failure it exists for.
-        */}
-        <button
-          type="button"
-          onClick={regenerateReport}
-          className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-saibyl-blue text-white font-semibold text-[13px] hover:bg-saibyl-gold-hover transition-colors"
-        >
-          {regenerating ? 'Writing it up again…' : 'Write it up again'}
-        </button>
-        {regenerateError && (
-          <p className="text-[12px] text-saibyl-negative">{regenerateError}</p>
-        )}
-        <Link
-          to="/app/simulations"
-          className="flex items-center gap-1.5 text-[13px] text-saibyl-muted hover:text-saibyl-ink transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to your runs
-        </Link>
-      </div>
+          {regenerateError && (
+            <p className="mt-3 text-[12px] text-saibyl-negative">{regenerateError}</p>
+          )}
+
+          <Link
+            to="/app/simulations"
+            className="mt-5 inline-flex items-center gap-1.5 text-[13px] text-saibyl-muted hover:text-saibyl-ink transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to your runs
+          </Link>
+        </Rise>
+      </Ground>
     );
   }
 
+  /* A violet block, not a dashed grey box inside a white card. This reports a
+     state — nothing to draw from — and the canvas says a state is said in
+     colour. The `action` is deliberately absent: there is no button anywhere
+     in the product that scores a finished run on demand, and inventing one
+     here would be a dead end wearing a way out. */
   const measurementMissing = (
-    <Panel title="Nothing here has been measured yet">
-      <NoData>
-        {analysisError ||
-          'Nobody has scored what was said in this run, so there are no figures to show.'}
-        <br />
-        <br />
-        No number on this page is worked back out of the written report. If the
-        scoring has not happened, the charts stay empty rather than being filled
-        in with something plausible.
-      </NoData>
-    </Panel>
+    <Notice tone="blocked" title="Nothing here has been measured yet">
+      {analysisError ||
+        'Nobody has scored what was said in this run, so there are no figures to show.'}
+      <br />
+      <br />
+      No number on this page is worked back out of the written report. If the
+      scoring has not happened, the charts stay empty rather than being filled
+      in with something plausible.
+    </Notice>
+  );
+
+  /* The write-up is still on its way — which is the one condition under which
+     the eyebrow's dot is allowed to pulse. `live` on a settled page is
+     decoration, and decoration that claims to be a state stops meaning
+     anything the second time somebody sees it. */
+  const writeUpPending = Boolean(
+    report.status && !REPORT_TERMINAL_STATUSES.includes(report.status),
   );
 
   return (
-    <div className="flex flex-col h-screen bg-saibyl-void">
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-2 px-8 py-3 border-b border-saibyl-border">
-        <Link
-          to="/app/simulations"
-          className="text-[12px] text-saibyl-muted hover:text-saibyl-platinum transition-colors flex items-center gap-1"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" /> Your runs
-        </Link>
-        <span className="text-saibyl-border text-[11px]">&rsaquo;</span>
-        <span className="text-[12px] font-semibold text-saibyl-silver">{simulation?.name}</span>
-      </div>
+    <Ground className="min-h-full pb-24">
+      {/* Breadcrumb + heading, in the scroll flow rather than pinned above it.
+          The artboard scrolls its header away and keeps the room in view; the
+          old fixed band spent a fifth of the viewport on chrome. */}
+      <Rise className="px-8 pt-6">
+        <div className="flex items-center gap-2 mb-5">
+          <Link
+            to="/app/simulations"
+            className="text-[12px] text-saibyl-muted hover:text-saibyl-ink transition-colors flex items-center gap-1"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" /> Your runs
+          </Link>
+          <span className="text-saibyl-border text-[11px]">&rsaquo;</span>
+          <span className="text-[12px] font-semibold text-saibyl-silver">{simulation?.name}</span>
+        </div>
 
-      {/* Header */}
-      <div className="px-8 py-5 border-b border-saibyl-border">
-        <div className="flex items-start justify-between gap-4 mb-3">
-          <div>
-            <h1 className="text-[24px] font-extrabold text-saibyl-platinum leading-tight">
-              {simulation?.name ?? 'Report'}
-            </h1>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <PageHeader
+            /* Not the room's own line — `Room` already deals
+               "The room · N buyers · M rounds" over the stage below, and two
+               of those on one screen is the same fact said twice. */
+            eyebrow="Your report"
+            live={writeUpPending}
+            title={simulation?.name ?? 'Report'}
+            phrase="They argued about it, and this is what they kept coming back to."
+            className="flex-1 min-w-0"
+          >
+            <p>
+              Everything on this page was read off what people in the room
+              actually wrote. Nothing is worked back out of the write-up, so a
+              figure that was never measured stays missing rather than turning
+              into a plausible number.
+            </p>
             {/* No `SIM-{first four characters of the id}` line. It read as a
                 reference number and was not one — four characters off the front
                 of a UUID identify nothing and collide between runs, and a
@@ -514,11 +608,10 @@ export default function ReportViewerPage() {
                 "SIM-1111". The run's own question is real and is what tells
                 one report from another. */}
             {simulation?.prediction_goal && (
-              <p className="text-[12px] text-saibyl-muted mt-1 max-w-2xl leading-relaxed">
-                {simulation.prediction_goal}
-              </p>
+              <p className="mt-2 text-saibyl-ink">{simulation.prediction_goal}</p>
             )}
-          </div>
+          </PageHeader>
+
           <div className="flex items-center gap-2 flex-shrink-0">
             <ReportExport
               reportId={report.id}
@@ -526,17 +619,18 @@ export default function ReportViewerPage() {
               simulationName={simulation?.name ?? 'report'}
               sections={report.sections}
             />
-            <Link
-              to={`/app/simulations/new?clone=${simId}`}
-              className="flex items-center gap-1.5 text-[12px] px-4 py-1.5 rounded-lg bg-saibyl-gold text-saibyl-void font-semibold hover:bg-saibyl-gold-hover transition-colors"
-            >
+            {/* `quiet`. The one gradient on this screen is the ask-pill, which
+                is the thing a founder is actually here to press; four buyers'
+                worth of blue rectangles is how a screen stops saying which
+                one matters. */}
+            <Action as={Link} to={`/app/simulations/new?clone=${simId}`} kind="quiet">
               <RotateCcw className="w-3.5 h-3.5" />
               Run this again
-            </Link>
+            </Action>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap mt-5">
           {simulation?.status && (
             <span
               className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${statusColor(
@@ -568,65 +662,79 @@ export default function ReportViewerPage() {
             </>
           )}
         </div>
-      </div>
+      </Rise>
 
-      {/* Tabs */}
-      <div className="flex gap-0 px-8 border-b border-saibyl-border overflow-x-auto">
-        {TAB_LABELS.map((label, i) => (
-          <button
-            key={label}
-            onClick={() => setActiveTab(i)}
-            className={`px-4 py-3 text-[13px] font-medium transition-colors border-b-2 whitespace-nowrap ${
-              i === activeTab
-                ? 'text-saibyl-platinum border-saibyl-gold'
-                : 'text-saibyl-muted border-transparent hover:text-saibyl-silver'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* Tabs. Sticky rather than pinned: the heading above scrolls away, and
+          the bar stays reachable from anywhere in a long report. The paper
+          tint and blur are the same surface `sb-stage` is drawn on, so the
+          content passing underneath stays visible without smearing. */}
+      <Rise
+        delayMs={dealDelayMs(1)}
+        className="sticky top-0 z-20 mt-6 border-b border-saibyl-border bg-saibyl-paper/85 backdrop-blur-[18px]"
+      >
+        <div className="flex gap-0 px-8 overflow-x-auto">
+          {TAB_LABELS.map((label, i) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() => setActiveTab(i)}
+              className={`px-4 py-3 text-[13px] font-medium transition-colors border-b-2 whitespace-nowrap ${
+                i === activeTab
+                  ? 'text-saibyl-ink border-saibyl-blue'
+                  : 'text-saibyl-muted border-transparent hover:text-saibyl-ink'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </Rise>
 
       {/* Content */}
-      {/* pb-24 keeps the floating ask-pill off the last row of content. */}
-      <div className="flex-1 overflow-auto p-8 pb-24">
+      <div className="px-8 pt-6">
         {report.status === 'failed' && (
-          <div className="mb-6 px-5 py-4 rounded-2xl bg-saibyl-negative/10 border border-saibyl-negative/20">
-            <div className="flex items-center gap-3">
-              <span className="inline-flex h-3 w-3 rounded-full bg-saibyl-negative shrink-0" />
-              <span className="text-[14px] text-saibyl-platinum">
-                The written-up version failed and is not coming. Everything measured below is
-                unaffected — it is scored from what people actually said, not from the
-                write-up.
-              </span>
-            </div>
-            <button
-              onClick={regenerateReport}
-              disabled={regenerating}
-              className="mt-3 ml-6 flex items-center gap-1.5 text-[12px] px-3 py-1.5 rounded-lg bg-saibyl-gold text-saibyl-void font-semibold hover:bg-saibyl-gold-hover disabled:opacity-50 transition-colors"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              {regenerating ? 'Starting…' : 'Write it up again'}
-            </button>
+          /* Was a rose-tinted slab with a flat blue rectangle inside it and a
+              `disabled` attribute on the one control that fixes the problem.
+              The state is "something is missing and here is what supplies it",
+              which is what `blocked` says in the system's own colour. */
+          <Notice
+            tone="blocked"
+            title="The written-up version failed and is not coming"
+            className="mb-6"
+            action={
+              regenerating ? (
+                <span className="text-[12.5px] font-extrabold text-saibyl-violet">
+                  Starting…
+                </span>
+              ) : (
+                <Action onClick={regenerateReport} kind="quiet">
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Write it up again
+                </Action>
+              )
+            }
+          >
+            Everything measured below is unaffected &mdash; it is scored from
+            what people actually said, not from the write-up.
             {regenerateError && (
-              <p className="mt-2 ml-6 text-[12px] text-saibyl-negative">{regenerateError}</p>
+              <span className="block mt-2 text-saibyl-negative">{regenerateError}</span>
             )}
-          </div>
+          </Notice>
         )}
 
-        {report.status &&
-          !REPORT_TERMINAL_STATUSES.includes(report.status) && (
-            <div className="mb-6 flex items-center gap-3 px-5 py-4 rounded-2xl bg-saibyl-insight-violet/10 border border-saibyl-insight-violet/20">
-              <span className="relative flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-saibyl-insight-violet opacity-75" />
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-saibyl-insight-violet" />
-              </span>
-              <span className="text-[14px] text-saibyl-platinum">
-                The written-up version is still being put together. Everything measured below
-                is already complete and does not wait on it.
-              </span>
-            </div>
-          )}
+        {writeUpPending && (
+          /* Cyan, because something is genuinely happening. The old block was
+              violet with a hand-rolled ping ring, which is the colour the
+              system reserves for "blocked" — the two most different states on
+              the page were wearing the same one. */
+          <Notice
+            tone="live"
+            title="The written-up version is still being put together"
+            className="mb-6"
+          >
+            Everything measured below is already complete and does not wait on it.
+          </Notice>
+        )}
 
         {/* Tab 0 — Findings */}
         {activeTab === 0 &&
@@ -741,23 +849,42 @@ export default function ReportViewerPage() {
         {activeTab === 3 && (
           <div className="space-y-6">
             {report.sections.length === 0 && (
-              <Panel title="The write-up">
-                <NoData>Nobody has written this up yet.</NoData>
-              </Panel>
+              /* A tab with nothing in it is a dead end unless it offers the
+                 way out, and the way out already existed: writing it up is
+                 free and puts nobody back in the room. */
+              <Notice
+                tone="blocked"
+                title="Nobody has written this up yet"
+                action={
+                  regenerating ? (
+                    <span className="text-[12.5px] font-extrabold text-saibyl-violet">
+                      Starting…
+                    </span>
+                  ) : (
+                    <Action onClick={regenerateReport} kind="quiet">
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      Write it up
+                    </Action>
+                  )
+                }
+              >
+                Everything measured in the other tabs is already complete
+                &mdash; the write-up is prose over the top of it, and it costs
+                nothing to produce.
+              </Notice>
             )}
             {report.sections.map((section) => (
-              <div
-                key={section.title}
-                className="bg-saibyl-surface border border-saibyl-border rounded-2xl p-6"
-              >
-                <h2 className="text-[16px] font-bold text-saibyl-platinum mb-4">
+              /* `meaning`. Each section is a claim a founder has to weigh, and
+                 there are few enough of them that depth still means something. */
+              <Card carries="meaning" key={section.title} className="p-6">
+                <h2 className="text-[16px] font-bold text-saibyl-ink mb-4">
                   {section.title}
                 </h2>
                 <SectionRenderer
                   content={stripDuplicateTitle(section.title, cleanContent(section.content))}
                   className="text-saibyl-silver leading-[1.75]"
                 />
-              </div>
+              </Card>
             ))}
           </div>
         )}
@@ -766,22 +893,16 @@ export default function ReportViewerPage() {
         {activeTab === 4 && (
           <>
             <div className="flex items-center gap-3 mb-4">
-              <button
-                onClick={copyMarkdown}
-                className="flex items-center gap-1.5 text-[12px] px-3 py-1.5 rounded-lg border border-saibyl-border text-saibyl-silver hover:text-saibyl-platinum hover:border-saibyl-border-light transition-colors"
-              >
+              <Action onClick={copyMarkdown} kind="quiet">
                 <Copy className="w-3.5 h-3.5" />
                 {copied ? 'Copied!' : 'Copy markdown'}
-              </button>
-              <button
-                onClick={downloadMarkdown}
-                className="flex items-center gap-1.5 text-[12px] px-3 py-1.5 rounded-lg border border-saibyl-border text-saibyl-silver hover:text-saibyl-platinum hover:border-saibyl-border-light transition-colors"
-              >
+              </Action>
+              <Action onClick={downloadMarkdown} kind="quiet">
                 <Download className="w-3.5 h-3.5" />
                 Download .md
-              </button>
+              </Action>
             </div>
-            <div className="bg-saibyl-surface border border-saibyl-border rounded-2xl p-6 mb-6">
+            <Card carries="meaning" className="p-6 mb-6">
               <div className="prose prose-sm max-w-none">
                 <ReactMarkdown>
                   {report.full_markdown ||
@@ -793,7 +914,7 @@ export default function ReportViewerPage() {
                     'There is nothing written up to show here yet.'}
                 </ReactMarkdown>
               </div>
-            </div>
+            </Card>
             {analysis && (
               <Panel
                 title="The exact numbers behind every chart"
@@ -828,23 +949,27 @@ export default function ReportViewerPage() {
       )}
 
       {!chatOpen && (
-        <button
+        /* The one primary on this screen. It was a hand-rolled copy of
+           `sb-action`'s gradient in an inline `style`, which is how a second
+           set of the system's numbers gets into the codebase — the class now
+           owns it, and the radius is the only thing this call site decides. */
+        <Action
           onClick={() => setChatOpen(true)}
-          className="fixed bottom-6 right-6 z-40 flex items-center gap-2 px-4 py-3 rounded-full text-white font-semibold text-[13px] shadow-lg transition-transform hover:scale-105"
-          style={{ background: 'linear-gradient(135deg, #286cf0, #5268e9)' }}
+          className="fixed bottom-6 right-6 z-40 rounded-full gap-2 px-4 py-3 text-[13px]"
         >
           <MessageCircle className="w-5 h-5" />
           Ask about this run
-        </button>
+        </Action>
       )}
 
       {chatOpen && (
-        <div className="fixed top-0 right-0 w-[360px] h-full z-50 bg-saibyl-void border-l border-saibyl-border flex flex-col shadow-2xl">
+        <div className="fixed top-0 right-0 w-[360px] h-full z-50 bg-saibyl-paper border-l border-saibyl-border flex flex-col shadow-2xl">
           <div className="flex items-center justify-between px-4 py-3 border-b border-saibyl-border">
-            <h3 className="text-[14px] font-semibold text-saibyl-platinum">Ask about this</h3>
+            <h3 className="text-[14px] font-semibold text-saibyl-ink">Ask about this</h3>
             <button
+              type="button"
               onClick={() => setChatOpen(false)}
-              className="p-1 rounded-lg text-saibyl-muted hover:text-saibyl-platinum hover:bg-saibyl-surface transition-colors"
+              className="p-1 rounded-lg text-saibyl-muted hover:text-saibyl-ink hover:bg-white transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -861,8 +986,8 @@ export default function ReportViewerPage() {
                 <div
                   className={`text-[13px] px-3 py-2.5 rounded-xl leading-relaxed ${
                     msg.role === 'user'
-                      ? 'bg-saibyl-gold/10 border border-saibyl-gold/20 text-saibyl-platinum'
-                      : 'bg-saibyl-surface border border-saibyl-border text-saibyl-silver'
+                      ? 'bg-saibyl-blue/[0.08] border border-saibyl-blue/25 text-saibyl-ink'
+                      : 'bg-white border border-saibyl-border text-saibyl-silver'
                   }`}
                 >
                   {msg.content}
@@ -871,7 +996,7 @@ export default function ReportViewerPage() {
             ))}
             {chatLoading && (
               <div className="mr-auto max-w-[85%]">
-                <div className="bg-saibyl-surface border border-saibyl-border rounded-xl px-3 py-2.5">
+                <div className="bg-white border border-saibyl-border rounded-xl px-3 py-2.5">
                   <div className="flex gap-1">
                     {[0, 150, 300].map((delay) => (
                       <span
@@ -888,70 +1013,86 @@ export default function ReportViewerPage() {
           </div>
 
           {/* The server's own sentence, verbatim, then what happens next —
-              which depends entirely on the status it reported. */}
+              which depends entirely on the status it reported. Two states, two
+              tones: `blocked` when the write-up is not coming and there is a
+              button that changes that, `live` while it is still on its way. */}
           {chatNotReady && (
-            <div
-              className={`mx-3 mb-2 px-3 py-3 rounded-xl border ${
-                chatNotReady.status === 'failed'
-                  ? 'bg-saibyl-negative/10 border-saibyl-negative/25'
-                  : 'bg-saibyl-insight-violet/10 border-saibyl-insight-violet/25'
-              }`}
+            <Notice
+              tone={chatNotReady.status === 'failed' ? 'blocked' : 'live'}
+              title={chatNotReady.message}
+              className="mx-3 mb-2 px-3 py-3"
+              action={
+                chatNotReady.status === 'failed' ? (
+                  regenerating ? (
+                    <span className="text-[12.5px] font-extrabold text-saibyl-violet">
+                      Starting…
+                    </span>
+                  ) : (
+                    <Action onClick={regenerateReport} kind="quiet">
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      Write it up again
+                    </Action>
+                  )
+                ) : undefined
+              }
             >
-              <p className="text-[12px] text-saibyl-platinum leading-relaxed">
-                {chatNotReady.message}
-              </p>
               {chatNotReady.status === 'failed' ? (
                 <>
-                  <p className="text-[11px] text-saibyl-muted mt-1.5 leading-relaxed">
-                    It is not still coming — we have stopped waiting for it. Everything
-                    measured on this page is unaffected; only the written-up version is
-                    missing. Write it again and there will be something here to answer
-                    from.
-                  </p>
-                  <button
-                    onClick={regenerateReport}
-                    disabled={regenerating}
-                    className="mt-2.5 flex items-center gap-1.5 text-[12px] px-3 py-1.5 rounded-lg bg-saibyl-gold text-saibyl-void font-semibold hover:bg-saibyl-gold-hover disabled:opacity-50 transition-colors"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    {regenerating ? 'Starting…' : 'Write it up again'}
-                  </button>
+                  It is not still coming &mdash; we have stopped waiting for it.
+                  Everything measured on this page is unaffected; only the
+                  written-up version is missing. Write it again and there will
+                  be something here to answer from.
                   {regenerateError && (
-                    <p className="mt-2 text-[12px] text-saibyl-negative">{regenerateError}</p>
+                    <span className="block mt-2 text-saibyl-negative">{regenerateError}</span>
                   )}
                 </>
               ) : (
-                <p className="flex items-center gap-2 text-[11px] text-saibyl-muted mt-1.5">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-saibyl-insight-violet opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-saibyl-insight-violet" />
-                  </span>
-                  Still being written — this unlocks on its own when it lands.
-                </p>
+                'Still being written — this unlocks on its own when it lands.'
               )}
-            </div>
+            </Notice>
           )}
 
+          {/* No `disabled` on either control.
+
+              The input is `readOnly` while there is nothing to answer from —
+              still focusable, still selectable, and its placeholder says why,
+              with the reason and the button that fixes it in the `Notice`
+              directly above it. `sendChat` already refuses an empty message
+              and refuses to send at all while `chatNotReady` is set, so the
+              guard lives where the decision is rather than in an attribute
+              that greys a rectangle.
+
+              While an answer is in flight the send control is replaced by the
+              same three dots the transcript is showing, which is what stops a
+              second submit. */}
           <form onSubmit={sendChat} className="p-3 border-t border-saibyl-border flex gap-2">
             <input
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
-              disabled={!!chatNotReady}
+              readOnly={!!chatNotReady}
               placeholder={
                 chatNotReady ? 'Nothing to ask about yet…' : 'e.g. Why did they hate the price?'
               }
-              className="flex-1 bg-saibyl-surface border border-saibyl-border rounded-lg px-3 py-2 text-[13px] text-saibyl-platinum placeholder-saibyl-muted focus:outline-none focus:ring-1 focus:ring-saibyl-gold focus:border-saibyl-gold disabled:opacity-50"
+              className="flex-1 bg-white border border-saibyl-border rounded-lg px-3 py-2 text-[13px] text-saibyl-ink placeholder-saibyl-muted focus:outline-none focus:ring-1 focus:ring-saibyl-blue focus:border-saibyl-blue read-only:text-saibyl-muted"
             />
-            <button
-              type="submit"
-              disabled={chatLoading || !chatInput.trim() || !!chatNotReady}
-              className="p-2 rounded-lg bg-saibyl-gold text-saibyl-void hover:bg-saibyl-gold-hover transition-colors disabled:opacity-50"
-            >
-              <Send className="w-4 h-4" />
-            </button>
+            {chatLoading ? (
+              <span className="flex items-center gap-1 px-2 rounded-lg border border-saibyl-border bg-white">
+                {[0, 150, 300].map((delay) => (
+                  <span
+                    key={delay}
+                    className="w-1.5 h-1.5 rounded-full bg-saibyl-muted animate-bounce"
+                    style={{ animationDelay: `${delay}ms` }}
+                  />
+                ))}
+              </span>
+            ) : (
+              <Action type="submit" className="px-2 py-2 rounded-lg" aria-label="Send">
+                <Send className="w-4 h-4" />
+              </Action>
+            )}
           </form>
         </div>
       )}
-    </div>
+    </Ground>
   );
 }

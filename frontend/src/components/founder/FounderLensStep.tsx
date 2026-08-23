@@ -3,6 +3,7 @@ import { AlertTriangle, Loader2, Sparkles } from 'lucide-react';
 import api, { unwrapList } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
 import AudienceReview from './AudienceReview';
+import { noticeSurface } from '@/components/design';
 import type { ICPProfile, StageSpec } from '@/lib/founder';
 
 export interface FounderConfig {
@@ -188,7 +189,7 @@ export default function FounderLensStep({
                 }`}
               >
                 <span
-                  className={`font-medium text-[14px] ${selected ? 'text-saibyl-white' : 'text-saibyl-platinum'}`}
+                  className={`font-medium text-[14px] ${selected ? 'text-saibyl-ink' : 'text-saibyl-ink'}`}
                 >
                   {spec.label}
                 </span>
@@ -207,7 +208,7 @@ export default function FounderLensStep({
             </p>
             <ul className="space-y-1">
               {stage.expected_inputs.map((input) => (
-                <li key={input} className="text-[12px] text-saibyl-platinum">
+                <li key={input} className="text-[12px] text-saibyl-ink">
                   — {input}
                 </li>
               ))}
@@ -217,11 +218,17 @@ export default function FounderLensStep({
           {/* The honesty block. Shown before the run rather than as a footnote
               in the report, because the point of stating a limit is to stop
               somebody asking a question the run cannot answer. */}
-          <div className="rounded-xl border border-saibyl-gold/20 bg-saibyl-gold/[0.06] p-4">
+          {/* Amber, which is what "thin" means in this system — the run will go
+              ahead and the answer will have holes in it, and here they are.
+              It was the blue accent, so a warning under an AlertTriangle was
+              rendering in the same colour as every link on the page. */}
+          <div className={`rounded-xl p-4 ${noticeSurface('thin').block}`}>
             <div className="flex items-start gap-2.5">
-              <AlertTriangle className="w-3.5 h-3.5 text-saibyl-gold mt-0.5 shrink-0" />
+              <AlertTriangle
+                className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${noticeSurface('thin').heading}`}
+              />
               <div>
-                <p className="text-[12px] font-medium text-saibyl-gold mb-1.5">
+                <p className={`text-[12px] font-medium mb-1.5 ${noticeSurface('thin').heading}`}>
                   What this run will not be able to tell you
                 </p>
                 <ul className="space-y-1">
@@ -270,7 +277,7 @@ export default function FounderLensStep({
                     }`}
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <span className="font-medium text-[14px] text-saibyl-platinum truncate">
+                      <span className="font-medium text-[14px] text-saibyl-ink truncate">
                         {p.name}
                       </span>
                       <span className="text-[10px] text-saibyl-muted whitespace-nowrap">
@@ -286,7 +293,7 @@ export default function FounderLensStep({
                     </p>
                     <div className="flex items-center gap-3 mt-2">
                       {p.profile.gaps.length > 0 && (
-                        <span className="text-[10px] text-saibyl-gold">
+                        <span className="text-[10px] text-saibyl-blue">
                           {p.profile.gaps.length} thing
                           {p.profile.gaps.length === 1 ? '' : 's'} your documents never say
                         </span>
@@ -301,7 +308,7 @@ export default function FounderLensStep({
                     <button
                       type="button"
                       onClick={() => setReviewingId(p.id)}
-                      className="text-[12px] text-saibyl-gold hover:underline"
+                      className="text-[12px] text-saibyl-blue hover:underline"
                     >
                       Check who we think will buy this →
                     </button>
@@ -326,11 +333,22 @@ export default function FounderLensStep({
           </div>
         )}
 
+        {/* Never a grey button. `!projectId` used to grey this out, which said
+            nothing: a founder saw a dead control and no reason for it. The
+            reason is stated beside it now and the control runs. `synthesizing`
+            still guards it — that is a double-submit guard, not a precondition;
+            the click landed and the answer is on its way. */}
+        {!projectId && (
+          <p className={`text-[12px] mb-2 ${noticeSurface('blocked').heading}`}>
+            Name what you are building first &mdash; the buyers are worked out
+            from your material, and are stored against the thing they buy.
+          </p>
+        )}
         <button
           type="button"
           onClick={synthesize}
-          disabled={!projectId || synthesizing}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-saibyl-gold/30 bg-saibyl-gold/5 hover:border-saibyl-gold/50 hover:bg-saibyl-gold/10 disabled:opacity-40 transition-all text-[13px] text-saibyl-gold"
+          disabled={synthesizing}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-saibyl-blue/30 bg-saibyl-blue/5 hover:border-saibyl-blue/50 hover:bg-saibyl-blue/10 disabled:opacity-40 transition-all text-[13px] text-saibyl-blue"
         >
           {synthesizing ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -391,7 +409,7 @@ export default function FounderLensStep({
                   <button
                     type="button"
                     onClick={adoptStageDefault}
-                    className="text-saibyl-gold hover:underline"
+                    className="text-saibyl-blue hover:underline"
                   >
                     Use {(stage.default_adversarial_share * 100).toFixed(0)}% instead
                   </button>
@@ -402,7 +420,7 @@ export default function FounderLensStep({
               <label className="text-[12px] font-medium text-saibyl-muted uppercase tracking-wide">
                 How many will push back
               </label>
-              <span className="text-[13px] font-mono text-saibyl-platinum">
+              <span className="text-[13px] font-mono text-saibyl-ink">
                 {(value.adversarialShare * 100).toFixed(0)}%
               </span>
             </div>
@@ -416,7 +434,7 @@ export default function FounderLensStep({
                 const adversarialShare = Number(e.target.value) / 100;
                 onChange((prev) => ({ ...prev, adversarialShare, shareSetByUser: true }));
               }}
-              className="w-full accent-saibyl-gold"
+              className="w-full accent-saibyl-blue"
             />
             {value.icpProfileId ? (
               <p className="text-[11px] text-saibyl-muted mt-2 leading-relaxed">

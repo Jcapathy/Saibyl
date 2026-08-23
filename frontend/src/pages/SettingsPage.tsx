@@ -7,6 +7,16 @@ import { useAuthStore } from '@/store/auth';
 import CreditTopUp from '@/components/billing/CreditTopUp';
 import ValueCase from '@/components/billing/ValueCase';
 import type { BillingStatus } from '@/types';
+import {
+  Action,
+  Card,
+  Deal,
+  Eyebrow,
+  Ground,
+  Notice,
+  PageHeader,
+  Rise,
+} from '@/components/design';
 
 /**
  * Two tabs. It had seven.
@@ -34,6 +44,20 @@ import type { BillingStatus } from '@/types';
  * The rule for adding a tab back: it does something today, for the founder this
  * product is written for. "Coming soon" is not a feature, it is an apology
  * taking up a nav slot.
+ *
+ * ---
+ *
+ * **Restyled onto the design system on 2026-08-23.** It painted
+ * `bg-saibyl-void` over the washed ground, headed itself in `saibyl-white`,
+ * and marked the selected tab in `bg-saibyl-gold` on `text-saibyl-void` —
+ * three legacy dark-theme aliases that still resolve to light values, which is
+ * why a page nobody had converted still looked converted.
+ *
+ * The one thing genuinely missing rather than merely mis-styled: **the credit
+ * balance had no meter here.** The rail footer draws it — a violet-to-blue bar
+ * over the grant — and Settings, the page a founder opens *because* they are
+ * thinking about credits, printed the same number as a bare integer inside the
+ * top-up panel. The artboard's own treatment is now on both.
  */
 
 type SettingsTab = 'billing' | 'account';
@@ -55,7 +79,9 @@ const TABS: { id: SettingsTab; label: string }[] = [
   is priced, which makes it a second source of truth — written down as one,
   knowingly, rather than pretended away.
 
-  TIER_CAPS at time of writing — agents, rounds, platforms, variants:
+  TIER_CAPS at time of writing — agents, rounds, platforms, variants (the
+  backend's own field order; the last of those renders to a founder as the
+  number of message versions a test may carry):
     founder      100,  8,  3, 3
     growth       150, 10,  4, 5
     agency       250, 12,  6, 8
@@ -122,9 +148,20 @@ function getNextPlan(current: string): string | null {
   return PLAN_ORDER[idx + 1];
 }
 
-const cardClass = 'bg-white border border-saibyl-border rounded-2xl';
-const goldBtnClass =
-  'bg-saibyl-blue text-white px-5 py-2.5 rounded-xl font-semibold text-[13px] hover:bg-[#1e5ad9] transition-colors';
+/**
+ * What the account has, and what it started with.
+ *
+ * The grant is read because a bar needs a denominator: "1,317" says nothing
+ * about whether that is a lot, and a meter with no scale is decoration. Same
+ * request, same endpoint, one more field — the rail footer already reads it.
+ */
+interface Credits {
+  balance: number;
+  grant: number;
+}
+
+/** Below a quarter of the original grant, the page says so rather than waits. */
+const LOW_CREDIT_FRACTION = 0.25;
 
 /* ------------------------------------------------------------------ */
 /*  Plan & credits                                                     */
@@ -134,7 +171,7 @@ function BillingTab() {
   const [billing, setBilling] = useState<BillingStatus | null>(null);
   // The balance the top-up panel adds to. Absent renders as no balance rather
   // than as zero, which would read as "you have none".
-  const [credits, setCredits] = useState<number | null>(null);
+  const [credits, setCredits] = useState<Credits | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [leaving, setLeaving] = useState(false);
@@ -150,7 +187,13 @@ function BillingTab() {
       .finally(() => setLoading(false));
     api
       .get('/billing/credits')
-      .then((res) => setCredits(res.data?.balance ?? null))
+      .then((res) =>
+        setCredits(
+          typeof res.data?.balance === 'number'
+            ? { balance: res.data.balance, grant: res.data.grant ?? 0 }
+            : null,
+        ),
+      )
       .catch(() => setCredits(null));
   }, []);
 
@@ -191,53 +234,115 @@ function BillingTab() {
   const agentCap = PLAN_AGENT_CAP[planKey];
   const nextPlan = getNextPlan(planKey);
 
+  const meterPct =
+    credits && credits.grant > 0
+      ? Math.min((credits.balance / credits.grant) * 100, 100)
+      : null;
+  const runningLow =
+    credits !== null &&
+    credits.grant > 0 &&
+    credits.balance / credits.grant < LOW_CREDIT_FRACTION;
+
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-saibyl-blue/45 bg-saibyl-blue/[0.05] p-6">
-        <div className="flex items-start justify-between flex-wrap gap-4">
-          <div>
-            <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-saibyl-blue">
-              Your plan
-            </span>
-            <h2 className="font-semibold text-[26px] text-saibyl-ink capitalize mt-1">
-              {planKey}
-            </h2>
-            <p className="font-mono tabular-nums text-[15px] text-saibyl-silver mt-1">
-              {price}
-              {price !== 'Custom' && price !== 'Free' && (
-                <span className="text-[13px]">/mo</span>
-              )}
-            </p>
-            {agentCap && (
-              <p className="text-[13px] text-saibyl-muted mt-2">
-                Up to {agentCap} people in the room per run
+      {/* `stage` — the one panel this screen is about, and the only one on it
+          with the deepest shadow. It used to be a blue-tinted rectangle with
+          no depth at all; the glass and the shadow are the artboard's own way
+          of saying "this is the subject", which frees the blue to mean
+          "action" everywhere else on the page. */}
+      <Deal index={0}>
+        <Card carries="stage" className="p-6">
+          <div className="flex items-start justify-between flex-wrap gap-4">
+            <div>
+              <Eyebrow>Your plan</Eyebrow>
+              <h2 className="font-semibold text-[26px] text-saibyl-ink capitalize mt-1">
+                {planKey}
+              </h2>
+              <p className="font-mono tabular-nums text-[15px] text-saibyl-silver mt-1">
+                {price}
+                {price !== 'Custom' && price !== 'Free' && (
+                  <span className="text-[13px]">/mo</span>
+                )}
               </p>
-            )}
-          </div>
+              {agentCap && (
+                <p className="text-[13px] text-saibyl-muted mt-2">
+                  Up to {agentCap} people in the room per run
+                </p>
+              )}
 
-          <div className="flex flex-wrap gap-3 items-start">
-            <button
-              onClick={openPortal}
-              className="border border-saibyl-border-light text-saibyl-silver px-4 py-2.5 rounded-xl text-[13px] hover:text-saibyl-ink hover:border-saibyl-blue/40 transition"
-            >
-              {leaving ? 'Opening…' : 'Manage billing'}
-            </button>
-            {nextPlan && (
-              <Link to="/#pricing" className={goldBtnClass}>
-                See the {nextPlan} plan
-              </Link>
-            )}
+              {/* The rail footer's meter, on the page a founder opens because
+                  they are thinking about credits. Same violet→blue gradient,
+                  same 6px bar, same denominator — one treatment, so the number
+                  in the sidebar and the number here are visibly the same fact. */}
+              {credits && (
+                <div className="mt-5 max-w-[15rem]">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-saibyl-muted">Credits left</span>
+                    <span className="font-mono tabular-nums text-saibyl-silver">
+                      {credits.balance.toLocaleString()}
+                    </span>
+                  </div>
+                  {meterPct !== null && (
+                    <div className="h-1.5 mt-1.5 rounded-full bg-[#14294a]/[0.08] overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-[#8b73ee] to-[#286cf0] transition-all"
+                        style={{ width: `${meterPct}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-3 items-start">
+              {/* No `disabled` while the portal opens — it says what it is
+                  doing instead. */}
+              <Action kind="quiet" onClick={openPortal}>
+                {leaving ? 'Opening…' : 'Manage billing'}
+              </Action>
+              {nextPlan && (
+                /* The one gradient on this screen. There is exactly one thing
+                   here the page recommends, and the artboard never draws that
+                   as a flat fill. */
+                <Action as={Link} to="/#pricing">
+                  See the {nextPlan} plan
+                </Action>
+              )}
+            </div>
           </div>
-        </div>
-        <p className="text-[11px] text-saibyl-muted mt-4 leading-relaxed">
-          Payments, cards, receipts and cancellation are all handled in Stripe.
-          We never see your card.
-        </p>
-      </div>
+          <p className="text-[11px] text-saibyl-muted mt-4 leading-relaxed">
+            Payments, cards, receipts and cancellation are all handled in Stripe.
+            We never see your card.
+          </p>
+        </Card>
+      </Deal>
+
+      {/* Amber, not grey. A balance heading toward zero is a state the founder
+          has to act on, and the way out is the panel directly below — so the
+          notice points at it rather than sending them somewhere else. */}
+      {runningLow && (
+        <Deal index={1}>
+          <Notice
+            tone="thin"
+            title="Credits are running low"
+            action={
+              <Action as="a" href="#add-credits" kind="quiet">
+                Add more
+              </Action>
+            }
+          >
+            Runs are charged against this balance. Top it up whenever you like —
+            it is a one-off payment, nothing renews, and the credits do not
+            expire.
+          </Notice>
+        </Deal>
+      )}
 
       {error && <p className="text-[13px] text-saibyl-negative">{error}</p>}
 
-      <CreditTopUp balance={credits} />
+      <div id="add-credits" className="scroll-mt-8">
+        <CreditTopUp balance={credits?.balance ?? null} />
+      </div>
       <ValueCase />
     </div>
   );
@@ -252,44 +357,49 @@ function AccountTab() {
 
   return (
     <div className="space-y-6">
-      <div className={`${cardClass} p-6 space-y-4`}>
-        <div>
-          <p className="text-[12px] text-saibyl-muted">Signed in as</p>
-          <p className="text-[15px] text-saibyl-ink mt-0.5">{user?.email ?? '—'}</p>
-        </div>
-        {org?.name && (
+      <Deal index={0}>
+        <Card carries="meaning" className="p-6 space-y-4">
           <div>
-            <p className="text-[12px] text-saibyl-muted">Workspace</p>
-            <p className="text-[15px] text-saibyl-ink mt-0.5">{org.name}</p>
+            <p className="text-[12px] text-saibyl-muted">Signed in as</p>
+            <p className="text-[15px] text-saibyl-ink mt-0.5">{user?.email ?? '—'}</p>
           </div>
-        )}
-        <button
-          onClick={logout}
-          className="border border-saibyl-border-light text-saibyl-silver px-4 py-2.5 rounded-xl text-[13px] hover:text-saibyl-negative hover:border-saibyl-negative/30 transition"
-        >
-          Sign out
-        </button>
-      </div>
+          {org?.name && (
+            <div>
+              <p className="text-[12px] text-saibyl-muted">Workspace</p>
+              <p className="text-[15px] text-saibyl-ink mt-0.5">{org.name}</p>
+            </div>
+          )}
+          <Action
+            kind="quiet"
+            onClick={logout}
+            className="hover:text-saibyl-negative"
+          >
+            Sign out
+          </Action>
+        </Card>
+      </Deal>
 
       {/* Said plainly rather than shown as a "coming soon" tab. A founder who
           needs their password changed can do it; a nav item that promises it
           and does nothing is what this replaces. */}
-      <div className={`${cardClass} p-6`}>
-        <h3 className="text-[15px] font-medium text-saibyl-ink">
-          Password and account deletion
-        </h3>
-        <p className="text-[13px] text-saibyl-silver mt-1.5 leading-relaxed max-w-xl">
-          Both are handled by email rather than in the app. Write to{' '}
-          <a
-            href="mailto:info@saidolabs.com"
-            className="text-saibyl-blue hover:underline"
-          >
-            info@saidolabs.com
-          </a>{' '}
-          and we will action it. If your account is deleted, your uploads, runs
-          and reports go with it.
-        </p>
-      </div>
+      <Deal index={1}>
+        <Card carries="meaning" className="p-6">
+          <h3 className="text-[15px] font-medium text-saibyl-ink">
+            Password and account deletion
+          </h3>
+          <p className="text-[13px] text-saibyl-silver mt-1.5 leading-relaxed max-w-xl">
+            Both are handled by email rather than in the app. Write to{' '}
+            <a
+              href="mailto:info@saidolabs.com"
+              className="text-saibyl-blue hover:underline"
+            >
+              info@saidolabs.com
+            </a>{' '}
+            and we will action it. If your account is deleted, your uploads, runs
+            and reports go with it.
+          </p>
+        </Card>
+      </Deal>
     </div>
   );
 }
@@ -307,20 +417,38 @@ export default function SettingsPage() {
   const [tab, setTab] = useState<SettingsTab>(initial);
 
   return (
-    <div className="p-6 lg:p-8 bg-saibyl-void min-h-full">
+    <Ground className="p-6 lg:p-8 min-h-full">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-h1 text-saibyl-white">Settings</h1>
+        <Rise>
+          <PageHeader
+            eyebrow="Your workspace"
+            title="Settings"
+            phrase="What you are paying for, and who is signed in."
+          >
+            <p>
+              Two things live here and nothing else does: the plan and the
+              credit balance a run is charged against, and the account those
+              runs belong to. Everything to do with cards, receipts and
+              cancellation happens in Stripe &mdash; we never see a card.
+            </p>
+          </PageHeader>
+        </Rise>
 
+        {/* The selected tab used to be `bg-saibyl-gold` on `text-saibyl-void`
+            — a dark-era pairing that resolved to blue-on-paper and therefore
+            never looked broken. It is now the artboard's own active-nav
+            treatment: a 10% blue wash under ink, so the accent still reads as
+            "the thing you pressed" without spending the page's one gradient. */}
         <div className="flex gap-1 p-1 glass rounded-xl w-fit my-6">
           {TABS.map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
               aria-pressed={tab === t.id}
-              className={`px-5 py-2 rounded-lg text-[13px] font-medium transition-all ${
+              className={`px-5 py-2 rounded-lg text-[13px] font-medium transition-colors ${
                 tab === t.id
-                  ? 'bg-saibyl-gold text-saibyl-void'
-                  : 'text-saibyl-muted hover:text-saibyl-platinum'
+                  ? 'bg-saibyl-blue/10 text-saibyl-ink'
+                  : 'text-saibyl-muted hover:text-saibyl-ink'
               }`}
             >
               {t.label}
@@ -330,6 +458,6 @@ export default function SettingsPage() {
 
         {tab === 'billing' ? <BillingTab /> : <AccountTab />}
       </div>
-    </div>
+    </Ground>
   );
 }

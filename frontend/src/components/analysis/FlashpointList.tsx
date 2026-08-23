@@ -54,7 +54,7 @@ export default function FlashpointList({
               />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-[13px] font-semibold text-saibyl-platinum">
+                  <span className="text-[13px] font-semibold text-saibyl-ink">
                     Round {flash.round_number}
                   </span>
                   <span

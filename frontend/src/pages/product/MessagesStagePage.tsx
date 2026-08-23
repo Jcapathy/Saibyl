@@ -10,6 +10,7 @@ import StageHeader from '@/components/stages/StageHeader';
 import { EmptyState, Guarded, StageError } from '@/components/stages/StagePrimitives';
 import MessagingDocPanel from '@/components/gtm/MessagingDocPanel';
 import { useProduct, useStage } from '@/components/stages/useProduct';
+import { Card } from '@/components/design';
 
 /**
  * Step 5 — which version of this should I spend money on?
@@ -125,8 +126,11 @@ export default function MessagesStagePage() {
           action={{ label: 'Write the versions', href: setupHref }}
         />
       ) : (
-        <section className="glass rounded-2xl p-6 space-y-4">
-          <h2 className="text-[15px] font-medium text-saibyl-platinum">
+        // `.glass` was the pre-canvas card idiom: right ground, right hairline,
+        // no depth at all. On a step whose whole subject is this one panel,
+        // that meant nothing on the screen claimed to be the subject.
+        <Card carries="stage" as="section" className="p-6 space-y-4">
+          <h2 className="text-[15px] font-medium text-saibyl-ink">
             {compared.variants} versions, one room
           </h2>
 
@@ -144,7 +148,12 @@ export default function MessagesStagePage() {
             </>
           ) : (
             <>
-              <p className="text-[13px] text-saibyl-gold">Too close to call.</p>
+              {/* Amber, not the blue accent. "Too close to call" is a caution
+                  a founder is about to spend a budget against, and rendering it
+                  in the same colour as every link on the page is how a refusal
+                  reads as a result. Not grey either — greyed, it reads as a
+                  loss rather than as a finding. */}
+              <p className="text-[13px] text-saibyl-warning">Too close to call.</p>
               <p className="text-[12.5px] text-saibyl-muted leading-relaxed">
                 {board.verdict ||
                   'The versions did not separate. Picking the top row would be picking noise.'}
@@ -157,11 +166,11 @@ export default function MessagesStagePage() {
               label="See the comparison"
               to={`/app/simulations/${compared.id}/compare`}
             />
-            <Link to={setupHref} className="text-[12.5px] text-saibyl-gold hover:underline">
+            <Link to={setupHref} className="text-[12.5px] text-saibyl-blue hover:underline">
               Test another set of versions
             </Link>
           </div>
-        </section>
+        </Card>
       )}
 
       {/* The document the rest of the go-to-market is derived from: the

@@ -87,7 +87,7 @@ function Finding({
       </div>
       {finding.quote &&
         (measured ? (
-          <p className="mt-2 rounded-md border border-saibyl-border-light bg-white px-2.5 py-2 font-mono text-[11.5px] text-saibyl-platinum leading-relaxed">
+          <p className="mt-2 rounded-md border border-saibyl-border-light bg-white px-2.5 py-2 font-mono text-[11.5px] text-saibyl-ink leading-relaxed">
             {finding.quote}
           </p>
         ) : (
@@ -98,8 +98,8 @@ function Finding({
       <p className="text-[12.5px] text-saibyl-muted mt-1.5 leading-relaxed">
         {finding.why}
       </p>
-      <p className="text-[12.5px] text-saibyl-platinum mt-1.5 leading-relaxed">
-        <span className="font-medium text-saibyl-gold">What to change: </span>
+      <p className="text-[12.5px] text-saibyl-ink mt-1.5 leading-relaxed">
+        <span className="font-medium text-saibyl-blue">What to change: </span>
         {finding.fix}
       </p>
     </li>
@@ -127,7 +127,7 @@ export function DimensionCard({ dimension }: { dimension: SiteDimension }) {
     <div className="rounded-xl border border-saibyl-border bg-white p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[13.5px] font-medium text-saibyl-platinum">
+          <p className="text-[13.5px] font-medium text-saibyl-ink">
             {words.name}
           </p>
           {words.help && (
@@ -164,7 +164,7 @@ export function DimensionCard({ dimension }: { dimension: SiteDimension }) {
 
       {rest.length > 0 && (
         <details className="mt-2">
-          <summary className="cursor-pointer text-[12px] text-saibyl-gold hover:underline select-none">
+          <summary className="cursor-pointer text-[12px] text-saibyl-blue hover:underline select-none">
             Show {rest.length} more
           </summary>
           <ul className="mt-2 space-y-2">
@@ -220,7 +220,7 @@ export default function SiteCritique({
           <button
             type="button"
             onClick={onRetry}
-            className="mt-2.5 text-[12px] text-saibyl-gold hover:underline"
+            className="mt-2.5 text-[12px] text-saibyl-blue hover:underline"
           >
             Try the address again, or paste a different one
           </button>
@@ -245,7 +245,7 @@ export default function SiteCritique({
           <button
             type="button"
             onClick={onRetry}
-            className="mt-2.5 text-[12px] text-saibyl-gold hover:underline"
+            className="mt-2.5 text-[12px] text-saibyl-blue hover:underline"
           >
             Run the check again
           </button>
@@ -305,7 +305,7 @@ export default function SiteCritique({
           <p className="text-[11px] font-medium text-saibyl-silver uppercase tracking-wider">
             What a first-time reader takes away
           </p>
-          <p className="text-[13.5px] text-saibyl-platinum mt-1 leading-relaxed">
+          <p className="text-[13.5px] text-saibyl-ink mt-1 leading-relaxed">
             &ldquo;{critique.page_takeaway}&rdquo;
           </p>
         </div>

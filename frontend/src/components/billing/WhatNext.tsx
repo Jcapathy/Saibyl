@@ -59,7 +59,7 @@ export default function WhatNext({ productId }: { productId?: string | null }) {
           {productId ? (
             <Link
               to={`/app/products/${productId}/answers`}
-              className="inline-flex items-center gap-1.5 mt-3 px-4 py-2 rounded-xl bg-saibyl-blue text-white font-semibold text-[12.5px] hover:bg-saibyl-gold-hover transition-colors self-start"
+              className="inline-flex items-center gap-1.5 mt-3 px-4 py-2 rounded-xl bg-saibyl-blue text-white font-semibold text-[12.5px] hover:bg-saibyl-blue-hover transition-colors self-start"
             >
               Build the answers
               <ArrowRight className="w-3.5 h-3.5" />
@@ -90,7 +90,7 @@ export default function WhatNext({ productId }: { productId?: string | null }) {
               rot quietly — this one goes where the card is. */}
           <Link
             to="/app/validate"
-            className="inline-flex items-center gap-1.5 mt-3 px-4 py-2 rounded-xl bg-saibyl-blue text-white font-semibold text-[12.5px] hover:bg-saibyl-gold-hover transition-colors self-start"
+            className="inline-flex items-center gap-1.5 mt-3 px-4 py-2 rounded-xl bg-saibyl-blue text-white font-semibold text-[12.5px] hover:bg-saibyl-blue-hover transition-colors self-start"
           >
             Check who owns it
             <ArrowRight className="w-3.5 h-3.5" />
@@ -117,7 +117,7 @@ export default function WhatNext({ productId }: { productId?: string | null }) {
           {productId ? (
             <Link
               to={`/app/products/${productId}/audience`}
-              className="inline-flex items-center gap-1.5 mt-3 px-4 py-2 rounded-xl bg-saibyl-blue text-white font-semibold text-[12.5px] hover:bg-saibyl-gold-hover transition-colors self-start"
+              className="inline-flex items-center gap-1.5 mt-3 px-4 py-2 rounded-xl bg-saibyl-blue text-white font-semibold text-[12.5px] hover:bg-saibyl-blue-hover transition-colors self-start"
             >
               Read my page
               <ArrowRight className="w-3.5 h-3.5" />

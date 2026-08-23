@@ -22,10 +22,10 @@ export default function StageHeader({ stage }: { stage: StageState }) {
   return (
     <header className="space-y-4">
       <div>
-        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-saibyl-gold">
+        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-saibyl-blue">
           Step {stage.number} of 5
         </p>
-        <h1 className="text-h1 text-saibyl-white mt-1.5">{stage.label}</h1>
+        <h1 className="text-h1 text-saibyl-ink mt-1.5">{stage.label}</h1>
         <p className="text-[13.5px] text-saibyl-silver mt-1.5">{def.ask}</p>
       </div>
 

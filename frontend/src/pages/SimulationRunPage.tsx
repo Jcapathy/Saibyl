@@ -1,11 +1,32 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useParams } from 'react-router-dom';
 import { SimulationSocket } from '@/lib/websocket';
 import { useSimulationLiveStore } from '@/store/simulation';
 import type { SimulationStreamEvent, VisualizerSnapshot } from '@/store/simulation';
 import { TERMINAL_STATUSES } from '@/lib/constants';
 import api from '@/lib/api';
+import { EmptyState } from '@/components/stages/StagePrimitives';
+import { Card, Deal, Eyebrow, Ground, Notice, PageHeader, Rise } from '@/components/design';
+
+/**
+ * The one genuinely live surface in the app.
+ *
+ * It was also the one page still painting `bg-saibyl-void` — a flat `#f8fbff`
+ * laid over the radial wash `<body>` carries — with its own `saibyl-platinum`
+ * and `saibyl-gold` legacy aliases on top. Those names resolve to light values,
+ * which is exactly why nobody noticed the page had never been converted.
+ *
+ * Two things are true of this screen and of no other, and both are said with
+ * the design system's own vocabulary rather than hand-rolled here:
+ *
+ *   - the eyebrow's dot pulses (`PageHeader live`) while the run is open. It is
+ *     a state, not decoration, and it stops meaning anything the moment a
+ *     static surface wears it;
+ *   - a run in progress with nothing to show yet is a cyan `Notice tone="live"`,
+ *     not grey body text.
+ *
+ * The polling and the socket wiring below are untouched.
+ */
 
 const PLATFORM_STYLES: Record<string, { bg: string; text: string; dot: string }> = {
   Twitter:   { bg: 'bg-[#286cf0]/10', text: 'text-[#1e5ad9]',  dot: '#286cf0' },
@@ -18,32 +39,38 @@ const PLATFORM_STYLES: Record<string, { bg: string; text: string; dot: string }>
 };
 
 /* ── Event Card ── */
+/**
+ * One reaction. `carries="density"` — a hairline, no shadow: these arrive by
+ * the hundred and shadowing every one of them turns the page to soup.
+ *
+ * `Deal` at index 0 rather than a framer-motion `initial`/`animate` pair. The
+ * cards stream in one at a time, so there is no sequence to stagger — what is
+ * wanted is the system's own 450ms slide on each arrival, and unlike the
+ * framer version it collapses to nothing under `prefers-reduced-motion`.
+ */
 function EventCard({ evt }: { evt: SimulationStreamEvent }) {
   const platform = evt.platform ?? undefined;
   const style = platform ? PLATFORM_STYLES[platform] : null;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 12 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.18 }}
-      className="rounded-xl bg-white border border-saibyl-border p-3 text-xs"
-    >
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="font-medium text-saibyl-platinum text-[12px] truncate max-w-[120px]">
-          {evt.event_type}
-        </span>
-        {platform && style && (
-          <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono ${style.bg} ${style.text}`}>
-            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: style.dot }} />
-            {platform}
+    <Deal index={0}>
+      <Card carries="density" className="p-3 text-xs">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="font-medium text-saibyl-ink text-[12px] truncate max-w-[120px]">
+            {evt.event_type}
           </span>
+          {platform && style && (
+            <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono ${style.bg} ${style.text}`}>
+              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: style.dot }} />
+              {platform}
+            </span>
+          )}
+        </div>
+        {evt.content && (
+          <p className="text-saibyl-muted text-[11px] leading-relaxed line-clamp-2">{evt.content}</p>
         )}
-      </div>
-      {evt.content && (
-        <p className="text-saibyl-muted text-[11px] leading-relaxed line-clamp-2">{evt.content}</p>
-      )}
-    </motion.div>
+      </Card>
+    </Deal>
   );
 }
 
@@ -105,84 +132,78 @@ export default function SimulationRunPage() {
 
   const recentEvents = events.slice(-200);
 
+  /* Why nobody spoke, in the words of whichever ending actually happened. A
+     stopped run and a failed one are not the same news. */
+  const silentBody =
+    simStatus === 'failed'
+      ? 'This run failed before anyone said anything.'
+      : simStatus === 'stopped'
+        ? 'You stopped this run before anyone said anything.'
+        : 'This run finished without anyone saying anything.';
+
   return (
-    <div className="h-screen flex flex-col bg-saibyl-void overflow-hidden">
-      {/* Top bar */}
-      <div className="bg-saibyl-deep border-b border-saibyl-border px-6 py-3 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-4">
-          <h1 className="text-[15px] font-bold text-saibyl-platinum">Watching it happen</h1>
-          <AnimatePresence mode="wait">
-            {isRunning ? (
-              <motion.span
-                key="running"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                className="flex items-center gap-1.5 text-[11px] font-mono px-2.5 py-1 rounded-full bg-saibyl-positive/15 text-saibyl-positive"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-saibyl-positive animate-pulse" />
-                Running
-              </motion.span>
-            ) : (
-              <motion.span
-                key="stopped"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                className="flex items-center gap-1.5 text-[11px] font-mono px-2.5 py-1 rounded-full bg-saibyl-elevated text-saibyl-muted"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-saibyl-muted" />
-                Stopped
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </div>
-        <div className="flex items-center gap-6 text-[12px] font-mono">
-          <div className="flex items-center gap-2">
-            <span className="text-saibyl-muted">Round</span>
-            <span className="font-bold text-saibyl-gold">{roundNumber}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-saibyl-muted">Reactions so far</span>
-            <span className="font-bold text-saibyl-blue">{totalEvents.toLocaleString()}</span>
-          </div>
-        </div>
-      </div>
+    <Ground className="h-screen flex flex-col overflow-hidden">
+      <Rise className="shrink-0 px-6 lg:px-8 pt-6 pb-5 border-b border-saibyl-border">
+        <PageHeader
+          /* The one place in the app that earns the pulsing dot. The run is
+             genuinely open, and the eyebrow says so for as long as it is. */
+          eyebrow={isRunning ? 'Running now' : 'Not running'}
+          live={isRunning}
+          title="Watching it happen"
+          mark={
+            <>
+              Round{' '}
+              <span className="font-mono font-bold text-saibyl-ink">{roundNumber}</span>
+              {' · '}
+              <span className="font-mono font-bold text-saibyl-blue">
+                {totalEvents.toLocaleString()}
+              </span>{' '}
+              reactions so far
+            </>
+          }
+          phrase="The room is talking. This is it, as it lands."
+        >
+          {/* Two lines, deliberately. This page is mostly feed, and a header
+              that teaches for five lines is a header that pushes the thing it
+              is describing off the screen. */}
+          <p>
+            Each card is one person reacting, in the order they posted. Close
+            this page whenever you like &mdash; the run keeps going, and the
+            write-up waits on the run&rsquo;s own page.
+          </p>
+        </PageHeader>
+      </Rise>
 
       {/* Main content */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden min-h-0">
         {/* Center — main visualization area */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Agent grid / activity area */}
           <div className="flex-1 p-5 overflow-auto">
             {recentEvents.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center gap-3 text-center">
+              <div className="h-full flex flex-col items-center justify-center">
                 {isRunning ? (
-                  <>
-                    <div className="w-12 h-12 rounded-2xl bg-saibyl-gold/10 flex items-center justify-center">
-                      <svg className="w-6 h-6 text-saibyl-gold animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
-                      </svg>
-                    </div>
-                    <p className="text-saibyl-muted text-sm">Waiting for the first reaction…</p>
-                    <p className="text-saibyl-muted/50 text-[12px] font-mono">They show up here as people post</p>
-                  </>
+                  /* Cyan, because something is happening. This was grey body
+                     text under a pulsing lightning bolt, which read as an
+                     error state on a run that was working perfectly. */
+                  <Notice
+                    tone="live"
+                    title="Waiting for the first reaction"
+                    className="max-w-md"
+                  >
+                    The room is being spoken to now. Reactions appear here the
+                    moment somebody posts one, and the feed on the right keeps
+                    the running order.
+                  </Notice>
                 ) : (
-                  <>
-                    <p className="text-saibyl-muted text-sm">
-                      {simStatus === 'failed'
-                        ? 'This run failed before anyone said anything.'
-                        : simStatus === 'stopped'
-                          ? 'You stopped this run before anyone said anything.'
-                          : 'This run finished without anyone saying anything.'}
-                    </p>
-                    <Link
-                      to={`/app/simulations/${id}`}
-                      className="text-saibyl-gold text-sm hover:underline"
-                    >
-                      ← Back to this run
-                    </Link>
-                  </>
+                  <EmptyState
+                    headline="Nobody said anything"
+                    body={silentBody}
+                    action={{
+                      label: 'Back to this run',
+                      href: `/app/simulations/${id}`,
+                    }}
+                  />
                 )}
               </div>
             ) : (
@@ -203,24 +224,24 @@ export default function SimulationRunPage() {
               measured version lives on the report. */}
         </div>
 
-        {/* Right panel — live event feed */}
-        <div className="w-[300px] bg-saibyl-deep border-l border-saibyl-border flex flex-col shrink-0">
+        {/* Right panel — live event feed. Glass over the wash, as the rail is
+            glass on the artboard, rather than the opaque panel that used to
+            cover the ground here. */}
+        <div className="w-[300px] bg-white/[0.72] backdrop-blur-[18px] border-l border-saibyl-border flex flex-col shrink-0">
           <div className="px-4 py-3 border-b border-saibyl-border">
-            <h2 className="text-[12px] font-semibold text-saibyl-platinum uppercase tracking-widest">As it happens</h2>
+            <Eyebrow>As it happens</Eyebrow>
           </div>
           <div ref={feedRef} className="flex-1 overflow-y-auto p-3 space-y-2">
-            <AnimatePresence initial={false}>
-              {recentEvents.length === 0 ? (
-                <p className="text-[11px] text-saibyl-muted text-center mt-10 font-mono">Nothing yet…</p>
-              ) : (
-                recentEvents.slice(-50).map((evt, i) => (
-                  <EventCard key={i} evt={evt} />
-                ))
-              )}
-            </AnimatePresence>
+            {recentEvents.length === 0 ? (
+              <p className="text-[11px] text-saibyl-muted text-center mt-10 font-mono">Nothing yet…</p>
+            ) : (
+              recentEvents.slice(-50).map((evt, i) => (
+                <EventCard key={i} evt={evt} />
+              ))
+            )}
           </div>
         </div>
       </div>
-    </div>
+    </Ground>
   );
 }

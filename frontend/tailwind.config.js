@@ -35,6 +35,13 @@ export default {
           purple: '#8b73ee',    // alias → Insight Violet
           cyan: '#35c7d5',
           blue: '#286cf0',
+          /* The hover pair for `blue`, and it did not exist until 2026-08-23.
+             `gold-hover` did — so the app-wide sweep off the legacy aliases
+             (`gold` → `blue`) would have turned every `saibyl-gold-hover` into
+             a `saibyl-blue-hover` that Tailwind resolves to nothing, silently
+             dropping the hover state on every button that had one. Same value
+             `gold-hover` always held. */
+          'blue-hover': '#1e5ad9',
           violet: '#8b73ee',
           platinum: '#14294a',  // primary text — ink
           white: '#14294a',     // legacy "white text" → ink on the light ground

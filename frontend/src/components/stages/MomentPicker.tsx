@@ -60,7 +60,7 @@ export default function MomentPicker({
     return (
       <p className="text-[12px] text-saibyl-muted leading-relaxed">
         We could not load the list of moments, so this run will use{' '}
-        <span className="text-saibyl-platinum">
+        <span className="text-saibyl-ink">
           {source === 'last_run' ? 'the same one as last time' : 'our default'}
         </span>
         . Reload the page to pick a different one.
@@ -72,7 +72,7 @@ export default function MomentPicker({
 
   return (
     <div>
-      <p className="text-[12.5px] text-saibyl-platinum">Where is the company right now?</p>
+      <p className="text-[12.5px] text-saibyl-ink">Where is the company right now?</p>
       <p className="text-[11.5px] text-saibyl-muted mt-0.5 mb-2.5 leading-relaxed">
         {source === 'last_run'
           ? 'Set to whatever you picked last time. Change it if things have moved on.'
@@ -90,7 +90,7 @@ export default function MomentPicker({
               className={`px-3.5 py-1.5 rounded-lg border text-[12.5px] transition-colors ${
                 active
                   ? 'border-saibyl-blue/45 bg-saibyl-blue/[0.07] text-saibyl-ink'
-                  : 'border-saibyl-border bg-white text-saibyl-muted hover:border-saibyl-border-light hover:text-saibyl-platinum'
+                  : 'border-saibyl-border bg-white text-saibyl-muted hover:border-saibyl-border-light hover:text-saibyl-ink'
               }`}
             >
               {option.label}

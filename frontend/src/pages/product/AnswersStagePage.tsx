@@ -18,6 +18,7 @@ import StageHeader from '@/components/stages/StageHeader';
 import { EmptyState, Guarded, StageError } from '@/components/stages/StagePrimitives';
 import AnswerPackPanel from '@/components/gtm/AnswerPackPanel';
 import { useProduct, useStage } from '@/components/stages/useProduct';
+import { Card } from '@/components/design';
 
 /**
  * Step 3 — what do I say to the people who said no?
@@ -121,7 +122,7 @@ export default function AnswersStagePage() {
       ) : (
         <>
           <section className="space-y-3">
-            <h2 className="text-[15px] font-medium text-saibyl-platinum">
+            <h2 className="text-[15px] font-medium text-saibyl-ink">
               What you would say back
             </h2>
             <ul className="space-y-2">
@@ -131,7 +132,7 @@ export default function AnswersStagePage() {
                   className="rounded-xl border border-saibyl-border bg-white px-4 py-3.5"
                 >
                   <div className="flex items-baseline justify-between gap-3">
-                    <p className="text-[13.5px] text-saibyl-platinum">{asset.title}</p>
+                    <p className="text-[13.5px] text-saibyl-ink">{asset.title}</p>
                     <span className="text-[11px] text-saibyl-muted shrink-0">
                       {ASSET_TYPE_LABELS[asset.asset_type] ?? asset.asset_type}
                     </span>
@@ -145,11 +146,11 @@ export default function AnswersStagePage() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-[15px] font-medium text-saibyl-platinum">
+            <h2 className="text-[15px] font-medium text-saibyl-ink">
               Did it work?
             </h2>
             {result === null ? (
-              <div className="glass rounded-2xl p-6">
+              <Card carries="stage" className="p-6">
                 <p className="text-[12.5px] text-saibyl-muted leading-relaxed">
                   Nothing has been tested yet. Publishing these and running the
                   same room again is what turns them from a plausible answer into
@@ -162,7 +163,7 @@ export default function AnswersStagePage() {
                     to={source ? `/app/simulations/${source.id}` : `/app/products/${product.id}/reactions`}
                   />
                 </div>
-              </div>
+              </Card>
             ) : (
               <>
                 <p className="text-[13px] text-saibyl-silver">
@@ -176,7 +177,7 @@ export default function AnswersStagePage() {
                       className="rounded-xl border border-saibyl-border bg-white px-4 py-3.5"
                     >
                       <div className="flex items-baseline justify-between gap-3">
-                        <p className="text-[13.5px] text-saibyl-platinum">
+                        <p className="text-[13.5px] text-saibyl-ink">
                           {delta.label}
                         </p>
                         <span
@@ -199,7 +200,7 @@ export default function AnswersStagePage() {
                 {source && (
                   <Link
                     to={`/app/simulations/${source.id}`}
-                    className="inline-block text-[12.5px] text-saibyl-gold hover:underline"
+                    className="inline-block text-[12.5px] text-saibyl-blue hover:underline"
                   >
                     See the full before-and-after
                   </Link>

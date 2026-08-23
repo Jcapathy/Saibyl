@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, CircleAlert, CircleCheck, Info } from 'lucide-react';
 
 import type { InheritedLine, MissingInput, StageAction, StaleResult } from '@/lib/stages';
+import { Card, actionSurface, noticeSurface } from '@/components/design';
 
 /**
  * The pieces every stage is built from.
@@ -22,6 +23,20 @@ import type { InheritedLine, MissingInput, StageAction, StaleResult } from '@/li
  * where they close the tab.
  */
 
+/**
+ * The unblocking button, at the small size this file uses in three places.
+ *
+ * It wears `sb-action` — the design system's gradient with its own glow —
+ * rather than the flat `bg-saibyl-blue` fill all three carried before. This
+ * one constant is why the change is worth making here: every stage page in the
+ * app renders its "do this first" button through `Missing`, `Stale` or
+ * `EmptyState`, so the primary action on the whole rail was a flat rectangle
+ * and is now the artboard's.
+ *
+ * The padding is the caller's, not the primitive's — this is a call site.
+ */
+const ACTION_SMALL = `inline-flex items-center gap-1.5 mt-3 px-3.5 py-1.5 rounded-xl text-[12px] font-extrabold transition-colors sb-lift ${actionSurface('primary')}`;
+
 /* ------------------------------------------------------------------ */
 /*  Inherited state                                                    */
 /* ------------------------------------------------------------------ */
@@ -40,7 +55,7 @@ export function Inherited({ lines }: { lines: InheritedLine[] }) {
         <Link
           key={`${line.label}-${line.href}`}
           to={line.href}
-          className="group flex items-center gap-2 text-[12px] text-saibyl-silver hover:text-saibyl-platinum transition-colors"
+          className="group flex items-center gap-2 text-[12px] text-saibyl-silver hover:text-saibyl-ink transition-colors"
         >
           <CircleCheck className="w-3.5 h-3.5 text-saibyl-positive shrink-0" />
           <span className="underline decoration-[#14294a]/20 underline-offset-2 group-hover:decoration-[#14294a]/45">
@@ -72,20 +87,18 @@ export function Missing({
   tone: 'blocking' | 'degrading';
 }) {
   const blocking = tone === 'blocking';
+  /* The design system's own two tones, rather than a third set of hex values
+     typed here. **The `degrading` case was rendering wrong.** Its colour was
+     `saibyl-gold`, and the docstring under `Stale` still explains that "gold on
+     this rail means you can still fix this before it costs you" — but `gold`
+     was remapped to the blue accent when the theme flipped to light, so for
+     months a caution about a thinner answer has been rendering in exactly the
+     same blue as every ordinary link on the page. Amber is what that sentence
+     meant. */
+  const { block, heading } = noticeSurface(blocking ? 'blocked' : 'thin');
   return (
-    <div
-      data-stage-declares="missing"
-      className={`rounded-xl border p-4 ${
-        blocking
-          ? 'border-[#8b73ee]/35 bg-[#8b73ee]/[0.08]'
-          : 'border-saibyl-gold/25 bg-saibyl-gold/[0.06]'
-      }`}
-    >
-      <p
-        className={`flex items-start gap-2 text-[13px] font-medium ${
-          blocking ? 'text-[#6a4fe0]' : 'text-saibyl-gold'
-        }`}
-      >
+    <div data-stage-declares="missing" className={`rounded-xl p-4 ${block}`}>
+      <p className={`flex items-start gap-2 text-[13px] font-medium ${heading}`}>
         {blocking ? (
           <CircleAlert className="w-4 h-4 shrink-0 mt-px" />
         ) : (
@@ -99,7 +112,7 @@ export function Missing({
       {input.action && (
         <Link
           to={input.action.href}
-          className="inline-flex items-center gap-1.5 mt-3 px-3.5 py-1.5 rounded-lg bg-saibyl-gold text-saibyl-void text-[12px] font-semibold hover:bg-saibyl-gold-hover transition-colors"
+          className={ACTION_SMALL}
         >
           {input.action.label}
           <ArrowRight className="w-3.5 h-3.5" />
@@ -139,7 +152,7 @@ export function Stale({ result }: { result: StaleResult }) {
       {result.action && (
         <Link
           to={result.action.href}
-          className="inline-flex items-center gap-1.5 mt-3 px-3.5 py-1.5 rounded-lg bg-saibyl-gold text-saibyl-void text-[12px] font-semibold hover:bg-saibyl-gold-hover transition-colors"
+          className={ACTION_SMALL}
         >
           {result.action.label}
           <ArrowRight className="w-3.5 h-3.5" />
@@ -179,10 +192,15 @@ export function Guarded({
   busyLabel?: string;
   tone?: 'primary' | 'quiet';
 }) {
+  /* Both tones now come from the design system rather than from two hand-typed
+     class strings. `Guarded` is the rail's main control — it is what runs a
+     stage — so it was the single most important flat-blue rectangle in the
+     app. `quiet` keeps its slightly wider padding because it sits beside the
+     primary and the pair reads better matched than mathematically equal. */
   const classes =
     tone === 'primary'
-      ? 'inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-saibyl-gold text-saibyl-void font-semibold text-[13px] hover:bg-saibyl-gold-hover transition-colors'
-      : 'inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-saibyl-border-light text-saibyl-ink text-[13px] hover:bg-[#14294a]/[0.04] transition-colors';
+      ? `inline-flex items-center gap-1.5 px-5 py-2 rounded-xl font-extrabold text-[13px] transition-colors sb-lift ${actionSurface('primary')}`
+      : `inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] transition-colors ${actionSurface('quiet')}`;
 
   if (blockedBy) {
     return (
@@ -196,7 +214,7 @@ export function Guarded({
         {blockedBy.action && (
           <Link
             to={blockedBy.action.href}
-            className="inline-flex items-center gap-1.5 mt-3 px-3.5 py-1.5 rounded-lg bg-saibyl-gold text-saibyl-void text-[12px] font-semibold hover:bg-saibyl-gold-hover transition-colors"
+            className={ACTION_SMALL}
           >
             {blockedBy.action.label}
             <ArrowRight className="w-3.5 h-3.5" />
@@ -255,18 +273,24 @@ export function EmptyState({
   secondary?: StageAction;
 }) {
   return (
-    <div
-      className="glass rounded-2xl p-10 text-center"
+    /* `carries="stage"`, because an empty state IS the screen when it renders
+       — there is nothing else on it to be the subject. `.glass` gave it the
+       right ground and no depth at all, so the one thing on an otherwise blank
+       page sat flat on the wash. One edit, and it applies to every step, every
+       list and every module that has nothing in it yet. */
+    <Card
+      carries="stage"
+      className="p-10 text-center"
       data-empty-state="true"
     >
-      <p className="text-[15px] font-medium text-saibyl-platinum">{headline}</p>
+      <p className="text-[15px] font-medium text-saibyl-ink">{headline}</p>
       <p className="text-[13px] text-saibyl-muted mt-2 max-w-md mx-auto leading-relaxed">
         {body}
       </p>
       <div className="flex items-center justify-center gap-3 mt-5">
         <Link
           to={action.href}
-          className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-saibyl-gold text-saibyl-void font-semibold text-[13px] hover:bg-saibyl-gold-hover transition-colors"
+          className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-saibyl-blue text-saibyl-paper font-semibold text-[13px] hover:bg-saibyl-blue-hover transition-colors"
         >
           {action.label}
           <ArrowRight className="w-3.5 h-3.5" />
@@ -274,13 +298,13 @@ export function EmptyState({
         {secondary && (
           <Link
             to={secondary.href}
-            className="text-[13px] text-saibyl-muted hover:text-saibyl-platinum transition-colors"
+            className="text-[13px] text-saibyl-muted hover:text-saibyl-ink transition-colors"
           >
             {secondary.label}
           </Link>
         )}
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -303,7 +327,7 @@ export function StageError({
         <button
           type="button"
           onClick={retry}
-          className="mt-2.5 text-[12px] text-saibyl-gold hover:underline"
+          className="mt-2.5 text-[12px] text-saibyl-blue hover:underline"
         >
           Try again
         </button>

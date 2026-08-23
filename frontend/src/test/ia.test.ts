@@ -20,9 +20,12 @@
  * cannot grow, and it is visible rather than hidden behind a convenient glob.
  * A test scoped to only the files that pass it is a test of the scope.
  */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
-import { railFiles, renderedStrings, sourceFiles } from './source';
+import { railFiles, renderedStrings, sourceFiles, SRC } from './source';
 import { clickDepths, routeNodes } from './routes';
 
 /* ================================================================== */
@@ -124,7 +127,20 @@ describe('2. No dead ends', () => {
       check that the guarantee is the one actually being used.
     */
     const NEARBY = 12;
-    const EMPTY_PHRASE = /(No .{0,40} yet|Nothing .{0,40} yet)/i;
+    /* The phrase has to *finish* on "yet".
+     *
+     * An empty state is a claim that a surface has nothing on it, and it stops
+     * there: "No versions tested yet", "Nothing to report yet." Reassurance
+     * inside a form hint reads the same for four words and then keeps going —
+     * `NewProductPage` says "And nothing written yet **is fine** — the next step
+     * takes a deck or a landing page", which the old pattern flagged as a dead
+     * end on a screen whose whole point is the two buttons under it.
+     *
+     * Requiring a sentence boundary is what separates the two, and it is a
+     * tighter rule rather than a looser one: widening the proximity window
+     * instead would have let a real dead end pass anywhere in twice the file.
+     */
+    const EMPTY_PHRASE = /(No |Nothing ).{0,40} yet(?=[.!?"'`<}]|\s*$)/i;
     /* `Action` joined the list on 2026-08-23 with the design primitive of that
        name. It is polymorphic — `<Action as={Link} to=…>` — so the raw `<Link`
        it used to render no longer appears in the source, and without this the
@@ -180,6 +196,55 @@ describe('3. Never a grey button', () => {
       for (const match of file.code.matchAll(/\bdisabled\b/g)) {
         const line = file.code.slice(0, match.index).split('\n').length;
         offenders.push(`${file.path}:${line}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('nowhere in the app is a control greyed by a precondition', () => {
+    /* **The rail was never where this rule was being broken.**
+     *
+     * The check above scans `railFiles()` and has always passed. On 2026-08-23
+     * a sweep found three live grey buttons outside that set — in
+     * `founder/`, `marketing/` — each greyed by a precondition with no
+     * explanation beside it:
+     *
+     *   disabled={!projectId || synthesizing}
+     *   disabled={saving || filled === 1}
+     *   disabled={selected.length === 0 || launching}
+     *
+     * The rule the founder wrote has no "on the rail" in it. A control either
+     * runs and states what its answer will be missing, or it is blocked with
+     * the reason and the button that unblocks it.
+     *
+     * **`disabled={busy}` is not that, and stays allowed.** It does not
+     * withhold an action on a condition the founder could fix — the click
+     * already landed and the answer is on its way, so re-firing it would
+     * double-charge. `StagePrimitives`' own `Guarded` draws exactly this line:
+     * "`busy` is separate and does not disable anything conceptually — it says
+     * the click already landed."
+     */
+    /* Matched on the TAIL of the identifier, not the whole of it, because a
+       busy flag is routinely scoped by what it is busy with —
+       `variantResetting`, `interviewLoading`. Anchoring to the whole name
+       flagged both of those as preconditions, which would have pushed somebody
+       to "fix" a correct double-submit guard. */
+    const BUSY =
+      /(saving|loading|busy|submitting|launching|drafting|running|synthesizing|regenerating|resetting|uploading|deleting|purging|exporting|generating|fetching|refreshing|working|pending|inflight)$/i;
+
+    const offenders: string[] = [];
+    for (const file of sourceFiles()) {
+      // `disabled={…}` only — `disabled:opacity-40` inside a className is a
+      // Tailwind style for the state, not a decision to enter it.
+      for (const match of file.code.matchAll(/\bdisabled=\{([^}]*)\}/g)) {
+        const expr = match[1].trim();
+        // Every operand of the guard must be a busy flag. One precondition in
+        // the expression is enough to make the button grey for a reason the
+        // founder can act on, which is the case this rule exists for.
+        const operands = expr.split(/\|\||&&/).map((s) => s.trim().replace(/^!/, ''));
+        if (operands.every((o) => BUSY.test(o))) continue;
+        const line = file.code.slice(0, match.index).split('\n').length;
+        offenders.push(`${file.path}:${line} — disabled={${expr}}`);
       }
     }
     expect(offenders).toEqual([]);
@@ -481,8 +546,18 @@ describe('5. Reachability', () => {
 const DESIGN_PRIMITIVES =
   /from\s+['"](?:@\/|(?:\.\.?\/)+)components\/design(?:\/[^'"]*)?['"]/;
 
-/** `<h1>` — the heading a page owns, as opposed to one inside a card. */
-const TOP_LEVEL_HEADING = /<h1[\s/>]/;
+/**
+ * A page-level heading — either spelled out, or composed.
+ *
+ * `<PageHeader>` had to join this on 2026-08-23, and the reason is a hole this
+ * check had from the day it was written: the primitive **renders the `<h1>`
+ * itself**, so the moment a page was converted it stopped matching `<h1`,
+ * dropped out of the scan entirely, and left through the same door as a page
+ * with no heading at all. The sweep would have "passed" by making its own
+ * subject invisible — and the canary counting the scanned pages would have gone
+ * down, not up, as the work succeeded.
+ */
+const TOP_LEVEL_HEADING = /<h1[\s/>]|<PageHeader[\s/>]/;
 
 /**
  * Pages that carry the system directly instead of through the primitives.
@@ -517,37 +592,16 @@ const SYSTEM_ORIGIN: Record<string, string> = {
  * Never add an entry to make a red suite green. An entry here is a promise
  * that somebody will come back, and the number of promises is the debt.
  */
-const AWAITING_THE_SWEEP = [
-  // The rail and the modules a founder pays for.
+const AWAITING_THE_SWEEP: string[] = [
+  // Empty, as of 2026-08-23. Every page behind the login composes
+  // `components/design/`.
   //
-  // `CapitalPage` left this list on 2026-08-23: it is the fifth stage, and it
-  // now composes `Ground` and `PageHeader` like the other four. Its two panels
-  // still style from `capital.css` — that is component debt, not page debt,
-  // and this list is about pages that own an `<h1>`.
-  'src/pages/DashboardPage.tsx',
-  'src/pages/GuidePage.tsx',
-  'src/pages/SettingsPage.tsx',
-  'src/pages/product/NewProductPage.tsx',
-  // The way in.
-  'src/pages/LoginPage.tsx',
-  'src/pages/SignupPage.tsx',
-  // Prospecting.
-  'src/pages/ProspectDetailPage.tsx',
-  'src/pages/ProspectDiscoverPage.tsx',
-  'src/pages/ProspectSettingsPage.tsx',
-  'src/pages/ProspectsPage.tsx',
-  // The reports, and the print view that is read on paper.
-  'src/pages/ComparisonPage.tsx',
-  'src/pages/ReportPrintPage.tsx',
-  'src/pages/ReportViewerPage.tsx',
-  // Surfaces the rail does not lead to. Reachable on purpose — see AppLayout.
-  'src/pages/NewSimulationPage.tsx',
-  'src/pages/PackLibraryPage.tsx',
-  'src/pages/ProjectDetailPage.tsx',
-  'src/pages/ProjectsPage.tsx',
-  'src/pages/SimulationDetailPage.tsx',
-  'src/pages/SimulationRunPage.tsx',
-  'src/pages/SimulationsPage.tsx',
+  // **Keep it empty.** The list was twenty-six entries when it was written and
+  // it only ever shrank, which was the design: adding a page that renders a
+  // heading without the primitives fails, and converting a page while leaving
+  // its name here also fails. An entry is a promise somebody will come back,
+  // and there are none outstanding. Putting one back is a deliberate act with
+  // a name attached, not a way to make a red suite green.
 ];
 
 function headingPages() {
@@ -597,5 +651,90 @@ describe('6. One design, composed rather than re-typed', () => {
       .sort();
 
     expect(unconverted).toEqual([...AWAITING_THE_SWEEP].sort());
+  });
+});
+
+/* ================================================================== */
+/*  7. The theme flipped, and the names did not                        */
+/* ================================================================== */
+
+/**
+ * No rendered class may name a colour from the dark theme.
+ *
+ * **This is the rule that explains why the app looked sterile for three days
+ * while every check was green.** Saibyl was dark once. When it flipped to the
+ * light editorial system, `tailwind.config.js` kept the old names alive and
+ * remapped their values:
+ *
+ *     void: '#f8fbff'      // was the dark page background → now paper
+ *     white: '#14294a'     // was white text → now ink
+ *     platinum: '#14294a'  // was primary text → now ink
+ *     gold: '#286cf0'      // was the gold accent → now the blue accent
+ *
+ * That was the right call for the flip — nothing broke, and every page kept
+ * rendering. It was also how the problem hid: a page written for the dark theme
+ * and never once looked at since kept resolving to sensible light values, so it
+ * read as *ink on paper* while never having been **designed** as ink on paper.
+ * There were 246 of these across 25 files on 2026-08-23, and `bg-saibyl-void`
+ * on a page root actively painted a flat panel over the radial wash `<body>`
+ * carries — canvas rule 1, switched off, on the first screen every founder
+ * sees.
+ *
+ * The aliases stay in the token file: deleting them would turn every one this
+ * check missed into a class that resolves to nothing, which fails invisibly.
+ * The usage is what is banned, and it is banned here rather than by convention,
+ * because convention is what failed.
+ */
+const DARK_THEME_ALIASES = ['void', 'white', 'platinum', 'gold'] as const;
+
+/**
+ * Comments stripped, conservatively.
+ *
+ * Block comments go entirely; a line comment only counts when `//` opens the
+ * line, so a `https://` inside a string can never swallow the code after it.
+ * Erring toward keeping code means this check can produce a false positive a
+ * human resolves — never a false negative that hides one.
+ */
+function withoutComments(code: string): string {
+  return code
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*(\/\/|\*)/.test(line))
+    .join('\n');
+}
+
+describe('7. No rendered class names a colour from the dark theme', () => {
+  it('the aliases still exist in the token file, so this bans usage and not the names', () => {
+    /* The canary. If somebody deletes the aliases instead of the usages, every
+       class this check missed starts resolving to nothing — a colour that
+       silently does not apply — and the assertion below would pass while the
+       app got worse. */
+    const tokens = readFileSync(join(SRC, '..', 'tailwind.config.js'), 'utf8');
+    for (const alias of DARK_THEME_ALIASES) {
+      expect(tokens, `the '${alias}' alias was deleted rather than swept`).toMatch(
+        new RegExp(`\\b${alias}:\\s*'#`),
+      );
+    }
+    // And the pair that had no light-theme counterpart until the sweep needed
+    // one: `gold-hover` existed, `blue-hover` did not, so renaming the first to
+    // the second would have dropped the hover state on every button that had it.
+    expect(tokens).toMatch(/'blue-hover':\s*'#/);
+  });
+
+  it('no source file uses one', () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles()) {
+      const code = withoutComments(file.code);
+      code.split(/\r?\n/).forEach((line, i) => {
+        for (const alias of DARK_THEME_ALIASES) {
+          // `saibyl-gold` but not `saibyl-gold-hover`, which is its own token
+          // and is checked by the same rule under its own name.
+          if (new RegExp(`saibyl-${alias}\\b(?!-)`).test(line)) {
+            offenders.push(`${file.path}:${i + 1} — saibyl-${alias}`);
+          }
+        }
+      });
+    }
+    expect(offenders).toEqual([]);
   });
 });

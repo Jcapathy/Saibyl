@@ -14,6 +14,7 @@ import {
 } from '@/lib/founder';
 import { formatSigned, type ObjectionSummary } from '@/lib/analysis';
 import Panel, { NoData } from '@/components/analysis/Panel';
+import { actionSurface, noticeSurface } from '@/components/design';
 
 const TONE_COLOR: Record<'good' | 'bad' | 'neutral', string> = {
   good: '#0e7d55',
@@ -33,7 +34,7 @@ function DeltaRow({ delta }: { delta: ObjectionDelta }) {
     <div className="py-3 border-b border-saibyl-border last:border-0">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[13px] text-saibyl-platinum font-medium">{delta.label}</p>
+          <p className="text-[13px] text-saibyl-ink font-medium">{delta.label}</p>
           {delta.asset_titles.length > 0 && (
             <p className="text-[11px] text-saibyl-muted mt-0.5">
               Answered by: {delta.asset_titles.join(', ')}
@@ -195,6 +196,18 @@ export default function InoculationWorkbench({
   };
 
   const resimulate = async () => {
+    /* The guard the `disabled` attribute used to be. Removing that attribute
+       without this would have posted an empty answer set to
+       `/inoculation/{id}/resimulate` — trading a silent grey button for a
+       silent server error, which is the same defect wearing a different face.
+       The rule is that a control runs and states what it is missing, and the
+       second half is this. */
+    if (selected.length === 0) {
+      setError(
+        'Tick at least one of the answers above — the room reads what you wrote, so there has to be something to read.',
+      );
+      return;
+    }
     setLaunching(true);
     setError('');
     try {
@@ -252,7 +265,7 @@ export default function InoculationWorkbench({
             <div className="space-y-1 mb-4">
               {objections.slice(0, 6).map((objection) => (
                 <div key={objection.key} className="flex items-baseline gap-3 text-[12px]">
-                  <span className="text-saibyl-platinum flex-1 truncate">{objection.label}</span>
+                  <span className="text-saibyl-ink flex-1 truncate">{objection.label}</span>
                   <span className="text-saibyl-muted text-[11px] whitespace-nowrap">
                     {objection.agent_count} {objection.agent_count === 1 ? 'person' : 'people'}
                     {objection.originated_adversarial &&
@@ -266,7 +279,7 @@ export default function InoculationWorkbench({
               type="button"
               onClick={draft}
               disabled={drafting}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-saibyl-gold/30 bg-saibyl-gold/5 hover:border-saibyl-gold/50 hover:bg-saibyl-gold/10 disabled:opacity-40 transition-all text-[13px] text-saibyl-gold"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-saibyl-blue/30 bg-saibyl-blue/5 hover:border-saibyl-blue/50 hover:bg-saibyl-blue/10 disabled:opacity-40 transition-all text-[13px] text-saibyl-blue"
             >
               {drafting ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -309,12 +322,12 @@ export default function InoculationWorkbench({
                         }
                         className={`w-full text-left p-4 rounded-xl border transition-all ${
                           isSelected
-                            ? 'border-saibyl-gold/50 bg-saibyl-gold/10'
+                            ? 'border-saibyl-blue/50 bg-saibyl-blue/10'
                             : 'border-saibyl-border bg-white hover:border-saibyl-border-light'
                         }`}
                       >
                         <div className="flex items-center justify-between gap-3">
-                          <span className="text-[13px] font-medium text-saibyl-platinum truncate">
+                          <span className="text-[13px] font-medium text-saibyl-ink truncate">
                             {asset.title}
                           </span>
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#14294a]/[0.04] text-saibyl-muted whitespace-nowrap">
@@ -338,20 +351,34 @@ export default function InoculationWorkbench({
           </div>
 
           <div className="mt-5 pt-4 border-t border-saibyl-border">
+            {/* Never a grey button. `selected.length === 0` used to grey this
+                out with no explanation beside it, so the founder was left to
+                infer that the checkboxes above were the reason. It says so now,
+                and the label stops claiming a count it does not have.
+                `launching` still guards it: a double-submit guard, not a
+                precondition. */}
+            {selected.length === 0 && (
+              <p className={`text-[12px] mb-2.5 ${noticeSurface('blocked').heading}`}>
+                Tick at least one of the answers above &mdash; the room reads
+                what you wrote, so there has to be something to read.
+              </p>
+            )}
             <button
               type="button"
               onClick={resimulate}
-              disabled={selected.length === 0 || launching}
-              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-saibyl-gold text-saibyl-void font-semibold text-[13px] disabled:opacity-40 transition-all hover:bg-saibyl-gold-hover"
+              disabled={launching}
+              className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-extrabold text-[13px] disabled:opacity-40 transition-colors sb-lift ${actionSurface('primary')}`}
             >
               {launching ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <FlaskConical className="w-4 h-4" />
               )}
-              {selected.length === 1
-                ? 'Run it again with this one'
-                : `Run it again with these ${selected.length}`}
+              {selected.length === 0
+                ? 'Run it again'
+                : selected.length === 1
+                  ? 'Run it again with this one'
+                  : `Run it again with these ${selected.length}`}
             </button>
             <p className="text-[11px] text-saibyl-muted mt-2 leading-relaxed">
               The same people react again — the exact ones from this run, not a fresh set — only

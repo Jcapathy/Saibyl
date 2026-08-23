@@ -6,8 +6,8 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-saibyl-void">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-saibyl-gold" />
+      <div className="flex items-center justify-center h-screen bg-saibyl-paper">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-saibyl-blue" />
       </div>
     );
   }

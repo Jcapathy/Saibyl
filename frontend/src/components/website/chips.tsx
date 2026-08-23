@@ -40,8 +40,8 @@ export function SeverityChip({ severity }: { severity: SiteFindingSeverity }) {
 
 const STATUS_STYLES: Record<SiteCheckStatus, string> = {
   queued: 'border-saibyl-border-light bg-[#14294a]/[0.04] text-saibyl-silver',
-  capturing: 'border-saibyl-gold/40 bg-saibyl-gold/10 text-saibyl-gold',
-  judging: 'border-saibyl-gold/40 bg-saibyl-gold/10 text-saibyl-gold',
+  capturing: 'border-saibyl-blue/40 bg-saibyl-blue/10 text-saibyl-blue',
+  judging: 'border-saibyl-blue/40 bg-saibyl-blue/10 text-saibyl-blue',
   complete: 'border-saibyl-positive/40 bg-saibyl-positive/10 text-saibyl-positive',
   failed: 'border-saibyl-negative/40 bg-saibyl-negative/10 text-saibyl-negative',
 };
@@ -75,8 +75,8 @@ export function SiteStatusChip({ status }: { status: SiteCheckStatus }) {
  */
 const REVISION_STYLES: Record<string, string> = {
   queued: 'border-saibyl-border-light bg-[#14294a]/[0.04] text-saibyl-silver',
-  generating: 'border-saibyl-gold/40 bg-saibyl-gold/10 text-saibyl-gold',
-  judging: 'border-saibyl-gold/40 bg-saibyl-gold/10 text-saibyl-gold',
+  generating: 'border-saibyl-blue/40 bg-saibyl-blue/10 text-saibyl-blue',
+  judging: 'border-saibyl-blue/40 bg-saibyl-blue/10 text-saibyl-blue',
   complete: 'border-saibyl-positive/40 bg-saibyl-positive/10 text-saibyl-positive',
   failed: 'border-saibyl-negative/40 bg-saibyl-negative/10 text-saibyl-negative',
 };
