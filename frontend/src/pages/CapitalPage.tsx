@@ -12,7 +12,7 @@ import {
 } from '@/lib/capital';
 import BankPanel from '@/components/capital/BankPanel';
 import ShortlistPanel from '@/components/capital/ShortlistPanel';
-import { MonoLabel } from '@/components/capital/CapitalPrimitives';
+import { Ground, PageHeader } from '@/components/design';
 
 /**
  * Access to capital — who would fund this, and who has published that they
@@ -127,36 +127,34 @@ export default function CapitalPage() {
   const runId = selected ? (findStage(selected, 'reactions')?.produced_by ?? null) : null;
 
   return (
-    <div className="capital-ground min-h-full p-6 lg:p-8">
+    /* The shared wash, not `capital-ground`. Both are the landing page's two
+       radial washes — `capital.css` ported them here before the app-wide
+       system existed — and one of the two copies had to go. */
+    <Ground className="min-h-full p-6 lg:p-8">
       <div className="max-w-4xl mx-auto space-y-8">
-        {/* ── Header ── */}
-        {/* The nav calls this Raise, so the page does too.
-            It used to be headed "Who would actually fund this" under a nav item
-            reading "Who would fund this" — fine while the sidebar was a list of
-            questions, wrong now that it is the journey the landing page sells.
-            Eyebrow, name and the italic phrase are that section's own, verbatim;
-            only the styling still awaits the sweep. */}
-        <header>
-          <MonoLabel>Fundraise</MonoLabel>
-          <h1 className="text-h1 text-saibyl-ink mt-2">Raise</h1>
-          <p className="text-[13px] text-saibyl-muted mt-2 leading-relaxed max-w-2xl">
-            <em className="font-serif italic text-[#6a4fe0]">
-              How the story reads to investors &mdash; and the questions
-              you&rsquo;ll be asked, before you&rsquo;re in the room that
-              matters.
-            </em>
+        {/* ── Header ──
+            The fifth stage, on the same primitive as the other four. It was
+            hand-rolled — its own mono label, its own italic `<em>`, its own
+            sizes — from before the shared header existed, which is precisely
+            how one system becomes five dialects of itself. The rest of this
+            page still awaits the sweep; the front door does not. */}
+        <PageHeader
+          eyebrow="Fundraise"
+          title="Raise"
+          phrase="How does the story read? Who would fund it? What will they ask?"
+        >
+          <p>
+            Investors ask the questions your buyers already asked, in a harder
+            register and with far less patience. This is where you see both
+            halves before the meeting: which firms actually fit what you are
+            building &mdash; matched on your sector, your stage and the
+            objections real buyers raised &mdash; and how your story reads to
+            them. A firm whose published position rules you out is reported
+            saying so, because a short list you can trust is worth more than a
+            long one you cannot.
           </p>
-          <p className="text-[13px] text-saibyl-muted mt-2 leading-relaxed max-w-2xl">
-            A curated bank of family offices, matched against your sector, your
-            stage and the objections real buyers raised &mdash; not a contact
-            dump. Firms that publish a position ruling you out are reported
-            saying so, because a padded list is worth less than a short one you
-            can trust.
-          </p>
-          <p className="text-[12px] text-saibyl-muted mt-2 leading-relaxed max-w-2xl">
-            {NO_CONTACT_DETAILS}
-          </p>
-        </header>
+          <p className="mt-2 text-[12.5px]">{NO_CONTACT_DETAILS}</p>
+        </PageHeader>
 
         {/* ── Which product this answer is for ── */}
         {productsError && <StageError message={productsError} retry={loadProducts} />}
@@ -221,6 +219,6 @@ export default function CapitalPage() {
           now={now}
         />
       </div>
-    </div>
+    </Ground>
   );
 }

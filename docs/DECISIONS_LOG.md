@@ -64,6 +64,35 @@ without anyone opening the folder — because nothing in the repo pointed at it.
    design primitives. Prose gets lost to a compaction summary; a red suite does
    not. This rule exists because the failure already happened.
 
+**Amendment, same day, after the founder read the five pages live:**
+
+- **The stage header is a front door, and the density rule does not govern it.**
+  The accent phrase was 15px serif italic *above* a 13px paragraph, and his
+  words were that it is "almost unreadable on a big screen and will certainly
+  be unreadable on a mobile device." Three changes, applied to all five stages:
+  the phrase grew to 20/23/26px responsive; the explanation moved **above** it,
+  at 14/15px, so the tagline reads as the line the explanation earns; and every
+  stage gained real explanatory copy saying what it is for, in the words a
+  founder arriving on it would use.
+
+  The canvas's constraint is unchanged and still binding on every dense
+  surface. What changed is the understanding of where it applies: a block whose
+  entire job is to teach a stage to somebody who just arrived is not a row in a
+  list. Recorded in `CLAUDE.md` §1 and pinned in `design_primitives.test.ts` §6
+  — which previously asserted the opposite, and now asserts both this and that
+  nothing outside the header sizes type at all.
+
+- **The taglines became questions.** "Does the pain exist, who feels it most,
+  and what would they pay?" → "Does the pain exist? Who feels it most? What
+  would they pay?" — the founder's own rewrite, applied to all five. They are
+  therefore no longer the landing page's copy verbatim; the landing keeps its
+  sentence form, and this is a deliberate divergence rather than drift.
+
+- **Raise came off the un-swept list.** Its header was still hand-rolled — its
+  own mono label, its own italic `<em>`, its own wash class — which is how one
+  system becomes five dialects. It now composes `Ground` and `PageHeader`. Its
+  two panels still style from `capital.css`; that is component debt.
+
 **Engineering decisions taken while implementing the above:**
 
 - **An absorbed page is deleted, not kept.** `WebsitePage`, `SalesToolkitPage`,

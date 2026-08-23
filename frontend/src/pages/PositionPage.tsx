@@ -107,14 +107,23 @@ export default function PositionPage() {
           <PageHeader
             eyebrow="Pre-launch"
             title="Position"
-            phrase="Which objections kill the pitch — and which answers actually move them."
+            phrase="Which objection kills the pitch? What answer moves them? Did the fix actually work?"
             mark={
               checked > 0
                 ? `${checked} ${checked === 1 ? 'page' : 'pages'} checked`
                 : undefined
             }
           >
-            <p>Test the fix on the same room, and watch the delta.</p>
+            <p>
+              A good product still loses to the one objection nobody
+              rehearsed. Your page has a few seconds to answer it, and you are
+              the last person alive who can read that page fresh. So the room
+              reads it for you and says what stopped them, in their own words,
+              ranked by how many it stopped. Then Saibyl rewrites the page to
+              answer the worst of it and puts the new version in front of that
+              same room &mdash; so what you get is a measured difference
+              rather than a hope.
+            </p>
           </PageHeader>
         </Rise>
 

@@ -165,7 +165,7 @@ export default function GrowPage() {
           <PageHeader
             eyebrow="Traction"
             title="Grow"
-            phrase="Rehearse the change before the market grades it."
+            phrase="Will they pay more? Do they want this next? Will a new market buy it?"
             mark={runs.length > 0 ? `${runs.length} rehearsed so far` : undefined}
           >
             <p>

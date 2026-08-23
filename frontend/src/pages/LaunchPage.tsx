@@ -175,7 +175,7 @@ export default function LaunchPage() {
           <PageHeader
             eyebrow="Go to market"
             title="Launch"
-            phrase="Up to eight versions of the message, head to head, in front of the same room — the winner earns your budget."
+            phrase="Which words land? Who changed their mind? Which version earns the budget?"
             mark={tested > 0 ? `${tested} tested so far` : undefined}
           >
             <p>

@@ -164,15 +164,35 @@ describe('4. It looks like Saibyl, and it stops when asked', () => {
     // The four things that make a surface feel like Saibyl: a washed ground,
     // soft blue shadows on the cards that carry meaning, a dot on every mono
     // label, and exactly one serif italic phrase in the biggest heading.
+    //
+    // The panels still carry them from `capital.css`, which is where this
+    // module ported the system before the app-wide primitives existed.
     const css = capitalCss();
     expect(css).toContain('radial-gradient');
     expect(css).toContain('#35c7d5');
     expect(css).toMatch(/box-shadow: 0 22px 60px rgba\(52, 96, 164, \.12\)/);
 
+    /* The **page** stopped carrying its own copy on 2026-08-23 and now composes
+       the shared primitives, like the other four stages. That is the point of
+       this test rather than a violation of it: two implementations of one wash
+       is exactly the dialect the name warns about, and Raise had one. */
     const page = byPath(PAGE);
-    expect(page.code).toContain('capital-ground');
-    const serif = [...page.code.matchAll(/font-serif italic/g)];
-    expect(serif.length, 'one serif italic phrase — not zero, not four').toBe(1);
+    expect(page.code, 'the page stopped composing the shared ground').toContain(
+      '<Ground',
+    );
+    expect(
+      page.code,
+      'the page went back to hand-rolling the wash',
+    ).not.toContain('capital-ground');
+    expect(page.code).toMatch(/from '@\/components\/design'/);
+
+    // Zero, not one: `PageHeader` owns the single Playfair line now, and a
+    // serif here would be the second one on the same heading.
+    const serif = [...page.code.matchAll(/font-serif/g)];
+    expect(serif.length, 'the page grew a serif line beside PageHeader\'s').toBe(0);
+    expect(page.code, 'the page lost its accent phrase entirely').toMatch(
+      /phrase="/,
+    );
 
     // And every mono label here wears its dot, because they all go through the
     // one component that draws it.

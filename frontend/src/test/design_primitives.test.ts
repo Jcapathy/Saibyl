@@ -441,9 +441,52 @@ describe('6. Density is deliberately unchanged', () => {
     );
   });
 
-  it('the explanatory paragraph is still the app\'s 13px body', () => {
+  it('the page header is the one named exception, and it is a front door', () => {
+    /* **The canvas's density constraint is unchanged, and still quoted below.**
+       What changed, on 2026-08-23, is where it is understood to apply.
+
+       The founder read the five live stage pages and could not comfortably
+       read the accent phrase on his own monitor — 15px serif italic, sitting
+       *above* a 13px paragraph, on a page whose entire job is to explain a
+       stage to somebody who has just arrived on it. His instruction: expand
+       the block with explanatory copy and put the tagline under it, larger.
+
+       So the rule holds where it was written to hold — rows, cards, lists,
+       every dense surface in the app — and does not govern the block that
+       carries the page's `<h1>`. The canvas itself names the accent phrase as
+       the place warmth is allowed to come from; this is that place. */
     const { code } = designSource(PRIMITIVES);
-    expect(code).toMatch(/text-\[13px\]/);
+
+    // The lead, and the phrase under it at its largest.
+    expect(code, 'the header lead went back to 13px').toMatch(/sm:text-\[15px\]/);
+    expect(code, 'the accent phrase stopped being an accent').toMatch(
+      /lg:text-\[26px\]/,
+    );
+    // Both scale down. The complaint named mobile first, and a single fixed
+    // 26px line is the same defect facing the other way.
+    expect(code).toMatch(/text-\[20px\]\s+sm:text-\[23px\]/);
+    expect(code).toMatch(/text-\[14px\]\s+sm:text-\[15px\]/);
+
+    // The explanation reads before the phrase it earns. Asserted on order,
+    // because "put the tagline underneath" was the instruction and a later
+    // refactor swapping them back would look like a formatting change.
+    expect(
+      code.indexOf('{children}'),
+      'the phrase moved back above the explanation',
+    ).toBeLessThan(code.indexOf('{phrase}'));
+
+    // And the constraint that did not move: nothing in the system sizes type
+    // for a dense surface. `Card` and `cardSurface` set no font size at all,
+    // so no row, list or record grew because a header did.
+    for (const file of designFiles().filter((f) => f.path !== PRIMITIVES)) {
+      expect(
+        [...file.code.matchAll(/text-\[\d+(?:\.\d+)?px\]/g)].map((m) => m[0]),
+        `${file.path} sizes type outside the page header`,
+      ).toEqual([]);
+    }
+    expect(stripCssComments(DESIGN_CSS), 'design.css sizes type').not.toMatch(
+      /font-size/,
+    );
     expect(CANVAS).toContain('same 13px body');
   });
 });

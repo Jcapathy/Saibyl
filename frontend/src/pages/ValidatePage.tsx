@@ -108,14 +108,23 @@ export default function ValidatePage() {
           <PageHeader
             eyebrow="Idea stage"
             title="Validate"
-            phrase="Does the pain exist, who feels it most, and what would they pay?"
+            phrase="Does the pain exist? Who feels it most? What would they pay?"
             mark={
               selected
                 ? `${ready} of ${IDEA_STEPS} steps have what they need`
                 : undefined
             }
           >
-            <p>Five answers are enough to build your first room.</p>
+            <p>
+              Founders everywhere are turning ideas into products, and most
+              find out far too late that nobody felt the problem badly enough
+              to pay for it. This is where you find out first. Describe what
+              you are building and Saibyl assembles the room of buyers you
+              think you have &mdash; then you read what they actually say:
+              whether the pain is real, which of them feels it hardest, and
+              what being rid of it would be worth. Five answers are enough to
+              build that first room.
+            </p>
           </PageHeader>
         </Rise>
 

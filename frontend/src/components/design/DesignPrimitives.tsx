@@ -131,8 +131,13 @@ export function Eyebrow({
  * — and there is nowhere inside those for a clause to go.
  *
  * `mark` is the artboard's line beside the title: "2 of 5 steps have what they
- * need". `children` is the explanatory paragraph, at the app's existing 13px
- * body — the canvas is explicit that body copy does not grow.
+ * need". `children` is the explanatory paragraph — what this stage is for, in
+ * the words a founder arriving on it would use.
+ *
+ * **Order: eyebrow, title, explanation, then the phrase.** The phrase is the
+ * tagline the explanation earns, so it reads last and it reads large. See the
+ * comment at the render site for why this is the one place the canvas's density
+ * constraint is deliberately not applied.
  */
 export function PageHeader({
   eyebrow,
@@ -184,16 +189,31 @@ export function PageHeader({
         {mark && <span className="text-[12px] text-saibyl-muted">{mark}</span>}
       </div>
 
-      {phrase && (
-        <p className="mt-1.5 font-serif text-[15px] italic leading-snug text-saibyl-violet">
-          {phrase}
-        </p>
-      )}
-
+      {/* The explainer comes first, and the accent phrase lands under it.
+          Reversed until 2026-08-23, when the founder read the live pages: a
+          15px serif line sitting above a 13px paragraph reads as a subtitle to
+          the heading rather than as the thing the page is about, and he could
+          not comfortably read either on his own monitor. Explanation, then the
+          line that sums it up — the arrangement of a page that has to teach a
+          stage to someone who has just arrived on it. */}
       {children && (
-        <div className="mt-2 max-w-2xl text-[13px] leading-relaxed text-saibyl-muted">
+        <div className="mt-3 max-w-2xl text-[14px] sm:text-[15px] leading-relaxed text-saibyl-muted">
           {children}
         </div>
+      )}
+
+      {phrase && (
+        /* The one density exception in the system, and a deliberate one.
+           The canvas's constraint — "same type sizes, same 13px body" — is
+           about the app's dense surfaces: rows, cards, lists, where growing
+           the type would turn a record into a brochure. A stage page's opening
+           block is not a dense surface. It is the page's front door, and the
+           canvas itself names the accent phrase as where warmth is allowed to
+           come from. Sized down rather than fixed, because the complaint named
+           mobile first. */
+        <p className="mt-4 max-w-3xl font-serif text-[20px] sm:text-[23px] lg:text-[26px] italic leading-snug text-saibyl-violet">
+          {phrase}
+        </p>
       )}
     </header>
   );

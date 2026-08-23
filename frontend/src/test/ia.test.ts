@@ -513,7 +513,11 @@ const SYSTEM_ORIGIN: Record<string, string> = {
  */
 const AWAITING_THE_SWEEP = [
   // The rail and the modules a founder pays for.
-  'src/pages/CapitalPage.tsx',
+  //
+  // `CapitalPage` left this list on 2026-08-23: it is the fifth stage, and it
+  // now composes `Ground` and `PageHeader` like the other four. Its two panels
+  // still style from `capital.css` — that is component debt, not page debt,
+  // and this list is about pages that own an `<h1>`.
   'src/pages/DashboardPage.tsx',
   'src/pages/GuidePage.tsx',
   'src/pages/SettingsPage.tsx',

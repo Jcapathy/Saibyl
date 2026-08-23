@@ -47,6 +47,20 @@ collapsing every animation is not optional.
 > spacing things further apart. An app that reads like a marketing page is the
 > opposite failure.
 
+**The one exception, granted by the founder on 2026-08-23: `PageHeader`.**
+He read the five live stage pages and could not comfortably read them on his
+own monitor — the accent phrase was 15px serif italic sitting *above* a 13px
+paragraph, on a block whose whole job is to teach a stage to somebody who has
+just arrived on it. His instruction: expand the block with explanatory copy,
+and put the tagline underneath it, larger.
+
+So the header block is a front door, not a dense surface. The lead is
+14/15px and the phrase is 20/23/26px responsive, and the explanation reads
+*before* the phrase it earns. **Do not "restore" these to 13px.** Everywhere
+else — rows, cards, lists, every record — the constraint above is unchanged
+and still binding. `design_primitives.test.ts` §6 pins both halves: the
+header's sizes and order, and that nothing outside it sizes type at all.
+
 ### New pages use the shared design primitives
 
 Every new page composes **`frontend/src/components/design/`** — the shared
