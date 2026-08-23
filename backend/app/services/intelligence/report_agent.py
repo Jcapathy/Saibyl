@@ -1013,6 +1013,36 @@ async def _run_react_loop(
         f"{seed.summary}\n{json.dumps(seed.data, default=str)[:6000]}"
     ]
 
+    # The platform split, seeded for the same reason the findings are: every
+    # outline this module writes requires a platform-dynamics section, and on
+    # three consecutive live runs the model wrote one **without ever fetching
+    # `platform_comparison`** — then printed a table of per-platform sentiment
+    # it had estimated from reading posts. One run stated 0.58 / 0.60 against a
+    # measured 0.5132 / 0.6569 and called the gap "just 0.019" against a
+    # measured 0.1437; another reversed the direction outright.
+    #
+    # This also repairs a blind spot in the figure check downstream:
+    # `unsourced_figures` compares an answer against the evidence the model was
+    # *shown*, so a figure contradicting data it never retrieved is invisible.
+    # Seeding the real split is what gives the verifier something to contradict.
+    try:
+        platform_seed = await simulation_analytics(
+            UUID(simulation_id), "platform_comparison"
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "report_platform_seed_failed",
+            simulation_id=simulation_id,
+            error=f"{type(exc).__name__}: {exc}",
+        )
+    else:
+        evidence.append(
+            f"[Measured platform split — the only source of per-platform "
+            f"numbers; do not estimate these from post text]\n"
+            f"{platform_seed.summary}\n"
+            f"{json.dumps(platform_seed.data, default=str)[:6000]}"
+        )
+
     for tool_call_num in range(resolved.max_tool_calls_per_section):
         prompt = _prompt(
             REACT_PROMPT,
