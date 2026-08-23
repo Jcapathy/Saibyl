@@ -221,3 +221,44 @@ def test_a_failing_failure_handler_never_raises(monkeypatch):
     monkeypatch.setattr(reports_api, "get_supabase_admin", lambda: _Broken())
 
     reports_api._mark_report_failed(SIM, ORG)(ValueError("boom"))
+
+
+# ── One report at a time per run ──
+
+
+def test_a_second_report_is_refused_while_one_is_generating(
+    owner, monkeypatch, spawned
+):
+    """The role gate stops a viewer starting these. It does nothing about the
+    same member starting twenty.
+
+    Nothing on this route calls `deduct_credits` — the report is billed inside
+    the run's price — so a loop here drives unbounded Opus sections against
+    Saibyl's own account with no ledger entry anywhere to notice it.
+    """
+    admin = _Admin({
+        "simulations": [{"id": SIM}],
+        "reports": [{"id": "rep-1", "status": "generating"}],
+    })
+    monkeypatch.setattr(reports_api, "get_supabase_admin", lambda: admin)
+
+    response = owner.post("/api/reports/generate", json={"simulation_id": SIM})
+
+    assert response.status_code == 409
+    assert "already being generated" in response.json()["detail"]
+    assert spawned == [], "a second report writer was started"
+
+
+def test_regenerating_a_finished_report_is_allowed(owner, monkeypatch, spawned):
+    """`complete` and `failed` are deliberately not blocked — regenerating a
+    finished or broken write-up is a thing a founder legitimately wants."""
+    admin = _Admin({
+        "simulations": [{"id": SIM}],
+        "reports": [],  # the in_() filter matches nothing
+    })
+    monkeypatch.setattr(reports_api, "get_supabase_admin", lambda: admin)
+
+    response = owner.post("/api/reports/generate", json={"simulation_id": SIM})
+
+    assert response.status_code == 200
+    assert len(spawned) == 1

@@ -139,7 +139,19 @@ STUCK: tuple[StuckRule, ...] = (
         # expensive artifact in the product was the one the reaper could not
         # see. `test_every_non_terminal_status_a_worker_writes_is_reapable`
         # pins the rules against the workers so this cannot drift again.
-        "page_revisions", ("queued", "generating"), 45,
+        # 45 was shorter than the work. Do the arithmetic once, here, so the
+        # next person does not have to: a revision runs up to 3 rounds, each
+        # one a `capture_html` that may queue 330s for the two-slot browser and
+        # then work for 300s, on top of up to 2 `capture_website` calls for the
+        # page and its reference. That is ~52 minutes of legitimate work
+        # against a 45-minute rule, so the reaper was closing revisions that
+        # were still running — and the worker then wrote `complete` over the
+        # closed row, because its compare-and-set was missing too.
+        #
+        # 80 covers the worst case with headroom. A founder whose revision is
+        # genuinely wedged waits longer; one whose revision is merely slow gets
+        # the artifact they paid 5,000 credits for.
+        "page_revisions", ("queued", "generating"), 80,
         "This revision stopped before it finished. Your original check is "
         "safe; start the revision again when you're ready.",
         # Still `queued` only. `generating` means vision calls were made and

@@ -438,7 +438,23 @@ def _overall_deadline(timeout_s: int) -> int:
     return max(WEBSITE_CAPTURE_DEADLINE_S, timeout_s * 2 + 60)
 
 
-async def _bounded(coro, subject: str, timeout_s: int) -> WebsiteCapture:
+#: How long a *revision* render waits for the browser slot.
+#:
+#: Longer than a check's, because the two are not in the same position. A check
+#: that gives up has cost the founder nothing they cannot retry for the same
+#: price. A revision render is round one of an artifact that already charged
+#: 5,000 credits and already spent a 32,000-token generation call — giving up
+#: there throws that away and returns "the checker is busy", which is a
+#: sentence about our capacity, not about their page.
+#:
+#: It cannot wait forever: `page_revisions` is reaped at 80 minutes and three
+#: rounds must fit inside that.
+_REVISION_QUEUE_WAIT_S = 600
+
+
+async def _bounded(
+    coro, subject: str, timeout_s: int, queue_wait_s: int | None = None
+) -> WebsiteCapture:
     """Run a capture under a hard ceiling, so no step can hang unbounded.
 
     The deadline starts when the browser slot is acquired, not when the
@@ -459,9 +475,16 @@ async def _bounded(coro, subject: str, timeout_s: int) -> WebsiteCapture:
     difference visible: "this page is too heavy" and "the checker is busy" are
     now different sentences.
     """
+    # Resolved here, not in the signature. A default argument is bound once at
+    # import, so `queue_wait_s: int = _QUEUE_WAIT_S` would have frozen the value
+    # and made every runtime override of the module constant a no-op — silently,
+    # including the one the wedged-capture test uses to keep itself fast.
+    if queue_wait_s is None:
+        queue_wait_s = _QUEUE_WAIT_S
+
     slots = _slots()
     try:
-        await asyncio.wait_for(slots.acquire(), timeout=_QUEUE_WAIT_S)
+        await asyncio.wait_for(slots.acquire(), timeout=queue_wait_s)
     except TimeoutError as exc:
         # The capture coroutine was built by the caller and will never run.
         # Closing it is not tidiness: an un-awaited coroutine raises a
@@ -549,7 +572,13 @@ async def capture_html(html: str, *, timeout_s: int = 45) -> WebsiteCapture:
     parks a revision at `generating` forever with no founder-readable error.
     """
     return await _bounded(
-        _capture_html(html, timeout_s=timeout_s), "the rewritten page", timeout_s
+        _capture_html(html, timeout_s=timeout_s),
+        "the rewritten page",
+        timeout_s,
+        # A revision waits longer for the slot than a check does: it has
+        # already been charged for and already spent a generation call, so
+        # losing the queue to a free-standing check throws real money away.
+        queue_wait_s=_REVISION_QUEUE_WAIT_S,
     )
 
 

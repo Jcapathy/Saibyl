@@ -108,6 +108,50 @@ def test_thousands_separators_and_trailing_zeros_are_typography():
     assert unsupported_claims(source, delivered) == []
 
 
+def test_an_idiom_is_not_a_price():
+    """"100 cents on the dollar" is a figure of speech.
+
+    `_normalise` folds "<digit> cents" to "<digit>¢" so a page writing "30
+    cents" matches a source writing "30¢". That fold turned the idiom into a
+    money figure, and the page restating its own source was accused of
+    inventing it.
+    """
+    source = "Sellers keep 100 cents on the dollar of every tip."
+    delivered = "<p>You keep 100 cents on the dollar.</p>"
+
+    assert unsupported_claims(source, delivered) == []
+
+
+def test_the_cents_fold_still_works_for_actual_money():
+    source = "We charge 30¢ per payout."
+    delivered = "<p>Just 30 cents per payout.</p>"
+
+    assert unsupported_claims(source, delivered) == []
+
+
+def test_an_accreditation_is_caught_in_either_word_order():
+    """The compressed spelling is the rewrite's voice; the spelled-out one is
+    how a lab writes it. Matching only the first told a founder who wrote the
+    second that they had invented their own accreditation."""
+    source = "Chartwell helps clinics submit prior authorisations."
+
+    for phrasing in (
+        "<p>We are CAP-accredited.</p>",
+        "<p>Our lab is accredited by the CAP.</p>",
+        "<p>Accredited by the College of American Pathologists.</p>",
+    ):
+        found = unsupported_claims(source, phrasing)
+        assert any(c.kind == "certification" for c in found), phrasing
+
+
+def test_an_accreditation_the_source_states_survives_either_way():
+    source = "Our lab is accredited by the College of American Pathologists."
+    delivered = "<p>CAP-accredited since 2019.</p>"
+
+    assert not [c for c in unsupported_claims(source, delivered)
+                if c.kind == "certification"]
+
+
 def test_a_rounded_source_figure_is_reporting_it_not_inventing_one():
     """The one false positive a live run produced.
 

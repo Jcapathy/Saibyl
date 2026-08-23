@@ -162,7 +162,14 @@ _CERTIFICATIONS: tuple[tuple[str, str], ...] = (
     ("CE mark", r"\bce[\s-]mark(?:ed|ing)?\b"),
     ("EU MDR", r"\bmedical\s+device\s+regulation\b|\beu\s+mdr\b"),
     ("CLIA", r"\bclia\b"),
-    ("CAP accreditation", r"\bcap[\s-]accredit"),
+    # Both word orders. The compressed form is the rewrite's voice; "accredited
+    # by the College of American Pathologists" is how a lab actually writes it,
+    # and matching only the first meant a founder who wrote it the second way
+    # was told they had invented their own accreditation. The same asymmetry
+    # was closed for SEC, FDA, e-money and AES; this entry was missed.
+    ("CAP accreditation",
+     r"\bcap[\s-]accredit|\baccredited\s+by\s+(?:the\s+)?cap\b"
+     r"|\bcollege\s+of\s+american\s+pathologists\b"),
     # Cryptography and transport, which are checkable technical assertions
     ("AES-256", r"\baes[\s-]?256\b|\b256[\s-]bit\s+aes\b"),
     ("TLS", r"\btls\s?1\.\d\b"),
@@ -246,7 +253,12 @@ def _normalise(text: str) -> str:
     # figure: no family pattern matches "30 cents", so the source states no
     # figure at all and the page's "30¢" is reported as invented. Only after a
     # number, so "Ledgerline cents" is untouched.
-    folded = re.sub(r"(\d)\s*cents?\b", r"\1¢", folded)
+    #
+    # "100 cents on the dollar" is an idiom, not a price, and folding it made
+    # the page's own restatement of it look like an invented figure. The
+    # exclusion is narrow on purpose: the idiom always continues "on the
+    # dollar", and nothing else about the fold changes.
+    folded = re.sub(r"(\d)\s*cents?\b(?!\s+on\s+the\s+dollar)", r"\1¢", folded)
     folded = folded.replace("–", "-").replace("—", "-")
     folded = folded.replace("’", "'").replace("“", '"').replace("”", '"')
     return " ".join(folded.split())

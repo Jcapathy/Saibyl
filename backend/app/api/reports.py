@@ -154,6 +154,39 @@ async def generate_report(body: GenerateReportBody, auth: dict = Depends(require
     if not sim.data:
         raise HTTPException(status_code=404, detail="Simulation not found")
 
+    # **One report at a time per run.** The role gate stops a viewer starting
+    # these; it does nothing about the same member starting twenty. Nothing
+    # here calls `deduct_credits` — the report is billed inside the run's price
+    # — so a loop on this route drives unbounded Opus sections against Saibyl's
+    # own account with no ledger entry anywhere to notice it.
+    #
+    # A run already generating is the whole abuse case and also the whole
+    # double-click case, and it is one read to close. `complete` and `failed`
+    # are deliberately not blocked: regenerating a finished or broken report is
+    # a thing a founder legitimately wants.
+    running = (
+        admin.table("reports")
+        .select("id, status")
+        .eq("simulation_id", body.simulation_id)
+        .in_("status", ("queued", "generating"))
+        .limit(1)
+        .execute()
+    ).data or []
+    if running:
+        log.warning(
+            "generate_report_already_running",
+            simulation_id=body.simulation_id,
+            org_id=auth["org_id"],
+            report_id=running[0].get("id"),
+        )
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "A write-up for this run is already being generated. Wait for "
+                "it to finish before starting another."
+            ),
+        )
+
     spawn(
         run_generate_report(body.simulation_id, body.evidence_depth, body.max_sections),
         "generate_report",

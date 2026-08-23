@@ -162,7 +162,7 @@ async def run_page_revision(revision_id: str, organization_id: str) -> None:
             capture=result.capture_after,
         )
 
-        admin.table("page_revisions").update({
+        if not _advance(revision_id, "generating", {
             "status": "complete",
             "rounds": len(result.rounds),
             "best_round": result.best_round,
@@ -187,7 +187,11 @@ async def run_page_revision(revision_id: str, organization_id: str) -> None:
             "screenshot_desktop_path": paths["desktop"],
             "screenshot_mobile_path": paths["mobile"],
             "completed_at": datetime.now(UTC).isoformat(),
-        }).eq("id", revision_id).execute()
+        }):
+            # The reaper closed this row while the loop was still running. Its
+            # sentence is the one the founder has already been shown; writing
+            # `complete` over it would tell them the opposite.
+            return
 
         logger.info(
             "page_revision_complete",
@@ -235,18 +239,68 @@ def _scores_from_critique(critique: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _advance(
+    revision_id: str, expected: str | tuple[str, ...], payload: dict[str, Any]
+) -> bool:
+    """Move the row on from `expected`. False means somebody else already did.
+
+    The twin of `website_tasks._advance`, and it was missing. A revision can
+    take longer than the reaper's patience — three generate-render-judge rounds
+    against a two-slot browser is a real ~50 minutes — so the reaper closes the
+    row, and this worker then wrote `complete` over it with a plain
+    `.eq("id", ...)`. The founder was told the revision succeeded on a row that
+    had already been failed and reported to them, or the reverse.
+
+    The compare-and-set was added to the check worker when exactly this
+    happened there, and not to this one. Same defect, same fix, one file later.
+    """
+    wanted = (expected,) if isinstance(expected, str) else tuple(expected)
+    try:
+        query = (
+            get_supabase_admin()
+            .table("page_revisions")
+            .update(payload)
+            .eq("id", revision_id)
+        )
+        # A failure can land before the row ever reaches `generating` — the
+        # snapshot check runs first, while it is still `queued` — so the guard
+        # names every state this worker may legitimately close from, rather
+        # than the one it usually does.
+        query = (
+            query.eq("status", wanted[0])
+            if len(wanted) == 1
+            else query.in_("status", list(wanted))
+        )
+        updated = query.execute()
+    except Exception:
+        logger.exception(
+            "page_revision_status_write_failed",
+            revision_id=revision_id, expected=expected,
+        )
+        return False
+
+    if not (updated.data or []):
+        logger.warning(
+            "page_revision_row_moved_on",
+            revision_id=revision_id,
+            expected=expected,
+            wanted=payload.get("status"),
+            detail="another writer closed this revision first; this worker stops",
+        )
+        return False
+    return True
+
+
 def _record_failure(revision_id: str, message: str) -> None:
     """Leave the row saying the revision failed and why.
 
     Without this the frontend cannot distinguish "still generating" from
     "failed", and would poll forever on a revision that will never finish.
+
+    Guarded like the success path: a revision the reaper already closed must
+    not have its sentence overwritten by a later, less useful one.
     """
-    try:
-        get_supabase_admin().table("page_revisions").update({
-            "status": "failed",
-            "error_message": message,
-        }).eq("id", revision_id).execute()
-    except Exception:
-        logger.exception(
-            "page_revision_failure_record_failed", revision_id=revision_id
-        )
+    _advance(revision_id, ("queued", "generating"), {
+        "status": "failed",
+        "error_message": message,
+    })
