@@ -148,9 +148,21 @@ FACT DISCIPLINE — these rules are absolute:
   price, name, and feature you write must already appear there. Tighten,
   reorder, and clarify the page's real claims; never invent a claim, a
   price, a customer, or a feature.
-- If a section needs a fact the page text does not contain, write the
-  placeholder [OWNER: fill in] where the fact belongs and move on. A visible
-  placeholder is honest; a plausible invention is not."""
+- When a section you were planning needs a fact the page text does not
+  contain, BUILD THE SECTION DIFFERENTLY. Make the point with what the page
+  does support, or drop that point and give the space to a claim you can
+  stand behind. A page is allowed to say less. Removing a trust strip you
+  cannot fill is a complete page with fewer claims; leaving three bracketed
+  blanks in it is a broken page.
+- Reach for the placeholder [OWNER: fill in <what>] ONLY for a single
+  self-contained value the founder can supply in seconds — a price, a launch
+  date, a customer count — and only where the sentence around it still reads
+  as finished English. Never use it for a headline, never for social proof,
+  and never more than twice in the whole document.
+- The founder publishes what you return. Anything they must edit before
+  publishing is unfinished work, and a visible bracket where the evidence
+  should be scores worse with a reader than the shorter, truthful page would
+  have."""
 
 _FINDINGS_HEADER = """\
 WHAT THE REVIEW FOUND — apply every numbered fix below; each one is an

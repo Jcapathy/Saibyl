@@ -74,6 +74,15 @@ DOM_TEXT_MAX_CHARS = 100_000
 # rather than waited on.
 _SETTLE_MS = 8_000
 
+# How long the lazy-content pass may take before the capture moves on without
+# it. Bounded and optional: a page that will not scroll is still captured.
+_PRIME_TIMEOUT_S = 20
+
+# How far down the page that pass will walk. An infinite-scroll page must not
+# be able to hold a capture open, and the screenshot is capped at 8,000px
+# anyway — reading text well past the image the critics judge buys nothing.
+_PRIME_MAX_PX = 30_000
+
 # The census's own ceiling, shorter than the required steps'.
 #
 # It is the most expensive thing in a capture by a wide margin: for every
@@ -94,6 +103,44 @@ _QUEUE_WAIT_S = 330
 # Scripts as module constants: each carries a distinctive marker string
 # ("scrollHeight", "innerText", "querySelectorAll('meta')") that tests key on
 # to fake `page.evaluate` without a browser.
+#: Walk the page top to bottom, then back, so anything lazy-loaded is in the
+#: DOM before the text is read.
+#:
+#: This is the difference between reading a page and reading its hero. Measured
+#: on 2026-08-23 across three fresh captures: duolingo.com 2,320 characters,
+#: gumroad.com 4,050, supabase.com 7,905 — and the placeholder count in each
+#: delivered revision tracked it inversely, 10 / 7 / 3, as did the score damage,
+#: -13 / -1 / 0. Duolingo's homepage plainly states its user count and app-store
+#: rating; we never saw them, called them unsupported, and told the founder to
+#: fill in facts their own page already displays.
+#:
+#: The full-page screenshot scrolls too, which is why the *images* were always
+#: complete — but it runs after this point, so the text had already been read
+#: from an unscrolled page. Ordering was the whole bug.
+#: The cap is baked in rather than passed as an argument, so the script keeps
+#: the single-parameter `page.evaluate(script)` shape every other script here
+#: uses — which is what the browserless test doubles key on.
+_PRIME_LAZY_JS = """async () => {
+  const maxPx = __MAX_PX__;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const height = () => Math.max(
+    document.body ? document.body.scrollHeight : 0,
+    document.documentElement ? document.documentElement.scrollHeight : 0
+  );
+  const step = Math.max(400, Math.floor(window.innerHeight * 0.85));
+  let y = 0;
+  let guard = 0;
+  while (y < Math.min(height(), maxPx) && guard < 80) {
+    window.scrollTo(0, y);
+    await sleep(110);
+    y += step;
+    guard += 1;
+  }
+  window.scrollTo(0, 0);
+  await sleep(250);
+  return height();
+}""".replace("__MAX_PX__", str(_PRIME_MAX_PX))
+
 _PAGE_HEIGHT_JS = (
     "() => Math.max("
     "document.body ? document.body.scrollHeight : 0, "
@@ -566,6 +613,15 @@ async def _render(
             # budget on an *optional* measurement and then failed on the
             # *required* one — observed on simplepractice.com, which navigated
             # fine and then died reading its own text.
+            # Lazy content first, because everything below reads the DOM and
+            # a page that has not been scrolled has not finished building
+            # itself. Optional and bounded: a page that refuses to scroll is
+            # captured as it stands, which is what the old behaviour did for
+            # every page.
+            await _optional(
+                page.evaluate(_PRIME_LAZY_JS), _PRIME_TIMEOUT_S, "lazy_content"
+            )
+
             result["title"] = await _optional(page.title(), timeout_s, "title")
             result["meta"] = await _optional(
                 page.evaluate(_META_TAGS_JS), timeout_s, "meta"

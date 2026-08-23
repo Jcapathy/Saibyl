@@ -573,12 +573,21 @@ async def test_the_prompt_carries_the_evidence_and_the_discipline(monkeypatch):
     assert call.images == [DESKTOP], "round 1's evidence is the original desktop screenshot"
 
     prompt = call.prompt
-    # The page's real words are the only source of facts, and the prompt
-    # says what to do when a fact is missing: a visible placeholder.
+    # The page's real words are the only source of facts, and the prompt says
+    # what to do when one is missing: **rebuild the section without it.**
+    #
+    # It used to say "write the placeholder", and three live runs showed what
+    # that produces — a Duolingo rewrite whose trust strip was seven bracketed
+    # blanks, scored 76 -> 63 with credibility 68 -> 32. A founder cannot
+    # publish that, so it is not finished work however honest it is. The
+    # placeholder survives only as a last resort for a single fillable value.
     assert page.dom_text in prompt
     assert "only source of facts" in prompt
     assert "never invent" in prompt
-    assert "[OWNER: fill in]" in prompt
+    assert "BUILD THE SECTION DIFFERENTLY" in prompt
+    assert "A page is allowed to say less" in prompt
+    assert "[OWNER: fill in <what>]" in prompt
+    assert "never more than twice" in prompt
 
     # Every finding rides as an instruction, grouped under its dimension,
     # with the measured quote where the finding carries one.
