@@ -20,6 +20,8 @@ import LandingPage from '@/pages/LandingPage';
 import DashboardPage from '@/pages/DashboardPage';
 import GuidePage from '@/pages/GuidePage';
 import IpCheckPage from '@/pages/IpCheckPage';
+import SalesToolkitPage from '@/pages/SalesToolkitPage';
+import WebsitePage from '@/pages/WebsitePage';
 import LoginPage from '@/pages/LoginPage';
 import MarketingPage from '@/pages/MarketingPage';
 import NewSimulationPage from '@/pages/NewSimulationPage';
@@ -90,6 +92,14 @@ function AnimatedRoutes() {
               rail to hang it on, and the answer is stored against one product
               rather than being a step in one. */}
           <Route path="capital" element={<PageTransition><CapitalPage /></PageTransition>} />
+          {/* The website check and the three sales artifacts, global as well
+              as being steps on a product's rail. They were reachable only from
+              inside a product, so a founder on `/app/home` had no path to the
+              flagship module at all — see the pages' own docstrings. Same
+              components, same props; these routes add a way in, not a second
+              implementation. */}
+          <Route path="website" element={<PageTransition><WebsitePage /></PageTransition>} />
+          <Route path="sales" element={<PageTransition><SalesToolkitPage /></PageTransition>} />
           <Route path="guide" element={<PageTransition><GuidePage /></PageTransition>} />
           <Route path="projects" element={<PageTransition><ProjectsPage /></PageTransition>} />
           <Route path="projects/:id" element={<PageTransition><ProjectDetailPage /></PageTransition>} />

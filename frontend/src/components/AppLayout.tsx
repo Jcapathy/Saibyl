@@ -6,8 +6,10 @@ import {
   FolderOpen,
   Building2,
   Clock,
+  Globe,
   Landmark,
   MessageSquare,
+  MessagesSquare,
   Search,
   ShieldCheck,
   Users,
@@ -51,6 +53,23 @@ interface NavItem {
  */
 const coreNav: NavItem[] = [
   { path: '/app/home', label: 'Home', Icon: LayoutDashboard },
+  /* The flagship, and it was unreachable from here.
+
+     The check and the revision are step one of a product's rail, and that was
+     the ONLY way in: a founder landing on Home saw five entries, none of them
+     this, and the module was three clicks deep behind "Everything you
+     uploaded". The entry below for the family-office bank already records this
+     exact lesson — "it shipped built, priced and with no way to reach it,
+     which is the same as not having shipped it" — and it happened twice more
+     without anyone noticing, because every test called the API directly.
+     Nothing in two rounds of adversarial review looked at what a person can
+     actually click. */
+  { path: '/app/website', label: 'Website check', Icon: Globe },
+  /* The objection answers, the messaging document and the outbound sequences.
+     Same story: three paid artifacts, each reachable only as a step inside a
+     product, none of them findable by a founder who went looking for them by
+     name. Named for the question they answer rather than for the module. */
+  { path: '/app/sales', label: 'What to say', Icon: MessagesSquare },
   /* Was unlinked, and was an account summary duplicating Home. It is now the
      export surface - every report, and three ways to take each one out - so it
      has a reason to exist and therefore a link. Named for what it holds. */

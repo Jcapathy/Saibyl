@@ -306,6 +306,37 @@ describe('5. Reachability', () => {
     }).toEqual({ unreachable: [], tooDeep: [] });
   });
 
+  it('every module a founder pays for is one click from anywhere', () => {
+    /* Reachable is not the same as findable, and the difference cost us the
+       flagship.
+
+       The website check and the three sales artifacts were reachable — three
+       clicks, inside a product's rail — so the test above passed while a
+       founder on `/app/home` had no way to know they existed. The only route
+       in was a nav item called "Everything you uploaded". Two rounds of
+       adversarial review missed it too, because every check called the API
+       directly and none asked what a person can click.
+
+       A paid module is something a founder goes looking for by name. If it is
+       not in the primary nav it is not findable, however few clicks it is
+       behind something else. */
+    const depths = clickDepths();
+    const buried: string[] = [];
+    for (const [path, what] of [
+      ['/app/website', 'the website check'],
+      ['/app/sales', 'the objection answers, messaging and outbound'],
+      ['/app/ip-check', 'the USPTO clearance check'],
+      ['/app/capital', 'the family-office shortlist'],
+      ['/app/dashboard', 'the reports export surface'],
+    ] as const) {
+      const depth = depths.get(path);
+      if (depth === undefined || depth > 1) {
+        buried.push(`${path} — ${what} — ${depth ?? 'unreachable'} clicks`);
+      }
+    }
+    expect(buried).toEqual([]);
+  });
+
   it('the five steps are each one click from a product', () => {
     const depths = clickDepths();
     for (const segment of [
