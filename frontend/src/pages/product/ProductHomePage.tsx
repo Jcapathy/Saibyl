@@ -6,6 +6,7 @@ import api, { unwrapList } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
 import type { AttentionLine, ProductState } from '@/lib/stages';
 import { EmptyState, StageError } from '@/components/stages/StagePrimitives';
+import { Action, Card, Deal, Ground, PageHeader, Rise } from '@/components/design';
 
 /**
  * Home leads with the product.
@@ -19,19 +20,46 @@ import { EmptyState, StageError } from '@/components/stages/StagePrimitives';
  * candidate list, a document still being read. A product with nothing to report
  * says so and offers the next step, because a card padded with filler teaches a
  * founder to stop reading the cards.
+ *
+ * ---
+ *
+ * **This was the worst-looking screen in the app, and the reasons were
+ * mechanical rather than aesthetic.** The founder's word for it, on
+ * 2026-08-23, was "sterile". Four things were wrong and all four are fixed
+ * here:
+ *
+ * 1. It painted `bg-saibyl-void` on its own root — a flat `#f8fbff` laid
+ *    *over* the radial wash `<body>` carries. Canvas rule 1, actively undone
+ *    by the one page every founder lands on first.
+ * 2. Every colour it used was a **legacy dark-theme alias** — `saibyl-white`,
+ *    `saibyl-platinum`, `saibyl-void`, `saibyl-gold`. Those names still
+ *    resolve, because the token file remapped them to light values when the
+ *    theme flipped, so the page kept rendering and nobody noticed it had never
+ *    been converted. It read as ink on paper and was never *designed* as ink
+ *    on paper.
+ * 3. Its cards were `.glass` with no depth class, so nothing on the screen
+ *    claimed to matter more than anything else on it.
+ * 4. No eyebrow, no accent phrase, no arrival motion. The four rules had
+ *    simply never been applied here.
  */
 
 function Attention({ line, productId }: { line: AttentionLine; productId: string }) {
   const body = (
     <>
+      {/* The dot carries the weight, and it is the artboard's own pair: the
+          blue that means "this is the live thing" against the amber that means
+          "this will still run, and thinner". Both were `bg-saibyl-gold` and a
+          70%-opacity warning before — two greys apart at a glance. */}
       <span
-        className={`mt-[0.42rem] w-1.5 h-1.5 rounded-full shrink-0 ${
-          line.weight === 'high' ? 'bg-saibyl-gold' : 'bg-saibyl-warning/70'
+        className={`mt-[0.42rem] w-[7px] h-[7px] rounded-full shrink-0 ${
+          line.weight === 'high'
+            ? 'bg-saibyl-blue shadow-[0_0_0_4px_rgba(40,108,240,0.12)]'
+            : 'bg-[#b45309] shadow-[0_0_0_4px_rgba(180,83,9,0.10)]'
         }`}
       />
       <span
         className={`text-[12.5px] leading-relaxed ${
-          line.weight === 'high' ? 'text-saibyl-platinum' : 'text-saibyl-silver'
+          line.weight === 'high' ? 'text-saibyl-ink' : 'text-saibyl-silver'
         }`}
       >
         {line.text}
@@ -73,14 +101,18 @@ function ProductCard({ product }: { product: ProductState }) {
     product.stages[product.stages.length - 1];
 
   return (
-    <div className="glass rounded-2xl p-6">
+    /* `meaning`, and it lifts. A product card is a claim a founder has to
+       weigh — what has changed here, and is it the one to open — and it goes
+       somewhere, which is the only condition under which the artboard's hover
+       rise is honest. */
+    <Card carries="meaning" lift className="p-6">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <Link
           /* The product's own URL. Its index route decides which step to open
              on, so the choice lives in one place instead of in every link that
              points at a product. */
           to={`/app/products/${product.id}`}
-          className="text-[18px] font-medium text-saibyl-white hover:text-saibyl-gold transition-colors"
+          className="text-[18px] font-semibold text-saibyl-ink hover:text-saibyl-blue transition-colors"
         >
           {product.name}
         </Link>
@@ -122,14 +154,15 @@ function ProductCard({ product }: { product: ProductState }) {
           </p>
         )}
 
-        <Link
-          to={nextStep.href}
-          className="inline-flex items-center gap-1.5 mt-4 px-4 py-1.5 rounded-lg border border-saibyl-blue/40 text-[12.5px] font-medium text-saibyl-blue hover:bg-saibyl-blue/[0.05] transition-colors"
-        >
-          {nextStep.number}. {nextStep.label} — {nextStep.blurb}
-        </Link>
+        {/* `quiet`, not `primary`. There is one of these per card, and on a
+            page with four products four gradient buttons would each be
+            shouting that they are the thing to do next. The one gradient on
+            this screen is "New product", in the header. */}
+        <Action as={Link} to={nextStep.href} kind="quiet" className="mt-4">
+          {nextStep.number}. {nextStep.label} &mdash; {nextStep.blurb}
+        </Action>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -165,24 +198,34 @@ export default function ProductHomePage() {
 
 
   return (
-    <div className="p-6 lg:p-8 bg-saibyl-void min-h-full">
+    /* `Ground`, not `bg-saibyl-void`. The old root painted a flat `#f8fbff`
+       panel across the whole page, on top of the radial wash `<body>` already
+       carries — so the first screen every founder sees was the one screen with
+       canvas rule 1 switched off. */
+    <Ground className="p-6 lg:p-8 min-h-full">
       <div className="max-w-4xl mx-auto">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-          <div>
-            <h1 className="text-h1 text-saibyl-white">Your products</h1>
-            <p className="text-[13px] text-saibyl-muted mt-1">
-              Each one carries its own audience, its own objections and its own
-              buyer list.
-            </p>
-          </div>
-          <Link
-            to="/app/products/new"
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-saibyl-gold text-saibyl-void font-semibold text-[13px] hover:bg-saibyl-gold-hover transition-colors"
+        <Rise className="flex flex-wrap items-end justify-between gap-4 mb-7">
+          <PageHeader
+            eyebrow="Your workspace"
+            title="Your products"
+            phrase="One product, five steps, in the order each one feeds the next."
           >
+            <p>
+              Everything you are building lives here, and each one carries its
+              own audience, its own objections and its own buyer list. A card
+              tells you what has changed since you last looked and what the
+              next step is &mdash; never a row of zeroes, because a card padded
+              with filler teaches you to stop reading the cards.
+            </p>
+          </PageHeader>
+          {/* The one gradient on this screen. There is exactly one thing a
+              founder can do here that is not "open something that already
+              exists", and the artboard says that thing is never a flat fill. */}
+          <Action as={Link} to="/app/products/new" className="shrink-0">
             <Plus className="w-4 h-4" />
             New product
-          </Link>
-        </div>
+          </Action>
+        </Rise>
 
         {error && (
           <div className="mb-5">
@@ -203,12 +246,18 @@ export default function ProductHomePage() {
           />
         ) : (
           <div className="space-y-4">
-            {products.map((product) => (
-              <ProductCard key={product.id} product={product} />
+            {/* Dealt, at the artboard's 70ms — the same arrival the rail has,
+                because this list is the rail's equivalent on a page that shows
+                several products rather than one. Capped inside `dealDelayMs`,
+                so a founder with thirty products does not wait for the tail. */}
+            {products.map((product, i) => (
+              <Deal key={product.id} index={i}>
+                <ProductCard product={product} />
+              </Deal>
             ))}
           </div>
         )}
       </div>
-    </div>
+    </Ground>
   );
 }

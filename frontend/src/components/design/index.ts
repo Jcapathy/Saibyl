@@ -9,18 +9,24 @@
  * anything here brings the system's CSS with it.
  */
 export {
+  Action,
   Card,
   Deal,
   Eyebrow,
   Ground,
+  Notice,
   PageHeader,
   Rise,
 } from './DesignPrimitives';
 
 export {
+  actionSurface,
   cardSurface,
   dealDelayMs,
+  noticeSurface,
   DEAL_MAX_STEPS,
   DEAL_STEP_MS,
+  type ActionKind,
   type CardCarries,
+  type NoticeTone,
 } from './surfaces';

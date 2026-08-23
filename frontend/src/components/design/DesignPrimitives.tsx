@@ -2,7 +2,15 @@ import type { CSSProperties, ElementType, ReactNode } from 'react';
 
 import { cn } from '@/lib/utils';
 
-import { cardSurface, dealDelayMs, type CardCarries } from './surfaces';
+import {
+  actionSurface,
+  cardSurface,
+  dealDelayMs,
+  noticeSurface,
+  type ActionKind,
+  type CardCarries,
+  type NoticeTone,
+} from './surfaces';
 
 import './design.css';
 
@@ -264,6 +272,114 @@ export function Card({
     <Tag className={cn(cardSurface(carries), lift && 'sb-lift', className)} style={style}>
       {children}
     </Tag>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  The gradient action                                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A control, wearing the gradient the artboards give the thing to press.
+ *
+ * Polymorphic on purpose: `as={Link} to="…"` for navigation, plain `<button>`
+ * for a command, `as="a" href` for an export. It takes no router import of its
+ * own — a design primitive that depends on the router is a design primitive
+ * that cannot be rendered in isolation.
+ *
+ * **It owns its padding, and `Card` does not.** That is a distinction rather
+ * than an inconsistency: `Card` wraps content of unknown density, so its
+ * spacing has to stay with the caller who knows what is inside it. An action
+ * *is* a shape — the artboard draws it at `9px 15px`, radius 12, weight 800 —
+ * and a shape whose every call site retypes its own padding is a shape with no
+ * definition. `design_primitives.test.ts` §6 holds both halves of that line.
+ *
+ * There is no `disabled`. Founder's standing rule: a control either runs and
+ * states what its answer will be missing, or it is blocked with the reason and
+ * the button that unblocks it beside it. A grey rectangle is neither.
+ */
+export function Action({
+  kind = 'primary',
+  as = 'button',
+  className,
+  children,
+  ...rest
+}: {
+  kind?: ActionKind;
+  as?: ElementType;
+  className?: string;
+  children?: ReactNode;
+  /* Whatever the rendered element needs — `to`, `href`, `onClick`, `aria-*`.
+     Typed loosely because the element is chosen by the caller. */
+  [prop: string]: unknown;
+}) {
+  const Tag: ElementType = as;
+  /* Only a real <button> gets a type, and only when the caller has not said
+     otherwise. `type` on an <a> or a <Link> is a different attribute meaning a
+     MIME hint, which is not what anybody wants here. */
+  const defaults = as === 'button' ? { type: 'button' } : {};
+
+  return (
+    <Tag
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-xl px-[15px] py-[9px]',
+        'text-[12.5px] font-extrabold transition-colors sb-lift',
+        actionSurface(kind),
+        className,
+      )}
+      {...defaults}
+      {...rest}
+    >
+      {children}
+    </Tag>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Colour that carries state                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A tinted block saying what is blocked, what will be thin, or what is live.
+ *
+ * The artboard says this in colour — a violet block with a violet heading for
+ * "Nothing to read yet", amber for a step that will run but produce less. The
+ * app said all three in the same grey body text as everything else, which is
+ * the mechanical reason a screen full of real information read as sterile:
+ * nothing on it claimed to matter more than anything else on it.
+ *
+ * `action` is optional here and required on `EmptyState`, and the difference is
+ * deliberate. An empty state is a dead end unless it offers a way out. A notice
+ * is frequently attached to something the founder is already doing, where the
+ * way out is the control it is sitting beside.
+ */
+export function Notice({
+  tone,
+  title,
+  children,
+  action,
+  className,
+}: {
+  tone: NoticeTone;
+  /** The state, in four or five words. Carries the tone's colour. */
+  title: ReactNode;
+  /** Why, and what it costs. The app's body size — this is not a heading. */
+  children?: ReactNode;
+  /** The control that resolves it, when one exists on another screen. */
+  action?: ReactNode;
+  className?: string;
+}) {
+  const { block, heading } = noticeSurface(tone);
+  return (
+    <div className={cn('rounded-[18px] px-[18px] py-4', block, className)}>
+      <div className={cn('text-[13px] font-semibold', heading)}>{title}</div>
+      {children && (
+        <div className="mt-1.5 text-[12.5px] leading-relaxed text-saibyl-muted">
+          {children}
+        </div>
+      )}
+      {action && <div className="mt-3">{action}</div>}
+    </div>
   );
 }
 

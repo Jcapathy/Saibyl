@@ -62,8 +62,72 @@
    shadow rule at all, only its hairline. Shadow every row and the page turns
    to soup — which is why `<Card>` makes the caller say which of the three it
    is rather than letting a call site guess. */
-.sb-stage { box-shadow: 0 22px 60px rgba(52, 96, 164, .12); }
-.sb-meaning { box-shadow: 0 14px 44px rgba(57, 91, 146, .06); }
+/* The inset white hairline along the top edge is the half that was missing
+   until 2026-08-23. Every raised surface on all four artboards carries one —
+   `inset 0 1px rgba(255,255,255,.35..42)` — and without it a card is a
+   rectangle with a shadow under it rather than something with a lit edge. The
+   founder's word for the result was "sterile". */
+.sb-stage { box-shadow: inset 0 1px rgba(255, 255, 255, .42), 0 22px 60px rgba(52, 96, 164, .12); }
+.sb-meaning { box-shadow: inset 0 1px rgba(255, 255, 255, .35), 0 14px 44px rgba(57, 91, 146, .06); }
+
+/* ── Gradient is structural, not decoration ─────────────────────────────────
+   The artboards use eight, and they are how the eye is told what matters.
+   Reading them off `design/*.dc.html`:
+
+     the primary action   linear-gradient(135deg, #286cf0, #5268e9)
+     the brand mark       linear-gradient(135deg, #2f75ef 5%, #705ee3 95%)
+     the pitch itself     linear-gradient(145deg, #306fe9, #725ce1 72%)
+     a live accent        linear-gradient(135deg, #35c7d5, #2f8fef)
+     a violet accent      linear-gradient(135deg, #8b73ee, #6a4fe0)
+     a panel's own ground linear-gradient(180deg, #edf5ff 0%, #f8fbff 87%)
+     a meter              linear-gradient(90deg,  #8b73ee, #286cf0)
+
+   Until this date not one primitive emitted any of them, so every page built
+   on this system came out as flat white cards on a washed ground. */
+
+/* The primary action. A flat fill is never this — the glow underneath is the
+   same blue as the fill and is what separates "the thing to do" from "a thing
+   you may do". `sb-lift` composes on top for the hover rise. */
+.sb-action {
+  color: #fff;
+  background: linear-gradient(135deg, #286cf0, #5268e9);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .35), 0 8px 18px rgba(40, 108, 240, .22);
+  border: none;
+}
+.sb-action:hover { box-shadow: inset 0 1px rgba(255, 255, 255, .35), 0 13px 25px rgba(40, 108, 240, .30); }
+
+/* The second action beside it: real, but not the one being recommended. */
+.sb-action-quiet {
+  color: #14294a;
+  background: #fff;
+  border: 1px solid rgba(38, 79, 139, .14);
+}
+.sb-action-quiet:hover { border-color: rgba(40, 108, 240, .30); }
+
+/* A panel with a ground of its own, rather than white on a wash. The report's
+   room is drawn on this. Once per screen at most — a page where everything has
+   its own ground has no ground. */
+.sb-hero { background: linear-gradient(180deg, #edf5ff 0%, #f8fbff 87%); }
+
+/* ── Colour carries state ───────────────────────────────────────────────────
+   The artboard says a blocked step in violet and a thin one in amber, as a
+   tinted block with a coloured heading — not as grey text, which is how the
+   app said it and is why nothing on the screen looked like it mattered. The
+   founder's standing rule is that a control either runs and states what its
+   answer will be missing, or it is blocked with the reason beside it; these
+   are the two renderings of that sentence. */
+.sb-note-blocked {
+  border: 1px solid rgba(139, 115, 238, .30);
+  background: rgba(139, 115, 238, .07);
+}
+.sb-note-thin {
+  border: 1px solid rgba(180, 83, 9, .24);
+  background: rgba(180, 83, 9, .06);
+}
+.sb-note-live {
+  border: 1px solid rgba(53, 199, 213, .32);
+  background: rgba(53, 199, 213, .07);
+}
 
 /* ── Motion ─────────────────────────────────────────────────────────────────
    Durations and easings are the artboard's, unchanged. The rail deals its

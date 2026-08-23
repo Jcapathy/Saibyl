@@ -125,7 +125,13 @@ describe('2. No dead ends', () => {
     */
     const NEARBY = 12;
     const EMPTY_PHRASE = /(No .{0,40} yet|Nothing .{0,40} yet)/i;
-    const WAY_FORWARD = /<(Link|Guarded|EmptyState|button)\b|\baction[=:]/;
+    /* `Action` joined the list on 2026-08-23 with the design primitive of that
+       name. It is polymorphic — `<Action as={Link} to=…>` — so the raw `<Link`
+       it used to render no longer appears in the source, and without this the
+       rule would fire on a page that had just been given a *better* way
+       forward than it had before. It counts for the same reason `Guarded`
+       does: it is a control, and a control is a way out. */
+    const WAY_FORWARD = /<(Link|Guarded|EmptyState|Action|button)\b|\baction[=:]/;
 
     const offenders: string[] = [];
     for (const file of railFiles()) {
@@ -522,7 +528,6 @@ const AWAITING_THE_SWEEP = [
   'src/pages/GuidePage.tsx',
   'src/pages/SettingsPage.tsx',
   'src/pages/product/NewProductPage.tsx',
-  'src/pages/product/ProductHomePage.tsx',
   // The way in.
   'src/pages/LoginPage.tsx',
   'src/pages/SignupPage.tsx',

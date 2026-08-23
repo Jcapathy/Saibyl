@@ -30,6 +30,68 @@
  */
 export type CardCarries = 'stage' | 'meaning' | 'density';
 
+/* ------------------------------------------------------------------ */
+/*  What an action is — and therefore whether it carries the gradient  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Which of the two things on screen this control is.
+ *
+ * The artboards never draw a primary action as a flat fill. It is
+ * `linear-gradient(135deg,#286cf0,#5268e9)` with a glow of the same blue
+ * underneath, and the second action beside it is white on a hairline. That
+ * contrast is how a founder is told which one to press without being told.
+ *
+ * Both were missing until 2026-08-23: no primitive in this folder emitted a
+ * gradient at all, so every page built on the system rendered its actions as
+ * flat blue rectangles. Same reason as `CardCarries` for naming the *role*
+ * rather than the look — a call site choosing a look is how the distinction
+ * stops meaning anything by the fourth page.
+ */
+export type ActionKind = 'primary' | 'quiet';
+
+const ACTION: Record<ActionKind, string> = {
+  primary: 'sb-action',
+  quiet: 'sb-action-quiet',
+};
+
+/** The classes an action of this kind wears. See {@link ActionKind}. */
+export function actionSurface(kind: ActionKind): string {
+  return ACTION[kind];
+}
+
+/* ------------------------------------------------------------------ */
+/*  What a notice says — and therefore what colour says it             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The state a tinted block is reporting.
+ *
+ * The founder's standing rule: a control either runs and states what its
+ * answer will be missing, or it is blocked with the reason beside it and the
+ * button that unblocks it. There is no third rendering, so there are exactly
+ * two tones for it — plus one for a surface that is genuinely working.
+ *
+ *   `blocked`  violet. Nothing can run until something is supplied.
+ *   `thin`     amber. It will run, and the answer will be weaker; say how.
+ *   `live`     cyan. Something is happening right now.
+ *
+ * The app said all three in grey body text, which is why nothing on a screen
+ * looked like it mattered more than anything else on it.
+ */
+export type NoticeTone = 'blocked' | 'thin' | 'live';
+
+const NOTICE: Record<NoticeTone, { block: string; heading: string }> = {
+  blocked: { block: 'sb-note-blocked', heading: 'text-saibyl-violet' },
+  thin: { block: 'sb-note-thin', heading: 'text-[#b45309]' },
+  live: { block: 'sb-note-live', heading: 'text-[#127f8a]' },
+};
+
+/** Block and heading classes for a notice of this tone. See {@link NoticeTone}. */
+export function noticeSurface(tone: NoticeTone): { block: string; heading: string } {
+  return NOTICE[tone];
+}
+
 /**
  * Border, radius, ground and depth for each kind of card.
  *

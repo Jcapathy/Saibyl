@@ -10,18 +10,34 @@ Saibyl is a Saido Labs LLC product. No personal name ever appears on it.
 a chart — open `design/` and read it.** Start with `design/README.md`, then the
 four artboards. They are self-contained HTML: open them in a browser.
 
-`design/canvas.json` — the `annotations` array — **is the design law.** It was
-approved by the founder on 2026-08-20. It is not a mood board and not a
-suggestion; it is the specification, written in his words, for every surface
-behind the login.
+### The artboards are the spec. The annotations are a change list.
 
-This rule exists because it was already broken. Three days after the canvas was
-approved, a session built two brand-new app pages without ever opening the
-folder, because nothing in the repo pointed at it. The founder found the drift
-himself on his first read-through of the site. **You are the reason this file
-exists.**
+**Read the four `.dc.html` files, not just `canvas.json`.** This distinction is
+the whole of this section, and getting it wrong has already cost two rounds of
+work.
 
-### The four rules, quoted from the canvas annotation
+`canvas.json`'s `annotations` array says *"The four changes, applied
+everywhere"* — **changes**, meaning the delta between the artboards and what
+shipped on 2026-08-20. It is not the specification. The artboards are, and they
+carry far more than four rules: eight distinct gradients, layered depth with
+inset highlights, radii scaled per element from 11px to 36px, colour that
+carries state, hover lift on anything touchable, and continuous motion
+alongside entrance motion.
+
+An earlier version of this file called the annotations "the design law". Every
+page built under that sentence came out with washes, shadows, a dotted eyebrow
+and a serif phrase applied to flat white cards — and the founder's word for the
+result, on 2026-08-23, was **"sterile."** He was right, and the sentence was
+wrong. If you only apply the four rules below, you will reproduce that.
+
+This section exists at all because the folder was ignored outright once: three
+days after the canvas was approved, a session built two brand-new app pages
+without ever opening it, because nothing in the repo pointed at it. The founder
+found the drift himself. **You are the reason this file exists.**
+
+### The four changes, quoted from the canvas annotation
+
+The floor, not the ceiling — what was missing that day:
 
 > The four changes, applied everywhere:
 >
@@ -29,6 +45,30 @@ exists.**
 > 2. Soft blue shadows on cards that carry meaning — hairlines stay on dense lists
 > 3. The dotted eyebrow on every mono label
 > 4. One Playfair italic phrase per major heading
+
+### The vocabulary the artboards carry beyond those four
+
+Read off the artboards themselves. These are what stop a page reading as a
+wireframe wearing a wash:
+
+- **Gradients are structural, not decorative.** The primary action is
+  `linear-gradient(135deg,#286cf0,#5268e9)` with a coloured glow
+  (`0 8px 18px rgba(40,108,240,.22)`), never a flat fill. Accents are
+  `(135deg,#35c7d5,#2f8fef)` and `(135deg,#8b73ee,#6a4fe0)`. A card that
+  matters has a ground of its own — the room is
+  `linear-gradient(180deg,#edf5ff 0%,#f8fbff 87%)`, not white.
+- **Depth is layered.** Outer shadow *plus* an inset highlight
+  (`inset 0 1px rgba(255,255,255,.35..42)`), at four different intensities
+  depending on how much the element matters.
+- **Colour carries state.** A missing input is a violet block —
+  `rgba(139,115,238,.07)` on `rgba(139,115,238,.30)`, heading `#6a4fe0` — not
+  grey text. Live things pulse cyan `#35c7d5` behind a ring. Accent dots glow
+  (`0 0 15px`).
+- **Anything touchable lifts**: `transform: translateY(-2px)` over 220ms.
+- **Radii scale with the element**: 11–14px chips, 16–20px cards, 28px on a
+  full-width stage, 36px on the pitch itself.
+- **Some things sit off-axis.** The buyer chips and the console are rotated a
+  degree or two. Nothing in a real room is aligned to a grid.
 
 ### Motion is part of the design, not a garnish
 

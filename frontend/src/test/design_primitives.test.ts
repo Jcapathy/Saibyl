@@ -41,6 +41,19 @@ import {
 /** The approved artboard. The app shell, with the motion it is supposed to have. */
 const ARTBOARD = readFileSync(join(SRC, '..', '..', 'design', 'Main.dc.html'), 'utf8');
 
+/**
+ * All four artboards, concatenated.
+ *
+ * `canvas.json`'s annotation is a *change list* — "the four changes, applied
+ * everywhere" — and reading it as the specification is what produced an app
+ * the founder called sterile on 2026-08-23: four rules applied faithfully to
+ * flat white cards. The artboards are the specification, and the vocabulary
+ * they carry beyond those four rules is asserted against these bytes.
+ */
+const ARTBOARDS = ['Main', 'Report', 'Answers', 'Next']
+  .map((n) => readFileSync(join(SRC, '..', '..', 'design', `${n}.dc.html`), 'utf8'))
+  .join('\n');
+
 /** The founder's brief and constraints, in their own words. */
 const CANVAS = readFileSync(join(SRC, '..', '..', 'design', 'canvas.json'), 'utf8');
 
@@ -414,15 +427,82 @@ describe('5. The washed ground is the landing page\'s own', () => {
 });
 
 describe('6. Density is deliberately unchanged', () => {
-  it('no primitive sets padding — spacing stays where the call site already has it', () => {
+  it('no primitive that wraps content sets padding — only the two that are shapes', () => {
+    /* The line, and it is a distinction rather than a loophole:
+
+       A **container** — `Card`, `Ground`, `PageHeader` — wraps content whose
+       density it cannot know, so its spacing belongs to the caller who does.
+       A shared card that re-pads every call site is the fastest way to break
+       the canvas's density rule everywhere at once.
+
+       A **shape** — `Action`, `Notice` — is drawn at a fixed size on the
+       artboard (the action at 9px/15px, radius 12, weight 800). A shape whose
+       every call site retypes its own padding has no definition, and the third
+       call site will get it wrong.
+
+       So padding is allowed only on a line that is building one of the two
+       shapes, and `sb-action` / `sb-note-` are how such a line is recognised.
+       Anything else re-padding a container fails here. */
     const PADDING = /(?:^|[\s'"`])(p[xytblrse]?-[\w[\].%/-]+)/g;
+    /** The only two exports allowed to pad, by name. Adding a third is a
+        decision somebody has to make here, in the open, rather than by
+        writing `px-4` into a component and finding the suite still green. */
+    const SHAPES = new Set(['Action', 'Notice']);
+
     for (const file of designFiles()) {
-      const found = [...file.code.matchAll(PADDING)].map((m) => m[1]);
-      expect(found, `${file.path} re-pads its call sites`).toEqual([]);
+      /* Split on the export boundary so the check is per COMPONENT rather than
+         per line: the artboard's padding and the class that identifies the
+         shape do not have to land on the same line of JSX, and a line-based
+         check would quietly pass whichever of the two the author wrapped. */
+      const blocks = file.code.split(/(?=^export function )/m);
+      const offenders = blocks.flatMap((block) => {
+        const name = /^export function (\w+)/.exec(block)?.[1] ?? '(module scope)';
+        if (SHAPES.has(name)) return [];
+        return [...block.matchAll(PADDING)].map((m) => `${name}: ${m[1]}`);
+      });
+      expect(offenders, `${file.path} re-pads its call sites`).toEqual([]);
     }
     expect(stripCssComments(DESIGN_CSS), 'design.css sets padding').not.toMatch(
       /\bpadding\b/,
     );
+  });
+
+  it('the gradient vocabulary is the artboards\', value for value', () => {
+    /* Until 2026-08-23 this folder emitted no gradient at all, and every page
+       built on it came out as flat white cards on a washed ground — which is
+       what the founder was looking at when he called the app sterile. These
+       are read off `design/*.dc.html`; a value invented here would be a second
+       brand inside a month. */
+    const css = stripCssComments(DESIGN_CSS);
+    const artboards = ARTBOARDS.replace(/\s+/g, ' ');
+
+    for (const gradient of [
+      // The thing to press, and the glow of the same blue underneath it.
+      'linear-gradient(135deg, #286cf0, #5268e9)',
+      // A panel with a ground of its own, rather than white on the wash.
+      'linear-gradient(180deg, #edf5ff 0%, #f8fbff 87%)',
+    ]) {
+      expect(css, `design.css lost ${gradient}`).toContain(gradient);
+      expect(
+        artboards,
+        `${gradient} is not on any artboard — it was invented here`,
+      ).toContain(gradient);
+    }
+
+    // And the glow, which is what separates an action from a coloured box.
+    expect(css).toContain('0 8px 18px rgba(40, 108, 240, .22)');
+  });
+
+  it('every raised surface has the inset highlight the artboards give it', () => {
+    // An outer shadow with no lit top edge is a rectangle with a shadow under
+    // it. All four artboards carry `inset 0 1px rgba(255,255,255,.35..42)` on
+    // anything raised; the app had none until the same date.
+    for (const selector of ['.sb-stage', '.sb-meaning', '.sb-action']) {
+      expect(
+        declaration(DESIGN_CSS, selector, 'box-shadow'),
+        `${selector} has no lit edge`,
+      ).toMatch(/inset 0 1px rgba\(255, 255, 255, \.\d+\)/);
+    }
   });
 
   it('the eyebrow adds a dot to the app\'s existing label, not a bigger label', () => {
