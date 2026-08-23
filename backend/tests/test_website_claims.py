@@ -146,6 +146,97 @@ def test_the_word_percent_and_the_symbol_are_the_same_claim():
     assert unsupported_claims(source, delivered) == []
 
 
+def test_a_licence_spelled_the_founders_way_is_not_reported_as_invented():
+    """The asymmetry that made this module accuse founders of inventing their
+    own licence.
+
+    The same pattern decides both sides, so a badge written only in the
+    compressed spelling a rewriter reaches for — "SEC-registered", "e-money
+    institution" — never matched the ordinary phrasing the founder's page
+    carries. The result is the worst finding this module can produce: a
+    certification, in the style guide's explicitly dangerous group, aimed at
+    somebody who holds it.
+    """
+    assert unsupported_claims(
+        "Northwind Advisors is registered with the SEC as an investment adviser.",
+        "<p>An SEC-registered investment adviser you can hold to account.</p>",
+    ) == []
+    assert unsupported_claims(
+        "Payflow is an authorised electronic money institution in Ireland.",
+        "<p>Authorised as an e-money institution.</p>",
+    ) == []
+
+
+def test_the_same_asymmetry_is_closed_where_it_repeats():
+    """Word order, one entry over: "cleared by the FDA" and "256-bit AES" are
+    how a founder writes what the rewrite compresses to "FDA-cleared" and
+    "AES-256"."""
+    assert unsupported_claims(
+        "Our device is cleared by the FDA for use in clinical settings.",
+        "<p>FDA-cleared for use in clinical settings.</p>",
+    ) == []
+    assert unsupported_claims(
+        "Records are encrypted at rest with 256-bit AES.",
+        "<p>AES-256 encryption at rest.</p>",
+    ) == []
+
+
+def test_a_badge_the_founder_never_claimed_is_still_caught_either_way():
+    """The widening may not cost detection: a page that names a regulator the
+    source never mentions is reported whichever spelling it uses."""
+    for delivered in (
+        "<p>Northwind is registered with the SEC.</p>",
+        "<p>Northwind is an SEC-registered adviser.</p>",
+    ):
+        assert _texts(unsupported_claims(_SOURCE, delivered)) == {"sec registration"}
+
+    # And the collision the entry avoids the bare acronym for stays avoided.
+    assert unsupported_claims(_SOURCE, "<p>Sign up in 30 sec. Registration is free.</p>") == []
+
+
+def test_a_compressed_magnitude_is_the_same_figure():
+    """Rewriting `$5 million` as `$5M` is the single most likely thing a copy
+    rewriter does to a headline number. Keyed as strings the two did not match,
+    and `_rounds_to` could not rescue them because `Decimal("5m")` raises — so
+    the founder was told in a paid artifact that they invented a revenue figure
+    they wrote themselves, and it cost a retry generation call each time."""
+    assert unsupported_claims(
+        "We have processed $5 million in payouts.", "<p>$5M in payouts.</p>"
+    ) == []
+    # And in the other direction, which is the same claim.
+    assert unsupported_claims(
+        "We have processed $5M in payouts.", "<p>$5 million in payouts.</p>"
+    ) == []
+    assert unsupported_claims(
+        "Ledgerline has processed over €1 million for finance teams.",
+        "<p>Over €1M processed.</p>",
+    ) == []
+    # Scale counts the same way.
+    assert unsupported_claims(
+        "Trusted by 50,000 creators worldwide.", "<p>Trusted by 50k creators.</p>"
+    ) == []
+
+
+def test_folding_a_magnitude_does_not_launder_a_different_number():
+    """The fold is arithmetic, not fuzziness: $5M is $5,000,000 and nothing
+    else."""
+    assert _texts(
+        unsupported_claims("We have processed $5 million in payouts.", "<p>$50M in payouts.</p>")
+    ) == {"$50m"}
+
+
+def test_a_unit_written_as_a_word_is_the_same_figure():
+    """`_normalise` folded "per cent" to "%" and nothing folded "cents" to "¢",
+    so the source stated no figure at all and the page's own fee was reported
+    as invented."""
+    assert unsupported_claims(
+        "We charge 30 cents per transaction.", "<p>Just 30¢ per transaction.</p>"
+    ) == []
+    assert _texts(
+        unsupported_claims("We charge 30 cents per transaction.", "<p>Just 45¢ per transaction.</p>")
+    ) == {"45¢"}
+
+
 def test_bare_numbers_are_not_claims():
     """A step number, a year and a phone number are not facts about the business."""
     delivered = """

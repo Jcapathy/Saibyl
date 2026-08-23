@@ -62,9 +62,10 @@ class _Admin:
 
 SIM = "11111111-1111-1111-1111-111111111111"
 ORG = "22222222-2222-2222-2222-222222222222"
+ICP = "44444444-4444-4444-4444-444444444444"
 
 
-def _store(objections):
+def _store(objections, *, competitors=None):
     return {
         "canonical_objections": objections,
         "simulations": [{
@@ -73,9 +74,23 @@ def _store(objections):
             "name": "Test product",
             "prediction_goal": "Would they pay?",
             "project_id": "33333333-3333-3333-3333-333333333333",
-            "icp_profile_id": None,
+            "icp_profile_id": ICP if competitors is not None else None,
+        }],
+        "icp_profiles": [{
+            "id": ICP,
+            "competitors": competitors or [],
+            "product_summary": "A thing that does a thing.",
         }],
     }
+
+
+def _card(rival):
+    return ap.Battlecard(
+        rival=rival,
+        they_say="They say they are cheaper.",
+        the_honest_read="They are, on a small team.",
+        where_we_win="Multi-entity closes.",
+    )
 
 
 def _objection(key, label, agents, score, quote="They said this."):
@@ -194,6 +209,99 @@ async def test_walking_away_is_available_rather_than_always_rebutting(monkeypatc
     pack = await ap.build_answer_pack(SIM, ORG)
 
     assert pack.rows[0].when_to_walk
+
+
+async def test_a_battlecard_for_a_rival_nobody_named_is_dropped(monkeypatch):
+    """The guarantee the docstring makes and the module did not keep.
+
+    `rivals` was interpolated into the prompt and nothing checked what came
+    back, so the model could return a battlecard for a company the founder has
+    never heard of — in the one artifact a founder reads out loud on a live
+    call. Asking a model to name a founder's competitors is how a battlecard
+    ends up arguing against a company that does not exist.
+    """
+    _install(
+        monkeypatch,
+        _store([_objection("price", "Too expensive", 14, 9.5)]),
+        ap._Generated(
+            rows=[_row("price")],
+            battlecards=[_card("Numeric"), _card("Doing nothing")],
+        ),
+    )
+
+    pack = await ap.build_answer_pack(SIM, ORG)
+
+    assert [card.rival for card in pack.battlecards] == ["Doing nothing"]
+
+
+async def test_a_rival_the_buyers_named_out_loud_keeps_its_battlecard(monkeypatch):
+    """The model may notice a rival in the room's own words. It may not conjure
+    one, and the difference is a substring match away."""
+    _install(
+        monkeypatch,
+        _store([
+            _objection("switching", "We already have something", 8, 5.0, quote="We already use Wedge.")
+        ]),
+        ap._Generated(rows=[_row("switching")], battlecards=[_card("Wedge")]),
+    )
+
+    pack = await ap.build_answer_pack(SIM, ORG)
+
+    assert [card.rival for card in pack.battlecards] == ["Wedge"]
+
+
+async def test_a_competitor_row_is_read_as_a_name_not_a_python_dict(monkeypatch):
+    """`icp_profiles.competitors` holds `Competitor.model_dump()` rows, and
+    every writer of that column writes them that way.
+
+    `str(row)` put "{'name': 'Datadog', 'positioning': …, 'mentioned_in':
+    ['9f3e…']}" into the allow-list the model is told to write about — so the
+    founder's real competitor was unrecognisable in the prompt and any
+    battlecard naming it was then dropped as invented.
+    """
+    store = _store(
+        [_objection("price", "Too expensive", 14, 9.5)],
+        competitors=[{
+            "name": "Datadog",
+            "positioning": "APM incumbent",
+            "mentioned_in": ["9f3e1a20-0000-4000-8000-000000000000"],
+        }],
+    )
+    monkeypatch.setattr(ap, "get_supabase_admin", lambda: _Admin(store))
+    prompts: list[str] = []
+
+    async def fake_structured(messages, _schema):
+        prompts.append(messages[-1]["content"])
+        return ap._Generated(rows=[_row("price")], battlecards=[_card("Datadog")])
+
+    monkeypatch.setattr(ap, "llm_structured", fake_structured)
+
+    pack = await ap.build_answer_pack(SIM, ORG)
+
+    assert "- Datadog" in prompts[0]
+    assert "mentioned_in" not in prompts[0]
+    assert [card.rival for card in pack.battlecards] == ["Datadog"]
+
+
+async def test_the_measured_agent_count_is_not_evidence_for_a_figure(monkeypatch):
+    """The prompt states "raised by: 14 buyers", and the scrubber was pointed
+    at the prompt — so a count this module printed licensed "we are 14%
+    cheaper", in a line meant to be said out loud to someone who can check it.
+    """
+    _install(
+        monkeypatch,
+        _store([_objection("price", "Too expensive", 14, 9.5)]),
+        ap._Generated(
+            rows=[_row("price", respond="We are 14% cheaper than the incumbent.")],
+            battlecards=[],
+        ),
+    )
+
+    pack = await ap.build_answer_pack(SIM, ORG)
+
+    assert "14%" not in pack.rows[0].respond
+    assert "[TODO: your number]" in pack.rows[0].respond
+    assert pack.placeholders_to_fill == 1
 
 
 def test_the_always_real_alternatives_are_never_forgotten():

@@ -166,6 +166,23 @@ def _load_objections(simulation_id: str, org_id: str) -> list[dict[str, Any]]:
     return rows
 
 
+def _competitor_name(row: Any) -> str:
+    """The rival's name, from the shape the column actually holds.
+
+    `icp_profiles.competitors` is written as
+    `[c.model_dump(mode="json") for c in profile.competitors]` — dicts of
+    `name`, `positioning` and `mentioned_in` — by both writers of that column.
+    `str(row)` therefore produced "{'name': 'Datadog', 'positioning': 'APM
+    incumbent', 'mentioned_in': ['9f3e…']}", which went into the prompt's
+    allow-list as the only name the model was permitted to write about, and
+    into the battlecard the founder reads out loud, internal document UUID and
+    all. Plain strings are still accepted: this column has held both.
+    """
+    if isinstance(row, dict):
+        return str(row.get("name") or "").strip()
+    return str(row or "").strip()
+
+
 def _load_context(simulation_id: str, org_id: str) -> dict[str, Any]:
     """The product's own words, and the rivals the founder already named."""
     admin = get_supabase_admin()
@@ -194,7 +211,7 @@ def _load_context(simulation_id: str, org_id: str) -> dict[str, Any]:
         ).data or {}
         raw = icp.get("competitors")
         if isinstance(raw, list):
-            competitors = [str(c) for c in raw if str(c).strip()]
+            competitors = [name for name in map(_competitor_name, raw) if name]
         summary = str(icp.get("product_summary") or "")
         founder = founder_material(icp)
 
@@ -222,6 +239,27 @@ def _quotes(row: dict[str, Any]) -> list[str]:
         if text and str(text).strip():
             out.append(str(text).strip())
     return out
+
+
+def _fact_material(context: dict[str, Any], objections: list[dict[str, Any]]) -> str:
+    """The only text a figure in this pack is allowed to come from.
+
+    Deliberately **not** the prompt. The prompt carries this module's own
+    bookkeeping — "raised by: 14 buyers", "across 3 kinds of buyer" — and
+    scrubbing against it made those counts license anything that landed on the
+    same number: "we are 14% cheaper", "$3 per entity per month". A count this
+    module printed is not evidence for a claim the model wrote.
+    """
+    parts = [
+        str(context.get("name") or ""),
+        str(context.get("goal") or ""),
+        str(context.get("summary") or ""),
+    ]
+    for row in objections:
+        parts.append(str(row.get("label") or ""))
+        parts.append(str(row.get("summary") or ""))
+        parts.extend(_quotes(row))
+    return "\n".join(part for part in parts if part.strip())
 
 
 async def build_answer_pack(simulation_id: str, org_id: str) -> AnswerPack:
@@ -271,14 +309,19 @@ async def build_answer_pack(simulation_id: str, org_id: str) -> AnswerPack:
         _Generated,
     )
 
-    # Every figure in the script must come from `user` — the founder's words
-    # and the buyers' own. SYSTEM says so above and was overridden anyway, in
-    # copy meant to be read aloud on a call: a $150k loaded salary, a $700
-    # labour cost and a 17-hour payback, none of them in the input, for a
-    # product that has never been sold. Invented figures become the placeholder
-    # the prompt asked for, which is honest and countable.
+    # Every figure in the script must come from the founder's words or the
+    # buyers' own. SYSTEM says so above and was overridden anyway, in copy
+    # meant to be read aloud on a call: a $150k loaded salary, a $700 labour
+    # cost and a 17-hour payback, none of them in the input, for a product that
+    # has never been sold. Invented figures become the placeholder the prompt
+    # asked for, which is honest and countable.
+    #
+    # Checked against `_fact_material` rather than `user`, because the prompt
+    # states its own agent counts and those are not evidence for a price.
     generated, invented = scrub_unsourced(
-        generated, user, product_material=str(context.get("founder_material") or "")
+        generated,
+        _fact_material(context, objections),
+        product_material=str(context.get("founder_material") or ""),
     )
     if invented:
         log.warning(
@@ -287,6 +330,32 @@ async def build_answer_pack(simulation_id: str, org_id: str) -> AnswerPack:
             count=len(invented),
             figures=invented[:10],
         )
+
+    # ── Battlecards: the model's rivals are verified, not believed ──
+    #
+    # The docstring's promise, enforced rather than assumed. `rivals` was
+    # interpolated into the prompt and nothing checked what came back, so a
+    # battlecard could argue against a company that does not exist — in the one
+    # artifact a founder reads out loud on a live call. The check is the
+    # messaging doc's `_allowed_alternatives`: the founder's list, plus any
+    # name a buyer actually said, matched against the quote text rather than
+    # taken on trust.
+    spoken = " ".join(
+        [str(row.get("summary") or "") for row in objections]
+        + [quote for row in objections for quote in _quotes(row)]
+    ).lower()
+    allowed = {name.lower() for name in rivals}
+    battlecards: list[Battlecard] = []
+    for card in generated.battlecards:
+        name = str(card.rival or "").strip()
+        if name and (name.lower() in allowed or name.lower() in spoken):
+            battlecards.append(card)
+        else:
+            log.warning(
+                "answer_pack_dropped_invented_rival",
+                simulation_id=simulation_id,
+                rival=name,
+            )
 
     # The measured numbers are attached here, from the database rows — never
     # taken from the model's echo of them.
@@ -322,7 +391,7 @@ async def build_answer_pack(simulation_id: str, org_id: str) -> AnswerPack:
 
     pack = AnswerPack(
         rows=rows,
-        battlecards=generated.battlecards,
+        battlecards=battlecards,
         built_from_objections=len(objections),
         notes=generated.notes,
     )
@@ -334,7 +403,7 @@ async def build_answer_pack(simulation_id: str, org_id: str) -> AnswerPack:
         "answer_pack_built",
         simulation_id=simulation_id,
         rows=len(rows),
-        battlecards=len(generated.battlecards),
+        battlecards=len(battlecards),
         placeholders=pack.placeholders_to_fill,
     )
     return pack

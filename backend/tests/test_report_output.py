@@ -30,6 +30,7 @@ from app.services.intelligence.report_agent import (
     _figure_checked,
     clean_report_output,
 )
+from app.services.intelligence.report_facts import unsourced_figures
 
 # ── the openers, including the two that actually shipped ─────────────
 
@@ -131,6 +132,92 @@ def test_an_opener_without_a_preamble_verb_survives():
     prose = "I want to be clear about what this measures."
 
     assert clean_report_output(prose) == prose
+
+
+def test_a_verbatim_buyer_quote_is_not_a_preamble():
+    """The evidence sounds exactly like a preamble, because it is first person.
+
+    `REACT_PROMPT` requires "direct quotes from the people in the run" and
+    `agent_interview` returns first-person text, so "I'll review it…" is what a
+    buyer quote looks like. Unanchored, the rule deleted the quote and left the
+    quotation marks standing — three times, since it runs at section write, DB
+    write and render.
+    """
+    prose = (
+        "One agency owner put it plainly: \"I'll review it with my co-founder "
+        "before we commit.\" That hesitation is the whole finding."
+    )
+
+    assert clean_report_output(prose) == prose
+
+
+def test_a_second_verbatim_quote_shape_survives_too():
+    prose = 'A buyer wrote: "I must check whether it exports to Xero." Nobody answered.'
+
+    assert clean_report_output(prose) == prose
+
+
+def test_a_preamble_line_with_no_period_does_not_swallow_the_table_after_it():
+    """`[^.]*` crossed newlines, so a preamble line with no terminal period ran
+    to the first "." anywhere — including the one inside a decimal. The
+    headline, the header row, the separator row and half the first data row
+    went with it, and the section opened on "62 | 80.6% |"."""
+    text = (
+        "I'll focus on Reddit and Hacker News\n\n"
+        "| Platform | Sentiment | Opposed |\n"
+        "|---|---|---|\n"
+        "| Reddit | -0.62 | 80.6% |\n"
+        "| Hacker News | -0.11 | 41.0% |\n\n"
+        "Reddit ran the deeper negative."
+    )
+
+    cleaned = clean_report_output(text)
+
+    assert cleaned.startswith("| Platform | Sentiment | Opposed |")
+    assert "|---|---|---|" in cleaned
+    assert "| Reddit | -0.62 | 80.6% |" in cleaned
+    assert "I'll focus" not in cleaned, "the preamble line itself must still go"
+
+
+def test_an_analyst_paragraph_opening_based_on_the_findings_is_not_deleted():
+    """Rule 1d was MULTILINE, so `^` matched any line start and DOTALL ran to
+    the end of the paragraph. "Based on the…" / "From the…" is ordinary analyst
+    prose and a natural opener anywhere in a section; it was deleted whole,
+    with no log line and nothing left behind."""
+    prose = (
+        "## Who reacted how\n\n"
+        "Based on the measured findings, the room split into three groups by "
+        "round three, and the split held.\n\n"
+        "The finance buyer never moved."
+    )
+
+    assert clean_report_output(prose) == prose
+
+
+def test_a_paragraph_opening_from_the_platform_data_keeps_its_heading_off_the_table():
+    prose = (
+        "## Platform split\n\n"
+        "From the platform data, Reddit ran meaningfully more negative than "
+        "Hacker News across every round.\n\n"
+        "| Platform | Sentiment |\n"
+        "|---|---|"
+    )
+
+    assert clean_report_output(prose) == prose
+
+
+def test_a_real_self_referential_preamble_at_the_top_still_goes():
+    """The case rule 1d was written for: it sits before the section, and the
+    section starts at a heading."""
+    text = (
+        "I have extensive evidence across five rounds.\n\n"
+        "## Reception and Belief\n\nThe room split early."
+    )
+
+    cleaned = clean_report_output(text)
+
+    assert cleaned.startswith("## Reception and Belief")
+    assert "extensive evidence" not in cleaned
 
 
 # ── the closing calls, and what happens when they do not return ──────
@@ -307,6 +394,88 @@ async def test_an_empty_correction_leaves_the_section_intact(monkeypatch):
     assert result == INVENTED
 
 
+#: A correct section — round-by-round arc, measured shares, nothing invented
+#: except the one figure that triggers the retry. This is what was replaced by
+#: a 38-character stub in a run with a stubbed model.
+LONG_SECTION = (
+    "## Platform dynamics\n\n"
+    "**Twitter/X carried the argument and Reddit never caught up.**\n\n"
+    "Twitter/X ran at -0.4653 across the run with 80.56% opposed, against "
+    "-0.091 and 41.03% on Reddit. The gap opened in round two and never "
+    "closed, and it is the single most decision-relevant number in this "
+    "report: the room that argued hardest is the room the launch post was "
+    "written for.\n\n"
+    "The finance buyer moved first and moved furthest. The engineer who has "
+    "to migrate stayed roughly where they started, which is the more useful "
+    "signal — they were never the objection, and every round spent answering "
+    "them was a round not spent on the client-relationship thread. The agency "
+    "owner arrived sceptical, softened in round three, and hardened again "
+    "once the tone of the automated reminder was shown.\n\n"
+    "**What this predicts.** If the launch post runs as written, the "
+    "client-relationship objection carries. Reddit hit -0.35 in the round "
+    "where it spread, and nothing in the arc suggests it reverses on its own. "
+    "The fix is not more evidence; it is changing who sends the message, "
+    "which is the one variable the room reacted to consistently across all "
+    "five rounds and both platforms.\n"
+)
+
+STUB = "The room turned negative over the run."
+
+
+@pytest.mark.asyncio
+async def test_a_stub_does_not_replace_a_section_just_by_having_fewer_figures(
+    monkeypatch,
+):
+    """The only acceptance test was `survivors >= figures`, which is monotone in
+    how much text the rewrite deletes — and the complaint itself offers "remove
+    the sentence that depends on it". A 1,000-character correct section came
+    back as 38 characters, logged as a successful correction."""
+    _install(monkeypatch, [f"ANSWER: {STUB}"])
+
+    with capture_logs() as logs:
+        result = await _check(LONG_SECTION)
+
+    assert result == LONG_SECTION
+    rejected = next(e for e in logs if e["event"] == "report_figure_retry_too_short")
+    assert rejected["after_chars"] == len(STUB)
+    assert not any(e["event"] == "report_figures_corrected" for e in logs)
+
+
+@pytest.mark.asyncio
+async def test_a_correction_that_drops_a_sentence_is_still_accepted(monkeypatch):
+    """The floor must not reject the ordinary case: the complaint's own remedy
+    is to replace the figure or drop the sentence carrying it."""
+    trimmed = LONG_SECTION.replace(
+        "Reddit hit -0.35 in the round where it spread, and nothing in the "
+        "arc suggests it reverses on its own. ",
+        "",
+    )
+    assert trimmed != LONG_SECTION
+    _install(monkeypatch, [f"ANSWER: {trimmed}"])
+
+    assert await _check(LONG_SECTION) == trimmed.strip()
+
+
+@pytest.mark.asyncio
+async def test_a_figure_retry_that_hangs_is_bounded(monkeypatch):
+    """`llm_complete` has no timeout of its own, and this retry runs on the
+    result of both closing calls and all three section answers. A hang here
+    strands `markdown_content` NULL with every section row `complete` — the
+    incident `_CLOSING_CALL_TIMEOUT_S` was added for, one call later."""
+    async def _never_returns_complete(messages, **kwargs):
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(report_agent, "llm_complete", _never_returns_complete)
+    monkeypatch.setattr(report_agent, "_CLOSING_CALL_TIMEOUT_S", 0.05)
+
+    with capture_logs() as logs:
+        result = await asyncio.wait_for(_check(INVENTED), timeout=5)
+
+    assert result == INVENTED, "a wedged retry took the whole report with it"
+    failed = next(e for e in logs if e["event"] == "report_figure_retry_failed")
+    assert "TimeoutError" in failed["error"]
+
+
 @pytest.mark.asyncio
 async def test_the_invented_figures_are_logged_with_their_values(monkeypatch):
     _install(monkeypatch, [f"ANSWER: {HONEST}"])
@@ -317,6 +486,103 @@ async def test_the_invented_figures_are_logged_with_their_values(monkeypatch):
     flagged = next(e for e in logs if e["event"] == "report_section_unsourced_figures")
     assert flagged["section"] == "Platform dynamics"
     assert set(flagged["figures"]) == {"-0.35", "-0.19"}
+
+
+# ── the checker must be shown what the writer was shown ──────────────
+#
+# `report_facts` documents its evidence as "precisely what the model was
+# shown". Since the message scoreboard was added, `lens_context` has carried
+# measured numbers of its own — each version's objective rate, its 95% CI
+# bounds and its virality score — and reached the writer through the prompt and
+# the checker not at all.
+
+SCOREBOARD_LENS = """
+MESSAGE SCOREBOARD — this run tested 2 messages against one shared audience
+  - Founder-sender: objective 34.0% (95% CI 12.3%–45.6%, n=25 agents),
+    virality 71/100
+  - Tool-sender: objective 18.0% (95% CI 6.1%–29.9%, n=25 agents),
+    virality 44/100
+VERDICT FROM THE MEASUREMENT: the intervals overlap, so the test did not
+separate them.
+"""
+
+SCOREBOARD_ANSWER = (
+    "The founder-sender version hit objective 34.0% "
+    "(95% CI 12.3%-45.6%, n=25 agents)."
+)
+
+
+class _Analytics:
+    """What `simulation_analytics` returns: a summary line and a data dict."""
+
+    def __init__(self, atype):
+        self.summary = f"{atype}: 25 people, 5 rounds, 180 events measured."
+        self.data = {
+            "quality": {"agents_measured": 25, "events_measured": 180},
+            "sentiment_curve": [-0.05, -0.18, -0.41, -0.62, -0.64],
+            "stance": {"oppose_pct": 60.0, "support_pct": 24.0},
+            "by_platform": {"reddit": {"mean_sentiment": -0.091, "n": 39}},
+        }
+
+
+@pytest.mark.asyncio
+async def test_the_scoreboard_the_writer_was_shown_is_evidence_to_the_checker(
+    monkeypatch,
+):
+    """On every multi-version run — the Marketing lens the scoreboard exists for
+    — the section that correctly reported the measured comparison was the one
+    accused of inventing it, and the retry pushed the model to drop the
+    comparison the run was paid for."""
+    seen: list[str] = []
+
+    async def _analytics(_sim_id, atype):
+        return _Analytics(atype)
+
+    async def _answers(messages, **kwargs):
+        return f"ANSWER: ## Versions\n\n{SCOREBOARD_ANSWER}"
+
+    async def _capture(answer, evidence_text, *, section_title, config):
+        seen.append(evidence_text)
+        return answer
+
+    monkeypatch.setattr(report_agent, "simulation_analytics", _analytics)
+    monkeypatch.setattr(report_agent, "llm_complete", _answers)
+    monkeypatch.setattr(report_agent, "_figure_checked", _capture)
+
+    await report_agent._run_react_loop(
+        report_agent.SectionPlan(title="Versions", research_angles=["which landed"]),
+        "00000000-0000-0000-0000-000000000001",
+        "will freelancers pay for this",
+        ReACTConfig(),
+        platforms="reddit",
+        lens_context=SCOREBOARD_LENS,
+    )
+
+    assert seen, "the section was never figure-checked"
+    assert "virality 71/100" in seen[0]
+    assert unsourced_figures(seen[0], SCOREBOARD_ANSWER) == [], (
+        "the measured version comparison was reported as invented"
+    )
+
+
+# ── the stat card the summary must not invent ────────────────────────
+
+
+def test_the_stat_cards_do_not_mandate_an_engagement_score():
+    """Part D required "| Engagement | <engagement score X.X / 10> |", and
+    nothing in the prompt's inputs carries an engagement score — `lens_context`,
+    the only place a virality score exists, is not passed to this prompt. So the
+    model had to supply the number, in the first table a founder reads, on every
+    run."""
+    prompt = report_agent.EXECUTIVE_SUMMARY_PROMPT
+
+    assert "| Engagement |" not in prompt
+    assert "engagement score" not in prompt.lower().replace(
+        "no engagement score", ""
+    )
+    assert "IMPORTANT for Engagement:" in prompt, (
+        "a mandated row removed without a rule against re-adding it comes back"
+    )
 
 
 # ── a section must be written, not echoed ────────────────────────────

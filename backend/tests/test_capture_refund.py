@@ -20,9 +20,14 @@ says plainly when it does.
 """
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from app.workers import website_tasks
+
+ORG = "11111111-1111-1111-1111-111111111111"
+SNAP = "44444444-4444-4444-4444-444444444444"
 
 
 class _Recorder:
@@ -95,6 +100,40 @@ def test_refund_credits_is_a_no_op_for_nothing():
                                  reason="test")
 
     assert granted == []
+
+
+def test_grant_credits_is_never_used_for_a_refund(monkeypatch):
+    """The one RPC a refund must never touch, and the one it went through.
+
+    `grant_credits(org_uuid, amount)` is a *cycle* grant: its body sets
+    `credits_balance += amount`, **`credits_granted = amount`** and
+    **`credit_cycle_start = NOW()`**. Every refund in the product routed through
+    it, so a Growth org with `credits_granted = 59,800` that hit one 3,000-credit
+    refund ended with a plan grant of 3,000 and its month restarted today —
+    `GET /billing/credits` then reporting a usage bar of 766.7%. And
+    `get_credit_balance` reads `credits_granted or tier_grant(plan)`, so 3,000 is
+    truthy and nothing ever recovers the real grant.
+
+    Migration 028's header, migration 031's header, `gtm/store.refund_run`'s
+    docstring and `test_gtm_refund.test_grant_credits_is_never_used_for_a_refund`
+    all say this in writing. Nothing said it about `agent_pricing.refund_credits`,
+    which is the one every refund path shipped that day actually called.
+    """
+    from app.services.billing import agent_pricing
+
+    seen: list[tuple[str, dict]] = []
+
+    class _Admin:
+        def rpc(self, name, params):
+            seen.append((name, params))
+            return SimpleNamespace(execute=lambda: SimpleNamespace(data=None))
+
+    monkeypatch.setattr(agent_pricing, "get_supabase_admin", lambda: _Admin())
+
+    agent_pricing.refund_credits(ORG, 3000, reason="capital:no_matches:x")
+
+    assert seen == [("refund_credits", {"org_uuid": ORG, "amount": 3000})]
+    assert "grant_credits" not in [name for name, _ in seen]
 
 
 def test_a_failing_refund_never_masks_the_original_failure(monkeypatch):

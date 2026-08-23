@@ -27,8 +27,69 @@ def _events(logs) -> set[str]:
 
 # ── Rate limiting: the default must be fail-closed ───────
 
-def _request(ip: str = "203.0.113.5"):
-    return SimpleNamespace(headers={}, client=SimpleNamespace(host=ip))
+def _request(ip: str = "203.0.113.5", forwarded: str | None = None):
+    headers = {} if forwarded is None else {"x-forwarded-for": forwarded}
+    return SimpleNamespace(headers=headers, client=SimpleNamespace(host=ip))
+
+
+# ── The limit must be keyed on an address the caller cannot choose ──
+
+def test_the_left_most_forwarded_for_entry_is_never_the_key():
+    """The limiter was keyed on a header the attacker writes.
+
+    `X-Forwarded-For` is a list each proxy *appends its peer to*, so everything
+    left of the right-most entry is whatever the client typed. Reading
+    `split(",")[0]` returned it verbatim — a fresh value per request bought a
+    fresh 10-attempt budget every time, so `login` (10/60s), `signup` (5/300s)
+    and `refresh` (20/60s) never fired at all. Signup grants
+    `tier_grant('free')` credits to every account it creates, so unlimited
+    signups is unbounded model spend on Saibyl's account.
+
+    Both failure cases verbatim: a nonce that is not even an IP, and a forged
+    address in front of the real one.
+    """
+    nonce = _request("203.0.113.9", forwarded="attacker-nonce-0001")
+    assert rate_limit._get_client_ip(nonce) == "203.0.113.9"
+
+    forged = _request("203.0.113.9", forwarded="9.9.9.9, 203.0.113.9")
+    assert rate_limit._get_client_ip(forged) == "203.0.113.9"
+
+
+def test_the_entry_our_own_proxy_wrote_is_the_key():
+    """One hop is Render's topology: the right-most entry is the real client."""
+    request = _request("10.0.0.7", forwarded="198.51.100.4")
+    assert rate_limit._get_client_ip(request) == "198.51.100.4"
+
+    chained = _request("10.0.0.7", forwarded="9.9.9.9, 198.51.100.4")
+    assert rate_limit._get_client_ip(chained) == "198.51.100.4"
+
+
+@pytest.mark.asyncio
+async def test_a_forged_key_no_longer_buys_a_fresh_budget(monkeypatch):
+    """The consequence, at the limiter rather than at the helper."""
+    keys: list[str] = []
+
+    class _KeyRecordingRedis:
+        def incr(self, key):
+            keys.append(key)
+            return len(keys)
+
+        def expire(self, _key, _seconds):
+            return True
+
+    monkeypatch.setattr(rate_limit, "_client", _ClientStub(_KeyRecordingRedis()))
+
+    for i in range(3):
+        request = _request("203.0.113.9", forwarded=f"attacker-nonce-{i:04d}")
+        await rate_limit.check_rate_limit(request, "login", 10, 60)
+
+    assert set(keys) == {"ratelimit:login:203.0.113.9"}, (
+        "a caller chose their own bucket, so the limit never fires"
+    )
+
+
+def test_no_forwarded_header_falls_back_to_the_socket_peer():
+    assert rate_limit._get_client_ip(_request("203.0.113.5")) == "203.0.113.5"
 
 
 class _ClientStub:
@@ -286,3 +347,51 @@ def test_no_static_route_anywhere_is_shadowed_by_a_parameterised_one():
                 shadowed.append(f"{method} {route.path}")
 
     assert not shadowed, f"unreachable static routes: {shadowed}"
+
+
+# ── Credentials belong nowhere in a URL ──────────────────
+
+def test_no_route_anywhere_takes_a_credential_as_a_query_parameter():
+    """`POST /auth/refresh` took the refresh token in the query string.
+
+    A bare `str` parameter on a handler is a **query** parameter in FastAPI, not
+    a body field, and the generated OpenAPI said so: `{"name": "refresh_token",
+    "in": "query", "required": true}` with `requestBody: None`. The live request
+    was `POST /api/auth/refresh?refresh_token=<token>` — and a Supabase refresh
+    token mints access tokens for the life of the session, so that is a full
+    account credential written verbatim into Render's request logs, any proxy
+    log in between, Sentry breadcrumbs, and the browser's own history.
+
+    A scan rather than one assertion, so the next handler that types a secret as
+    a bare `str` fails here instead of in the logs.
+    """
+    from app.main import create_app
+
+    secretish = ("token", "password", "secret", "api_key", "apikey", "credential")
+    schema = create_app().openapi()
+
+    leaked = []
+    for path, operations in schema.get("paths", {}).items():
+        for method, operation in operations.items():
+            for parameter in operation.get("parameters") or []:
+                if parameter.get("in") not in ("query", "path"):
+                    continue
+                name = str(parameter.get("name", "")).lower()
+                if any(word in name for word in secretish):
+                    leaked.append(
+                        f"{method.upper()} {path}: {parameter['name']} "
+                        f"in {parameter['in']}"
+                    )
+
+    assert not leaked, f"credentials in a URL: {leaked}"
+
+
+def test_the_refresh_token_arrives_in_the_body():
+    """The other half: it has to still be accepted, just not in the URL."""
+    from app.main import create_app
+
+    refresh = create_app().openapi()["paths"]["/api/auth/refresh"]["post"]
+
+    assert not refresh.get("parameters"), refresh.get("parameters")
+    schema = refresh["requestBody"]["content"]["application/json"]["schema"]
+    assert schema["$ref"].endswith("RefreshRequest")

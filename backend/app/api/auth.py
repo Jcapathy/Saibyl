@@ -31,6 +31,22 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class RefreshRequest(BaseModel):
+    """The refresh token, in the body — never in the URL.
+
+    It was a bare `str` parameter, which FastAPI reads as a **query
+    parameter**: the live request was
+    `POST /api/auth/refresh?refresh_token=<token>`, and the generated OpenAPI
+    said so (`"in": "query"`, no requestBody). A Supabase refresh token mints
+    new access tokens for the life of the session — it is a full account
+    credential — and a query string is written verbatim into Render's request
+    logs, any proxy log in between, Sentry breadcrumbs, and the browser's own
+    history. Anyone who could read a log could resume anyone's session.
+    """
+
+    refresh_token: str
+
+
 @router.post("/signup")
 async def signup(body: SignupRequest, request: Request):
     """Create a new user, organization, and link them."""
@@ -143,12 +159,12 @@ async def logout():
 
 
 @router.post("/refresh")
-async def refresh(refresh_token: str, request: Request):
+async def refresh(body: RefreshRequest, request: Request):
     """Refresh session token."""
     await check_rate_limit(request, "refresh", max_attempts=20, window_seconds=60, fail_open=False)
     supabase = get_supabase()
     try:
-        result = supabase.auth.refresh_session(refresh_token)
+        result = supabase.auth.refresh_session(body.refresh_token)
         return {
             "access_token": result.session.access_token,
             "refresh_token": result.session.refresh_token,

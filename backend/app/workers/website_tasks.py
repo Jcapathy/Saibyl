@@ -54,6 +54,21 @@ REFERENCE_FAILURE_PREFIX = "We couldn't read the site you admire — "
 # one constant would break that.
 SCREENSHOT_BUCKET = "project-media"
 
+# The states this worker still owns the row in.
+#
+# **Every forward write is conditional on one of these**, because this worker is
+# not the only writer: `maintenance/reaper` closes a check that has outrun its
+# deadline, and its close was being silently overwritten. The writes here were
+# all keyed on `.eq("id", snapshot_id)` alone, so a check reaped at the deadline
+# went on to write `judging` and then `complete` with the whole critique on top
+# of it — the founder ended up holding the finished 1,750-credit artifact *and*
+# a full refund of its price, with `credits_charged` still reading 1,750 so
+# reconciliation looked clean.
+#
+# The rule is the same one the reaper follows from the other side: whoever moves
+# the row out of these states owns the outcome, and the loser writes nothing.
+_LIVE_STATUSES = ("queued", "capturing", "judging")
+
 
 async def run_website_check(snapshot_id: str, organization_id: str) -> None:
     """Execute a queued website check end to end and persist what it found."""
@@ -72,9 +87,8 @@ async def run_website_check(snapshot_id: str, organization_id: str) -> None:
             )
         snapshot = rows[0]
 
-        admin.table("website_snapshots").update({"status": "capturing"}).eq(
-            "id", snapshot_id
-        ).execute()
+        if not _advance(admin, snapshot_id, "queued", {"status": "capturing"}):
+            return
 
         # Imported here rather than at module top so this module — and the API
         # router that imports it at startup — loads even when the website
@@ -88,21 +102,23 @@ async def run_website_check(snapshot_id: str, organization_id: str) -> None:
             capture = await capture_website(snapshot["url"])
         except WebsiteCaptureError as exc:
             # The capture service's messages are founder-readable by contract,
-            # so the row carries them whole.
-            _record_failure(snapshot_id, str(exc))
-            # Nothing was spent. The page never loaded, so no critic ran and
-            # no model was called — and the founder was being told to try
-            # again at the same price for work we had not done. Observed in
-            # production on a site that was merely slow to wake.
-            #
-            # Refunded only on THIS path. A check that dies later has consumed
-            # real compute, and a rule that quietly sometimes pays is worse
-            # than one that says plainly when it does.
-            refund_credits(
-                organization_id,
-                int(snapshot.get("credits_charged") or 0),
-                reason="website_capture_failed_before_any_model_call",
-            )
+            # so the row carries them whole. The refund is gated on that close
+            # having landed — a wedged capture can raise after the reaper has
+            # already closed and refunded the same row, and paying here as well
+            # handed back 3,500 against a 1,750 charge. See `_record_failure`.
+            if _record_failure(snapshot_id, str(exc)):
+                # Nothing was spent: the page never loaded, so no critic ran and
+                # no model was called, and the founder was being told to try
+                # again at the same price for work we had not done.
+                #
+                # Refunded only on THIS path. A check that dies later has
+                # consumed real compute, and a rule that quietly sometimes pays
+                # is worse than one that says plainly when it does.
+                refund_credits(
+                    organization_id,
+                    int(snapshot.get("credits_charged") or 0),
+                    reason="website_capture_failed_before_any_model_call",
+                )
             return
 
         # The admired site, when the founder named one. Captured before any
@@ -154,9 +170,8 @@ async def run_website_check(snapshot_id: str, organization_id: str) -> None:
         }
         if reference_screenshot_path:
             capture_update["reference_screenshot_path"] = reference_screenshot_path
-        admin.table("website_snapshots").update(capture_update).eq(
-            "id", snapshot_id
-        ).execute()
+        if not _advance(admin, snapshot_id, "capturing", capture_update):
+            return
 
         try:
             critique = await run_critic_gauntlet(
@@ -180,12 +195,13 @@ async def run_website_check(snapshot_id: str, organization_id: str) -> None:
             snapshot, organization_id=organization_id, capture=capture
         )
 
-        admin.table("website_snapshots").update({
+        if not _advance(admin, snapshot_id, "judging", {
             "critique": critique.model_dump(),
             "document_id": document_id,
             "status": "complete",
             "completed_at": datetime.now(UTC).isoformat(),
-        }).eq("id", snapshot_id).execute()
+        }):
+            return
 
         logger.info(
             "website_check_complete",
@@ -328,16 +344,74 @@ async def _store_design_gallery_row(
         )
 
 
-def _record_failure(snapshot_id: str, message: str) -> None:
-    """Leave the row saying the check failed and why.
+def _advance(admin, snapshot_id: str, expected: str, payload: dict[str, Any]) -> bool:
+    """Move the row on from `expected`. False means somebody else already did.
+
+    A compare-and-set, and the result is read rather than discarded — the whole
+    point is the branch, not the guard. The loser writes nothing and returns:
+    a check the reaper has already closed and refunded must not go on to
+    deliver its critique, and one it closed at `capturing` must not be
+    resurrected to `judging`.
+    """
+    try:
+        updated = (
+            admin.table("website_snapshots")
+            .update(payload)
+            .eq("id", snapshot_id)
+            .eq("status", expected)
+            .execute()
+        )
+    except Exception:
+        logger.exception(
+            "website_check_status_write_failed",
+            snapshot_id=snapshot_id, expected=expected,
+        )
+        return False
+
+    if not (updated.data or []):
+        logger.warning(
+            "website_check_row_moved_on",
+            snapshot_id=snapshot_id,
+            expected=expected,
+            wanted=payload.get("status"),
+            detail="another writer closed this check first; this worker stops "
+                   "here rather than overwriting it",
+        )
+        return False
+    return True
+
+
+def _record_failure(snapshot_id: str, message: str) -> bool:
+    """Leave the row saying the check failed and why. True if this call did it.
 
     Without this the frontend cannot distinguish "still checking" from
     "failed", and would poll forever on a check that will never finish.
+
+    Guarded on the row still being in flight, and the return value is what the
+    capture-failure refund is gated on: the reaper refunds `queued` and
+    `capturing` too, nothing on the row records that a refund was paid, and a
+    wedged capture can raise here *after* the reaper has already closed and paid
+    for the same row.
     """
     try:
-        get_supabase_admin().table("website_snapshots").update({
-            "status": "failed",
-            "error_message": message,
-        }).eq("id", snapshot_id).execute()
+        updated = (
+            get_supabase_admin().table("website_snapshots").update({
+                "status": "failed",
+                "error_message": message,
+            })
+            .eq("id", snapshot_id)
+            .in_("status", list(_LIVE_STATUSES))
+            .execute()
+        )
     except Exception:
         logger.exception("website_check_failure_record_failed", snapshot_id=snapshot_id)
+        return False
+
+    if not (updated.data or []):
+        logger.warning(
+            "website_check_already_closed",
+            snapshot_id=snapshot_id,
+            detail="the row was closed by another writer; no refund is paid here",
+        )
+        return False
+    return True

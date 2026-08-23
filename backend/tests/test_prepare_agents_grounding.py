@@ -52,6 +52,7 @@ class _Query:
         self._table = table
         self._payload: dict | None = None
         self._single = False
+        self._delete = False
 
     def select(self, *_a, **_k):
         return self
@@ -62,6 +63,14 @@ class _Query:
 
     def insert(self, rows):
         self._admin.inserted.extend(rows)
+        self._admin.ops.append(("insert", self._table))
+        return self
+
+    def delete(self):
+        # `run_prepare_agents` clears this run's agents before inserting the
+        # new swarm, so a second preparation replaces it rather than adding a
+        # second one on top with colliding usernames.
+        self._delete = True
         return self
 
     def eq(self, *_a):
@@ -78,6 +87,11 @@ class _Query:
         return self
 
     def execute(self):
+        if self._delete:
+            self._admin.deleted.append(self._table)
+            self._admin.ops.append(("delete", self._table))
+            self._admin.rows.pop(self._table, None)
+            return SimpleNamespace(data=[])
         if self._payload is not None:
             self._admin.updates.append((self._table, self._payload))
             return SimpleNamespace(data=[{}])
@@ -101,6 +115,10 @@ class _Admin:
         self.storage = SimpleNamespace(from_=lambda _bucket: _Bucket(objects))
         self.inserted: list[dict] = []
         self.updates: list[tuple[str, dict]] = []
+        self.deleted: list[str] = []
+        # Deletes and inserts in the order they were issued, so "the swarm is
+        # cleared *before* the new one lands" is an assertion rather than a hope.
+        self.ops: list[tuple[str, str]] = []
 
     def table(self, name: str):
         return _Query(self, name)
@@ -206,6 +224,37 @@ async def test_the_run_builds_exactly_the_agents_that_were_charged_for(
 
     assert result["agents"] == agent_count
     assert len(admin.inserted) == agent_count
+
+
+@pytest.mark.asyncio
+async def test_preparing_replaces_the_swarm_rather_than_adding_a_second_one(
+    monkeypatch,
+):
+    """The insert had no DELETE in front of it, and `agent_count` counted the
+    batch rather than the table.
+
+    `seen_usernames` is local to one invocation, so a second preparation
+    re-emitted the first one's handles. On migration 019 the first 20-row batch
+    trips `idx_simulation_agents_unique_username` and the run is marked failed;
+    without 019 a second full swarm lands, `run_simulation` reads every row for
+    the simulation, and the run executes with twice the agents the org was
+    quoted for — every confidence interval drawn from a swarm of the wrong size,
+    and the duplicate handles reproducing exactly the attribution defect 019
+    exists to prevent.
+    """
+    admin, _prompts = _install(
+        monkeypatch, sim=_sim_row(30, ["hacker_news"]), docs=[], objects={}
+    )
+
+    await simulation_tasks.run_prepare_agents(SIM)
+
+    assert admin.deleted == ["simulation_agents"], (
+        "the previous swarm was never cleared, so a second preparation adds to it"
+    )
+    # And it is cleared *first*, or it deletes the swarm it has just written.
+    assert admin.ops[0] == ("delete", "simulation_agents"), admin.ops
+    assert admin.ops.count(("delete", "simulation_agents")) == 1
+    assert admin.inserted, "nothing was inserted after the clear"
 
 
 @pytest.mark.asyncio

@@ -44,6 +44,15 @@ class Settings(BaseSettings):
     # The platform owner's org; empty disables the admin routes entirely
     # (they answer 404, like crisis above). Env var: ADMIN_ORGANIZATION_ID.
     admin_organization_id: str = ""
+    # How many proxies sit in front of this process, counted from the app.
+    #
+    # `X-Forwarded-For` is a list each proxy *appends its peer to*, so the
+    # right-most entry is written by the proxy nearest us and everything to the
+    # left of it is whatever the client typed. Render is one hop, hence 1;
+    # putting a CDN in front makes it 2, and the number must move with the
+    # deployment or `core/rate_limit` keys on a value somebody else controls.
+    # Env var: TRUSTED_PROXY_HOPS.
+    trusted_proxy_hops: int = 1
 
     model_config = {"env_file": ["../.env", ".env"], "env_file_encoding": "utf-8"}
 

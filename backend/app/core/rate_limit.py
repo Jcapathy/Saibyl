@@ -8,6 +8,7 @@ that genuinely prefer availability to protection must now say so explicitly.
 """
 from __future__ import annotations
 
+import ipaddress
 from functools import lru_cache
 
 import redis
@@ -30,11 +31,48 @@ def _client() -> redis.Redis:
 
 
 def _get_client_ip(request: Request) -> str:
-    """Extract client IP from request, respecting X-Forwarded-For."""
+    """The address this request is counted against.
+
+    **The left-most `X-Forwarded-For` entry is the attacker's half of the
+    header, and this used to return it verbatim.** XFF is a list each proxy
+    *appends its own peer to*, so the right-most entry is the one written by the
+    proxy nearest us — everything to its left is whatever the client typed.
+    Reading `split(",")[0]` therefore let any caller choose their own Redis key:
+    `X-Forwarded-For: attacker-nonce-0001` came back as
+    `'attacker-nonce-0001'` — not even an IP — and a fresh value per request
+    bought a fresh 10-attempt budget every time. Login, signup and refresh were
+    all keyed this way, so the limits never fired, and signup grants
+    `tier_grant('free')` credits to every account it creates.
+
+    So: count `settings.trusted_proxy_hops` in from the right, which is the
+    entry our own trusted proxy wrote. Anything that is not a parseable IP
+    address, and any header shorter than the number of hops we expect, falls
+    back to the socket peer — the one value no client can forge.
+    """
+    peer = request.client.host if request.client else "unknown"
     forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    if not forwarded:
+        return peer
+
+    parts = [part.strip() for part in forwarded.split(",") if part.strip()]
+    hops = max(1, settings.trusted_proxy_hops)
+    if len(parts) < hops:
+        # Fewer entries than proxies means the chain is not the one this
+        # deployment was configured for; the peer is the only address left that
+        # nobody upstream could have written.
+        logger.warning(
+            "rate_limit_forwarded_for_too_short",
+            entries=len(parts), trusted_proxy_hops=hops,
+        )
+        return peer
+
+    candidate = parts[-hops]
+    try:
+        ipaddress.ip_address(candidate)
+    except ValueError:
+        logger.warning("rate_limit_forwarded_for_not_an_ip", trusted_proxy_hops=hops)
+        return peer
+    return candidate
 
 
 async def check_rate_limit(

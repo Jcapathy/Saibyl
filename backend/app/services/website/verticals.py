@@ -223,6 +223,30 @@ def brief_for(vertical_id: str) -> VerticalBrief:
     return VERTICALS.get(vertical_id, _GENERAL)
 
 
+#: The endings a signal wears in ordinary copy.
+#:
+#: The signals are written in one spelling and marketing copy uses the others:
+#: a page about "clinics", "patients" and "providers" is the same health page
+#: as one about a "clinic", a "patient" and a "provider". A rule that demanded
+#: the exact singular was blind to the plural — the normal voice of a web page
+#: — so a realistic health page scored zero hits in every category and fell
+#: through to the general brief, which is invisible because `general` is also
+#: the legitimate answer for thin evidence.
+_INFLECTION = r"(?:e?s|ed|ing)?"
+
+#: Words in a signal may be joined by a space or a hyphen in either direction:
+#: real copy writes "open-source" and "self-hosted" for signals spelled
+#: "open source" and "self-host".
+_SEPARATOR = r"[\s-]+"
+
+
+def _signal_pattern(signal: str) -> str:
+    """One signal as a regex: either separator between its words, any ordinary
+    ending after the last one, and a letter boundary on both sides."""
+    words = _SEPARATOR.join(re.escape(word) for word in re.split(r"[\s-]+", signal) if word)
+    return rf"(?<![a-z]){words}{_INFLECTION}(?![a-z])"
+
+
 def classify_vertical(text: str) -> str:
     """Best-effort category from the founder's own words.
 
@@ -241,7 +265,7 @@ def classify_vertical(text: str) -> str:
         hits = sum(
             1
             for signal in brief.signals
-            if re.search(rf"(?<![a-z]){re.escape(signal)}(?![a-z])", haystack)
+            if re.search(_signal_pattern(signal), haystack)
         )
         if hits:
             scores[vid] = hits

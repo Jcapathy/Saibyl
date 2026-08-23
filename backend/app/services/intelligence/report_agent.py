@@ -69,6 +69,22 @@ _PREAMBLE_OPENERS = (
     r"|I'm going to|I am going to|Let me|Let's|First,? I(?:'ll)?"
 )
 
+#: A preamble announces the work *before* the section and therefore starts a
+#: line. Mid-sentence, the same words are the room talking, not the model:
+#: `REACT_PROMPT` requires "direct quotes from the people in the run" and
+#: `agent_interview` returns first person, so "I need to…", "I'll check…" and
+#: "Let me look…" are exactly what a buyer quote sounds like.
+#:
+#: Unanchored, the rules deleted them and left the quotation marks standing:
+#: 'One agency owner put it plainly: "I\'ll review it with my co-founder before
+#: we commit."' became 'One agency owner put it plainly: ""'. The rule runs
+#: three times — section write, DB write, render — so the founder paid for a
+#: section whose supporting quotes were empty quote marks.
+#:
+#: A line beginning with `"` or `>` is therefore already safe: the anchor
+#: allows indentation and nothing else in front of the opener.
+_LINE_START = r"^[ \t]*"
+
 
 def clean_report_output(text: str) -> str:
     """Sanitise raw LLM text before storage **and** before rendering.
@@ -86,36 +102,60 @@ def clean_report_output(text: str) -> str:
     """
     # 1a. Full preamble-through-ANSWER blocks (dotAll for multiline CoT)
     text = re.sub(
-        r"I'll\s+(?:gather|systematically|start by).*?ANSWER:\s*",
-        "",
-        text,
-        flags=re.DOTALL | re.IGNORECASE,
-    )
-    # 1b. Broader preamble-through-ANSWER (covers "I will", "I need to", etc.)
-    text = re.sub(
-        r"(?:" + _PREAMBLE_OPENERS + r")\s+(?:\w+\s+)*?(?:"
-        + _PREAMBLE_VERBS + r").*?ANSWER:\s*",
-        "",
-        text,
-        flags=re.DOTALL | re.IGNORECASE,
-    )
-    # 1c. Preamble sentences NOT followed by ANSWER: (stop at sentence period)
-    text = re.sub(
-        r"(?:" + _PREAMBLE_OPENERS + r")\s+(?:\w+\s+)*?(?:"
-        + _PREAMBLE_VERBS + r")\b[^.]*\.\s*",
-        "",
-        text,
-        flags=re.IGNORECASE,
-    )
-    # 1d. Broader self-referential preambles ("I have extensive evidence..., but ##")
-    text = re.sub(
-        r"^(?:I have|I've|Based on|From the|Using the|After)"
-        r"(?:\s+\w+){0,5}?\s+"
-        r"(?:evidence|data|research|analysis|findings|information|results|rounds?)\b"
-        r".*?(?=\n##|\n\n)",
+        _LINE_START + r"I'll\s+(?:gather|systematically|start by).*?ANSWER:\s*",
         "",
         text,
         flags=re.DOTALL | re.IGNORECASE | re.MULTILINE,
+    )
+    # 1b. Broader preamble-through-ANSWER (covers "I will", "I need to", etc.)
+    text = re.sub(
+        _LINE_START + r"(?:" + _PREAMBLE_OPENERS + r")\s+(?:\w+\s+)*?(?:"
+        + _PREAMBLE_VERBS + r").*?ANSWER:\s*",
+        "",
+        text,
+        flags=re.DOTALL | re.IGNORECASE | re.MULTILINE,
+    )
+    # 1c. Preamble sentences NOT followed by ANSWER: (stop at the sentence's
+    #     period, or at the end of the line if it has none).
+    #
+    #     `[^.\n]` rather than `[^.]`: a preamble line with no terminal period
+    #     used to run forward to the first "." *anywhere*, including the one
+    #     inside a decimal. "I'll focus on Reddit and Hacker News" followed by a
+    #     comparison table deleted the headline, the header row, the separator
+    #     row and half the first data row, leaving the section opening on
+    #     "62 | 80.6% |". The `|$` alternative is what lets the preamble line
+    #     itself still go: it ends at the newline instead of eating the table.
+    text = re.sub(
+        _LINE_START + r"(?:" + _PREAMBLE_OPENERS + r")\s+(?:\w+\s+)*?(?:"
+        + _PREAMBLE_VERBS + r")\b[^.\n]*(?:\.|$)\s*",
+        "",
+        text,
+        flags=re.IGNORECASE | re.MULTILINE,
+    )
+    # 1d. Broader self-referential preambles ("I have extensive evidence...
+    #     ## Reception and Belief"), at the top of the output only.
+    #
+    #     This was MULTILINE, so `^` matched *any* line start, and DOTALL
+    #     `.*?(?=\n##|\n\n)` ran to the end of the paragraph. "Based on the
+    #     measured findings, the room split into three groups by round three,
+    #     and the split held." — ordinary analyst prose, and a natural way to
+    #     open a paragraph anywhere in a section — was deleted whole, with no
+    #     log line and nothing left behind. "From the platform data, Reddit ran
+    #     meaningfully more negative than Hacker News" went the same way,
+    #     leaving its heading sitting directly on a table.
+    #
+    #     The wording does not separate the preamble from the prose; they are
+    #     the same words. The position does: a preamble sits *before* the
+    #     section, and the section starts at a heading. So the rule fires only
+    #     at the top of the output, and only when a heading follows it.
+    text = re.sub(
+        r"\A\s*(?:I have|I've|Based on|From the|Using the|After)"
+        r"(?:\s+\w+){0,5}?\s+"
+        r"(?:evidence|data|research|analysis|findings|information|results|rounds?)\b"
+        r"[^\n]*?\s+(?=#{1,6}\s)",
+        "",
+        text,
+        flags=re.IGNORECASE,
     )
     # 2. All standalone TOOL: call lines
     text = re.sub(r"^TOOL:\s*.*$", "", text, flags=re.MULTILINE)
@@ -570,9 +610,13 @@ Output exactly this markdown table with values filled from your analysis:
 | Metric | Value | Label |
 |--------|-------|-------|
 | Sentiment | <overall sentiment score, signed decimal e.g. -0.42> | <Strongly Positive/Positive/Mixed/Negative/Strongly Negative> |
-| Engagement | <engagement score X.X / 10> | <High virality potential OR Moderate reach> |
 {polarization_row}| Platforms | <count of platforms> | <comma-separated platform names> |
 | Sentiment Trajectory | <directional summary e.g. "Topic A: -0.59 ↓ / Topic B: +0.40 ↑"> | <Net shift description> |
+
+IMPORTANT for Engagement: you have been given no engagement score and no reach \
+score, which is why the table above has no such row. Do not add one, do not \
+state a score out of 10 or out of 100, and do not rate how far this run would \
+spread anywhere in Part D.
 
 {polarization_guidance}
 
@@ -890,6 +934,24 @@ _TOOL_ECHO = re.compile(
 )
 
 
+#: How much of the section a correction is allowed to delete and still be
+#: accepted.
+#:
+#: The only acceptance test used to be "fewer flagged figures", which is
+#: monotone in how much text the rewrite throws away — and the complaint
+#: explicitly offers "remove the sentence that depends on it" as an option. A
+#: stubbed run proved it: a correct 1,091-character section, round-by-round arc
+#: and measured shares, was replaced by the 38 characters "The room turned
+#: negative over the run." and logged as a successful correction. `llm_complete`
+#: also truncates at its default 4,096 tokens, and truncation removes figures,
+#: which made a cut-off rewrite *more* likely to win.
+#:
+#: Removing a sentence or two around a bad figure is legitimate and stays well
+#: inside this. Below it the original stands: it has known figure problems, but
+#: it is 800-1500 words of otherwise-good work, and a stub is not a correction.
+_MIN_CORRECTION_RATIO = 0.6
+
+
 def _looks_like_prose(text: str) -> bool:
     """Whether a model response is a written section rather than tool output.
 
@@ -924,6 +986,9 @@ async def _figure_checked(
     The original is kept unless the rewrite is *strictly* better. A correction
     pass that trades two invented figures for three is not a correction, and a
     section is 800-1500 words of otherwise-good work to gamble on one retry.
+
+    "Strictly better" means fewer flagged figures **and** still a section. The
+    figure count alone is monotone in deletion — see `_MIN_CORRECTION_RATIO`.
     """
     figures = unsourced_figures(evidence_text, answer)
     if not figures:
@@ -936,19 +1001,29 @@ async def _figure_checked(
         figures=[f.text for f in figures],
     )
     try:
-        corrected_raw = await llm_complete(
-            messages=[
-                {"role": "system", "content": REPORT_SYSTEM_PROMPT},
-                {"role": "user", "content": _FIGURE_RETRY.format(
-                    section_title=section_title,
-                    evidence=evidence_text,
-                    answer=answer,
-                    complaint=figure_complaint(figures),
-                )},
-            ],
-            temperature=config.temperature,
+        # Bounded for the same reason the two closing calls are: `llm_complete`
+        # has no timeout of its own, and this retry runs *after* the section it
+        # is correcting has been written and paid for. Every call site — the
+        # three in the ReACT loop and the two closing ones — reaches this line,
+        # so a hang here strands `markdown_content` NULL with every section row
+        # `complete`, which is the incident `_CLOSING_CALL_TIMEOUT_S` was added
+        # for, one call later.
+        corrected_raw = await asyncio.wait_for(
+            llm_complete(
+                messages=[
+                    {"role": "system", "content": REPORT_SYSTEM_PROMPT},
+                    {"role": "user", "content": _FIGURE_RETRY.format(
+                        section_title=section_title,
+                        evidence=evidence_text,
+                        answer=answer,
+                        complaint=figure_complaint(figures),
+                    )},
+                ],
+                temperature=config.temperature,
+            ),
+            timeout=_CLOSING_CALL_TIMEOUT_S,
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 — including TimeoutError
         logger.error(
             "report_figure_retry_failed",
             section=section_title,
@@ -960,6 +1035,15 @@ async def _figure_checked(
         corrected_raw.split("ANSWER:", 1)[-1].strip()
     )
     if not corrected.strip():
+        return answer
+
+    if len(corrected) < _MIN_CORRECTION_RATIO * len(answer):
+        logger.warning(
+            "report_figure_retry_too_short",
+            section=section_title,
+            before_chars=len(answer),
+            after_chars=len(corrected),
+        )
         return answer
 
     survivors = unsourced_figures(evidence_text, corrected)
@@ -1043,6 +1127,25 @@ async def _run_react_loop(
             f"{json.dumps(platform_seed.data, default=str)[:6000]}"
         )
 
+    def _shown_to_model() -> str:
+        """Everything the writer was given, for the figure check to judge against.
+
+        `report_facts` compares an answer against evidence it documents as
+        "precisely what the model was shown". Since the message scoreboard was
+        added, `lens_context` has carried measured numbers of its own — each
+        version's objective rate, its 95% CI bounds, the virality score out of
+        100, and a verdict quoting intervals like "(12.3%-45.6%)" — and it
+        reached the writer through the prompt and the checker not at all. So on
+        every multi-version run, the section that correctly reported the
+        measured comparison was the one accused of inventing it, and the retry
+        pushed the model to drop the comparison the run was paid for.
+
+        Computed at each answer rather than once, because `evidence` grows with
+        every tool observation and there are three places a section can be
+        returned from.
+        """
+        return "\n".join([*evidence, lens_context] if lens_context.strip() else evidence)
+
     for tool_call_num in range(resolved.max_tool_calls_per_section):
         prompt = _prompt(
             REACT_PROMPT,
@@ -1065,7 +1168,7 @@ async def _run_react_loop(
         if response.strip().startswith("ANSWER:"):
             return await _figure_checked(
                 strip_react_artifacts(response.split("ANSWER:", 1)[1].strip()),
-                "\n".join(evidence),
+                _shown_to_model(),
                 section_title=section.title,
                 config=config,
             )
@@ -1082,7 +1185,7 @@ async def _run_react_loop(
             # more likely to have respected the measurement rules.
             return await _figure_checked(
                 strip_react_artifacts(response.strip()),
-                "\n".join(evidence),
+                _shown_to_model(),
                 section_title=section.title,
                 config=config,
             )
@@ -1126,7 +1229,7 @@ async def _run_react_loop(
     )
     return await _figure_checked(
         strip_react_artifacts(forced),
-        "\n".join(evidence),
+        _shown_to_model(),
         section_title=section.title,
         config=config,
     )
@@ -1173,15 +1276,21 @@ def _extract_arg(tool_call: str) -> str:
     return tool_call.split(None, 1)[1] if " " in tool_call else ""
 
 
-#: How long either closing call may take before the report gives up on it.
+#: How long either closing call — and the figure-correction retry behind every
+#: one of them — may take before the report gives up on it.
 #:
-#: `llm_complete` has no timeout of its own, and these two calls sit *after*
-#: every section has been written and paid for. On 2026-08-22 two of three
-#: reports died here: all sections `complete`, tens of thousands of characters
-#: in `report_sections`, and `markdown_content` never written — the founder's
+#: `llm_complete` has no timeout of its own, and these calls sit *after* every
+#: section has been written and paid for. On 2026-08-22 two of three reports
+#: died here: all sections `complete`, tens of thousands of characters in
+#: `report_sections`, and `markdown_content` never written — the founder's
 #: whole deliverable stranded behind one call that never returned. Generous
 #: because these prompts are long; finite because the alternative is what
 #: happened.
+#:
+#: The first version of the fix wrapped the two closing calls and stopped
+#: there, leaving `_figure_checked`'s retry — which runs on the result of each
+#: of them, and on all three section answers — calling `llm_complete` bare. The
+#: same stranded deliverable was still reachable, one call later.
 _CLOSING_CALL_TIMEOUT_S = 300
 
 _REPORT_FAILED_MESSAGE = (

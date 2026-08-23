@@ -381,6 +381,18 @@ def _parse_document(raw: str) -> str | None:
     return text[: end + len("</html>")]
 
 
+def _fabrication(claims: list[UnsupportedClaim]) -> tuple[int, int]:
+    """How much a document invented, ordered by what a false one costs.
+
+    Invented certifications first, then everything else — the same priority
+    `_is_better` uses to rank whole rounds. A page claiming one badge is worse
+    than a page claiming four prices, and a badge is what a founder cannot
+    explain to a regulator.
+    """
+    forged = sum(1 for c in claims if c.kind == "certification")
+    return forged, len(claims)
+
+
 async def _generate_html(
     prompt: str, evidence: bytes, page_text: str
 ) -> tuple[str, list[UnsupportedClaim]]:
@@ -397,6 +409,16 @@ async def _generate_html(
     the honesty rule real. Surviving claims come back with the page rather than
     raising: a page with a flagged figure is still worth more to the founder
     than no page, provided the flag travels with it.
+
+    **A retry that fabricates MORE than the answer it replaces is not an
+    improvement, and "it came back second" is not a reason to ship it.** The
+    complaint demands a whole-document rewrite, so a rewrite can fabricate
+    differently rather than less — one live shape has the first answer claiming
+    SOC 2 and the retry coming back with ISO 27001, PCI DSS and HIPAA. Accepted
+    on parseability alone, the strictly-worse document is what the founder
+    downloads. This is the same rule `_is_better` applies between rounds
+    (fewest invented certifications first), applied to the choice inside a
+    round, which is where it was missing.
     """
     try:
         raw = await llm_vision(prompt, [evidence], max_tokens=_GENERATION_MAX_TOKENS)
@@ -415,8 +437,21 @@ async def _generate_html(
             # was one — losing a whole page to fix a percentage is a worse
             # trade than reporting the percentage.
             if retried is not None:
-                html = retried
-                claims = unsupported_claims(page_text, html)
+                retried_claims = unsupported_claims(page_text, retried)
+                if html is None or _fabrication(retried_claims) <= _fabrication(claims):
+                    html, claims = retried, retried_claims
+                else:
+                    logger.warning(
+                        "website_revision_retry_rejected",
+                        first_claims=len(claims),
+                        retry_claims=len(retried_claims),
+                        first_certifications=[
+                            c.text for c in claims if c.kind == "certification"
+                        ],
+                        retry_certifications=[
+                            c.text for c in retried_claims if c.kind == "certification"
+                        ],
+                    )
     except Exception as exc:
         raise RevisionError(
             _GENERATION_FAILED_ERROR.format(error=f"{type(exc).__name__}: {exc}")

@@ -945,6 +945,54 @@ async def test_a_fabrication_that_survives_the_retry_rides_out_with_the_page(
     assert all(c.kind == "certification" for c in result.unsupported_claims)
 
 
+async def test_a_retry_that_invents_more_never_replaces_the_answer_it_retried(monkeypatch):
+    """The complaint demands a whole-document rewrite, so the rewrite can
+    fabricate differently rather than less.
+
+    Round one claims SOC 2 — one forged badge. The retry comes back with ISO
+    27001, PCI DSS and HIPAA — three. Accepted on parseability alone, the
+    strictly-worse document is the one the founder downloads and publishes, and
+    "it came back second" is not a reason to ship more invented badges than the
+    answer it replaced. This is the rule `_is_better` already applies between
+    rounds, applied inside one.
+    """
+    _install(
+        monkeypatch,
+        replies=[
+            _doc_saying(1, "We are SOC 2 Type II certified."),
+            _doc_saying(
+                1, "ISO 27001 certified, PCI DSS Level 1, and HIPAA compliant."
+            ),
+        ],
+        verdicts=[_verdict(80)],
+    )
+
+    result = await generate_revision(_capture(), ORIGINAL_CRITIQUE, DNA, max_rounds=1)
+
+    assert "SOC 2" in result.html, "the less-fabricating first document was discarded"
+    assert "HIPAA" not in result.html and "PCI DSS" not in result.html
+    assert {c.text for c in result.unsupported_claims} == {"SOC 2"}
+
+
+async def test_a_retry_that_invents_fewer_badges_is_still_the_one_that_ships(monkeypatch):
+    """The rule is fewest fabrications, not "keep the first answer" — a retry
+    that trades two badges for one is the improvement the retry was bought
+    for."""
+    _install(
+        monkeypatch,
+        replies=[
+            _doc_saying(1, _FORGED),  # SOC 2 and ISO 27001
+            _doc_saying(1, "We are SOC 2 Type II certified."),
+        ],
+        verdicts=[_verdict(80)],
+    )
+
+    result = await generate_revision(_capture(), ORIGINAL_CRITIQUE, DNA, max_rounds=1)
+
+    assert "ISO 27001" not in result.html
+    assert {c.text for c in result.unsupported_claims} == {"SOC 2"}
+
+
 async def test_an_honest_page_beats_a_higher_scoring_fabrication(monkeypatch):
     """The heart of it.
 

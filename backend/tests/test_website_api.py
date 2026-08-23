@@ -631,6 +631,87 @@ async def test_an_unexpected_failure_is_generic_on_the_row_and_full_in_the_logs(
     assert not stored
 
 
+async def test_a_check_the_reaper_closed_is_not_delivered_anyway(monkeypatch):
+    """The founder held the finished artifact **and** a full refund of it.
+
+    A check with a reference site can legitimately still be at `capturing` at 21
+    minutes (330s of queue plus a 300s work deadline, twice), and the reaper's
+    rule fired at 20 with `capturing` in `refund_states`. It set the row to
+    `failed` and gave back 1,750 credits — and then the worker, whose writes
+    were keyed on `.eq("id", snapshot_id)` alone, wrote `judging` and then
+    `complete` with the whole critique straight over the top of it.
+
+    Here the close lands while the critics are running. The row must stay
+    closed: whoever moves it out of the in-flight states owns the outcome.
+    """
+    admin = _install(monkeypatch, {"website_snapshots": [_queued_snapshot()]})
+    calls = _install_services(monkeypatch)
+    stored = _capture_store_upload(monkeypatch)
+
+    critics = sys.modules["app.services.website.critics"]
+    original_gauntlet = critics.run_critic_gauntlet
+
+    async def reaped_mid_flight(capture, **kwargs):
+        # Exactly what `reaper.sweep_once` writes, at exactly the moment the
+        # worker is between its `judging` and `complete` writes.
+        admin.store["website_snapshots"][0].update({
+            "status": "failed",
+            "error_message": "This check stopped before it finished.",
+        })
+        return await original_gauntlet(capture, **kwargs)
+
+    critics.run_critic_gauntlet = reaped_mid_flight
+
+    await website_tasks.run_website_check(SNAP, ORG)
+
+    row = admin.store["website_snapshots"][0]
+    assert row["status"] == "failed", "the worker overwrote the reaper's close"
+    assert row["critique"] is None, "the refunded check was delivered anyway"
+    assert row["completed_at"] is None
+    assert calls.critics is not None, "the test never reached the window it tests"
+    assert stored, "the document write happens before the guarded final write"
+
+
+async def test_a_capture_failure_on_an_already_closed_row_pays_no_second_refund(
+    monkeypatch,
+):
+    """The mirror case, and the one that hands back 3,500 against a 1,750 charge.
+
+    A capture can wedge past the reaper's deadline and *then* raise — Playwright's
+    teardown can block `wait_for`'s cancellation, which is the eleven-minute
+    wedge the reaper's own docstring records. The reaper refunds `capturing`, and
+    nothing is written to the row to say a refund was paid: `credits_charged`
+    still reads 1,750 afterwards and there is no claim flag. So the worker paid
+    it a second time.
+    """
+    admin = _install(monkeypatch, {"website_snapshots": [_queued_snapshot()]})
+    refunds: list[tuple] = []
+    monkeypatch.setattr(
+        website_tasks, "refund_credits",
+        lambda org, credits, *, reason: refunds.append((str(org), credits, reason)),
+    )
+    _install_services(monkeypatch)
+    _capture_store_upload(monkeypatch)
+
+    capture_mod = sys.modules["app.services.website.capture"]
+
+    async def wedged_then_failed(url, *, timeout_s=45):
+        # The reaper reached the row first: closed it and paid the refund.
+        admin.store["website_snapshots"][0].update({
+            "status": "failed",
+            "error_message": "This check stopped before it finished.",
+        })
+        raise capture_mod.WebsiteCaptureError(
+            f"{url} did not finish loading within {timeout_s} seconds."
+        )
+
+    capture_mod.capture_website = wedged_then_failed
+
+    await website_tasks.run_website_check(SNAP, ORG)
+
+    assert refunds == [], f"the same check was refunded twice: {refunds}"
+
+
 async def test_the_worker_never_runs_another_orgs_row(monkeypatch):
     """Org id comes from the authenticated route; the worker re-checks it."""
     admin = _install(monkeypatch, {"website_snapshots": [

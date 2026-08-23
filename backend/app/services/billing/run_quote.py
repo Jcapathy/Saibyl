@@ -325,10 +325,25 @@ def consume_quote(
         )
 
     now = datetime.now(UTC)
-    get_supabase_admin().table("run_quotes").update({
-        "consumed_at": now.isoformat(),
-        "simulation_id": simulation_id,
-    }).eq("id", quote_id).is_("consumed_at", "null").execute()
+    # `.is_("consumed_at", "null")` is a compare-and-set, and its result has to
+    # be read or it guards nothing a caller can act on. `load_quote` above
+    # refuses an already-consumed quote, but that is a read followed by a write
+    # with a network round-trip between them — two starts in the same window
+    # both pass it, and the second one's UPDATE then matches zero rows. With the
+    # result discarded, the loser went on to be charged for a run the winner had
+    # already paid for. Whoever claims the row redeems it; everyone else is told
+    # the quote is spent.
+    claimed = (
+        get_supabase_admin().table("run_quotes").update({
+            "consumed_at": now.isoformat(),
+            "simulation_id": simulation_id,
+        }).eq("id", quote_id).is_("consumed_at", "null").execute()
+    ).data or []
+    if not claimed:
+        logger.warning(
+            "quote_already_consumed", quote_id=quote_id, simulation_id=simulation_id
+        )
+        raise QuoteError("This quote has already been used")
 
     quote.consumed_at = now
     quote.simulation_id = simulation_id

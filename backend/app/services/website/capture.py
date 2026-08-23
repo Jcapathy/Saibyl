@@ -23,6 +23,16 @@ too, because a public hostname that 302s to 169.254.169.254 is the classic
 bypass. The redirect target has necessarily been *fetched* by the browser by
 then; the re-check guarantees its content never leaves this function.
 
+That promise holds only if the re-check sees **every** landing URL and sees it
+**late**, and for a while it did neither. The desktop and mobile passes are two
+independent navigations, so a host that redirects on the second request only
+was checked on the first and rendered on the second; and each pass read its
+`final_url` before the page was read, so a navigation landing during the
+seconds-long lazy-content prime left `final_url` equal to the URL the founder
+typed and skipped the check entirely, while the text and screenshots came from
+wherever the page had gone. Both passes are validated now, each from a
+`final_url` read after its own last read.
+
 **Playwright is imported lazily, inside the call.** The local dev venv and CI
 have no browser runtime — only the Docker image does (see the Dockerfile) — so
 this module must import cleanly everywhere, and tests mock the import boundary.
@@ -60,12 +70,12 @@ REVISION_URL = "about:revision"
 
 # Full-page screenshots are evidence for vision critics, and an infinite-scroll
 # page would otherwise produce an image no model accepts. The cap trades the
-# tail of a very long page for a bounded payload; the cut is recorded in `meta`
-# so a report never presents a cropped page as the whole page.
+# tail of a very long page for a bounded payload; the cut is recorded in
+# `notes` so a report never presents a cropped page as the whole page.
 MAX_SCREENSHOT_HEIGHT_PX = 8_000
 
 # DOM text rides inside prompts; one pathological page must not be able to blow
-# a context window. Truncation is likewise noted in `meta`.
+# a context window. Truncation is likewise noted in `notes`.
 DOM_TEXT_MAX_CHARS = 100_000
 
 # How long to let the network go quiet after the document is parsed, before
@@ -292,7 +302,18 @@ class WebsiteCapture(BaseModel):
     final_url: str
     title: str | None
     dom_text: str
+    #: The page's OWN tags — `description` and `og:*`, exactly as the document
+    #: ships them. Nothing this module knows about itself belongs here: the
+    #: credibility critic is handed this dict under the heading "PAGE TAGS
+    #: (what search results and link previews will show)" and asked to quote
+    #: any drift between them and the page. A capture's bookkeeping in that
+    #: block is a fact about our pipeline presented as a fact about the
+    #: founder's site, and the founder pays for the critique that results.
     meta: dict
+    #: What this capture had to cut, in our own words rather than the page's.
+    #: Read by anything that must not present a cropped page as the whole page;
+    #: never shown to a reviewer as the page's content.
+    notes: dict = Field(default_factory=dict)
     screenshot_desktop: bytes  # PNG
     screenshot_mobile: bytes  # PNG
     # Measured computed styles (see `_normalize_census` for the shape). Empty
@@ -480,6 +501,18 @@ async def _capture_website(url: str, *, timeout_s: int) -> WebsiteCapture:
                     validate_external_url(final_url)
 
                 mobile = await _render(browser, MOBILE_VIEWPORT, timeout_s, mobile=True, url=url)
+
+                # **The mobile pass is a second, independent navigation, and it
+                # gets the same check.** It had none: a founder-supplied host
+                # that redirects only on the second request — a counter, a
+                # cookie, an A/B split — rendered wherever it landed into
+                # `screenshot_mobile`, which `upload_screenshots` stores and
+                # `GET /website/check/{id}/image?which=mobile` serves back. The
+                # docstring's promise that the re-check "guarantees its content
+                # never leaves this function" was true of half the capture.
+                mobile_final = str(mobile["final_url"] or url)
+                if mobile_final != url:
+                    validate_external_url(mobile_final)
             finally:
                 await browser.close()
     except pw.TimeoutError as exc:
@@ -505,7 +538,22 @@ async def capture_html(html: str, *, timeout_s: int = 45) -> WebsiteCapture:
 
     The rendered document is still denied the network entirely — see
     `_abort_external_request` for why.
+
+    **It starts a browser, so it queues for a slot and runs under the deadline
+    like every other capture.** It did neither, and both omissions were paid
+    for by other founders: `generate_revision` calls this up to three times per
+    revision, each revision is its own task, and every one of them was adding
+    an unbudgeted 300–500 MB Chromium beside the two `capture_website` is
+    allowed — on the instance whose failure mode is not a slow capture but
+    `502` across every endpoint. A launch that hangs was unbounded too, which
+    parks a revision at `generating` forever with no founder-readable error.
     """
+    return await _bounded(
+        _capture_html(html, timeout_s=timeout_s), "the rewritten page", timeout_s
+    )
+
+
+async def _capture_html(html: str, *, timeout_s: int) -> WebsiteCapture:
     pw = _import_playwright()
 
     try:
@@ -602,7 +650,7 @@ async def _render(
             except Exception:  # noqa: BLE001 - never going idle is not a failure
                 logger.info("website_capture_settle_skipped", url=url)
 
-        result: dict[str, Any] = {"final_url": page.url}
+        result: dict[str, Any] = {}
         if not mobile:
             # **The evidence first, the extras after.** Text and tags are
             # viewport-independent; extracting once keeps the mobile pass to
@@ -669,6 +717,16 @@ async def _render(
         result["screenshot"], result["screenshot_truncated"] = await _required(
             _screenshot(page, viewport), timeout_s, "a screenshot", url
         )
+
+        # **Read last, not first — where the bytes came from, not where the
+        # navigation first settled.** Snapshotted before the reads, a
+        # `final_url` names a page the evidence did not come from, and the
+        # caller's `final_url != url` re-check is then False: a redirect that
+        # lands one moment late is never validated at all. Today's lazy-content
+        # prime made that window deterministic and seconds wide, and everything
+        # after it — the title, the tags, `dom_text` (which IS the report body)
+        # and the screenshot — is read from wherever the page went.
+        result["final_url"] = page.url
         return result
     finally:
         await context.close()
@@ -703,21 +761,32 @@ async def _required(awaitable: Any, timeout_s: int, what: str, url: str | None) 
 
 
 def _assemble(*, url: str, final_url: str, desktop: dict, mobile: dict) -> WebsiteCapture:
-    """The two viewport passes as one WebsiteCapture, every cap noted in meta."""
+    """The two viewport passes as one WebsiteCapture, every cap noted.
+
+    **The caps are recorded in `notes`, never in `meta`.** They were written
+    into the same dict as the page's `description` and `og:*` tags, and the
+    credibility critic renders that dict whole under "PAGE TAGS (what search
+    results and link previews will show)". A page taller than 8,000px — which
+    a long marketing page routinely is, and the lazy-content prime makes taller
+    still — handed the reviewer `screenshot_desktop_truncated: desktop
+    screenshot capped at 8000px of page height` as one of the founder's own
+    tags, and asked it to judge the drift. The founder pays for that critique.
+    """
     meta = dict(desktop["meta"] or {})
+    notes: dict[str, str] = {}
     dom_text = str(desktop["dom_text"] or "")
     if len(dom_text) > DOM_TEXT_MAX_CHARS:
-        meta["dom_text_truncated"] = (
+        notes["dom_text_truncated"] = (
             f"dom_text capped at {DOM_TEXT_MAX_CHARS} characters; "
             f"the page had {len(dom_text)}"
         )
         dom_text = dom_text[:DOM_TEXT_MAX_CHARS]
     if desktop["screenshot_truncated"]:
-        meta["screenshot_desktop_truncated"] = (
+        notes["screenshot_desktop_truncated"] = (
             f"desktop screenshot capped at {MAX_SCREENSHOT_HEIGHT_PX}px of page height"
         )
     if mobile["screenshot_truncated"]:
-        meta["screenshot_mobile_truncated"] = (
+        notes["screenshot_mobile_truncated"] = (
             f"mobile screenshot capped at {MAX_SCREENSHOT_HEIGHT_PX}px of page height"
         )
 
@@ -728,6 +797,7 @@ def _assemble(*, url: str, final_url: str, desktop: dict, mobile: dict) -> Websi
         dom_chars=len(dom_text),
         desktop_bytes=len(desktop["screenshot"]),
         mobile_bytes=len(mobile["screenshot"]),
+        truncations=sorted(notes),
     )
     return WebsiteCapture(
         url=url,
@@ -735,6 +805,7 @@ def _assemble(*, url: str, final_url: str, desktop: dict, mobile: dict) -> Websi
         title=desktop["title"],
         dom_text=dom_text,
         meta=meta,
+        notes=notes,
         screenshot_desktop=desktop["screenshot"],
         screenshot_mobile=mobile["screenshot"],
         style_census=desktop.get("style_census") or {},

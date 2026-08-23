@@ -158,6 +158,14 @@ class StartSimulationBody(BaseModel):
 # is the global ceiling rather than `tier_caps(plan).max_agents`.
 MAX_INTERVIEW_BATCH = MAX_AGENTS_ANY_TIER
 
+# And a role gate on all three routes, for the half of the sentence above that
+# the cap does not cover. `core/auth` states the contract plainly — "a viewer
+# does neither; that is not a judgement call, it is what the word means" — and
+# the interview surface broke it: three routes on `get_current_org` alone, each
+# able to drive up to 2,000 model calls per request on Saibyl's account,
+# repeatedly, from an account whose whole grant is to read. The cap bounds one
+# request; the gate bounds who may make it.
+#
 # A question, not a payload. The prompt is re-sent in full to every agent in
 # the batch, so its length multiplies by the fan-out — 1,000 agents × an
 # unbounded string is the same defect as an unbounded id list, reached by the
@@ -485,14 +493,48 @@ async def delete_simulation(id: str, auth: dict = Depends(require_can_destroy)):
     return {"status": "deleted", "id": id}
 
 
+# The statuses a run may legitimately be prepared from.
+#
+# `draft` is a run that has never been prepared; `failed` is one whose earlier
+# preparation died and which the founder is retrying. Everything else — a run
+# already `preparing`, one sitting `ready` with its swarm built, one that has
+# run — is refused, because preparing again does not replace the swarm, it adds
+# a second one.
+PREPARABLE_STATUSES = ("draft", "failed")
+
+# The statuses a run may legitimately be started from — the same set that
+# already reached the deduction, since `preparing`, `draft` and `running` are
+# refused by name higher up in `start_simulation`. `analyzing` is deliberately
+# absent: a run in its analysis pass is in flight, and starting it again is the
+# duplicate charge this list exists to prevent.
+STARTABLE_STATUSES = ("ready", "complete", "completed", "failed", "stopped")
+
+
 @router.post("/{id}/prepare")
-async def prepare_simulation(id: str, auth: dict = Depends(get_current_org)):
-    """Trigger agent preparation for a simulation."""
+async def prepare_simulation(id: str, auth: dict = Depends(require_can_spend)):
+    """Trigger agent preparation for a simulation.
+
+    **Gated, and single-use.** This route had neither. It checked that the run
+    belonged to the org and nothing else — not its status, not whether it
+    already had agents — while `run_prepare_agents` makes one `llm_fast` call
+    per agent, up to 1,000 at enterprise. So a viewer could fire it, and a
+    double-click on a prepared 100-agent run spent another 100 uncharged model
+    calls and then either tripped migration 019's unique username index (whose
+    failure handler marks a run that was prepared and fine as "stopped before it
+    finished") or, where 019 is not yet applied, inserted a **second full
+    swarm** with colliding handles — the run then executing with twice the
+    agents it was quoted for and every confidence interval drawn from a swarm of
+    the wrong size.
+
+    The claim is a compare-and-set on `status` rather than a read-then-write:
+    two clicks land in the same event-loop window, and a plain read would let
+    both through.
+    """
     log.info("prepare_simulation", simulation_id=id, org_id=auth["org_id"])
     admin = get_supabase_admin()
     sim = (
         admin.table("simulations")
-        .select("id")
+        .select("id, status")
         .eq("id", id)
         .eq("organization_id", auth["org_id"])
         .single()
@@ -500,6 +542,48 @@ async def prepare_simulation(id: str, auth: dict = Depends(get_current_org)):
     )
     if not sim.data:
         raise HTTPException(status_code=404, detail="Simulation not found")
+
+    claimed = (
+        admin.table("simulations")
+        .update({"status": "preparing"})
+        .eq("id", id)
+        .eq("organization_id", auth["org_id"])
+        .in_("status", list(PREPARABLE_STATUSES))
+        .execute()
+    ).data or []
+    if not claimed:
+        current = str(sim.data.get("status") or "")
+
+        # **Already prepared is success, not conflict.** The compare-and-set
+        # exists to stop a second room being built, and a run at `ready` has
+        # exactly the room it should — so refusing it protects nothing and
+        # breaks the one control the founder uses.
+        #
+        # The Start button posts `/prepare` and then `/start` unconditionally,
+        # and it renders for draft, ready and failed. Answering 409 on `ready`
+        # meant the frontend's catch fired and `/start` was never called: a
+        # prepared run could not be started at all from the primary button.
+        # The guard was added to one side of a two-call contract without the
+        # other side being looked at.
+        if current == "ready":
+            log.info(
+                "prepare_noop_already_ready",
+                simulation_id=id, org_id=auth["org_id"],
+            )
+            return {"status": "ready", "detail": "The room is already built."}
+
+        log.warning(
+            "prepare_refused_not_preparable",
+            simulation_id=id, org_id=auth["org_id"], status=current,
+        )
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "This run's people are already being built. Wait for status "
+                "'ready' and start the run — preparing it again would build a "
+                "second room."
+            ),
+        )
 
     spawn(
         run_prepare_agents(id), "prepare_agents",
@@ -645,7 +729,7 @@ async def start_simulation(
             )
         except QuoteError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
-        deduct_credits(auth["org_id"], quote.credits)
+        credits_to_charge = quote.credits
     else:
         # No quote — a run started from the API or an older client. Priced the
         # same way, just without the signed guarantee that the price shown is
@@ -657,7 +741,47 @@ async def start_simulation(
         )
         if not budget.allowed:
             raise HTTPException(status_code=402, detail=budget.message)
-        deduct_credits(auth["org_id"], budget.credits_required)
+        credits_to_charge = budget.credits_required
+
+    # The single-use guard, and the reason it is a compare-and-set.
+    #
+    # The quote path has one already — `load_quote` refuses a quote whose
+    # `consumed_at` is set — and the no-quote branch above had **nothing**: it
+    # checked the budget and deducted, with the plain read at the top of this
+    # handler as its only protection and the database status not written until
+    # `run_simulation` runs inside the spawned task. Two POSTs landing in the
+    # same event-loop window (a double-click, or a client retry on a slow
+    # response — this handler awaits `check_simulation_quota` over the network
+    # before deducting) each deducted ~17,000 credits and each spawned an engine
+    # on the same run. Two engines writing into one `simulation_events` doubles
+    # every count and draws `mean_interval`'s bands from duplicated
+    # observations.
+    #
+    # And re-simulations are *forced* onto that branch: the 409 above refuses a
+    # `quote_id` on a run with a `parent_simulation_id`, which is the
+    # inoculation loop and the website-room "prove" leg — the flagship V3 flow.
+    #
+    # Placed immediately before the deduction so no earlier refusal (402, a
+    # QuoteError) can leave a run claimed and unstarted.
+    started = (
+        admin.table("simulations")
+        .update({"status": "running"})
+        .eq("id", id)
+        .eq("organization_id", auth["org_id"])
+        .in_("status", list(STARTABLE_STATUSES))
+        .execute()
+    ).data or []
+    if not started:
+        log.warning(
+            "start_refused_already_started",
+            simulation_id=id, org_id=auth["org_id"], status=current_status,
+        )
+        raise HTTPException(
+            status_code=409,
+            detail="This run has already been started.",
+        )
+
+    deduct_credits(auth["org_id"], credits_to_charge)
 
     # One entry point. The `is_ab_test` branch that used to sit here chose
     # between `run_simulation_ab` and `run_simulation`, and the two were the same
@@ -772,7 +896,7 @@ async def list_agents(id: str, auth: dict = Depends(get_current_org)):
 
 
 @router.post("/{id}/interview")
-async def interview_agent_endpoint(id: str, body: InterviewBody, auth: dict = Depends(get_current_org)):
+async def interview_agent_endpoint(id: str, body: InterviewBody, auth: dict = Depends(require_can_spend)):
     """Interview a single agent."""
     log.info("interview_agent", simulation_id=id, agent_id=body.agent_id)
     admin = get_supabase_admin()
@@ -792,7 +916,7 @@ async def interview_agent_endpoint(id: str, body: InterviewBody, auth: dict = De
 
 
 @router.post("/{id}/interview/batch")
-async def interview_batch_endpoint(id: str, body: BatchInterviewBody, auth: dict = Depends(get_current_org)):
+async def interview_batch_endpoint(id: str, body: BatchInterviewBody, auth: dict = Depends(require_can_spend)):
     """Interview multiple agents."""
     log.info("interview_batch", simulation_id=id, count=len(body.agent_ids))
     admin = get_supabase_admin()
@@ -812,7 +936,7 @@ async def interview_batch_endpoint(id: str, body: BatchInterviewBody, auth: dict
 
 
 @router.post("/{id}/interview/by-persona")
-async def interview_by_persona_endpoint(id: str, body: PersonaInterviewBody, auth: dict = Depends(get_current_org)):
+async def interview_by_persona_endpoint(id: str, body: PersonaInterviewBody, auth: dict = Depends(require_can_spend)):
     """Interview all agents of a specific persona type.
 
     **No request-side cap here, deliberately.** The sibling batch route needs

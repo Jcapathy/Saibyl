@@ -1181,13 +1181,25 @@ def refund_credits(org_id: UUID | str, credits: int, *, reason: str) -> None:
     `reason` is logged rather than stored: the artifact row already carries
     `credits_charged` and its own error, so the refund is reconcilable from
     two records that were written independently.
+
+    **Deliberately not `grant_credits`.** That RPC is a *cycle* grant, not a
+    credit: its body sets `credits_granted = amount` and
+    `credit_cycle_start = NOW()` as well as adding to the balance, so putting a
+    1,750-credit refund through it would tell a Growth org — and every usage
+    bar, balance warning and monthly reset that reads the grant — that its plan
+    is now 1,750 credits a month, starting today. `get_credit_balance` treats
+    any non-zero `credits_granted` as authoritative, so nothing recovers the
+    real grant afterwards. Migration 028's header, migration 031's header and
+    `gtm/store.refund_run` all wrote this down; this path did it anyway.
+    `refund_credits(org_uuid, amount)` (migration 042) adds to the balance and
+    touches nothing else.
     """
     if credits <= 0:
         return
 
     admin = get_supabase_admin()
     try:
-        admin.rpc("grant_credits", {
+        admin.rpc("refund_credits", {
             "org_uuid": str(org_id),
             "amount": credits,
         }).execute()

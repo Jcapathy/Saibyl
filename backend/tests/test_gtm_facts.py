@@ -192,6 +192,154 @@ def test_the_meeting_asks_that_were_actually_damaged_in_production():
         assert text == line
 
 
+def test_the_meeting_asks_the_widened_verb_list_still_damaged():
+    """The third live check, and the reason the test was turned around.
+
+    Each of these was mangled into "[TODO: your number] next week?" by an
+    exemption that asked whether booking language sat around the number: "keep
+    it to" was not a verb it knew, and four of these have no verb at all. These
+    are subject lines and CTAs — the lines a sequence lives or dies on — and
+    because the damage is counted in `placeholders_to_fill` it reads to the
+    founder as a fact they forgot to supply rather than copy the tool broke.
+    """
+    for line in (
+        "I'll keep it to 15 minutes.",
+        "20 minutes next week?",
+        "Would 20 minutes on Tuesday work?",
+        "Open to 20 minutes Thursday?",
+        "If 15 minutes is easier, say when.",
+        "30 minutes with your ops lead would settle it.",
+        "Any interest in 15 minutes?",
+    ):
+        text, replaced = _scrub(line)
+        assert replaced == [], f"scrubbed a meeting ask in: {line}"
+        assert text == line
+
+
+def test_a_product_benchmark_is_never_exempted_by_the_meeting_rule():
+    """The regression a judge caught before it shipped.
+
+    Fixing the damaged calls-to-action above turned this predicate into
+    exempt-by-default, and every one of these — all previously scrubbed —
+    walked straight through. None carries a rate, a hyphen or a savings verb,
+    so none of the newer guards sees them; only the requirement that an offer
+    of time actually *look* like one does.
+
+    The asymmetry is the point. Exempting wrongly puts an invented benchmark in
+    a stranger's inbox under the founder's name. Checking wrongly leaves a
+    counted, visible placeholder in a CTA. These are not the same mistake.
+    """
+    for line in (
+        "Reviews are done in 20 minutes.",
+        "Close the books in 90 minutes.",
+        "Setup is 15 minutes.",
+        "Onboarding is complete in 30 minutes.",
+        "Reconciliation now finishes in 90 minutes instead of days.",
+        "Month-end close drops to 2 hours.",
+    ):
+        text, replaced = _scrub(line)
+        assert replaced, f"an invented benchmark was exempted: {line}"
+        assert MISSING_NUMBER in text
+
+
+def test_a_duration_bigger_than_a_meeting_is_a_claim_in_any_unit():
+    """The size test existed only in hours.
+
+    "Tuning takes 500 hours" was caught and the identical fabrication written
+    in minutes or seconds walked through, exempted by its own verb — and
+    minutes is the unit a model reaches for when it invents a per-task
+    benchmark. A meeting is at most about two hours; nothing longer is an offer
+    of someone's time, and nothing measured in seconds ever was.
+    """
+    for line in (
+        "The month-end close takes 900 minutes of manual work.",
+        "Reconciliation takes 400 minutes a close.",
+        "You have 600 minutes of manual reconciliation every close.",
+        "Setup takes 90 seconds.",
+        "Manual matching takes 45 seconds per line item.",
+    ):
+        text, replaced = _scrub(line)
+        assert len(replaced) == 1, f"exempted a product claim in: {line}"
+        assert MISSING_NUMBER in text
+
+
+def test_a_rate_written_with_a_slash_or_as_an_adverb_is_still_a_claim():
+    """The rate test is what lets the exemption be generous, and it could only
+    see "a month" and "per week". "/week", "/month" and "weekly" are the forms
+    a savings claim is actually written in — "we free up 2 hours/week" is the
+    invented benefit this module opens with, for a product with no customers.
+    """
+    for line in (
+        "We free up 2 hours/week for every controller.",
+        "You get 2 hours/week back.",
+        "It takes 2 hours weekly to reconcile.",
+        "Your team will spend 90 minutes/week chasing this.",
+    ):
+        text, replaced = _scrub(line)
+        assert len(replaced) == 1, f"exempted a rate in: {line}"
+        assert MISSING_NUMBER in text
+
+
+def test_a_savings_verb_makes_a_meeting_sized_duration_a_claim():
+    """"We save you 90 minutes" asserts a benefit; it does not ask for time."""
+    text, replaced = _scrub("We save you 90 minutes per close.")
+
+    assert replaced == ["90 minutes"]
+    assert MISSING_NUMBER in text
+
+
+def test_a_magnitude_word_is_part_of_the_figure_not_decoration():
+    """The three-order-of-magnitude hole.
+
+    The money span stopped at "$3", which keys as 3 — and the material says "3
+    entities", so "Teams like yours lose $3 million a year" reported zero
+    replacements and the artifact reported zero placeholders. A fabricated
+    "$20 billion market" is the cheapest sentence a model can write and the
+    most damaging one a cold email can carry.
+    """
+    for line in (
+        "Teams like yours lose $3 million a year to this.",
+        "We save mid-market teams $8 million annually.",
+        "It is a $20 billion market.",
+    ):
+        text, replaced = _scrub(line)
+        assert len(replaced) == 1, f"a magnitude word was ignored in: {line}"
+        assert MISSING_NUMBER in text
+
+    # And it still fails against the founder's own words, not just the room's.
+    founder = "Ledgerline is $1,200 a month per entity across 3 entities."
+    pack, replaced = scrub_unsourced(
+        _Pack(rows=[_Row(respond="Teams like yours lose $3 million a year to this.")]),
+        MATERIAL,
+        product_material=founder,
+    )
+    assert replaced == ["$3 million"]
+
+
+def test_a_figure_the_material_states_with_a_magnitude_word_survives():
+    """The other half: "$3 million" in the material licenses copy that says it,
+    and copy that writes the same figure in digits."""
+    material = "their words: we write off $3 million a year on this."
+
+    for line in ("That is $3 million a year.", "That is $3,000,000 a year."):
+        pack, replaced = scrub_unsourced(_Pack(rows=[_Row(respond=line)]), material)
+
+        assert replaced == [], f"scrubbed a sourced figure in: {line}"
+        assert pack.rows[0].respond == line
+
+
+def test_money_and_percentages_spelled_out_are_checked_too():
+    """"Cuts 40 percent of the manual work" and "9,000 USD" matched no claim
+    branch at all, so nothing ever looked at them."""
+    for line in (
+        "Cuts 40 percent of the manual work.",
+        "They quoted us 9,000 USD for the migration.",
+    ):
+        text, replaced = _scrub(line)
+        assert len(replaced) == 1, f"never checked: {line}"
+        assert MISSING_NUMBER in text
+
+
 def test_a_duration_must_match_its_unit_not_just_its_digits():
     """The escape a live check found.
 

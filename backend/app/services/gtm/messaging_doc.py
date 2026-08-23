@@ -326,6 +326,25 @@ def _load_objections(simulation_id: str, org_id: str) -> list[dict[str, Any]]:
     ).data or []
 
 
+def _competitor_name(row: Any) -> str:
+    """The rival's name, from the shape the column actually holds.
+
+    `icp_profiles.competitors` is written as
+    `[c.model_dump(mode="json") for c in profile.competitors]` — dicts of
+    `name`, `positioning` and `mentioned_in` — by both writers of that column.
+    `str(row)` therefore put "{'name': 'Datadog', 'positioning': 'APM
+    incumbent', 'mentioned_in': ['9f3e…']}" into `alternatives`, which is
+    rendered to the founder with an internal document UUID in it, and made the
+    model's correct nomination of the real competitor look invented — so it was
+    dropped, and `_three_way_verdict` never had a name that could break the
+    set. It reported "Defensible" whatever the facts were. Plain strings are
+    still accepted: this column has held both.
+    """
+    if isinstance(row, dict):
+        return str(row.get("name") or "").strip()
+    return str(row or "").strip()
+
+
 def _load_context(simulation_id: str, org_id: str) -> dict[str, Any]:
     """The product's own words, and the rivals the founder already named."""
     admin = get_supabase_admin()
@@ -353,7 +372,7 @@ def _load_context(simulation_id: str, org_id: str) -> dict[str, Any]:
         ).data or {}
         raw = icp.get("competitors")
         if isinstance(raw, list):
-            competitors = [str(c).strip() for c in raw if str(c).strip()]
+            competitors = [name for name in map(_competitor_name, raw) if name]
         summary = str(icp.get("product_summary") or "")
         founder = founder_material(icp)
 
@@ -517,6 +536,35 @@ def _count_placeholders(payload: str) -> int:
     return count_placeholders(payload)
 
 
+def _fact_material(
+    context: dict[str, Any],
+    objections: list[dict[str, Any]],
+    test: dict[str, Any],
+) -> str:
+    """The only text a figure in this document is allowed to come from.
+
+    Deliberately **not** the prompt. The prompt carries this module's own
+    bookkeeping — "raised by: 14 buyers" — and scrubbing against it made that
+    count license any money or percentage figure that landed on the same
+    number. A count this module printed is not evidence for a claim the model
+    wrote. What remains is what the rule has always named: the founder's own
+    words, the buyers' own sentences, and the versions that were tested.
+    """
+    parts = [
+        str(context.get("name") or ""),
+        str(context.get("goal") or ""),
+        str(context.get("summary") or ""),
+        str(test.get("verdict") or ""),
+    ]
+    for row in objections:
+        parts.append(str(row.get("label") or ""))
+        parts.append(str(row.get("summary") or ""))
+        parts.extend(_quotes(row))
+    for variant in test.get("variants") or []:
+        parts.append(str(variant.get("content") or ""))
+    return "\n".join(part for part in parts if part.strip())
+
+
 def _variant_lines(variants: list[dict[str, Any]]) -> str:
     return "\n".join(
         f"- {v.get('variant_key')}: {v.get('label') or '(unnamed)'} — {v.get('content') or ''}"
@@ -627,10 +675,15 @@ async def build_messaging_doc(simulation_id: str, org_id: str) -> MessagingDoc:
     # to figures. This document is the best-behaved of the three artifacts —
     # its own notes police claims the answer pack made — and it still converted
     # a buyer's all-entities "15-20 hours a month" into "per month per entity",
-    # tripling the stated pain. A figure not in `user` becomes the placeholder
-    # the prompt asked for.
+    # tripling the stated pain. A figure not in the material becomes the
+    # placeholder the prompt asked for.
+    #
+    # Checked against `_fact_material` rather than `user`, because the prompt
+    # states its own agent counts and those are not evidence for a price.
     generated, invented = scrub_unsourced(
-        generated, user, product_material=str(context.get("founder_material") or "")
+        generated,
+        _fact_material(context, objections, test),
+        product_material=str(context.get("founder_material") or ""),
     )
     if invented:
         log.warning(

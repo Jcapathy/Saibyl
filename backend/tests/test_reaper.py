@@ -19,6 +19,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from structlog.testing import capture_logs
 
 from app.core.messages import looks_like_a_traceback
 from app.services.maintenance import reaper
@@ -298,6 +299,13 @@ def test_every_non_terminal_status_a_worker_writes_is_reapable():
 
     Read out of the worker sources rather than listed here, so a worker that
     invents a new in-flight status fails this instead of going quiet.
+
+    **A table with no rule at all used to be exempt from this scan.** The line
+    below read `if table not in watched or status in resting: continue`, so the
+    one thing it could not catch was the one thing that actually happened:
+    `clearance_runs` parks rows at `running` after deducting up to 6,000 credits
+    and had no rule, and the test that existed to notice reported it as skipped.
+    A missing rule is the worse failure, not the excused one.
     """
     import pathlib
     import re
@@ -320,9 +328,9 @@ def test_every_non_terminal_status_a_worker_writes_is_reapable():
             r'table\(\s*"(\w+)"\s*\)\s*\.update\(\s*\{\s*"status"\s*:\s*"(\w+)"',
             text,
         ):
-            if table not in watched or status in resting:
+            if status in resting:
                 continue
-            if status not in watched[table]:
+            if status not in watched.get(table, set()):
                 missing.append(f"{source.name}: {table}.status={status!r}")
 
     assert not missing, (
@@ -379,6 +387,122 @@ async def test_a_prepared_run_waiting_for_the_founder_is_never_reaped(world):
 
     assert closed == {}
     assert store["simulations"][0]["status"] == "ready"
+
+
+@pytest.mark.asyncio
+async def test_a_close_that_matched_no_rows_pays_no_refund(world):
+    """The race the reaper lost and paid for anyway.
+
+    The worker moves the row on between this sweep's SELECT and its UPDATE, so
+    `.eq("status", was)` matches nothing. The guard protected the row — but the
+    result was discarded, so the row was counted as closed, logged as a normal
+    close, and **refunded in full**: 1,750 credits handed back on a website
+    check the founder actually received. Nothing is written to the row to record
+    that a refund was paid, so a later sweep could pay again.
+    """
+    store, admin, refunds = world
+    store["website_snapshots"] = [_row("capturing", 60)]
+
+    class _RacedTable(_Table):
+        """Every UPDATE matches zero rows, as it does when the worker won."""
+
+        def execute(self):
+            if self._op == "update":
+                return type("R", (), {"data": []})()
+            return super().execute()
+
+    admin.table = lambda name: _RacedTable(store, name, admin.updates)
+
+    with capture_logs() as logs:
+        closed = await reaper.sweep_once(now=NOW)
+
+    assert refunds == [], f"refunded a row it did not close: {refunds}"
+    assert closed == {}, "a row the worker won was still counted as closed"
+    assert "reaper_close_lost_race" in {entry["event"] for entry in logs}
+
+
+@pytest.mark.asyncio
+async def test_a_clearance_run_a_deploy_killed_is_closed_and_says_why(world):
+    """6,000 credits, deducted at create, for an artifact that never arrives.
+
+    `api/clearance.py` deducts before it spawns and `workers/clearance_tasks.py`
+    parks the row at `running`. There was no `clearance_runs` rule, so a deploy
+    left the row there forever — the exact failure this module was written to
+    end, on the most expensive charge-at-create table in the product.
+    """
+    store, _admin, refunds = world
+    store["clearance_runs"] = [_row("running", 90, credits=6000)]
+
+    closed = await reaper.sweep_once(now=NOW)
+
+    assert closed.get("clearance_runs") == 1
+    assert store["clearance_runs"][0]["status"] == "failed"
+    assert "stopped before it finished" in store["clearance_runs"][0]["error_message"]
+    # `running` means the USPTO calls were already going out. Only `queued`
+    # proves nothing was spent.
+    assert refunds == []
+
+
+@pytest.mark.asyncio
+async def test_a_clearance_run_that_never_started_gets_its_credits_back(world):
+    store, _admin, refunds = world
+    store["clearance_runs"] = [_row("queued", 90, credits=6000)]
+
+    await reaper.sweep_once(now=NOW)
+
+    assert refunds == [(ORG, 6000, "reaper:clearance_runs:queued")]
+
+
+@pytest.mark.asyncio
+async def test_a_gtm_discovery_run_is_closed_on_its_own_error_column(world):
+    """The table `gtm/discovery`'s docstring named, and the column it uses.
+
+    "If the API process dies mid-run, the run row stays `running`. There is no
+    worker to reap it" — there still was not one, because the status is written
+    from `services/gtm/store.py` rather than from `workers/`, where the guard
+    test scans. And this is the one table that spells the column `error`, not
+    `error_message`: naming the wrong one makes PostgREST reject the whole
+    update and disables the rule on every sweep, which is precisely how
+    `reports` was silently skipped for days.
+    """
+    store, admin, refunds = world
+    row = _row("running", 90, credits=1254)
+    del row["credits_charged"]
+    store["gtm_discovery_runs"] = [row]
+
+    closed = await reaper.sweep_once(now=NOW)
+
+    assert closed.get("gtm_discovery_runs") == 1
+    _table, _row_id, payload = admin.updates[0]
+    assert set(payload) == {"status", "error"}, payload
+    assert "error_message" not in payload
+    # Reconciled through `refund_discovery_credits`, which claims the row. A
+    # second blind refund from here would pay twice.
+    assert refunds == []
+
+
+def test_the_website_deadline_outlasts_the_worker_it_watches():
+    """A rule shorter than the worker's own bound refunds work in progress.
+
+    At 20 minutes this rule fired *before* a legitimate check could finish. One
+    capture is `_QUEUE_WAIT_S` of queue plus `_overall_deadline(45)` of work, and
+    a check naming a site the founder admires runs two of them — 21 minutes
+    still honestly at `capturing`, before the critics have started. `capturing`
+    is in `refund_states`, so the founder was refunded 1,750 credits and then
+    handed the finished critique anyway: the worker's `judging` and `complete`
+    writes were keyed on the id alone and overwrote the reaper's close.
+    """
+    from app.services.website.capture import _QUEUE_WAIT_S, _overall_deadline
+
+    one_capture_s = _QUEUE_WAIT_S + _overall_deadline(45)
+    with_a_reference_min = 2 * one_capture_s / 60
+    assert with_a_reference_min >= 21, "the arithmetic in this test has drifted"
+
+    rule = next(r for r in reaper.STUCK if r.table == "website_snapshots")
+    assert rule.minutes > with_a_reference_min, (
+        f"the reaper closes and refunds at {rule.minutes} min, but a check with "
+        f"a reference site can still be working at {with_a_reference_min:.0f} min"
+    )
 
 
 def test_every_rule_names_states_and_a_sentence_a_founder_can_act_on():

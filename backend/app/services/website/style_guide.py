@@ -122,11 +122,49 @@ def _first_family(stack: str, props: dict[str, str], _depth: int = 0) -> str:
     return name
 
 
+def _resolved_prop(name: str, props: dict[str, str], _depth: int = 0) -> str:
+    """What a custom property finally holds, following `var()` as fonts do.
+
+    Two hops, then it gives up rather than chasing a cycle — the same bound
+    `_first_family` uses, for the same reason.
+    """
+    value = " ".join(props.get(name, "").split())
+    if not value:
+        return ""
+
+    ref = _VAR_REF.match(value)
+    if ref:
+        if _depth >= 2:
+            return ""
+        return _resolved_prop(ref.group(1), props, _depth + 1)
+
+    return value
+
+
+def _resolved_hex(name: str, props: dict[str, str]) -> str:
+    """The colour a custom property names, or nothing if it names no hex."""
+    match = _HEX.match(_resolved_prop(name, props))
+    return _normalize_hex(match.group(0)) if match else ""
+
+
 def extract_tokens(html: str) -> StyleTokens:
     """The system the page actually uses, read from the page."""
-    colors = Counter(_normalize_hex(m.group(0)) for m in _HEX.finditer(html))
-
     props = {m.group(1): m.group(2) for m in _CUSTOM_PROP.finditer(html)}
+
+    colors = Counter(_normalize_hex(m.group(0)) for m in _HEX.finditer(html))
+    # A `var(--accent)` is a use of the colour `--accent` holds.
+    #
+    # Without this, the most idiomatic single-file page there is — one `:root`
+    # palette, `var(--…)` at every point of use — has every hex occurring
+    # exactly once, so `_MIN_COLOR_USES` deletes the whole palette and the
+    # guide ships with no Colour table at all. That table is the main content
+    # of the download. The module already follows `var()` for fonts, and for
+    # exactly this reason: a value named at the point of use is the exception
+    # in modern markup, not the rule.
+    for match in _VAR_REF.finditer(html):
+        hexv = _resolved_hex(match.group(1), props)
+        if hexv:
+            colors[hexv] += 1
 
     faces: list[str] = []
     for match in _FONT_FAMILY.finditer(html):
@@ -140,6 +178,12 @@ def extract_tokens(html: str) -> StyleTokens:
             # `!important` is about precedence, not shape — and it is what let
             # a "shadow" of `none !important` reach a real page's guide.
             value = " ".join(m.group(1).replace("!important", " ").split())
+            # `border-radius: var(--r)` names a variable, not a shape. Printing
+            # the variable name is the same technically-accurate, completely
+            # useless answer the font read already refuses.
+            ref = _VAR_REF.match(value)
+            if ref:
+                value = _resolved_prop(ref.group(1), props)
             if value and value.lower() != "none" and value not in seen:
                 seen.append(value)
             if len(seen) >= limit:
@@ -350,8 +394,16 @@ def build_style_guide(
     out += [
         "## Adding to this page later",
         "",
-        "1. Take colours from the table above. A new hue is a decision, not a "
-        "detail — it needs the same argument the existing ones had.",
+        # A page with no palette to read gets no table, and an instruction
+        # pointing at a table that is not in the document is how a founder
+        # learns to distrust the rest of the guide.
+        (
+            "1. Take colours from the table above. A new hue is a decision, not "
+            "a detail — it needs the same argument the existing ones had."
+            if tokens.colors
+            else "1. Take colours from the page itself. A new hue is a decision, "
+            "not a detail — it needs the same argument the existing ones had."
+        ),
         "2. Reuse a radius and a shadow that already appear here rather than "
         "introducing a neighbouring value; two radii four pixels apart read as "
         "a mistake rather than as a system.",

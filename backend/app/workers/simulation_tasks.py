@@ -480,6 +480,65 @@ Return a JSON object:
         logger.error("prepare_agents_zero", simulation_id=simulation_id)
         raise ValueError("Agent generation produced 0 agents — all LLM calls failed")
 
+    # Replace this run's swarm, do not add to it.
+    #
+    # The insert below had no DELETE in front of it and `seen_usernames` is
+    # local to one invocation, so a second preparation of the same run re-emitted
+    # the first one's handles against rows that were still there: on migration
+    # 019 the first 20-row batch trips `idx_simulation_agents_unique_username`
+    # and the whole run is marked failed, and without 019 a second full swarm
+    # lands with colliding usernames — `run_simulation` reads every row for the
+    # simulation, so the run executes with twice the agents the org was quoted
+    # for and the duplicate handles reproduce exactly the attribution defect 019
+    # exists to prevent.
+    #
+    # `POST /prepare` now claims the run with a compare-and-set, so this should
+    # never have rows to clear; it clears them because "should never" is what
+    # the first version of this said too, and a partially-inserted swarm from a
+    # preparation that died mid-batch is a real leftover.
+    # **Only the leftovers, which by definition have no events.**
+    #
+    # `simulation_events.agent_id` REFERENCES `simulation_agents(id)` with no
+    # ON DELETE clause (005_simulations.sql), so the default NO ACTION makes an
+    # unconditional delete raise a foreign-key violation on any run that
+    # already produced events. `failed` is preparable, so the retry path this
+    # cleanup was written for was the one it broke — after up to a thousand
+    # model calls had been spent, with the founder seeing "We could not build
+    # the room" every time they tried again.
+    #
+    # A run that already has events is not a partial preparation; it is a room
+    # that ran. Rebuilding it would either destroy measured data or land a
+    # second swarm with colliding handles — the attribution defect migration
+    # 019 exists to prevent. So it refuses, in a sentence, instead.
+    posted = {
+        str(row["agent_id"])
+        for row in (
+            admin.table("simulation_events")
+            .select("agent_id")
+            .eq("simulation_id", simulation_id)
+            .limit(1000)
+            .execute()
+        ).data or []
+        if row.get("agent_id")
+    }
+    if posted:
+        logger.warning(
+            "prepare_refused_room_already_ran",
+            simulation_id=simulation_id,
+            agents_with_events=len(posted),
+        )
+        raise ValueError(
+            "This run's people have already posted, so its room cannot be "
+            "rebuilt without losing what they said. Start a new run to test "
+            "this idea again."
+        )
+
+    # Past the guard, no agent of this run has an event, so "every agent of
+    # this run" and "the ones it is safe to delete" are the same set.
+    admin.table("simulation_agents").delete().eq(
+        "simulation_id", simulation_id
+    ).execute()
+
     # Insert agents in batch
     if agents_to_create:
         for i in range(0, len(agents_to_create), 20):
@@ -722,6 +781,12 @@ async def run_simulation(simulation_id: str):
     admin = get_supabase_admin()
     sim = admin.table("simulations").select("*").eq("id", simulation_id).single().execute().data
 
+    # `running` is accepted because `POST /simulations/{id}/start` now claims
+    # the run by writing it — a compare-and-set on the row, which is the only
+    # place a duplicate start can actually be refused atomically. A second
+    # worker cannot reach here without a second claim having succeeded, and a
+    # read in this process could never have told "I set this" apart from
+    # "somebody else did".
     if sim["status"] not in ("ready", "running"):
         logger.error(
             "sim_not_ready_for_run",

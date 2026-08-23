@@ -37,10 +37,13 @@ api.interceptors.response.use(
         isRefreshing = true;
         error.config._retry = true;
         try {
+          // In the body, not the query string. A refresh token mints access
+          // tokens for the life of the session, and a URL is written verbatim
+          // into Render's request logs, any proxy in between, and the browser's
+          // own history.
           const { data } = await axios.post(
             `${api.defaults.baseURL}/auth/refresh`,
-            null,
-            { params: { refresh_token: refreshToken } },
+            { refresh_token: refreshToken },
           );
           localStorage.setItem('saibyl_access_token', data.access_token);
           localStorage.setItem('saibyl_refresh_token', data.refresh_token);

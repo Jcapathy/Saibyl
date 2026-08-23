@@ -191,6 +191,78 @@ def test_a_quote_cannot_be_replayed_against_another_org():
     assert _sign(_payload()) != _sign(_payload(org_id="org-2"))
 
 
+def test_a_quote_that_loses_the_claim_is_refused_rather_than_redeemed(monkeypatch):
+    """`consume_quote` wrote the compare-and-set and then threw away its result.
+
+    `.is_("consumed_at", "null")` is exactly the right guard, and `load_quote`
+    above it is a *read* followed by a write with a network round-trip in
+    between. Two starts in the same window both pass the read; the loser's
+    UPDATE matches zero rows — and with the result discarded, it went on to be
+    charged for a run the winner had already paid for.
+    """
+    from types import SimpleNamespace
+
+    from app.services.billing import run_quote
+    from app.services.billing.run_quote import QuoteError, consume_quote
+
+    expires = "2099-01-01T00:00:00+00:00"
+    row = {
+        "id": "q-1",
+        "organization_id": "org-1",
+        "simulation_id": None,
+        "agent_count": 100,
+        "rounds": 5,
+        "platforms": 2,
+        "variants": 1,
+        "depth": "standard",
+        "credits": 3230,
+        "expires_at": expires,
+        "estimated_cost_usd": 1.0,
+        "retail_price_usd": 5.0,
+        "margin_pct": 80.0,
+        "breakdown": {},
+        "consumed_at": None,
+        "created_at": "2026-08-01T12:00:00+00:00",
+    }
+    row["signature"] = _sign(_canonical(
+        row["id"], row["organization_id"], row["agent_count"], row["rounds"],
+        row["platforms"], row["variants"], row["depth"], row["credits"], expires,
+    ))
+
+    class _Table:
+        def __init__(self):
+            self._op = "select"
+
+        def select(self, *_a, **_k):
+            return self
+
+        def update(self, _payload):
+            self._op = "update"
+            return self
+
+        def eq(self, *_a):
+            return self
+
+        def is_(self, *_a):
+            return self
+
+        def limit(self, *_a):
+            return self
+
+        def execute(self):
+            # The other request claimed the row first: zero rows updated.
+            return SimpleNamespace(data=[] if self._op == "update" else [row])
+
+    monkeypatch.setattr(
+        run_quote, "get_supabase_admin", lambda: SimpleNamespace(table=lambda _n: _Table())
+    )
+
+    with pytest.raises(QuoteError) as exc:
+        consume_quote("q-1", "org-1", "sim-1", (100, 5, 2, 1))
+
+    assert "already been used" in str(exc.value)
+
+
 # ── Variants: N-way matched swarms ───────────────────────
 
 def test_the_variant_cap_never_runs_ahead_of_the_engine():

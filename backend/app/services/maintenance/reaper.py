@@ -69,6 +69,14 @@ class StuckRule:
     message: str
     # Refund only where the state itself proves no model was called.
     refund_states: tuple[str, ...] = ()
+    # Where this table keeps its founder-readable failure sentence.
+    #
+    # Six tables call it `error_message`; `gtm_discovery_runs` calls it `error`.
+    # Naming a column a table does not have makes PostgREST reject the whole
+    # update — which is exactly how `reports` was silently skipped on every
+    # sweep for days. This is a schema fact per table, not a flag somebody
+    # maintains by hand: a rule cannot be written without answering it.
+    error_column: str = "error_message"
 
     # There was a `writes_message` flag here, because `reports` had no
     # `error_message` column and naming one that does not exist makes PostgREST
@@ -100,8 +108,24 @@ STUCK: tuple[StuckRule, ...] = (
         "This run stopped before it finished. Anything it had already measured "
         "is saved — start a new run when you're ready.",
     ),
+    # Forty-five minutes, not twenty, and the arithmetic is the argument.
+    #
+    # At twenty this rule was **shorter than the worker's own bound**, so it
+    # refunded checks that were still legitimately working. `capture._bounded`
+    # gives each capture `_QUEUE_WAIT_S` = 330s of queue plus
+    # `_overall_deadline(45)` = 300s of work, and a check that names a site the
+    # founder admires runs two of them: 2 x 630s = 1,260s = 21 minutes still at
+    # `capturing`, before the critic panel, the screenshot uploads or the
+    # design-gallery pass have started. The founder was handed the complete
+    # 1,750-credit critique *and* a full refund of it — and the slowest pages
+    # are exactly the heavy commercial ones render.yaml names as the case the
+    # module exists to serve.
+    #
+    # The deadline is generous on purpose (see StuckRule): closing a job that
+    # was still working is the expensive mistake, and 45 leaves the same margin
+    # over the worker's ceiling that `page_revisions` has over its own.
     StuckRule(
-        "website_snapshots", ("queued", "capturing", "judging"), 20,
+        "website_snapshots", ("queued", "capturing", "judging"), 45,
         "This check stopped before it finished. Nothing was left half-saved — "
         "start it again when you're ready.",
         refund_states=("queued", "capturing"),
@@ -157,6 +181,47 @@ STUCK: tuple[StuckRule, ...] = (
         "ready.",
         refund_states=("queued",),
     ),
+    # The two most expensive charge-at-create tables in the product, and until
+    # now neither had a rule at all.
+    #
+    # A COMPREHENSIVE clearance deducts 6,000 credits (`api/clearance.py`)
+    # before the worker is spawned — three times the entire free-tier grant —
+    # and `workers/clearance_tasks.py` then parks the row at `running`. A deploy
+    # kills it and the row sits there forever: no sentence, no refund, no
+    # ending. The guard test above could not see it, because a table with **no
+    # rule at all** was silently exempt from the scan; both halves were fixed
+    # together.
+    #
+    # `queued` refunds because the worker never started — the row is created
+    # `queued` by the API and only `run_clearance` writes `running`, so the
+    # state itself proves the USPTO was never called. `running` does not.
+    StuckRule(
+        "clearance_runs", ("queued", "running"), 45,
+        "This search stopped before it finished. Nothing was left half-saved — "
+        "run it again when you're ready.",
+        refund_states=("queued",),
+    ),
+    # `gtm_discovery_runs` is the case this module's own docstring names: "if
+    # the API process dies mid-run, the run row stays `running`. There is no
+    # worker to reap it." There still was not one. It is created `running` by
+    # `services/gtm/store.create_run` after up to 1,254 credits are deducted,
+    # and its status is written from `services/`, not `workers/`, which is why
+    # the worker scan never saw it either.
+    #
+    # No refund state: `running` is the only non-terminal status and it means
+    # the queries were already going out. A partial run's money is reconciled by
+    # `discovery.reconcile_run` through `refund_discovery_credits`, which claims
+    # the row — a second, blind refund from here would pay twice.
+    #
+    # `error`, not `error_message`: this is the one table that spells it that
+    # way (migration 027), and naming the wrong column would disable the rule on
+    # every sweep.
+    StuckRule(
+        "gtm_discovery_runs", ("running",), 30,
+        "This search stopped before it finished. Any companies it had already "
+        "found are saved — start a new search when you're ready.",
+        error_column="error",
+    ),
 )
 
 
@@ -204,17 +269,44 @@ async def sweep_once(now: datetime | None = None) -> dict[str, int]:
 
             payload: dict[str, object] = {
                 "status": "failed",
-                "error_message": rule.message,
+                rule.error_column: rule.message,
             }
 
             try:
-                admin.table(rule.table).update(payload).eq(
-                    "id", row["id"]
-                ).eq("status", was).execute()
+                updated = (
+                    admin.table(rule.table)
+                    .update(payload)
+                    .eq("id", row["id"])
+                    .eq("status", was)
+                    .execute()
+                )
             except Exception:  # noqa: BLE001
                 failures[rule.table] = failures.get(rule.table, 0) + 1
                 log.exception(
                     "reaper_close_failed", table=rule.table, row_id=row.get("id")
+                )
+                continue
+
+            # The `.eq("status", was)` guard above is a compare-and-set, and its
+            # result has to be read or the guard protects only the row.
+            #
+            # Zero rows means the worker moved this row on between the SELECT
+            # and the UPDATE — which is a real window, not a theoretical one:
+            # the read takes up to 200 rows and the writes then go out one
+            # network round-trip at a time, while the worker's own status write
+            # happens at an `await` in the same loop. Discarding the result
+            # counted that row as closed, logged it as a normal close, and — the
+            # expensive part — **paid the refund anyway**, on a check the
+            # founder actually received. Nothing on the row records that a
+            # refund was paid, so a later sweep could pay again.
+            if not (updated.data or []):
+                log.info(
+                    "reaper_close_lost_race",
+                    table=rule.table,
+                    row_id=row.get("id"),
+                    was=was,
+                    detail="the worker finished between the read and the write; "
+                           "it wins, and nothing is refunded",
                 )
                 continue
 

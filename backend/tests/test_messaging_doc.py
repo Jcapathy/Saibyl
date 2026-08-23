@@ -379,6 +379,71 @@ async def test_a_competitor_the_buyers_named_out_loud_is_allowed(monkeypatch):
     assert doc.differentiators[0].rivals_who_can_claim_it == ["Wedge"]
 
 
+async def test_a_competitor_row_is_read_as_a_name_not_a_python_dict(monkeypatch):
+    """`icp_profiles.competitors` holds `Competitor.model_dump()` rows, and
+    every writer of that column writes them that way.
+
+    `str(row)` therefore rendered "{'name': 'Datadog', 'positioning': 'APM
+    incumbent', 'mentioned_in': ['9f3e…']}" into `alternatives`, which the
+    founder reads — an internal document UUID in a paid worksheet. Worse, the
+    model's correct nomination of the founder's actual competitor matched no
+    entry, so it was dropped as invented and the three-differentiator test
+    never had a name that could break the set: it reported "Defensible"
+    whatever the rival lists said.
+    """
+    _install(
+        monkeypatch,
+        _store(
+            [_objection("price", "Too expensive")],
+            competitors=[{
+                "name": "Datadog",
+                "positioning": "APM incumbent",
+                "mentioned_in": ["9f3e1a20-0000-4000-8000-000000000000"],
+            }],
+        ),
+        _generated(
+            differentiators=[
+                _diff("One", rivals=["Datadog"]),
+                _diff("Two", rivals=["Datadog"]),
+                _diff("Three", rivals=["Datadog"]),
+            ]
+        ),
+    )
+
+    doc = await md.build_messaging_doc(SIM, ORG)
+
+    assert "Datadog" in doc.alternatives
+    assert all("mentioned_in" not in name for name in doc.alternatives)
+    assert doc.differentiators[0].rivals_who_can_claim_it == ["Datadog"]
+    # The set the model itself says Datadog claims three times over is not
+    # defensible, and the document has to say so.
+    assert "Not defensible" in doc.differentiation_verdict
+    assert "Datadog" in doc.differentiation_verdict
+
+
+async def test_the_measured_agent_count_is_not_evidence_for_a_figure(monkeypatch):
+    """The prompt states "raised by: 14 buyers", and the scrubber was pointed
+    at the prompt — so a count this module printed licensed any figure that
+    landed on the same number, in the document every other asset is derived
+    from."""
+    _install(
+        monkeypatch,
+        _store([_objection("price", "Too expensive", agents=14)]),
+        _generated(
+            value_props=[
+                _prop("Fast", statement="We are 14% cheaper than the incumbent."),
+                _prop("Easy"),
+                _prop("Efficient"),
+            ]
+        ),
+    )
+
+    doc = await md.build_messaging_doc(SIM, ORG)
+
+    assert "14%" not in doc.value_props[0].statement
+    assert md.MISSING_NUMBER in doc.value_props[0].statement
+
+
 def test_the_always_real_alternatives_are_never_forgotten():
     """Doing nothing and building in-house are usually the highest-frequency
     competitors in early-stage B2B and the ones most often left off."""

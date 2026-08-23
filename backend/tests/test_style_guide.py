@@ -144,6 +144,85 @@ def test_shorthand_and_longhand_hex_are_the_same_colour():
     assert dict(extract_tokens(html).colors)["#ffffff"] == 3
 
 
+_VAR_PAGE = """<html><head><style>
+:root{--ink:#141414;--paper:#faf8f5;--accent:#c8452e;--muted:#6b6b6b;--line:#e6e0d8;
+      --card-radius:14px}
+body { background: var(--paper); color: var(--ink) }
+h1 { color: var(--ink); border-bottom: 1px solid var(--line) }
+a { color: var(--accent) }
+.note { color: var(--muted) }
+.card { border-radius: var(--card-radius) }
+</style></head><body><h1>Ship faster</h1></body></html>"""
+
+
+def test_a_palette_held_in_custom_properties_is_still_a_palette():
+    """The page shape the generator is told to produce: one inline `<style>`,
+    a `:root` palette, `var(--…)` at every point of use. Each hex then occurs
+    exactly once — in `:root` — so counting literals alone put the whole
+    palette under the two-use cut and deleted the Colour table, which is the
+    main content of the guide the founder paid for. The module already follows
+    `var()` for fonts; a colour is no different."""
+    found = dict(extract_tokens(_VAR_PAGE).colors)
+
+    assert found["#141414"] == 3  # defined once, used twice
+    assert found["#faf8f5"] == 2
+    assert found["#c8452e"] == 2
+    assert found["#6b6b6b"] == 2
+    assert found["#e6e0d8"] == 2
+
+    guide = build_style_guide(url="https://acme.example", page_text=_VAR_PAGE)
+    assert "## Colour" in guide
+    assert "`#141414`" in guide
+
+
+def test_a_radius_named_by_a_variable_is_printed_as_the_shape_it_holds():
+    """The same defect one declaration over. `border-radius: var(--card-radius)`
+    printed as `var(--card-radius)` is the technically-accurate, completely
+    useless answer the font read already refuses."""
+    tokens = extract_tokens(_VAR_PAGE)
+
+    assert tokens.radii == ["14px"]
+    assert not any("var(" in radius for radius in tokens.radii)
+
+
+def test_an_undefined_shape_variable_names_nothing_rather_than_itself():
+    assert extract_tokens("<style>.c{border-radius:var(--missing)}</style>").radii == []
+
+
+def test_the_closing_steps_never_point_at_a_table_that_is_not_there():
+    """A numbered instruction referring to a Colour table the guide does not
+    contain is how a founder learns to distrust the rest of it."""
+    without = build_style_guide(url="https://acme.example", page_text="<p>Hello</p>")
+    assert "## Colour" not in without
+    assert "table above" not in without
+
+    with_colors = build_style_guide(url="https://acme.example", page_text=PAGE)
+    assert "## Colour" in with_colors
+    assert "Take colours from the table above." in with_colors
+
+
+def test_the_category_survives_the_plural_the_page_actually_uses():
+    """Marketing copy is written in the plural, and the classifier was blind to
+    it: the same sentence about a "clinic" and a "patient" classified as health
+    and the one about "clinics" and "patients" fell through to `general`, so
+    the guide told the founder their page was for **General** and the
+    generation prompt got the generic brief. Invisible, because `general` is
+    also the honest answer for thin evidence."""
+    singular = "<p>Our clinic software helps every patient and provider in the hospital.</p>"
+    plural = "<p>Our clinics software helps every patients and providers in the hospitals.</p>"
+    realistic = (
+        "<p>Chartline gives clinics one place to see their patients. Care teams "
+        "at 40 practices chase referrals with providers. Physicians spend less "
+        "time in charts, across independent practices and the hospitals they "
+        "refer into.</p>"
+    )
+
+    for markup in (singular, plural, realistic):
+        assert "Health and clinical software" in build_style_guide(
+            url="https://chartline.example", page_text=markup
+        ), f"the category was lost on: {markup[:60]}"
+
+
 def test_the_category_is_read_from_the_copy_not_the_class_names():
     """Left raw, a Tailwind page votes with its class names. `patient` in a
     CSS selector must not weigh what `patient` in a headline weighs."""

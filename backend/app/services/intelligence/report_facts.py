@@ -43,7 +43,20 @@ clothes of a measurement:
 
 - **decimals** — sentiment means, confidence bounds, deltas
 - **percentages** — stance splits, shares
-- **"N of M" counts** — "13 of 25 people"
+- **"N of M" counts** — "13 of 25 people". Checked two ways: both halves must
+  be in the evidence, *and* N must not exceed M. Membership on its own is
+  nearly inert on real evidence, which is integer-rich enough — the seeded
+  findings carry a count for every objection — to contain almost any small
+  number the model reaches for. "31 of 25 people" is impossible whatever the
+  evidence holds, and that is the half that does not depend on luck.
+
+  What is deliberately *not* checked is whether counts sharing a denominator
+  sum past it. "18 of 25 raised pricing and 13 of 25 raised the migration" is
+  ordinary correct reporting — an objection count is per objection, and people
+  raise more than one — so a sum rule would fire on the sections that read the
+  evidence properly. That is the false positive this file cannot afford, since
+  every hit spends an Opus call and can swap a correct section for a shorter
+  one.
 
 Bare integers are ignored on purpose. A report is thick with round numbers,
 list positions, years and archetype counts, and flagging those would bury a
@@ -82,10 +95,35 @@ class UnsourcedFigure(BaseModel):
     quote: str  # the sentence it sits in
 
 
+#: A `-` that directly follows a digit or a `%` is a *range separator*, never a
+#: sign. `_normalise` folds en-dashes to hyphens, so the correctly-reported CI
+#: "0.659–0.765" arrives here as "0.659-0.765"; without this the upper bound
+#: read as -0.765, absent from the evidence and duly reported as invented.
+#:
+#: It guards **every** number pattern in this module, because the first version
+#: of this fix guarded one of them and the identical defect stayed in the other
+#: three:
+#:
+#: - `_DECIMAL` carried `(?<!\d)(?<!\d )`. The second lookbehind blocked the
+#:   match at the `-` whenever a digit and a space preceded it, so the engine
+#:   restarted one character later and read the sign off: "Round 3 -0.41" — the
+#:   round-by-round form `REACT_PROMPT` requires — reported a measured -0.41 as
+#:   an invented +0.41, and a correct monotonic arc came back with every figure
+#:   in it flagged.
+#: - `_PERCENT` had no guard at all, so "(95% CI 12.3%-45.6%, n=25 agents)" —
+#:   the exact string `_scoreboard_block` writes — yielded "-45.6".
+#: - `_ANY_NUMBER` and `_PCT_IN_TEXT` read the *evidence*, and must split a
+#:   range the same way, or a bound the model quoted correctly is missing from
+#:   the sourced set and is reported anyway.
+#:
+#: A `-` after a space is still a sign: "-0.42 (95% CI -0.61 to -0.23)" is the
+#: format the prompt mandates, and every figure in it survives.
+_NOT_A_SIGN = r"(?<![\d%])"
+
 # Any number at all, for building the sourced set out of tool observations.
 # Commas are thousands separators here, never decimal points — the evidence is
 # JSON and English, not a European locale.
-_ANY_NUMBER = re.compile(r"-?\d[\d,]*(?:\.\d+)?")
+_ANY_NUMBER = re.compile(_NOT_A_SIGN + r"-?\d[\d,]*(?:\.\d+)?")
 
 # What gets checked in the answer. `~` and `−` (the real minus sign, which
 # models emit in prose) are folded before matching.
@@ -94,16 +132,8 @@ _ANY_NUMBER = re.compile(r"-?\d[\d,]*(?:\.\d+)?")
 # the engine backtracks to satisfy the percent lookahead, matching "80.5"
 # inside "80.56%" — a figure nobody wrote, reported as a fabrication, in the
 # one place precision matters most.
-#
-# The two lookbehinds stop a *range* being read as a negative number.
-# `_normalise` folds en-dashes to hyphens, so the correctly-reported CI
-# "0.659–0.765" became "0.659-0.765" and the upper bound was read as -0.765 —
-# absent from the evidence, and duly reported as invented. Both figures were
-# right, and the section that wrote them had followed the measurement rules
-# exactly. A minus sign directly after a digit, or after a digit and a space,
-# is a range separator.
-_DECIMAL = re.compile(r"(?<!\d)(?<!\d )-?\d[\d,]*\.\d+(?!\d)(?!\s*%)")
-_PERCENT = re.compile(r"-?\d[\d,]*(?:\.\d+)?(?=\s*%)")
+_DECIMAL = re.compile(_NOT_A_SIGN + r"-?\d[\d,]*\.\d+(?!\d)(?!\s*%)")
+_PERCENT = re.compile(_NOT_A_SIGN + r"-?\d[\d,]*(?:\.\d+)?(?=\s*%)")
 _COUNT_OF = re.compile(r"\b(\d[\d,]*)\s+(?:of|out of)\s+(\d[\d,]*)\b", re.I)
 
 # Where a *share* may legitimately come from. Checking percentages against
@@ -119,7 +149,7 @@ _CONFIDENCE_LABEL = re.compile(
     r"(-?\d[\d,]*(?:\.\d+)?)\s*%\s*(?:ci\b|c\.i\.|confidence)", re.I
 )
 
-_PCT_IN_TEXT = re.compile(r"(-?\d[\d,]*(?:\.\d+)?)\s*%")
+_PCT_IN_TEXT = re.compile(_NOT_A_SIGN + r"(-?\d[\d,]*(?:\.\d+)?)\s*%")
 _PCT_FIELD = re.compile(
     r'"[a-z0-9_]*(?:pct|percent|rate|ratio|share)[a-z0-9_]*"\s*:\s*'
     r"(-?\d[\d,]*(?:\.\d+)?)",
@@ -241,6 +271,19 @@ def unsourced_figures(evidence: str, answer: str) -> list[UnsourcedFigure]:
     # Counts first: "18 of 25" is read as a pair, so its parts are not then
     # re-reported as loose numbers.
     for match in _COUNT_OF.finditer(text):
+        part = _to_decimal(match.group(1))
+        whole = _to_decimal(match.group(2))
+
+        # The arithmetic, before the membership check. "31 of 25 people" is
+        # impossible whatever the evidence holds, and membership alone cannot
+        # see that: real evidence is integer-rich — the seeded measured
+        # findings carry an objection count for every objection — so both
+        # halves of an invented pair are almost always present somewhere in it,
+        # and the check was inert on every run that was not hand-trimmed.
+        if part is not None and whole is not None and part > whole:
+            _add("count", match.group(0), match.start(), match.end())
+            continue
+
         for group in (1, 2):
             written = match.group(group)
             stated = _to_decimal(written)

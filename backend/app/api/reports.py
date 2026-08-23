@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from typing import Literal
+
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from app.core.auth import get_current_org, require_can_destroy
+from app.core.auth import get_current_org, require_can_destroy, require_can_spend
 from app.core.database import get_supabase_admin
 from app.core.tasks import spawn
+from app.services.billing.agent_pricing import _MAX_SECTIONS
 from app.services.engine.document_processor import _extract_text
 from app.services.intelligence.analysis_data import load_run_data
 from app.services.intelligence.report_agent import (
@@ -21,6 +25,66 @@ log = structlog.get_logger()
 
 router = APIRouter(tags=["reports"])
 
+# What a founder sees when the report writer died. Every other spawn site in
+# the API has one of these; this one had none, so a failed report was a spinner
+# with no ending on the artifact the run was paid to produce.
+REPORT_FAILURE_MESSAGE = (
+    "This write-up stopped before it finished. Your run and its findings are "
+    "safe — generate it again from the run."
+)
+
+# States a report row can be in while it is still being written. The failure
+# handler claims one of these rather than clobbering a finished report.
+_REPORT_IN_FLIGHT = ("pending", "queued", "generating")
+
+
+def _mark_report_failed(simulation_id: str, org_id: str) -> Callable[[Exception], None]:
+    """`on_failure` for `spawn`: a report whose worker died must say so.
+
+    **It has to be able to insert, not only update.** `report_tasks` builds its
+    `ReACTConfig` before `generate_report` inserts the `reports` row, so a bad
+    `evidence_depth` — or a deleted simulation making the `.single()` lookup
+    raise, or a Supabase blip — raises with no row anywhere. The client then
+    polls `GET /reports/by-simulation/{id}`, which 404s "No report found for
+    this simulation" forever, while the API has already said "started". So when
+    there is nothing to mark, this writes the row that carries the sentence.
+    """
+    def _mark(exc: Exception) -> None:
+        log.error(
+            "report_worker_failed",
+            simulation_id=simulation_id,
+            error_type=type(exc).__name__,
+            error=str(exc)[:500],
+        )
+        admin = get_supabase_admin()
+        try:
+            existing = (
+                admin.table("reports")
+                .select("id")
+                .eq("simulation_id", simulation_id)
+                .in_("status", list(_REPORT_IN_FLIGHT))
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            ).data or []
+            if existing:
+                admin.table("reports").update({
+                    "status": "failed",
+                    "error_message": REPORT_FAILURE_MESSAGE,
+                }).eq("id", existing[0]["id"]).execute()
+            else:
+                admin.table("reports").insert({
+                    "simulation_id": simulation_id,
+                    "organization_id": org_id,
+                    "status": "failed",
+                    "error_message": REPORT_FAILURE_MESSAGE,
+                }).execute()
+        except Exception:
+            # The failure is already in the log above. A handler that raises
+            # would only replace one lost error message with two.
+            log.exception("report_failure_record_failed", simulation_id=simulation_id)
+    return _mark
+
 
 # ---------------------------------------------------------------------------
 # Request bodies
@@ -28,8 +92,22 @@ router = APIRouter(tags=["reports"])
 
 class GenerateReportBody(BaseModel):
     simulation_id: str
-    evidence_depth: str = "deep"  # shallow, standard, deep, exhaustive
-    max_sections: int | None = None
+    # The same `Literal` `ReACTConfig` declares, not a bare `str`.
+    #
+    # The two disagreeing is not a tidiness point: the worker builds
+    # `ReACTConfig(evidence_depth=...)` before any `reports` row exists, so an
+    # out-of-enum value accepted here — `"medium"`, say — raised a
+    # `ValidationError` in the background with the API having already answered
+    # 200 `{"status": "started"}` and no row for the founder's client to poll.
+    evidence_depth: Literal["shallow", "standard", "deep", "exhaustive"] = "deep"
+    # Bounded, because this number is the outline size and the outline size is
+    # one ReACT loop per section, each up to 20 tool calls, all gathered with no
+    # concurrency cap. `report_agent` uses `config.section_count` verbatim, so
+    # `max_sections: 500` was 500 Opus-written sections on Saibyl's account for
+    # a route that charges nothing. `_MAX_SECTIONS` is the ceiling the pricing
+    # model itself will ever quote (`report_section_count`), which makes it the
+    # only number here that cannot drift away from what the run paid for.
+    max_sections: int | None = Field(default=None, ge=1, le=_MAX_SECTIONS)
 
     # `variant` was here and did nothing — it reached a log line and no further.
     # A report covers the whole run, and on a matched-swarm run that is the
@@ -49,8 +127,18 @@ class ChatBody(BaseModel):
 # ---------------------------------------------------------------------------
 
 @router.post("/generate")
-async def generate_report(body: GenerateReportBody, auth: dict = Depends(get_current_org)):
-    """Trigger report generation for a simulation."""
+async def generate_report(body: GenerateReportBody, auth: dict = Depends(require_can_spend)):
+    """Trigger report generation for a simulation.
+
+    `require_can_spend`, even though nothing here touches the credit ledger.
+    Report generation is the most expensive main-model stage in a run — roughly
+    a fifth of a standard run's cost, by `report_tasks`' own docstring — and it
+    is billed inside the run's price, so this route spends without ever calling
+    `deduct_credits`. That is exactly why `test_role_gates`' scan could not see
+    it: a view-only account could drive hundreds of Opus sections against any
+    run in its org, for free and repeatedly, on a route whose source contains no
+    spending call to find.
+    """
     log.info("generate_report", simulation_id=body.simulation_id, org_id=auth["org_id"])
     admin = get_supabase_admin()
 
@@ -69,6 +157,7 @@ async def generate_report(body: GenerateReportBody, auth: dict = Depends(get_cur
     spawn(
         run_generate_report(body.simulation_id, body.evidence_depth, body.max_sections),
         "generate_report",
+        on_failure=_mark_report_failed(body.simulation_id, auth["org_id"]),
     )
     return {"status": "started"}
 

@@ -29,6 +29,41 @@ Run of 25 agents over 3 rounds, 75 events.
 "engaged": 8}
 """
 
+#: A seeded `measured_findings` blob in the shape `react_tools` really returns:
+#: integer-rich, because it carries a count for every objection. The hand-
+#: trimmed blobs above have an artificially sparse integer set, and a check
+#: that only asks "does this digit appear somewhere" passes everything here.
+MEASURED_FINDINGS_EVIDENCE = """
+[Measured analysis — the only source of numbers for this report]
+25 people, 5 rounds, 180 events measured.
+{"quality": {"agents_measured": 25, "events_measured": 180, "posts": 31},
+"sentiment_curve": [-0.05, -0.18, -0.41, -0.62, -0.64],
+"objections": [{"label": "client relationship", "agent_count": 18,
+"first_round_seen": 1}, {"label": "price", "agent_count": 13,
+"first_round_seen": 1}, {"label": "migration", "agent_count": 11,
+"first_round_seen": 2}, {"label": "tone", "agent_count": 9,
+"first_round_seen": 2}, {"label": "trust", "agent_count": 8,
+"first_round_seen": 3}, {"label": "support", "agent_count": 6,
+"first_round_seen": 3}, {"label": "export", "agent_count": 5,
+"first_round_seen": 4}, {"label": "audit", "agent_count": 4,
+"first_round_seen": 4}, {"label": "seats", "agent_count": 3,
+"first_round_seen": 5}, {"label": "onboarding", "agent_count": 2,
+"first_round_seen": 5}], "buyers": 8}
+"""
+
+#: The scoreboard block, which `build_lens_context` writes into the prompt with
+#: its confidence intervals rendered as en-dashed ranges.
+SCOREBOARD_EVIDENCE = """
+[Measured analysis — the only source of numbers for this report]
+MESSAGE SCOREBOARD — this run tested 2 messages against one shared audience
+  - Founder-sender: objective 34.0% (95% CI 12.3%–45.6%, n=25 agents),
+    virality 71/100
+  - Tool-sender: objective 18.0% (95% CI 6.1%–29.9%, n=25 agents),
+    virality 44/100
+VERDICT FROM THE MEASUREMENT: the two versions' intervals overlap (12.3%–45.6%
+against 6.1%–29.9%), so the test did not separate them.
+"""
+
 #: What the Ledgerline section was shown.
 LEDGER_EVIDENCE = """
 [Measured analysis — the only source of numbers for this report]
@@ -191,6 +226,115 @@ def test_a_decimal_inside_a_percentage_is_not_a_separate_figure():
     section = "Twitter/X ran at 80.56% opposed."
 
     assert unsourced_figures(PARRY_EVIDENCE, section) == []
+
+
+def test_a_round_by_round_arc_is_not_read_as_five_fabrications():
+    """The guard that stopped a range being read as a negative blocked the match
+    at the `-`, so "Round 3 -0.41" restarted one character later and the sign
+    was read off — reporting a measured -0.41 as an invented +0.41.
+
+    `REACT_PROMPT` demands exactly this prose ("Describe trajectory arcs with
+    specific turning points"), so the check fired on the sections that followed
+    the measurement rules, and every figure in them.
+    """
+    section = (
+        "The arc is monotonic. Round 1 -0.05, Round 2 -0.18, Round 3 -0.41, "
+        "Round 4 -0.62, Round 5 -0.64."
+    )
+
+    assert unsourced_figures(MEASURED_FINDINGS_EVIDENCE, section) == []
+
+
+def test_a_negative_after_a_digit_and_a_space_keeps_its_sign():
+    """The narrow form of the above, at the regex."""
+    found = _texts(unsourced_figures(MEASURED_FINDINGS_EVIDENCE, "Round 3 -0.41 was the low."))
+
+    assert found == set(), "the sign was read off a measured value"
+
+    invented = _texts(unsourced_figures(MEASURED_FINDINGS_EVIDENCE, "Round 3 -0.37 was the low."))
+
+    assert invented == {"-0.37"}, "and a real fabrication still has its sign"
+
+
+def test_a_confidence_interval_range_is_not_a_negative_percentage():
+    """`_scoreboard_block` writes "(95% CI 12.3%–45.6%, n=25 agents)" itself, and
+    `_normalise` folds the en-dash to a hyphen. Read as a sign, the upper bound
+    became "-45.6%" — a number nobody wrote, reported to the model as one it
+    invented, with a retry telling it to delete a correct measured bound."""
+    section = (
+        "The founder-sender version hit objective 34.0% "
+        "(95% CI 12.3%-45.6%, n=25 agents)."
+    )
+
+    assert unsourced_figures(SCOREBOARD_EVIDENCE, section) == []
+
+    # And the same bound cited on its own. This is the half the evidence side
+    # of the fix carries: read as a sign, the evidence held -45.6 and never
+    # 45.6, so a section quoting the upper bound was reported as inventing it.
+    assert unsourced_figures(
+        SCOREBOARD_EVIDENCE, "The upper bound of 45.6% is where this could land."
+    ) == []
+
+
+#: Long enough to clear `MIN_EVIDENCE_CHARS`, which silently returns nothing
+#: for a section with less evidence than that behind it.
+SHARE_EVIDENCE = """
+[Measured analysis — the only source of numbers for this report]
+25 people, 5 rounds, 180 events measured, 100% coverage.
+{"stance": {"support_pct": 35.0, "oppose_pct": 40.0, "neutral_pct": 25.0},
+"net_sentiment_pct": -12.0, "n": 25, "rounds": 5}
+"""
+
+
+def test_a_plain_prose_percentage_range_is_not_a_negative_either():
+    section = "Between 35-40% of buyers said they would switch."
+
+    assert unsourced_figures(SHARE_EVIDENCE, section) == []
+
+
+def test_a_percentage_that_really_is_negative_keeps_its_sign():
+    """The guard must not eat the minus off a genuine negative share."""
+    assert unsourced_figures(SHARE_EVIDENCE, "Net sentiment closed at -12.0%.") == []
+    assert _texts(
+        unsourced_figures(SHARE_EVIDENCE, "Net sentiment closed at -21.0%.")
+    ) == {"-21.0%"}
+
+
+def test_an_impossible_count_is_caught_on_evidence_that_contains_both_halves():
+    """The membership check is nearly inert on real evidence.
+
+    31 and 25 both appear in a seeded findings blob — 31 as a post count, 25 as
+    the number of people — so "31 of 25 people" passed on digit membership
+    alone. It is impossible whatever the evidence holds, and that is the half
+    of the check that does not depend on how sparse the evidence happened to be.
+    """
+    section = "Total people active was 31 of 25 across the run."
+
+    assert any(
+        "31 of 25" in f.text for f in unsourced_figures(MEASURED_FINDINGS_EVIDENCE, section)
+    )
+
+
+def test_another_impossible_count_with_both_halves_present():
+    """"11 of 8 buyers" — 11 is a measured objection count and 8 is the buyer
+    count, so both halves are sourced and the pair is still impossible."""
+    section = "Of the buyers, 11 of 8 leaned towards keeping their current tool."
+
+    assert any(
+        "11 of 8" in f.text for f in unsourced_figures(MEASURED_FINDINGS_EVIDENCE, section)
+    )
+
+
+def test_a_possible_count_from_measured_parts_is_left_alone():
+    """Counts sharing a denominator may legitimately sum past it: an objection
+    count is per objection, and people raise more than one. Flagging that would
+    fire on the sections that read the evidence properly."""
+    section = (
+        "18 of 25 people raised the client relationship, and 13 of 25 raised "
+        "the price."
+    )
+
+    assert unsourced_figures(MEASURED_FINDINGS_EVIDENCE, section) == []
 
 
 def test_a_thousands_separator_is_typography():

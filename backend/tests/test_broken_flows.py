@@ -38,12 +38,24 @@ class _TableStub:
         self._rows = rows
         self._count = count
         self._single = False
+        self._update: dict | None = None
+        self._in: dict[str, tuple] = {}
         touched.append(name)
 
     def select(self, *_a, **_k):
         return self
 
+    def update(self, payload):
+        # `POST /simulations/{id}/start` claims the run with a compare-and-set
+        # before it deducts, so the stub has to be able to answer one.
+        self._update = payload
+        return self
+
     def eq(self, *_a, **_k):
+        return self
+
+    def in_(self, column, values):
+        self._in[column] = tuple(values)
         return self
 
     def order(self, *_a, **_k):
@@ -57,6 +69,14 @@ class _TableStub:
         return self
 
     def execute(self):
+        if self._update is not None:
+            matched = [
+                row for row in self._rows
+                if all(row.get(k) in v for k, v in self._in.items())
+            ]
+            for row in matched:
+                row.update(self._update)
+            return SimpleNamespace(data=[dict(r) for r in matched], count=None)
         if self._single:
             return SimpleNamespace(data=self._rows[0] if self._rows else None)
         return SimpleNamespace(data=list(self._rows), count=self._count)
@@ -229,6 +249,159 @@ async def test_a_failed_variant_lookup_is_raised_rather_than_read_as_zero(
         await simulations_api.start_simulation(SIM, None, auth=AUTH)
 
     assert not billing.calls
+
+
+# ── Starting and preparing are single-use, and the guard is a CAS ──
+
+@pytest.mark.asyncio
+async def test_two_starts_in_one_window_charge_once_and_run_one_engine(
+    monkeypatch, billing
+):
+    """The full run is the most expensive charge in the product, ~17,000 credits.
+
+    The quote path is guarded — `load_quote` refuses a quote whose `consumed_at`
+    is set — and the no-quote branch had **nothing**: it checked the budget and
+    deducted, with the plain read at the top of the handler as its only
+    protection and the database status not written until `run_simulation` ran
+    inside the spawned task. Two POSTs landing in the same window (a
+    double-click, or a client retry on a slow response — this handler awaits
+    `check_simulation_quota` over the network before deducting) each deducted and
+    each spawned an engine on the same run. Two engines writing into one
+    `simulation_events` doubles every count and draws `mean_interval`'s bands
+    from duplicated observations.
+
+    Re-simulations are *forced* onto that branch: a `quote_id` is refused with
+    409 on a run with a `parent_simulation_id`, which is the inoculation loop and
+    the website-room "prove" leg.
+
+    The quota stub here holds both requests until both have read `status='ready'`
+    — the window a double-click actually lands in, which a read-then-write guard
+    cannot see.
+    """
+    admin = _AdminStub({
+        "simulations": ([_simulation()], None),
+        "simulation_variants": ([], None),
+    })
+    monkeypatch.setattr(simulations_api, "get_supabase_admin", lambda: admin)
+
+    both_arrived = asyncio.Event()
+    arrivals: list[int] = []
+
+    async def _quota_after_both_read(_org_id):
+        arrivals.append(1)
+        if len(arrivals) < 2:
+            await both_arrived.wait()
+        else:
+            both_arrived.set()
+        return True
+
+    monkeypatch.setattr(stripe_service, "check_simulation_quota", _quota_after_both_read)
+
+    outcomes = await asyncio.gather(
+        simulations_api.start_simulation(SIM, None, auth=AUTH),
+        simulations_api.start_simulation(SIM, None, auth=AUTH),
+        return_exceptions=True,
+    )
+    await asyncio.sleep(0)
+
+    started = [o for o in outcomes if o == {"status": "started"}]
+    refused = [o for o in outcomes if isinstance(o, HTTPException)]
+    assert len(started) == 1, outcomes
+    assert len(refused) == 1, outcomes
+    assert refused[0].status_code == 409
+    assert "already been started" in refused[0].detail
+    assert len(billing.calls) == 1, (
+        f"one run, charged {len(billing.calls)} times: {billing.calls}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_run_already_prepared_is_not_prepared_a_second_time(monkeypatch):
+    """A double-click on `/prepare` built a second swarm on top of the first.
+
+    `run_prepare_agents` makes one `llm_fast` call per agent — up to 1,000 at
+    enterprise — and inserted the new batch with no prior DELETE, with
+    `seen_usernames` local to one invocation. So a second call re-emitted the
+    first call's handles: on migration 019 the first 20-row batch trips
+    `idx_simulation_agents_unique_username` and `_mark_simulation_failed` then
+    writes "This run stopped before it finished" onto a run that was prepared and
+    fine; without 019, a second full swarm lands and `run_simulation` reads every
+    row, so the run executes with twice the agents the org was quoted for.
+    """
+    prepared: list[str] = []
+
+    async def _prepare(sim_id):
+        prepared.append(sim_id)
+
+    monkeypatch.setattr(simulations_api, "run_prepare_agents", _prepare)
+    admin = _AdminStub({"simulations": ([_simulation(status="draft")], None)})
+    monkeypatch.setattr(simulations_api, "get_supabase_admin", lambda: admin)
+
+    first = await simulations_api.prepare_simulation(SIM, auth=AUTH)
+    await asyncio.sleep(0)
+
+    assert first == {"status": "started"}
+    assert prepared == [SIM]
+
+    with capture_logs() as logs:
+        with pytest.raises(HTTPException) as exc:
+            await simulations_api.prepare_simulation(SIM, auth=AUTH)
+    await asyncio.sleep(0)
+
+    assert exc.value.status_code == 409
+    assert "would build a second room" in exc.value.detail
+    assert prepared == [SIM], "a second swarm was built for one run"
+    assert "prepare_refused_not_preparable" in {e["event"] for e in logs}
+
+
+@pytest.mark.asyncio
+async def test_a_prepared_run_waiting_to_start_is_not_re_prepared(monkeypatch):
+    """`ready` is the state the founder is looking at when they click twice.
+
+    **No second room, and no error either.** This asserted a 409, and that
+    broke the only control the founder has: the Start button posts `/prepare`
+    and then `/start` unconditionally, and it renders for draft, ready and
+    failed. A 409 on `ready` made the frontend's catch fire, so `/start` was
+    never called and a prepared run could not be started at all.
+
+    The guard exists to stop a second swarm being built, not to refuse the
+    caller — so the room is left exactly as it is, `run_prepare_agents` is
+    never spawned, and the caller gets a 200 it can carry on from.
+    """
+    prepared: list[str] = []
+
+    async def _prepare(sim_id):
+        prepared.append(sim_id)
+
+    monkeypatch.setattr(simulations_api, "run_prepare_agents", _prepare)
+    admin = _AdminStub({"simulations": ([_simulation(status="ready")], None)})
+    monkeypatch.setattr(simulations_api, "get_supabase_admin", lambda: admin)
+
+    result = await simulations_api.prepare_simulation(SIM, auth=AUTH)
+    await asyncio.sleep(0)
+
+    assert result["status"] == "ready"
+    assert prepared == [], "a second room was built for an already-prepared run"
+
+
+@pytest.mark.asyncio
+async def test_a_run_whose_preparation_died_can_be_prepared_again(monkeypatch):
+    """The guard must refuse the duplicate, not the retry. `_mark_simulation_
+    failed` writes `failed`, and that is the state a founder retries from."""
+    prepared: list[str] = []
+
+    async def _prepare(sim_id):
+        prepared.append(sim_id)
+
+    monkeypatch.setattr(simulations_api, "run_prepare_agents", _prepare)
+    admin = _AdminStub({"simulations": ([_simulation(status="failed")], None)})
+    monkeypatch.setattr(simulations_api, "get_supabase_admin", lambda: admin)
+
+    result = await simulations_api.prepare_simulation(SIM, auth=AUTH)
+    await asyncio.sleep(0)
+
+    assert result == {"status": "started"}
+    assert prepared == [SIM]
 
 
 # ── Item 38: a pager that could never reach page two ─────

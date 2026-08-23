@@ -91,6 +91,16 @@ class UnsupportedClaim(BaseModel):
 # reason: "SEC" collides with "30 sec", "MDR" is Managed Detection and Response
 # to every security founder alive, and "ASIC" is a chip. Each requires the
 # spelled-out form, accepting a miss to avoid a false positive.
+#
+# **A badge must be spelled the founder's way as well as the rewrite's.** The
+# same pattern decides both sides, so an entry that accepts only the compressed
+# spelling a copy rewriter reaches for ("SEC-registered", "e-money
+# institution", "FDA-cleared") and not the ordinary phrasing a founder writes
+# ("registered with the SEC", "electronic money institution", "cleared by the
+# FDA") reports the founder's own licence back to them as an invention. That is
+# the false accusation this module's docstring calls its worst failure, and it
+# was live in three entries below; the alternations exist for that reason and
+# each new spelling has to be one a page could only mean as the badge.
 _CERTIFICATIONS: tuple[tuple[str, str], ...] = (
     # Security and assurance
     ("SOC 1", r"\bsoc[\s-]?1\b"),
@@ -124,14 +134,28 @@ _CERTIFICATIONS: tuple[tuple[str, str], ...] = (
     ("Monetary Authority of Singapore", r"\bmonetary\s+authority\s+of\s+singapore\b"),
     ("MiCA", r"\bmica\b"),
     ("PSD2", r"\bpsd\s?2\b"),
-    ("e-money licence", r"\be[\s-]?money\s+(?:licen[cs]e|institution)\b|\bemi\s+licen[cs]e\b"),
-    ("SEC registration", r"\bsecurities\s+and\s+exchange\s+commission\b|\bsec[\s-]registered\b"),
+    (
+        "e-money licence",
+        r"\b(?:e[\s-]?money|electronic\s+money)\s+(?:licen[cs]e|institution)\b"
+        r"|\bemi\s+licen[cs]e\b",
+    ),
+    (
+        "SEC registration",
+        # Not a bare "sec registration": "30 sec registration" is a signup
+        # flow, and the whole reason this entry avoids the bare acronym.
+        r"\bsecurities\s+and\s+exchange\s+commission\b|\bsec[\s-]registered\b"
+        r"|\bregistered\s+with\s+the\s+sec\b",
+    ),
     ("FINRA", r"\bfinra\b"),
     ("SIPC", r"\bsipc\b"),
     ("FDIC", r"\bfdic\b"),
     ("NCUA", r"\bncua\b"),
     # Medical and clinical
-    ("FDA clearance", r"\bfda[\s-]?(?:cleared|approved|clearance|approval)\b"),
+    (
+        "FDA clearance",
+        r"\bfda[\s-]?(?:cleared|approved|clearance|approval)\b"
+        r"|\b(?:cleared|approved)\s+by\s+the\s+fda\b",
+    ),
     ("510(k)", r"\b510\s?\(\s?k\s?\)"),
     ("De Novo", r"\bde\s+novo\s+(?:clearance|classification)\b"),
     ("premarket approval", r"\bpremarket\s+approval\b"),
@@ -140,7 +164,7 @@ _CERTIFICATIONS: tuple[tuple[str, str], ...] = (
     ("CLIA", r"\bclia\b"),
     ("CAP accreditation", r"\bcap[\s-]accredit"),
     # Cryptography and transport, which are checkable technical assertions
-    ("AES-256", r"\baes[\s-]?256\b"),
+    ("AES-256", r"\baes[\s-]?256\b|\b256[\s-]bit\s+aes\b"),
     ("TLS", r"\btls\s?1\.\d\b"),
     # Accessibility conformance
     ("WCAG", r"\bwcag\b"),
@@ -217,9 +241,37 @@ def _normalise(text: str) -> str:
     # "30 percent" and "30%" are the same claim; so are the two dashes and the
     # two apostrophes that word processors substitute.
     folded = re.sub(r"\s*per\s?cent(?:age)?\b", "%", folded)
+    # And "30 cents" and "30¢". The unit word has to fold here rather than in
+    # `_figure_key`, because until it does the source's spelling is not even a
+    # figure: no family pattern matches "30 cents", so the source states no
+    # figure at all and the page's "30¢" is reported as invented. Only after a
+    # number, so "Ledgerline cents" is untouched.
+    folded = re.sub(r"(\d)\s*cents?\b", r"\1¢", folded)
     folded = folded.replace("–", "-").replace("—", "-")
     folded = folded.replace("’", "'").replace("“", '"').replace("”", '"')
     return " ".join(folded.split())
+
+
+#: What a magnitude word or letter multiplies the number by.
+#:
+#: Only the spellings the family patterns above can actually match, so the
+#: table cannot claim to fold something that never reaches it.
+_MAGNITUDES: dict[str, int] = {
+    "k": 1_000,
+    "m": 1_000_000,
+    "million": 1_000_000,
+    "b": 1_000_000_000,
+    "bn": 1_000_000_000,
+    "billion": 1_000_000_000,
+}
+
+#: A figure split into the parts that decide whether two of them are one claim:
+#: the currency it is in, the number, the magnitude it carries, and the unit it
+#: is measured in.
+_FIGURE_PARTS = re.compile(
+    r"^(?P<prefix>[$£€]?)(?P<number>\d+(?:\.\d+)?)"
+    r"(?P<magnitude>million|billion|bn|k|m|b)?(?P<suffix>[%¢]?)$"
+)
 
 
 def _figure_key(token: str) -> str:
@@ -228,8 +280,23 @@ def _figure_key(token: str) -> str:
     `$1,200`, `$ 1200` and `$1,200.00` are one claim; spacing and thousands
     separators are typography. The trailing zeros go too, so a source that
     writes `2.9%` covers a render that writes `2.90%`.
+
+    **The magnitude word is arithmetic, not typography, so it is multiplied out
+    rather than left in the key.** Compressing `$5 million` to `$5M` is the
+    single most likely thing a copy rewriter does to a headline number, and
+    keyed as strings the two do not match — the founder was then told in a paid
+    artifact that they invented a figure they wrote themselves, and `_rounds_to`
+    could not rescue it because `Decimal("5m")` raises. Folded to `$5000000`,
+    both spellings are one claim in either direction, and the key stays a
+    number `_rounds_to` can read.
     """
     key = token.lower().replace(",", "").replace(" ", "")
+    parts = _FIGURE_PARTS.match(key)
+    if parts:
+        value = Decimal(parts["number"]) * _MAGNITUDES.get(parts["magnitude"] or "", 1)
+        # `normalize` alone renders large values as `5E+6`; the plain format is
+        # what makes `$5 million` and `$5,000,000` the same string.
+        return f"{parts['prefix']}{format(value.normalize(), 'f')}{parts['suffix']}"
     key = re.sub(r"(\.\d*?)0+(?=\D|$)", r"\1", key)
     return key.rstrip(".")
 

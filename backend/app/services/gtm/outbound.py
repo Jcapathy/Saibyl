@@ -559,6 +559,41 @@ def _user_prompt(
     )
 
 
+def _fact_material(
+    context: dict[str, Any],
+    archetype: dict[str, Any],
+    pains: dict[int, dict[str, Any]],
+    winner: dict[str, Any],
+) -> str:
+    """The only text a figure in this copy is allowed to come from.
+
+    Deliberately **not** the prompt. `_user_prompt` carries the cadence table
+    this module wrote itself — "step 7 | day 4 | email | …" — and scrubbing
+    against the prompt made every one of those step and day numbers evidence:
+    `sourced_numbers` on a real prompt returned exactly 1 through 16, so "we
+    are 14% cheaper than the incumbent", "$16 per entity per month" and "cuts
+    errors by 7%" all passed with nothing replaced, on every run. A number this
+    module printed is not something a buyer said.
+
+    What is left is what the rule has always named: the founder's own words,
+    the buyer profile, the message the room picked, and the objections with the
+    sentences buyers actually used.
+    """
+    parts = [
+        str(context.get("name") or ""),
+        str(context.get("category") or ""),
+        str(context.get("goal") or ""),
+        str(context.get("summary") or ""),
+        str(winner.get("content") or "") if winner else "",
+        _archetype_block(archetype),
+    ]
+    for pain in pains.values():
+        parts.append(str(pain.get("label") or ""))
+        parts.append(str(pain.get("summary") or ""))
+        parts.extend(_quotes(pain))
+    return "\n".join(part for part in parts if part.strip())
+
+
 def _placeholder_count(steps: list[OutboundStep], notes: list[str]) -> int:
     """How many blanks the founder still has to fill before any of this sends.
 
@@ -713,10 +748,16 @@ async def build_outbound_sequences(simulation_id: str, org_id: str) -> OutboundS
         # "customers are seeing 10+ hours per month back" for a product with no
         # customers, "we built volume pricing into the model" for one with no
         # volume pricing, and a $3,600/year price 12x off the founder's own —
-        # all under notes labelling them "(factual)". A figure not in `user`
-        # becomes the placeholder, which cannot be sent by accident.
+        # all under notes labelling them "(factual)". A figure not in the
+        # material becomes the placeholder, which cannot be sent by accident.
+        #
+        # Checked against `_fact_material`, not against `user`: the prompt
+        # contains this module's own step and day numbers, and scrubbing
+        # against it blessed every money or percentage figure between 1 and 16.
         generated, invented = scrub_unsourced(
-            generated, user, product_material=str(context.get("founder_material") or "")
+            generated,
+            _fact_material(context, archetype, pains, winner),
+            product_material=str(context.get("founder_material") or ""),
         )
         if invented:
             log.warning(

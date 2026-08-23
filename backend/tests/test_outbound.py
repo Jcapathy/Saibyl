@@ -492,6 +492,47 @@ async def test_placeholders_are_counted_so_a_founder_knows_what_is_unfinished(mo
     assert sequence.placeholders_to_fill == 2 * len(sequence.steps)
 
 
+async def test_the_cadence_this_module_wrote_is_not_evidence_for_a_figure(monkeypatch):
+    """The fact authority was this module's own prompt scaffolding.
+
+    `_skeleton_block` prints "step 7 | day 4 | email | …" for sixteen touches,
+    and the scrubber was pointed at the whole prompt — so `sourced_numbers`
+    returned exactly 1 through 16 on every run, and any money or percentage
+    figure that landed on a small number was blessed by the cadence table.
+    "We are 14% cheaper than the incumbent" shipped unmarked, under the
+    founder's name, to people who can check it.
+    """
+    _install(
+        monkeypatch,
+        _store([_objection("price", "Too expensive", quote="It costs too much.")]),
+        _copy_for_every_step(body="We are 14% cheaper than the incumbent."),
+    )
+
+    pack = await ob.build_outbound_sequences(SIM, ORG)
+    sequence = pack.sequences[0]
+
+    assert sequence.steps
+    for step in sequence.steps:
+        assert "14%" not in step.body
+        assert ob.TODO_NUMBER in step.body
+    assert sequence.placeholders_to_fill == len(sequence.steps)
+
+
+async def test_what_the_founder_and_the_buyers_said_still_licenses_a_figure(monkeypatch):
+    """The other half: narrowing the material must not blank the numbers the
+    run actually contains, or the sequence is a document of placeholders."""
+    _install(
+        monkeypatch,
+        _store([_objection("price", "Too expensive", quote="We lose 15 hours a month to this.")]),
+        _copy_for_every_step(body="You told us it costs 15 hours a month."),
+    )
+
+    pack = await ob.build_outbound_sequences(SIM, ORG)
+
+    assert pack.sequences[0].placeholders_to_fill == 0
+    assert all("15 hours" in step.body for step in pack.sequences[0].steps)
+
+
 @pytest.mark.parametrize(
     "body",
     [

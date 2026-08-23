@@ -67,25 +67,48 @@ _TIME_UNIT = (
     r"|hrs?|mins?"
 )
 
-#: A number anywhere, for reading the material.
-_ANY_NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?\s*[km]?\b", re.I)
+#: A magnitude, written as a letter *or* as a word. Letters only was a
+#: three-order-of-magnitude hole: "$3 million" ended its span at "$3", keyed as
+#: 3, and any bare 3 in the material — "3 entities" — licensed it. "A $20
+#: billion market" and "$3 million a year in wasted spend" are the cheapest
+#: sentences a model can write and the most damaging ones a cold email can
+#: carry, and both reported zero replacements.
+#:
+#: Always used with a trailing `\b`, for the reason `_CLAIM_SPAN` gives below.
+_MAGNITUDE = r"(?:thousand|million|billion|trillion|mm|bn|k|m)"
+
+#: Money the writer spelled out instead of prefixing. "9,000 USD" matched no
+#: claim branch at all, so it was never checked against anything.
+_CURRENCY_WORD = r"(?:USD|EUR|GBP|dollars?)"
+
+#: A number anywhere, for reading the material. The magnitude is captured
+#: rather than swallowed so *both* readings are sourced: material stating
+#: "$3 million" covers copy writing "$3 million" and copy writing "3".
+_ANY_NUMBER = re.compile(
+    r"(\d[\d,]*(?:\.\d+)?)(?:\s*(" + _MAGNITUDE + r"))?\b", re.I
+)
 
 #: A span that makes a claim. Whole spans are replaced rather than the digits
 #: inside them, so a range never degrades into "[TODO: your number]-50 hours".
 _CLAIM_SPAN = re.compile(
     r"(?:"
-    # money, with optional k/m and an optional range partner.
+    # money, with an optional magnitude and an optional range partner.
     #
-    # `[km]\b`, not `[km]?` — the same boundary `_DIGITS` needed and this
-    # pattern did not get. Without it the span eats the first letter of the
-    # next word: "$35 kit" matched as "$35 k", which keys as 35,000, is absent
-    # from the material, and so scrubbed a correctly-sourced price *and* left
+    # `\b` after the magnitude, and the magnitude optional rather than the
+    # boundary — the same boundary `_DIGITS` needed and this pattern did not
+    # get. Without it the span eats the first letter of the next word: "$35
+    # kit" matched as "$35 k", which keys as 35,000, is absent from the
+    # material, and so scrubbed a correctly-sourced price *and* left
     # "[TODO: your number]it" in shipped copy.
-    r"[$£€]\s?\d[\d,]*(?:\.\d+)?(?:\s*[km]\b)?"
-    r"(?:\s*[-–—]\s*[$£€]?\s?\d[\d,]*(?:\.\d+)?(?:\s*[km]\b)?)?"
+    r"[$£€]\s?\d[\d,]*(?:\.\d+)?(?:\s*" + _MAGNITUDE + r"\b)?"
+    r"(?:\s*[-–—]\s*[$£€]?\s?\d[\d,]*(?:\.\d+)?(?:\s*" + _MAGNITUDE + r"\b)?)?"
     r"|"
-    # percentage, with an optional range partner
-    r"\d[\d,]*(?:\.\d+)?\s*(?:[-–—]\s*\d[\d,]*(?:\.\d+)?\s*)?%"
+    # money named rather than prefixed: "9,000 USD", "3 million dollars"
+    r"\d[\d,]*(?:\.\d+)?(?:\s*" + _MAGNITUDE + r"\b)?\s*" + _CURRENCY_WORD + r"\b"
+    r"|"
+    # percentage, with an optional range partner. Spelled out as well as
+    # signed: "Cuts 40 percent of the manual work" is the same claim as 40%.
+    r"\d[\d,]*(?:\.\d+)?\s*(?:[-–—]\s*\d[\d,]*(?:\.\d+)?\s*)?(?:%|per\s?cent\b|pct\b)"
     r"|"
     # a number carrying a unit of time: "17 hours", "30-50 hours", "45-minute"
     r"\d[\d,]*(?:\.\d+)?\s*\+?"
@@ -95,10 +118,12 @@ _CLAIM_SPAN = re.compile(
     re.I,
 )
 
-#: `[km]\b` and not `[km]?` — without the boundary this reads "8 months" as
-#: "8 m", i.e. eight million, and then reports a duration the material plainly
-#: states as unsourced.
-_DIGITS = re.compile(r"\d[\d,]*(?:\.\d+)?\s*(?:[km]\b)?", re.I)
+#: The magnitude carries a `\b` and is optional — without the boundary this
+#: reads "8 months" as "8 m", i.e. eight million, and then reports a duration
+#: the material plainly states as unsourced.
+_DIGITS = re.compile(
+    r"\d[\d,]*(?:\.\d+)?(?:\s*" + _MAGNITUDE + r"\b)?", re.I
+)
 
 #: A meeting length is not a claim about the product, and this copy is full of
 #: them — "Can we book 20 minutes?", "a 30-minute intro". Scrubbing those
@@ -106,27 +131,50 @@ _DIGITS = re.compile(r"\d[\d,]*(?:\.\d+)?\s*(?:[km]\b)?", re.I)
 #: line that has to work, and it catches nothing, because a meeting length was
 #: never a claim.
 #:
-#: The first version of this exemption anchored on the characters immediately
-#: before the number, and a live check found it failing on most real copy —
-#: "set up **a** 30-minute call" defeated it with an article, and "worth",
-#: "takes" and "got" were not verbs it knew. Eight damaged meeting asks reached
-#: generated sequences. It now searches a window rather than anchoring, and the
-#: verb list carries the words outbound copy actually uses.
+#: **The test used to be the other way round and it kept failing.** It asked
+#: whether booking language sat around the number, and every live check found
+#: another phrasing the list did not know: an article ("set up **a** 30-minute
+#: call"), then "worth", "takes", "got", then "I'll **keep it to** 15 minutes",
+#: "20 minutes next week?", "Any interest in 15 minutes?", "30 minutes with
+#: your ops lead would settle it". Widening the list moved the boundary rather
+#: than removing it, because the list can never be finished — cold copy asks
+#: for time in as many ways as there are ways to be polite.
+#:
+#: So a meeting-sized duration is an offer of someone's time *by default*, and
+#: what has to be recognised instead is the small, closed set of shapes that
+#: make a duration a measurement: a rate ("2 hours/week"), a duration used as
+#: an adjective on something that is not a meeting ("a 45-minute manual hunt"),
+#: and the savings verbs a benefit claim is written with ("saves 90 minutes").
+#: Those are shapes, not vocabulary, and there are few enough of them to state.
+#: Language that makes a duration an offer of someone's time. Generous on
+#: purpose — the cost of missing one is a placeholder in a call-to-action,
+#: which is visible and fixable, while the cost of exempting by default is an
+#: invented benchmark in a stranger's inbox.
+#:
+#: "keep it to" and "hold it to" are here because real copy asks that way and
+#: the earlier list did not know them.
 _BOOKING_BEFORE = re.compile(
     r"(?:book|book in|grab|spare|schedule|hop on|jump on|set up|carve out|"
-    r"give (?:me|us)|steal|worth|takes?|got|get|have|spend|free up|block|"
-    r"find|need|want)\b",
+    r"give (?:me|us)|steal|worth|takes?|took|got|get|have|spend|free up|"
+    r"block|find|need|want|keep it to|hold it to|no more than|under|"
+    r"buy me|borrow|pencil)\b",
     re.I,
 )
 
-#: A bare meeting length standing as its own clause — "15 minutes—let's settle
-#: it.", "(20 minutes, free tier)". Both halves of the verb-before /
-#: noun-after test fail here by construction: the sentence split leaves
-#: `before` empty and the punctuation that follows carries no noun. Two of
-#: these reached sendable copy, one of them a line meant to be read down a
-#: phone. A duration alone in a clause is an offer of time, not a claim about
-#: a product — nothing measurable is being asserted.
-_STANDS_ALONE = re.compile(r"^\s*[—–\-,)(]|^\s*$")
+#: The claim shape a savings or waste verb makes: "we save you 90 minutes",
+#: "you lose 40 minutes a close". Checked before the exemption, because this is
+#: an assertion about the product whatever else surrounds it.
+_CLAIM_BEFORE = re.compile(
+    r"\b(?:sav(?:e|es|ed|ing)|shav(?:e|es|ed|ing)|wast(?:e|es|ed|ing)|"
+    r"los(?:e|es|ing)|lost|bleed(?:s|ing)?|burn(?:s|ed|ing)?)\b",
+    re.I,
+)
+
+#: A duration written as an adjective — "a 45-minute manual hunt", "a 5-minute
+#: triage". The hyphen is what says the duration is measuring the noun after
+#: it, so unless that noun is a meeting, this is a benchmark rather than an
+#: offer of time.
+_ATTRIBUTIVE = re.compile(r"\d\s*[-–—]\s*(?:" + _TIME_UNIT + r")\b", re.I)
 
 #: A lookback or lookahead window in a request — "the worst denial you've seen
 #: in the last 6 months", "anything in the next two weeks". Not a claim about
@@ -141,19 +189,51 @@ _MEETING_AFTER = re.compile(
     r"walkthrough|screen ?share|session)\b",
     re.I,
 )
+
+#: The two things that make a duration an ask when no booking verb is present.
+#:
+#: This is the discriminator that lets the default be "check" without mangling
+#: real calls to action. Asks are **interrogative or scheduled**; product
+#: claims are **declarative**. "20 minutes next week?" and "Would 20 minutes on
+#: Tuesday work?" carry a question mark and a day; "Reviews are done in 20
+#: minutes." and "Month-end close drops to 2 hours." carry neither, and both of
+#: those are invented benchmarks that reached sendable copy when this function
+#: briefly exempted by default.
+#:
+#: "with you / with your <person>" counts too: time spent together is a
+#: meeting, which is what "30 minutes with your ops lead would settle it" is.
+#: A bare meeting length standing as its own clause — "15 minutes—let's settle
+#: it.", "(20 minutes, free tier)". Both halves of the verb-before /
+#: noun-after test fail here by construction: the sentence split leaves
+#: `before` empty and the punctuation that follows carries no noun. Two of
+#: these reached sendable copy, one a line meant to be read down a phone.
+_STANDS_ALONE = re.compile(r"^\s*[—–\-,)(]|^\s*$")
+
+_ASK_MARK = re.compile(r"\?")
+_SCHEDULING_NEAR = re.compile(
+    r"\b(?:today|tomorrow|tonight|monday|tuesday|wednesday|thursday|friday|"
+    r"this week|next week|the week|say when|let me know when|when(?:\?|\b)|"
+    r"your calendar|my calendar|diary|availability)\b"
+    r"|\bwith (?:you|your)\b",
+    re.I,
+)
 _CONTEXT_CHARS = 34
 
-#: A rate is always a claim and can never be a meeting ask. This is what keeps
-#: the widened verb list above from swallowing real fabrications: "Most
-#: controllers **spend** 30-50 hours **a month**" contains a booking verb, and
-#: is still checked, because no one books a meeting "a month".
+#: A rate is always a claim and can never be a meeting ask: nobody books a
+#: meeting "a month".
+#:
+#: The forms matter as much as the units. Reading only "a/per/each/every" plus
+#: a unit meant "we free up 2 hours**/week** for every controller", "you get 2
+#: hours/week back" and "it takes 2 hours **weekly**" all walked through the
+#: one guard that keeps a booking verb honest — and "/week", "/month" and
+#: "weekly" are the forms a savings claim is actually written in.
 _RATE_AFTER = re.compile(
-    r"^\W*(?:an?|per|each|every)\s+(?:day|week|month|quarter|year|hour)\b", re.I
+    r"^\W*(?:an?|per|each|every)\s+(?:day|week|month|quarter|year|hour)s?\b"
+    r"|^\s*/\s*(?:day|week|month|quarter|year|hour|wk|mo|yr|hr)s?\b"
+    r"|^\W*(?:daily|weekly|monthly|quarterly|yearly|annually|hourly)\b",
+    re.I,
 )
 
-#: A meeting is minutes, or an hour or two. The other half of the guard: it
-#: stops "tuning **takes** 500 hours" being exempted by its verb, while leaving
-#: "**takes** 15 minutes" alone.
 _SENTENCE_SPLIT = re.compile(r"[.!?\n]")
 
 #: Every "<number> <time unit>" the material states, so a duration can be
@@ -170,11 +250,31 @@ _DURATION_RANGE = re.compile(
     re.I,
 )
 
-_MINUTE_UNIT = re.compile(r"\b(?:minutes?|mins?|seconds?|secs?)\b", re.I)
+_MINUTE_UNIT = re.compile(r"\b(?:minutes?|mins?)\b", re.I)
+_SECOND_UNIT = re.compile(r"\b(?:seconds?|secs?)\b", re.I)
 _HOUR_UNIT = re.compile(r"\bhours?|hrs?\b", re.I)
 MAX_MEETING_HOURS = 2
+#: The same ceiling in the unit copy usually writes it in. Minutes had no
+#: ceiling at all, so "the month-end close takes 900 minutes of manual work"
+#: was exempted by its verb while the identical claim in hours was scrubbed —
+#: and minutes is the unit a model reaches for when it invents a per-task
+#: benchmark.
+MAX_MEETING_MINUTES = 120
 
 _PLACEHOLDER = re.compile(r"\[TODO:[^\]]*\]", re.I)
+
+
+#: Longest suffix first, so "million" is not read as an "m" with a tail.
+_MAGNITUDE_FACTORS: tuple[tuple[str, int], ...] = (
+    ("trillion", 1_000_000_000_000),
+    ("billion", 1_000_000_000),
+    ("million", 1_000_000),
+    ("thousand", 1_000),
+    ("mm", 1_000_000),
+    ("bn", 1_000_000_000),
+    ("k", 1_000),
+    ("m", 1_000_000),
+)
 
 
 def _key(raw: str) -> str:
@@ -183,13 +283,16 @@ def _key(raw: str) -> str:
     `$1,200`, `1200` and `1.2k` are one figure; separators and magnitude
     suffixes are notation. Trailing zeros go too, so material stating `2.9`
     covers copy writing `2.90`.
+
+    The magnitude *word* counts as notation too. Reading only `k` and `m` meant
+    "$3 million" keyed as 3, so a material saying "3 entities" licensed it.
     """
     text = raw.strip().lower().replace(",", "").replace(" ", "")
     multiplier = 1
-    if text.endswith("k"):
-        multiplier, text = 1_000, text[:-1]
-    elif text.endswith("m"):
-        multiplier, text = 1_000_000, text[:-1]
+    for suffix, factor in _MAGNITUDE_FACTORS:
+        if text.endswith(suffix) and text[: -len(suffix)]:
+            multiplier, text = factor, text[: -len(suffix)]
+            break
     try:
         value = float(text) * multiplier
     except ValueError:
@@ -200,8 +303,20 @@ def _key(raw: str) -> str:
 
 
 def sourced_numbers(material: str) -> set[str]:
-    """Every number the generator was actually shown."""
-    return {_key(raw) for raw in _ANY_NUMBER.findall(material or "") if raw.strip()}
+    """Every number the generator was actually shown.
+
+    A figure written with a magnitude is read both ways — "$3 million" sources
+    3,000,000 *and* 3 — because the material is what licenses copy, and copy
+    quoting either form is quoting what it was given.
+    """
+    values: set[str] = set()
+    for digits, magnitude in _ANY_NUMBER.findall(material or ""):
+        if not digits.strip():
+            continue
+        values.add(_key(digits))
+        if magnitude:
+            values.add(_key(f"{digits}{magnitude}"))
+    return values
 
 
 def _canonical_unit(unit: str) -> str:
@@ -234,20 +349,54 @@ def sourced_durations(material: str) -> set[tuple[str, str]]:
     return pairs
 
 
-def _is_meeting_ask(span: str, before: str, after: str) -> bool:
-    """Whether this span asks for someone's time rather than claiming a fact.
+def _meeting_sized(span: str) -> bool:
+    """Whether this duration could be a meeting at all.
 
-    Three conditions, and all of them are load-bearing:
+    A meeting is twenty minutes, or an hour or two. Hours were capped from the
+    start — otherwise "tuning **takes** 500 hours" is exempted by its own verb
+    — and minutes and seconds were not, which is the same hole in the units
+    copy actually invents benchmarks in: "the close takes 900 minutes",
+    "setup takes 90 seconds", "45 seconds per line item".
 
-    1. **Not a rate.** "a month", "per week" — nobody books a meeting for a
-       month. This is what allows the verb list to be generous: "controllers
-       spend 30-50 hours a month" carries a booking verb and is still checked.
-    2. **A meeting-sized duration.** Minutes, or an hour or two. Without this,
-       "tuning takes 500 hours" would be exempted by its own verb.
-    3. **Booking language around it** — a verb before ("set up", "worth",
-       "got") or a meeting noun after ("call", "walkthrough"), searched in a
-       window rather than anchored, because an article or an adjective sits
-       between them more often than not.
+    Seconds have no cap because no meeting is ever booked in them. A duration
+    in seconds is a claim about how fast something runs.
+    """
+    values = [
+        float(_key(n))
+        for n in _DIGITS.findall(span)
+        if _key(n).replace(".", "").isdigit()
+    ]
+    if _SECOND_UNIT.search(span):
+        return False
+    if _MINUTE_UNIT.search(span):
+        return bool(values) and max(values) <= MAX_MEETING_MINUTES
+    if _HOUR_UNIT.search(span):
+        return bool(values) and max(values) <= MAX_MEETING_HOURS
+    return False
+
+
+def _is_meeting_ask(span: str, before: str, after: str, raw_after: str = "") -> bool:
+    """Whether this span offers someone's time rather than claiming a fact.
+
+    A meeting-sized duration is an offer of time unless one of a closed set of
+    shapes makes it a measurement:
+
+    1. **A rate.** "a month", "per week", "/week", "weekly" — nobody books a
+       meeting for a month, so "controllers spend 30-50 hours a month" is
+       checked however politely it is phrased.
+    2. **Bigger than a meeting.** 500 hours, 900 minutes, any number of
+       seconds. See `_meeting_sized`.
+    3. **A savings verb before it.** "we save you 90 minutes" asserts a
+       benefit; it does not ask for time.
+    4. **Used as an adjective on something that is not a meeting.** "a
+       45-minute manual hunt", "a 5-minute triage" — the hyphen says the
+       duration is measuring the noun after it. A booking verb before, or a
+       meeting noun after, says the noun *is* the meeting ("a 30-minute
+       technical call", "grab a 15-minute slot") and the offer stands.
+
+    Everything else — "20 minutes next week?", "I'll keep it to 15 minutes",
+    "30 minutes with your ops lead would settle it" — is an ask, and the ask is
+    the one line in this copy that has to work.
     """
     if _RATE_AFTER.match(after):
         return False
@@ -258,23 +407,50 @@ def _is_meeting_ask(span: str, before: str, after: str) -> bool:
     if _WINDOW_BEFORE.search(before):
         return True
 
-    if _MINUTE_UNIT.search(span):
-        meeting_sized = True
-    elif _HOUR_UNIT.search(span):
-        values = [float(_key(n)) for n in _DIGITS.findall(span) if _key(n).replace(".", "").isdigit()]
-        meeting_sized = bool(values) and max(values) <= MAX_MEETING_HOURS
-    else:
-        meeting_sized = False
-    if not meeting_sized:
+    if not _meeting_sized(span):
         return False
 
-    # A meeting-sized duration alone in its clause offers time; it asserts
-    # nothing. Only reached once the rate and size tests above have passed, so
-    # "30-50 hours a month" and "500 hours" cannot arrive here.
+    if _CLAIM_BEFORE.search(before):
+        return False
+
+    if _ATTRIBUTIVE.search(span) and not (
+        _BOOKING_BEFORE.search(before) or _MEETING_AFTER.search(after)
+    ):
+        return False
+
+    # A duration alone in its clause offers time — "15 minutes—let's settle
+    # it.", "(20 minutes, free tier)". Both halves of the test below fail here
+    # by construction: the sentence split leaves `before` empty and the
+    # punctuation after carries no noun.
     if not before.strip() and _STANDS_ALONE.match(after):
         return True
 
-    return bool(_BOOKING_BEFORE.search(before) or _MEETING_AFTER.search(after))
+    # **The default is to CHECK, not to exempt.** The guards above disqualify
+    # the shapes we know are claims; they cannot enumerate the shapes we do
+    # not. This function briefly ended `return True`, and six invented product
+    # benchmarks walked straight through it — "Reviews are done in 20
+    # minutes.", "Setup is 15 minutes.", "Month-end close drops to 2 hours." —
+    # all previously caught, none carrying a rate, a hyphen or a savings verb.
+    #
+    # The two failure directions are not symmetrical. Exempting wrongly sends
+    # an invented benchmark to a stranger under the founder's name, which is
+    # the failure this module exists to prevent. Checking wrongly leaves a
+    # placeholder in a call-to-action, which is visible, counted, and fixable
+    # in seconds. So an offer of time has to look like one.
+    if _BOOKING_BEFORE.search(before) or _MEETING_AFTER.search(after):
+        return True
+
+    # No booking verb, so the clause has to look like an ask another way:
+    # interrogative, or scheduled, or time spent with someone.
+    #
+    # The question mark is read from `raw_after` rather than `after`, because
+    # `_SENTENCE_SPLIT` treats `?` as a boundary and consumes it — so "Any
+    # interest in 15 minutes?" arrives here with an empty `after` and its one
+    # distinguishing mark already thrown away.
+    context = f"{before} {span} {after}"
+    return bool(
+        _ASK_MARK.search(raw_after[:4]) or _SCHEDULING_NEAR.search(context)
+    )
 
 
 def _duration_supported(span: str, durations: set[tuple[str, str]]) -> bool:
@@ -290,7 +466,10 @@ def _duration_supported(span: str, durations: set[tuple[str, str]]) -> bool:
     )
 
 
-_HAS_CURRENCY = re.compile(r"[$£€]")
+#: Money, whichever way it is written. The symbols alone left "9,000 USD" and
+#: "40 dollars a seat" outside the price check — and outside the test that
+#: decides whether the founder stated a price at all.
+_HAS_CURRENCY = re.compile(r"[$£€]|\b" + _CURRENCY_WORD + r"\b", re.I)
 
 
 def _scrub_text(
@@ -327,10 +506,9 @@ def _scrub_text(
         before = _SENTENCE_SPLIT.split(
             text[max(0, match.start() - _CONTEXT_CHARS) : match.start()]
         )[-1]
-        after = _SENTENCE_SPLIT.split(
-            text[match.end() : match.end() + _CONTEXT_CHARS]
-        )[0]
-        if _is_meeting_ask(span, before, after):
+        raw_after = text[match.end() : match.end() + _CONTEXT_CHARS]
+        after = _SENTENCE_SPLIT.split(raw_after)[0]
+        if _is_meeting_ask(span, before, after, raw_after):
             return span
 
         # A duration must match its unit as well as its digits; money and

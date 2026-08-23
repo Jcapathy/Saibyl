@@ -65,6 +65,31 @@ def _clear_overrides(app):
 # bodies never have to be realistic — only well-formed.
 SPENDING_ROUTES = [
     ("POST", "/api/simulations/11111111-1111-1111-1111-111111111111/start", {}),
+    # Five routes that spend without ever touching the credit ledger, which is
+    # why the `deduct_credits(` scan at the bottom of this file could not see
+    # them and why they shipped ungated.
+    #
+    # `/prepare` makes one `llm_fast` call per agent, up to 1,000 at
+    # enterprise. `/reports/generate` drives the most expensive main-model stage
+    # in the product — a fifth of a standard run's cost — and is billed inside
+    # the run's price, so it charges nothing at the route. Each interview is two
+    # calls on Saibyl's account and the batch takes up to 1,000 agent ids.
+    ("POST", "/api/simulations/11111111-1111-1111-1111-111111111111/prepare", {}),
+    ("POST", "/api/reports/generate", {"simulation_id": ORG}),
+    (
+        "POST", "/api/simulations/11111111-1111-1111-1111-111111111111/interview",
+        {"prompt": "hi", "agent_id": "a-1"},
+    ),
+    (
+        "POST",
+        "/api/simulations/11111111-1111-1111-1111-111111111111/interview/batch",
+        {"prompt": "hi", "agent_ids": ["a-1"]},
+    ),
+    (
+        "POST",
+        "/api/simulations/11111111-1111-1111-1111-111111111111/interview/by-persona",
+        {"prompt": "hi", "persona_type": "IT director"},
+    ),
     ("POST", "/api/clearance", {"item": "Saibyl", "tier": "COMPREHENSIVE"}),
     ("POST", "/api/website/check", {"project_id": ORG, "url": "https://acme.example"}),
     ("POST", "/api/website/revision", {"snapshot_id": ORG}),
@@ -304,6 +329,15 @@ def test_no_handler_reaches_deduct_credits_without_a_spending_gate():
     "/api/billing/flash-report",
     # Charged by `reconcile_run_cost` at the tail of the spawned worker.
     "/api/simulations/{id}/start",
+    # These five spend model calls on Saibyl's account and never reach the
+    # credit ledger at all — the report is billed inside the run's price, and
+    # preparation and interviews are not metered anywhere. A source scan for
+    # `deduct_credits(` will never find them, so they are listed by hand.
+    "/api/simulations/{id}/prepare",
+    "/api/reports/generate",
+    "/api/simulations/{id}/interview",
+    "/api/simulations/{id}/interview/batch",
+    "/api/simulations/{id}/interview/by-persona",
 ])
 def test_the_routes_whose_spend_is_one_call_deeper_are_gated_too(path):
     """The hand-maintained tail of the scan above, listed rather than inferred."""
