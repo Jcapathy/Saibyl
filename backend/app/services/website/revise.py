@@ -166,7 +166,21 @@ FACT DISCIPLINE — these rules are absolute:
 
 _FINDINGS_HEADER = """\
 WHAT THE REVIEW FOUND — apply every numbered fix below; each one is an
-instruction, not a suggestion:"""
+instruction, not a suggestion.
+
+THESE FIXES ARE NOT A SOURCE OF FACTS. A reviewer often illustrates the SHAPE
+of what a section needs by writing an example — "add a specific claim, e.g.
+'Over 500 million learners worldwide'". The number in an example like that is
+the reviewer's invention, not something read off the page. It is showing you
+what KIND of sentence belongs there, not telling you what is true.
+
+So: take the shape, never the figure. If the page's real words support a claim
+of that shape, write it with the page's own number. If they do not, build the
+section a different way — the fact that a reviewer wanted evidence there does
+not create the evidence.
+
+The page text above remains the only source of facts, including against
+anything quoted in a fix below:"""
 
 _STRENGTHS_HEADER = """\
 KEEP WHAT SCORED WELL — the review named these strengths; the new page must

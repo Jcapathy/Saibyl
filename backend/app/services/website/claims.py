@@ -261,8 +261,23 @@ _SCALE_NOUNS = (
     "creators|sellers|buyers|designers|makers|artists|shops|storefronts|"
     "listings|subscribers|members|vendors|freelancers|agencies|engineers|"
     "students|learners|schools|districts|accounts|workspaces|"
-    "repos|repositories|projects|sites|apps|installs|downloads|signups"
+    "repos|repositories|projects|sites|apps|installs|downloads|signups|"
+    # Counts that are always an assertion rather than something a reader could
+    # total up from the page in front of them. A live consumer revision shipped
+    # "4.7 star App Store" beside an invented download count; the rating had no
+    # noun this list knew.
+    "reviews|ratings|testimonials|transactions|orders|bookings|seats|"
+    "courses|lessons|episodes|articles|integrations|templates"
 )
+
+#: Deliberately NOT in the list above: `languages`, `countries`, `currencies`,
+#: `logos`, `features`. Pages enumerate those — a language ribbon with 42 links
+#: makes "40+ languages" a true statement the founder can defend, and this
+#: module counts literal digits in the source rather than list items, so it
+#: would report a defensible figure as an invention. That is the false
+#: accusation the docstring calls this module's worst failure, and a missed
+#: count costs less than an accusation.
+_ENUMERABLE_NOUNS_EXCLUDED = ("languages", "countries", "currencies", "logos")
 
 #: A unit of time between the number and the noun means the number is not
 #: counting the noun: "in 30 days our customers see…" counts days, not

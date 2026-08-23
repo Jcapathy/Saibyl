@@ -108,6 +108,51 @@ def test_thousands_separators_and_trailing_zeros_are_typography():
     assert unsupported_claims(source, delivered) == []
 
 
+def test_the_social_proof_bar_a_live_revision_invented():
+    """What actually shipped, and it was not copied — it was blended.
+
+    The critics illustrated the *shape* of a trust signal with examples: "e.g.
+    'Over 500 million learners'", "e.g. '4.7 star from 2.4M reviews'", "'800M+
+    downloads'". Every one is marked `e.g.` and asserts nothing.
+
+    The delivered page then read `500M+ downloads worldwide · 4.7 star App
+    Store` — a download count no example contained, made by fusing the 500M
+    from one illustration with the noun from another. So the failure is not
+    transcription; the generator cannot tell an illustration inside a fix
+    instruction from a fact it may use, and confabulates from the seed.
+    """
+    source = (
+        "Fernway teaches you a language in three-minute spoken sessions that "
+        "fit into idle moments of your day."
+    )
+    delivered = (
+        '<div class="proof-bar"><span>500M+ downloads worldwide</span>'
+        "<span>4.7 star App Store from 2.4M reviews</span></div>"
+    )
+
+    found = _texts(unsupported_claims(source, delivered))
+
+    assert any("500m+ downloads" in t for t in found)
+    assert any("2.4m reviews" in t for t in found), (
+        "a review count is always an assertion; nothing on a page lets a "
+        "reader total it up"
+    )
+
+
+def test_a_count_a_reader_could_total_from_the_page_is_not_reported():
+    """`languages`, `countries` and friends are left out of the scale nouns.
+
+    Duolingo's page carries a ribbon of ~42 language links, so "40+ languages"
+    is a true statement its owner can defend — but this module counts digits in
+    the source, not list items, so including the noun would report a defensible
+    figure as an invention. A miss costs less than an accusation.
+    """
+    source = "Learn Spanish, French, German, Japanese, Korean and more."
+    delivered = "<p>Choose from 40+ languages.</p>"
+
+    assert unsupported_claims(source, delivered) == []
+
+
 def test_an_idiom_is_not_a_price():
     """"100 cents on the dollar" is a figure of speech.
 

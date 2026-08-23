@@ -637,6 +637,13 @@ async def test_the_prompt_carries_the_evidence_and_the_discipline(monkeypatch):
     assert "[OWNER: fill in <what>]" in prompt
     assert "never more than twice" in prompt
 
+    # A reviewer's `e.g.` is an illustration of the shape a section needs, not
+    # a fact. A live consumer revision took "e.g. 'Over 500 million learners'"
+    # and "'800M+ downloads'" and shipped "500M+ downloads" — a figure neither
+    # example contained — as fact on the founder's page.
+    assert "NOT A SOURCE OF FACTS" in prompt
+    assert "take the shape, never the figure" in prompt
+
     # Every finding rides as an instruction, grouped under its dimension,
     # with the measured quote where the finding carries one.
     assert "hierarchy (scored 55/100):" in prompt
