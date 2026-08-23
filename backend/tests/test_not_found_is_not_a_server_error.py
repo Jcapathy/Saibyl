@@ -60,11 +60,19 @@ def test_single_raises_rather_than_answering_with_no_data():
 
 
 def test_maybe_one_answers_with_no_data_instead():
-    """And `maybe_one` normalises the `None` that `.maybe_single()` returns,
-    which is its own foot-gun: `None.data` is an `AttributeError`, i.e. a 500
-    again."""
-    assert SyncMaybeSingleRequestBuilder(_ZeroRows()).execute() is None
+    """`maybe_one` normalises whatever `.maybe_single()` does into `data=None`.
 
+    **This asserts the wrapper, not the library, and that distinction is the
+    whole point.** It first asserted `SyncMaybeSingleRequestBuilder(...)
+    .execute() is None`, which is true of the postgrest-py the dev venv
+    resolves and false of the one `uv.lock` pins — the version CI and the Docker
+    image build from, where it raises `APIError` instead. So the suite passed
+    locally while `maybe_one` re-raised in production, 500ing on exactly the
+    not-found paths it exists to fix, across eleven API modules.
+
+    Pinning library behaviour makes a test a statement about one machine. This
+    pins ours: whatever the library does, the caller sees `data=None`.
+    """
     class _Query:
         def maybe_single(self):
             return SyncMaybeSingleRequestBuilder(_ZeroRows())
@@ -75,6 +83,34 @@ def test_maybe_one_answers_with_no_data_instead():
     assert result.data is None
     # The guard every call site already had now actually runs.
     assert not result.data
+
+
+def test_maybe_one_still_raises_when_more_than_one_row_matched():
+    """PGRST116 covers "no rows" *and* "multiple rows". Swallowing both would
+    turn two rows where the code assumes one into a silent 404 — a data
+    problem hidden rather than reported."""
+    class _TwoRows:
+        def send(self):
+            return httpx.Response(
+                406,
+                json={
+                    "message": "JSON object requested, multiple (or no) rows returned",
+                    "code": "PGRST116",
+                    "hint": None,
+                    "details": "The result contains 2 rows",
+                },
+                request=httpx.Request("GET", "http://x/rest/v1/simulations"),
+            )
+
+    class _Query:
+        def maybe_single(self):
+            return SyncMaybeSingleRequestBuilder(_TwoRows())
+
+    # That it *raises* is the property; which code it carries is the library's
+    # business and differs between the versions this repo resolves — asserting
+    # that is what made the sibling test pass locally and fail in CI.
+    with pytest.raises(APIError):
+        maybe_one(_Query())
 
 
 def test_a_row_that_does_exist_still_comes_back():

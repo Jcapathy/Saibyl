@@ -99,8 +99,39 @@ def maybe_one(query_builder):
         result = maybe_one(admin.table("simulations").select("*").eq("id", id))
         if not result.data:
             raise HTTPException(404, "Simulation not found")
+
+    **`.maybe_single()` does not behave the same across postgrest-py versions,
+    and the difference is a 500 in production.** Some versions return `None` for
+    the zero-row case; the version pinned in `uv.lock` — the one CI and the
+    Docker image build from — raises `APIError` with `PGRST116` instead. Written
+    against the first behaviour alone, this helper re-raised on exactly the
+    not-found paths it exists to fix, and the local suite passed because the dev
+    venv resolves a different version than the lock. Handling both is the only
+    version-independent shape.
+
+    The zero-row case is distinguished by `details`, not by the code: PGRST116
+    covers "no rows" **and** "multiple rows", and more than one row must still
+    raise. Swallowing both would turn a genuine data-integrity problem — two
+    rows where the code assumes one — into a silent 404.
     """
-    return query_builder.maybe_single().execute() or _NO_ROW
+    try:
+        return query_builder.maybe_single().execute() or _NO_ROW
+    except Exception as exc:  # noqa: BLE001 — narrowed immediately below
+        if _is_zero_rows(exc):
+            return _NO_ROW
+        raise
+
+
+def _is_zero_rows(exc: Exception) -> bool:
+    """Whether this is PostgREST's "singular request matched nothing"."""
+    code = getattr(exc, "code", None)
+    details = str(getattr(exc, "details", "") or "")
+    message = str(exc)
+    if code != "PGRST116" and "PGRST116" not in message:
+        return False
+    haystack = f"{details} {message}".lower()
+    # "The result contains 0 rows" — and never "contains 2 rows".
+    return "0 rows" in haystack
 
 
 def fetch_all(query_builder, page_size: int = PAGE_SIZE) -> list[dict[str, Any]]:
