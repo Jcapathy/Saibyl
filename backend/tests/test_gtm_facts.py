@@ -258,6 +258,43 @@ def test_the_founders_own_price_still_survives_that_narrowing():
     assert "$1,200" in pack.rows[0].respond
 
 
+def test_an_inactive_price_guard_says_so():
+    """Silence here reads as safety, and it wasn't.
+
+    All three sample runs reached this with no price in the founder-side
+    material, so the narrowing was inert on every one while the code looked
+    like a live guard. The intake truncates the project description and the ICP
+    synthesis drops pricing, so the price survives only in the buyer
+    archetypes — which this function must never read. Until that is fixed
+    upstream, the log line is the only thing telling the difference between
+    "nothing was laundered" and "nothing was watching".
+    """
+    from structlog.testing import capture_logs
+
+    with capture_logs() as logs:
+        scrub_unsourced(
+            _Pack(rows=[_Row(respond="It costs $500.")]),
+            MATERIAL,
+            product_material="Basecrate gives backend teams a database branch.",
+        )
+
+    entry = next(e for e in logs if e["event"] == "gtm_price_narrowing_inactive")
+    assert entry["reason"] == "founder material states no price"
+
+
+def test_an_engaged_price_guard_is_silent():
+    from structlog.testing import capture_logs
+
+    with capture_logs() as logs:
+        scrub_unsourced(
+            _Pack(rows=[_Row(respond="At $1,200 a month.")]),
+            MATERIAL,
+            product_material="Ledgerline is $1,200 a month per entity.",
+        )
+
+    assert not [e for e in logs if e["event"] == "gtm_price_narrowing_inactive"]
+
+
 def test_money_falls_back_to_the_whole_material_when_no_price_was_stated():
     """Narrowing to founder material that names no price would blank every
     money figure in the document — a worse trade than the rare laundered one.

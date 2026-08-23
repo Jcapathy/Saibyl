@@ -52,7 +52,10 @@ from __future__ import annotations
 
 import re
 
+import structlog
 from pydantic import BaseModel
+
+log = structlog.get_logger()
 
 #: What the model was told to write when the material is silent. Defined here
 #: so the prompts, the substitution and the counter cannot drift apart.
@@ -375,11 +378,28 @@ def scrub_unsourced[M: BaseModel](
     # Only narrow money to the founder's words when the founder actually stated
     # a price. If they did not, every money figure would be scrubbed, which
     # trades a rare laundered price for a document full of blanks.
-    prices = (
-        sourced_numbers(product_material)
-        if product_material and _HAS_CURRENCY.search(product_material)
-        else None
-    )
+    #
+    # **Logged when it cannot engage, because silence here reads as safety.**
+    # Measured on 2026-08-23: all three sample runs reached this with no price
+    # anywhere in the founder-side material, so the narrowing was inert on
+    # every one of them — while the code above looked like a live guard. The
+    # cause is upstream: the intake truncates `projects.description` and the
+    # ICP synthesis drops pricing from `product_summary`, so the founder's
+    # stated price survives only inside the buyer archetypes, which this
+    # function must not read. Until intake preserves it, this warning is the
+    # only thing distinguishing "no laundering happened" from "nothing was
+    # watching".
+    prices = None
+    if product_material and _HAS_CURRENCY.search(product_material):
+        prices = sourced_numbers(product_material)
+    elif product_material:
+        log.warning(
+            "gtm_price_narrowing_inactive",
+            reason="founder material states no price",
+            material_chars=len(product_material),
+        )
+    else:
+        log.warning("gtm_price_narrowing_inactive", reason="no founder material")
 
     def walk(value: object) -> object:
         if isinstance(value, str):
