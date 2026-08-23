@@ -52,6 +52,11 @@ class _Admin:
     def single(self):
         return self
 
+    # What `core.database.maybe_one` calls. The real `.single()` raises on zero
+    # rows; `.maybe_single()` is the one that answers with nothing.
+    def maybe_single(self):
+        return self
+
     def execute(self):
         return SimpleNamespace(data=None)
 

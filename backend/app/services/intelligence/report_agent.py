@@ -1003,8 +1003,8 @@ async def _figure_checked(
     try:
         # Bounded for the same reason the two closing calls are: `llm_complete`
         # has no timeout of its own, and this retry runs *after* the section it
-        # is correcting has been written and paid for. Every call site — the
-        # three in the ReACT loop and the two closing ones — reaches this line,
+        # is correcting has been written and paid for. Every call site — both
+        # in the ReACT loop and the two closing ones — reaches this line,
         # so a hang here strands `markdown_content` NULL with every section row
         # `complete`, which is the incident `_CLOSING_CALL_TIMEOUT_S` was added
         # for, one call later.
@@ -1141,7 +1141,7 @@ async def _run_react_loop(
         pushed the model to drop the comparison the run was paid for.
 
         Computed at each answer rather than once, because `evidence` grows with
-        every tool observation and there are three places a section can be
+        every tool observation and there is more than one place a section can be
         returned from.
         """
         return "\n".join([*evidence, lens_context] if lens_context.strip() else evidence)
@@ -1165,44 +1165,51 @@ async def _run_react_loop(
             temperature=config.temperature,
         )
 
-        if response.strip().startswith("ANSWER:"):
+        stripped = response.strip()
+
+        if stripped.startswith("TOOL:"):
+            tool_line = stripped.split("TOOL:", 1)[1].strip()
+            observation = await _execute_tool(
+                tool_line, simulation_id, config
+            )
+            evidence.append(f"[Tool: {tool_line}]\n{observation}")
+            continue
+
+        # Anything that is not a tool call is a candidate section, whether or
+        # not it wore the ANSWER: marker — and the marker is *not* evidence
+        # that a section follows it. It was checked on only the unmarked
+        # branch, so `ANSWER:\n<results>[{'tool': …` walked straight through
+        # the guard that exists to stop exactly that payload. The prompt below
+        # demands the marker, which makes a marked echo the likelier one.
+        answer = (
+            stripped.split("ANSWER:", 1)[1].strip()
+            if stripped.startswith("ANSWER:")
+            else stripped
+        )
+        if _looks_like_prose(answer):
+            # A section that ignored the response format is still a section,
+            # and is checked like any other: it is not more likely to have
+            # respected the measurement rules.
             return await _figure_checked(
-                strip_react_artifacts(response.split("ANSWER:", 1)[1].strip()),
+                strip_react_artifacts(answer),
                 _shown_to_model(),
                 section_title=section.title,
                 config=config,
             )
 
-        if response.strip().startswith("TOOL:"):
-            tool_line = response.split("TOOL:", 1)[1].strip()
-            observation = await _execute_tool(
-                tool_line, simulation_id, config
-            )
-            evidence.append(f"[Tool: {tool_line}]\n{observation}")
-        elif _looks_like_prose(response):
-            # Didn't follow the format but did write a section. Checked like
-            # any other: a section that ignored the response format is not
-            # more likely to have respected the measurement rules.
-            return await _figure_checked(
-                strip_react_artifacts(response.strip()),
-                _shown_to_model(),
-                section_title=section.title,
-                config=config,
-            )
-        else:
-            # It echoed tool output instead of writing. This branch used to
-            # accept anything as a final answer, and a paying founder received
-            # a section that was 10,169 characters of raw `<results>[{'tool':
-            # 'simulation_analytics'…` — no headings, no prose, truncated
-            # mid-JSON. Treated as an observation instead: the loop is bounded
-            # and ends at the forced answer below, so this cannot spin.
-            logger.warning(
-                "report_section_answer_was_tool_output",
-                section=section.title,
-                attempt=tool_call_num + 1,
-                preview=response.strip()[:120],
-            )
-            evidence.append(f"[Unparsed model output]\n{response.strip()[:2000]}")
+        # It echoed tool output instead of writing. This branch used to accept
+        # anything as a final answer, and a paying founder received a section
+        # that was 10,169 characters of raw `<results>[{'tool':
+        # 'simulation_analytics'…` — no headings, no prose, truncated
+        # mid-JSON. Treated as an observation instead: the loop is bounded and
+        # ends at the forced answer below, which now refuses an echo too.
+        logger.warning(
+            "report_section_answer_was_tool_output",
+            section=section.title,
+            attempt=tool_call_num + 1,
+            preview=stripped[:120],
+        )
+        evidence.append(f"[Unparsed model output]\n{stripped[:2000]}")
 
     # Max tool calls reached — force answer
     final_prompt = _prompt(
@@ -1227,6 +1234,22 @@ async def _run_react_loop(
         if "ANSWER:" in result
         else result.strip()
     )
+    if not _looks_like_prose(forced):
+        # The same guard as the loop above, at the other place a section can be
+        # returned from. It was on one of the two, and the loop's own comment
+        # ("ends at the forced answer below") assumed this call was safe — but
+        # a model that echoed on every turn of the loop echoes on the last turn
+        # too, and that echo went to `report_sections.content` marked
+        # `complete`. There is no turn left to spend, so the founder is told the
+        # part is missing rather than handed the payload: a named gap is a
+        # smaller loss than 10,000 characters of JSON sold as analysis.
+        logger.error(
+            "report_section_forced_answer_was_tool_output",
+            section=section.title,
+            chars=len(forced),
+            preview=forced[:120],
+        )
+        return _MISSING_PART_NOTE.format(what=section.title)
     return await _figure_checked(
         strip_react_artifacts(forced),
         _shown_to_model(),
@@ -1289,7 +1312,7 @@ def _extract_arg(tool_call: str) -> str:
 #:
 #: The first version of the fix wrapped the two closing calls and stopped
 #: there, leaving `_figure_checked`'s retry — which runs on the result of each
-#: of them, and on all three section answers — calling `llm_complete` bare. The
+#: of them, and on every section answer — calling `llm_complete` bare. The
 #: same stranded deliverable was still reachable, one call later.
 _CLOSING_CALL_TIMEOUT_S = 300
 
@@ -1329,6 +1352,21 @@ async def _closing_call(coro, *, what: str, report_id: str) -> str | None:
     return clean_report_output(raw)
 
 
+#: The one-in-flight-per-simulation index from migration 043. Matched on the
+#: message because PostgREST surfaces a unique violation as an opaque API error
+#: rather than a typed exception, and the index name is the only stable part of
+#: it. Deliberately narrow: any other integrity error must still raise.
+_IN_FLIGHT_INDEX = "idx_reports_one_in_flight_per_simulation"
+
+
+def _is_duplicate_in_flight(exc: Exception) -> bool:
+    """Whether this insert lost the race for a run's single in-flight report."""
+    text = str(exc)
+    return _IN_FLIGHT_INDEX in text or (
+        "duplicate key" in text.lower() and "reports" in text.lower()
+    )
+
+
 async def generate_report(
     simulation_id: UUID,
     config: ReACTConfig | None = None,
@@ -1364,15 +1402,36 @@ async def generate_report(
     section_count = config.section_count or report_section_count(
         event_count, config.evidence_depth_preset()
     )
-    report = admin.table("reports").insert({
-        "simulation_id": sim_id,
-        "organization_id": org_id,
-        "title": f"Intelligence Report: {sim['name']}",
-        "status": "generating",
-        "variant": "a",
-        "react_config": config.model_dump(),
-        "section_count": section_count,
-    }).execute().data[0]
+    # **This insert is the real one-at-a-time gate.** The route's SELECT gate
+    # catches a founder clicking twice slowly and answers 409; it cannot catch
+    # two clicks in the same second, because it checks and then spawns while the
+    # row is only written here, four round trips later. Migration 043 puts a
+    # partial unique index on `simulation_id` for the in-flight states, so the
+    # loser of that race fails right here — before a single section is written,
+    # which is the whole point of inserting early.
+    #
+    # The loser must exit *quietly*. Raising would run `_mark_report_failed`,
+    # which would find the winner's in-flight row and mark it failed — one
+    # double-click would then kill the report it was racing.
+    try:
+        report = admin.table("reports").insert({
+            "simulation_id": sim_id,
+            "organization_id": org_id,
+            "title": f"Intelligence Report: {sim['name']}",
+            "status": "generating",
+            "variant": "a",
+            "react_config": config.model_dump(),
+            "section_count": section_count,
+        }).execute().data[0]
+    except Exception as exc:
+        if not _is_duplicate_in_flight(exc):
+            raise
+        logger.info(
+            "report_generation_already_in_flight",
+            simulation_id=sim_id,
+            detail="another writer holds this run's report; this one stops",
+        )
+        return {}
     report_id = report["id"]
 
     try:

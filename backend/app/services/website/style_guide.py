@@ -41,7 +41,24 @@ _HEX = re.compile(r"#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b")
 _SCRIPT_OR_STYLE = re.compile(
     r"<(script|style)\b[^>]*>.*?</\1\s*>", re.I | re.S
 )
-_TAG = re.compile(r"<[^>]+>")
+# Only *well-formed* markup is stripped, and that word is load-bearing.
+#
+# `<[^>]+>` treats any literal "<" as the start of a tag and deletes everything
+# up to the next ">" anywhere later in the document — across newlines, across
+# paragraphs. Ordinary marketing copy carries both characters as text: "Setup
+# takes <5 minutes", "<1% churn", "Learn more >", a breadcrumb ">". A page with
+# one of each lost the entire span between them, so `claims._normalise` read
+# the founder's own price and their own metric out of existence and reported
+# them back as invented, and `build_style_guide` classified the page from the
+# surviving fragment.
+#
+# A real tag opens with a name (`<p`, `</p`), a markup declaration (`<!doctype`)
+# or a processing instruction (`<?xml`). Nothing else is markup, so nothing
+# else is removed. Comments come first because their body may legitimately
+# contain ">" — the generator is asked to declare a replaced design system in
+# an HTML comment at the top of the document.
+_COMMENT = re.compile(r"<!--.*?-->", re.S)
+_TAG = re.compile(r"</?[a-zA-Z][^>]*>|<[!?][^>]*>")
 # Font stacks are the one declaration that routinely contains quotes — every
 # multi-word family is written `"Playfair Display"` or `'DM Mono'`. So this one
 # runs to the end of the declaration and lets `_first_family` do the cutting;
@@ -210,8 +227,15 @@ def visible_copy(html: str) -> str:
     bundle votes with its variable names — `patient` in a CSS selector would
     weigh the same as `patient` in a headline, and a devtools page dense with
     `api`/`sdk` in its script tags would classify itself.
+
+    Safe on plain text as well as on markup, and that is a requirement rather
+    than a happy accident: `claims` runs this over the founder's *extracted*
+    page text so a caller holding raw HTML cannot smuggle a `<style>` block in
+    as evidence. Only well-formed markup is removed (see `_TAG`), so a page
+    that writes "Setup takes <5 minutes" keeps its five minutes.
     """
     stripped = _SCRIPT_OR_STYLE.sub(" ", html)
+    stripped = _COMMENT.sub(" ", stripped)
     return " ".join(_TAG.sub(" ", stripped).split())
 
 

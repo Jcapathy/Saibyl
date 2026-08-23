@@ -98,13 +98,33 @@ def world(monkeypatch):
     return store, admin, refunds
 
 
-def _row(status: str, minutes_old: int, credits: int = 1750) -> dict:
+def _row(
+    status: str,
+    minutes_old: int,
+    credits: int = 1750,
+    *,
+    touched_minutes_ago: int | None = None,
+) -> dict:
+    """One row, `minutes_old` minutes since it was created.
+
+    `updated_at` defaults to the same instant, which is what the column's own
+    `DEFAULT NOW()` gives every freshly inserted row. `touched_minutes_ago`
+    moves it forward — the case of a run that rested at `draft` and was only
+    started later, which is the one the `simulations` rule ages from.
+    """
+    created = NOW - timedelta(minutes=minutes_old)
+    touched = (
+        created
+        if touched_minutes_ago is None
+        else NOW - timedelta(minutes=touched_minutes_ago)
+    )
     return {
         "id": f"row-{status}-{minutes_old}",
         "organization_id": ORG,
         "status": status,
         "credits_charged": credits,
-        "created_at": (NOW - timedelta(minutes=minutes_old)).isoformat(),
+        "created_at": created.isoformat(),
+        "updated_at": touched.isoformat(),
     }
 
 
@@ -515,3 +535,127 @@ def test_every_rule_names_states_and_a_sentence_a_founder_can_act_on():
             assert state in rule.states, (
                 f"{rule.table}: refunds a state it never closes"
             )
+
+
+# ---------------------------------------------------------------------------
+# The deadline is measured from when the work began, not from when the row was
+# created. `draft` is a resting state, so for `simulations` those differ.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_run_started_from_a_day_old_draft_is_not_reaped_on_the_next_sweep(
+    world,
+):
+    """The largest single charge in the product, taken and destroyed minutes later.
+
+    A founder configures a run in the wizard, leaves it at `draft`, comes back
+    the next day and presses "Start the run →". `POST /start` deducts ~17,000
+    credits and the compare-and-set writes `running`. Aged from `created_at`
+    that row was 26 hours old the instant it started, so the very next sweep
+    — at most five minutes later — matched it against the 90-minute budget, won
+    its own compare-and-set on `running`, and wrote it `failed` with "This run
+    stopped before it finished." `simulations` carries no `refund_states` and no
+    `credits_charged` column, so nothing was paid back.
+
+    The `preparing` variant closed the same way, which meant a draft older than
+    ninety minutes could never be started at all: every attempt looped through
+    prepare, was reaped, and came back "We could not build the room."
+    """
+    store, _admin, refunds = world
+    store["simulations"] = [
+        _row("running", 26 * 60, credits=0, touched_minutes_ago=1),
+        _row("preparing", 26 * 60, credits=0, touched_minutes_ago=1),
+    ]
+
+    closed = await reaper.sweep_once(now=NOW)
+
+    assert closed == {}, "a run that started one minute ago was reaped"
+    assert [r["status"] for r in store["simulations"]] == ["running", "preparing"]
+    assert refunds == []
+
+
+@pytest.mark.asyncio
+async def test_a_run_that_really_has_been_in_flight_too_long_is_still_closed(world):
+    """The rule still does its job — it is the clock that moved, not the budget."""
+    store, _admin, _refunds = world
+    store["simulations"] = [
+        _row("running", 26 * 60, credits=0, touched_minutes_ago=200)
+    ]
+
+    closed = await reaper.sweep_once(now=NOW)
+
+    assert closed.get("simulations") == 1
+    assert store["simulations"][0]["status"] == "failed"
+
+
+def test_only_the_table_with_a_resting_state_ages_from_updated_at():
+    """`created_at` is right everywhere a row is inserted and spawned together.
+
+    Which is every table here except `simulations`, where the wizard writes the
+    row and the founder presses start whenever they like. Pinned both ways: a
+    rule that quietly started ageing from a column its table does not have would
+    match nothing and leave those rows stuck forever, which is the silent
+    failure mode this module has already been bitten by twice.
+    """
+    by_table = {rule.table: rule.age_column for rule in reaper.STUCK}
+
+    assert by_table["simulations"] == "updated_at"
+    assert all(
+        column == "created_at"
+        for table, column in by_table.items()
+        if table != "simulations"
+    ), by_table
+
+
+# ---------------------------------------------------------------------------
+# A rule shorter than the worker it watches closes work that was still running.
+# ---------------------------------------------------------------------------
+
+
+def test_a_capture_driven_deadline_outlasts_the_worker_it_watches():
+    """Both capture-driven rules, against the constants as shipped.
+
+    `website_snapshots` had this assertion; `page_revisions` never did, and that
+    is how 80 minutes survived the change that raised a revision render's queue
+    wait from 330s to 600s in the same commit. With 600 a revision's capture
+    ceiling alone is 66 minutes, leaving 14 of the 80 for up to six 32,000-token
+    vision calls, three six-critic gauntlets and two uploads — the exact defect
+    the 45->80 change had just been made to fix, reintroduced beside it.
+
+    One test over both rules, so the next rule that renders a page cannot be
+    added without answering the same question.
+    """
+    from app.services.website.capture import (
+        _QUEUE_WAIT_S,
+        _REVISION_QUEUE_WAIT_S,
+        _overall_deadline,
+    )
+
+    one_check_capture_s = _QUEUE_WAIT_S + _overall_deadline(45)
+    one_render_s = _REVISION_QUEUE_WAIT_S + _overall_deadline(45)
+
+    # A check captures the founder's page and the site they admire.
+    check_ceiling_min = 2 * one_check_capture_s / 60
+    # A revision captures both of those too, then renders up to 3 rounds.
+    revision_ceiling_min = (2 * one_check_capture_s + 3 * one_render_s) / 60
+
+    ceilings = {
+        "website_snapshots": check_ceiling_min,
+        "page_revisions": revision_ceiling_min,
+    }
+    for table, ceiling_min in ceilings.items():
+        rule = next(r for r in reaper.STUCK if r.table == table)
+        assert rule.minutes > ceiling_min, (
+            f"{table}: the reaper closes at {rule.minutes} min, but its worker "
+            f"can still be honestly capturing at {ceiling_min:.0f} min — before "
+            f"a single model call is counted"
+        )
+        # Capture is the floor, not the ceiling: the model calls, critic
+        # gauntlets and uploads all happen inside the same budget. Half the rule
+        # again is the margin `website_snapshots` already carried at 45 vs 21.
+        assert rule.minutes >= ceiling_min * 1.5, (
+            f"{table}: {rule.minutes} min leaves only "
+            f"{rule.minutes - ceiling_min:.0f} min for every model call the "
+            f"worker makes"
+        )

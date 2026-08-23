@@ -600,6 +600,10 @@ class _Query:
         self._single = True
         return self
 
+    # What `core.database.maybe_one` calls. See the note in test_broken_flows.
+    def maybe_single(self):
+        return self.single()
+
     def _matched(self):
         rows = self._store.setdefault(self._table, [])
         return [r for r in rows if all(r.get(k) == v for k, v in self._filters.items())]

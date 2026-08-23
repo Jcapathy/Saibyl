@@ -57,6 +57,20 @@ LIST_LIMIT = 20
 MAX_URL_LENGTH = 2048
 
 
+# The states each row is still in flight in — the same sets the reaper's own
+# rules watch, and the only ones an `on_failure` may write over.
+#
+# **Every one of these handlers was a bare `.update(...).eq("id", ...)`**, which
+# is the shape that let `_mark_simulation_failed` rewrite a run that had already
+# completed, been analysed and been reported. That one was reachable through a
+# real path; these are harder to reach, because their workers wrap their whole
+# body in `except Exception`. "Harder to reach" is not a guard, and a late
+# failure handler clobbering a finished row is the same defect wherever it
+# happens — so the rule is written the same way in all of them.
+_SNAPSHOT_LIVE_STATUSES = ("queued", "capturing", "judging")
+_REVISION_LIVE_STATUSES = ("queued", "generating")
+
+
 def _mark_website_check_failed(
     snapshot_id: str, name: str
 ) -> Callable[[Exception], None]:
@@ -64,24 +78,37 @@ def _mark_website_check_failed(
 
     Without this the row stays `queued`/`capturing` forever and the founder
     watches a spinner for a failure that was logged and never surfaced.
+
+    Conditional on the row still being in flight — see
+    `_SNAPSHOT_LIVE_STATUSES`. A check the reaper already closed, or one that
+    finished, keeps the outcome its own writer left.
     """
     def _mark(exc: Exception) -> None:
         get_supabase_admin().table("website_snapshots").update({
             "status": "failed",
             "error_message": f"[{name}] {type(exc).__name__}: {exc}",
-        }).eq("id", snapshot_id).execute()
+        }).eq("id", snapshot_id).in_(
+            "status", list(_SNAPSHOT_LIVE_STATUSES)
+        ).execute()
     return _mark
 
 
 def _mark_page_revision_failed(
     revision_id: str, name: str
 ) -> Callable[[Exception], None]:
-    """`on_failure` for `spawn`: the same never-a-spinner rule for revisions."""
+    """`on_failure` for `spawn`: the same never-a-spinner rule for revisions.
+
+    Guarded the same way, and it matters more here: a revision costs 5,000
+    credits and `revision_tasks._advance` is a compare-and-set on both sides, so
+    this was the one writer to the row that could still overwrite a finished one.
+    """
     def _mark(exc: Exception) -> None:
         get_supabase_admin().table("page_revisions").update({
             "status": "failed",
             "error_message": f"[{name}] {type(exc).__name__}: {exc}",
-        }).eq("id", revision_id).execute()
+        }).eq("id", revision_id).in_(
+            "status", list(_REVISION_LIVE_STATUSES)
+        ).execute()
     return _mark
 
 

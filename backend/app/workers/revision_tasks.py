@@ -21,6 +21,7 @@ from typing import Any
 import structlog
 
 from app.core.database import get_supabase_admin
+from app.services.billing.agent_pricing import refund_credits
 
 logger = structlog.get_logger()
 
@@ -50,6 +51,37 @@ BLOCKED_REFERENCE_MESSAGE = (
 # whose extracted text is this short is a CAPTCHA page wearing a 200, not the
 # admired design (found live when linear.app returned an 18KB not-Linear).
 MIN_REFERENCE_DOM_CHARS = 400
+
+
+def _refund_before_any_model_call(
+    revision_id: str, organization_id: str, revision: dict[str, Any], *, reason: str
+) -> None:
+    """Give back the 5,000 credits when the revision died before it spent them.
+
+    The twin of the refund in `website_tasks.run_website_check`, and it was
+    missing entirely — `grep -c refund revision_tasks.py` was 0, on the most
+    expensive artifact in the product. `POST /website/revision` deducts 5,000 at
+    create, and every path this helper is called from returns before
+    `generate_revision` is entered, so no `llm_vision` call and no critic has
+    run. The founder's page was slow to wake, the capture failed, and 5,000
+    credits were kept for work nobody did.
+
+    **Gated on `_record_failure` having landed**, exactly as the check worker
+    gates its own. The reaper's `page_revisions` rule refunds from `queued`, so
+    a wedged revision can be closed and refunded from there while this worker is
+    still unwinding; paying here as well would hand back 10,000 against a 5,000
+    charge. Whoever moves the row out of its live states owns the outcome, and
+    the loser pays nothing.
+
+    Refunded on **these** paths only. A revision that dies inside
+    `generate_revision` has consumed real vision calls, and a rule that quietly
+    sometimes pays is worse than one that says plainly when it does.
+    """
+    refund_credits(
+        organization_id,
+        int(revision.get("credits_charged") or 0),
+        reason=reason,
+    )
 
 
 async def run_page_revision(revision_id: str, organization_id: str) -> None:
@@ -85,7 +117,11 @@ async def run_page_revision(revision_id: str, organization_id: str) -> None:
             or snapshot.get("status") != "complete"
             or not snapshot.get("critique")
         ):
-            _record_failure(revision_id, UNFINISHED_CHECK_MESSAGE)
+            if _record_failure(revision_id, UNFINISHED_CHECK_MESSAGE):
+                _refund_before_any_model_call(
+                    revision_id, organization_id, revision,
+                    reason="revision_check_unfinished_before_any_model_call",
+                )
             return
 
         admin.table("page_revisions").update({"status": "generating"}).eq(
@@ -110,7 +146,14 @@ async def run_page_revision(revision_id: str, organization_id: str) -> None:
         try:
             capture = await capture_website(snapshot["url"])
         except WebsiteCaptureError as exc:
-            _record_failure(revision_id, str(exc))
+            # Byte-for-byte the branch `website_tasks` refunds — "the founder
+            # was being told to try again at the same price for work we had not
+            # done" — at 5,000 credits rather than 1,750.
+            if _record_failure(revision_id, str(exc)):
+                _refund_before_any_model_call(
+                    revision_id, organization_id, revision,
+                    reason="revision_capture_failed_before_any_model_call",
+                )
             return
 
         # The check's design DNA, when its gallery row landed — the revision
@@ -124,16 +167,28 @@ async def run_page_revision(revision_id: str, organization_id: str) -> None:
         # the after-score would not be comparable to the before-score.
         reference = None
         if snapshot.get("reference_url"):
+            # Both reference failures are refundable for the same reason as the
+            # page's own capture: `generate_revision` has not been entered, so
+            # no vision call and no critic has run. The site the founder admires
+            # blocking a reader is not work we did.
             try:
                 reference = await capture_website(snapshot["reference_url"])
             except WebsiteCaptureError as exc:
-                _record_failure(revision_id, REFERENCE_FAILURE_PREFIX + str(exc))
+                if _record_failure(revision_id, REFERENCE_FAILURE_PREFIX + str(exc)):
+                    _refund_before_any_model_call(
+                        revision_id, organization_id, revision,
+                        reason="revision_reference_capture_failed_before_any_model_call",
+                    )
                 return
             if len(reference.dom_text or "") < MIN_REFERENCE_DOM_CHARS:
-                _record_failure(
+                if _record_failure(
                     revision_id,
                     REFERENCE_FAILURE_PREFIX + BLOCKED_REFERENCE_MESSAGE,
-                )
+                ):
+                    _refund_before_any_model_call(
+                        revision_id, organization_id, revision,
+                        reason="revision_reference_blocked_before_any_model_call",
+                    )
                 return
 
         critique = snapshot["critique"]
@@ -291,16 +346,21 @@ def _advance(
     return True
 
 
-def _record_failure(revision_id: str, message: str) -> None:
-    """Leave the row saying the revision failed and why.
+def _record_failure(revision_id: str, message: str) -> bool:
+    """Leave the row saying the revision failed and why. True if this write won.
 
     Without this the frontend cannot distinguish "still generating" from
     "failed", and would poll forever on a revision that will never finish.
 
     Guarded like the success path: a revision the reaper already closed must
     not have its sentence overwritten by a later, less useful one.
+
+    **The return value is the refund's permission slip.** The reaper refunds a
+    `page_revisions` row it closes from `queued`, so a row it already closed has
+    already been paid back; returning False there is what stops this worker
+    paying a second time. Same contract as `website_tasks._record_failure`.
     """
-    _advance(revision_id, ("queued", "generating"), {
+    return _advance(revision_id, ("queued", "generating"), {
         "status": "failed",
         "error_message": message,
     })

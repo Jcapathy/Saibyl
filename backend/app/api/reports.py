@@ -37,6 +37,12 @@ REPORT_FAILURE_MESSAGE = (
 # handler claims one of these rather than clobbering a finished report.
 _REPORT_IN_FLIGHT = ("pending", "queued", "generating")
 
+#: States a report has already finished in. A row in one of these owns its own
+#: outcome — the worker wrote it closer to the event and more specifically than
+#: the generic failure handler can — so the handler leaves it alone rather than
+#: overwriting it or, worse, inserting a second row beside it.
+_REPORT_TERMINAL = ("complete", "failed")
+
 
 def _mark_report_failed(simulation_id: str, org_id: str) -> Callable[[Exception], None]:
     """`on_failure` for `spawn`: a report whose worker died must say so.
@@ -58,20 +64,39 @@ def _mark_report_failed(simulation_id: str, org_id: str) -> Callable[[Exception]
         )
         admin = get_supabase_admin()
         try:
+            # **Any recent row, not only an in-flight one.**
+            #
+            # `generate_report` writes `status='failed'` on its own way out and
+            # then re-raises, so by the time this handler runs the row it should
+            # be marking is already `failed` — a state the in-flight filter
+            # cannot see. It therefore inserted a *second* row, and
+            # `GET /reports/by-simulation` returns the newest, which is the
+            # phantom, which has no sections. A report that died after writing
+            # four of five sections rendered to the founder as "Nobody has
+            # written this up yet", with the real one and its content hidden
+            # behind it.
+            #
+            # Worse where it hurts most: this handler is wired only to the
+            # "Write it up again" button, so it fired on somebody already
+            # recovering from one failure and took their partial work with them.
             existing = (
                 admin.table("reports")
-                .select("id")
+                .select("id, status")
                 .eq("simulation_id", simulation_id)
-                .in_("status", list(_REPORT_IN_FLIGHT))
                 .order("created_at", desc=True)
                 .limit(1)
                 .execute()
             ).data or []
             if existing:
-                admin.table("reports").update({
-                    "status": "failed",
-                    "error_message": REPORT_FAILURE_MESSAGE,
-                }).eq("id", existing[0]["id"]).execute()
+                # A row the worker already closed keeps its own sentence: it
+                # was written closer to the failure and is more specific than
+                # this handler's generic one. Only the id is needed here, to
+                # know that a row exists at all.
+                if str(existing[0].get("status") or "") not in _REPORT_TERMINAL:
+                    admin.table("reports").update({
+                        "status": "failed",
+                        "error_message": REPORT_FAILURE_MESSAGE,
+                    }).eq("id", existing[0]["id"]).execute()
             else:
                 admin.table("reports").insert({
                     "simulation_id": simulation_id,
@@ -148,7 +173,7 @@ async def generate_report(body: GenerateReportBody, auth: dict = Depends(require
         .select("id")
         .eq("id", body.simulation_id)
         .eq("organization_id", auth["org_id"])
-        .single()
+        .limit(1)
         .execute()
     )
     if not sim.data:
@@ -257,7 +282,7 @@ async def get_reports_by_simulation(sim_id: str, auth: dict = Depends(get_curren
         .select("id, project_id")
         .eq("id", sim_id)
         .eq("organization_id", auth["org_id"])
-        .single()
+        .limit(1)
         .execute()
     )
     if not sim.data:
@@ -294,7 +319,7 @@ async def get_reports_by_simulation(sim_id: str, auth: dict = Depends(get_curren
 
     # Fetch source documents for the simulation's project
     source_documents: list[dict] = []
-    project_id = sim.data.get("project_id")
+    project_id = sim.data[0].get("project_id")
     if project_id:
         docs = (
             admin.table("documents")
@@ -360,12 +385,16 @@ async def get_report(id: str, auth: dict = Depends(get_current_org)):
         .select("*, simulations!inner(organization_id)")
         .eq("id", id)
         .eq("simulations.organization_id", auth["org_id"])
-        .single()
+        .limit(1)
         .execute()
     )
     if not result.data:
         raise HTTPException(status_code=404, detail="Report not found")
-    return result.data
+    # `.limit(1)` rather than `.single()`, so this is a list. `.single()` raises
+    # on zero rows instead of returning falsy, which made every `if not
+    # x.data` guard in this file unreachable — a deleted or foreign report
+    # answered 500 rather than 404, on eight routes.
+    return result.data[0]
 
 
 @router.get("/{id}/sections")
@@ -380,7 +409,7 @@ async def list_report_sections(id: str, auth: dict = Depends(get_current_org)):
         .select("id, simulations!inner(organization_id)")
         .eq("id", id)
         .eq("simulations.organization_id", auth["org_id"])
-        .single()
+        .limit(1)
         .execute()
     )
     if not report.data:
@@ -408,7 +437,7 @@ async def report_progress(id: str, auth: dict = Depends(get_current_org)):
         .select("id, simulations!inner(organization_id)")
         .eq("id", id)
         .eq("simulations.organization_id", auth["org_id"])
-        .single()
+        .limit(1)
         .execute()
     )
     if not report.data:
@@ -430,7 +459,7 @@ async def chat_with_report_endpoint(id: str, body: ChatBody, auth: dict = Depend
         .select("id, simulations!inner(organization_id)")
         .eq("id", id)
         .eq("simulations.organization_id", auth["org_id"])
-        .single()
+        .limit(1)
         .execute()
     )
     if not report.data:
@@ -457,7 +486,7 @@ async def delete_report(id: str, auth: dict = Depends(require_can_destroy)):
         .select("id, simulations!inner(organization_id)")
         .eq("id", id)
         .eq("simulations.organization_id", auth["org_id"])
-        .single()
+        .limit(1)
         .execute()
     )
     if not report.data:

@@ -52,6 +52,7 @@ import math
 import os
 import re
 from typing import Any
+from urllib.parse import urlsplit
 
 import structlog
 from pydantic import BaseModel, Field
@@ -559,8 +560,9 @@ async def capture_html(html: str, *, timeout_s: int = 45) -> WebsiteCapture:
     redirect. `url` and `final_url` are both `REVISION_URL`, the honest
     spelling of "this page never had an address".
 
-    The rendered document is still denied the network entirely — see
-    `_abort_external_request` for why.
+    The rendered document is still denied the network, bar the one Google
+    Fonts link the generation prompt permits it — see
+    `_abort_external_request` for why, and for why that exception exists.
 
     **It starts a browser, so it queues for a slot and runs under the deadline
     like every other capture.** It did neither, and both omissions were paid
@@ -608,18 +610,54 @@ async def _capture_html(html: str, *, timeout_s: int) -> WebsiteCapture:
     return _assemble(url=REVISION_URL, final_url=REVISION_URL, desktop=desktop, mobile=mobile)
 
 
+#: The only remote hosts a string-rendered document may reach: the Google
+#: Fonts stylesheet endpoint and the file host it points at.
+#:
+#: `revise._HARD_REQUIREMENTS` tells the generator "system-font stacks, or at
+#: most one Google Fonts <link> and nothing else remote" — and the two sides of
+#: that contract have to agree. They did not: a revision that took the
+#: permitted option rendered in Times/Arial for both screenshots, so the design
+#: reviewer's very first signal ("if the primary typeface is a browser default
+#: or system stack … major at the least, critical if the whole page is set in
+#: it") fired on a page that specifies Inter, while the style census — read
+#: from the declared stack — reported Inter in the same prompt. The grounding
+#: line and the picture disagreed. Worse, those same bytes become
+#: `capture_after`, which `upload_revision` serves as the founder's before/after
+#: "after" image: a picture of a page their own browser does not render.
+#:
+#: This is an allowlist of two hosts, not a relaxation of the rule. Everything
+#: else — beacons, dead CDNs, external script and image references — is still
+#: aborted, and the host is compared against the parsed hostname so
+#: `fonts.googleapis.com.example.invalid` is not one of them.
+_FONT_HOSTS = frozenset({"fonts.googleapis.com", "fonts.gstatic.com"})
+
+
+def _is_permitted_font_request(url: str) -> bool:
+    """Whether a request is for the one remote thing the contract permits."""
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return False
+    if parts.scheme not in ("http", "https"):
+        return False
+    return (parts.hostname or "").lower() in _FONT_HOSTS
+
+
 async def _abort_external_request(route: Any) -> None:
-    """Deny the network to a string-rendered document.
+    """Deny the network to a string-rendered document, bar its fonts.
 
     A document that arrives as a string was written, not fetched — for page
     revisions, written by a model — so any network request it makes is a
     liability rather than a dependency: a beacon that reports where the page
     is being judged, or a reference to a dead CDN that stalls the render until
     the timeout. Everything except a data: URI (which never leaves the page)
-    is aborted; the self-contained contract says the page must render from
-    what it carries, and this is that contract enforced.
+    and the two Google Fonts hosts the generation prompt explicitly permits
+    (`_FONT_HOSTS`) is aborted; the self-contained contract says the page must
+    render from what it carries and the one typeface it is allowed to ask for,
+    and this is that contract enforced.
     """
-    if str(route.request.url).startswith("data:"):
+    url = str(route.request.url)
+    if url.startswith("data:") or _is_permitted_font_request(url):
         await route.continue_()
         return
     await route.abort()

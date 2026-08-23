@@ -225,6 +225,114 @@ def test_the_same_asymmetry_is_closed_where_it_repeats():
     ) == []
 
 
+def test_a_regulator_spelled_out_is_the_same_badge_as_its_acronym():
+    """The sixth through sixteenth instance of the asymmetry, closed as a
+    family rather than one entry at a time.
+
+    "Authorised and regulated by the Financial Conduct Authority" is the
+    legally-standard sentence on essentially every UK fintech page, so an FCA
+    entry that matched only the acronym told the highest-value fintech founder
+    alive, in an artifact they paid for, that they had fabricated their own
+    regulator — and burned a 32,000-token retry per round on a complaint the
+    model cannot satisfy.
+    """
+    both_ways = [
+        (
+            "Ledgerline Ltd is authorised and regulated by the Financial Conduct "
+            "Authority under firm reference number 912345.",
+            "<p>Money movement for UK businesses, built by an FCA-regulated team.</p>",
+        ),
+        (
+            "Acme is registered with the Financial Crimes Enforcement Network.",
+            "<p>FinCEN registered since 2021.</p>",
+        ),
+        (
+            "Deposits are insured by the Federal Deposit Insurance Corporation.",
+            "<p>FDIC insured to $250,000.</p>",
+        ),
+        (
+            "Acme Securities is a member of the Financial Industry Regulatory Authority.",
+            "<p>A FINRA member firm.</p>",
+        ),
+        (
+            "Chartered and regulated by the National Credit Union Administration.",
+            "<p>NCUA regulated.</p>",
+        ),
+        (
+            "Our device is cleared by the U.S. Food and Drug Administration.",
+            "<p>FDA clearance in hand.</p>",
+        ),
+        (
+            "Our controls are mapped to NIST SP 800-53.",
+            "<p>NIST 800-53 aligned.</p>",
+        ),
+        (
+            "The device holds 510k clearance.",
+            "<p>510(k) cleared for clinical use.</p>",
+        ),
+        (
+            "Our attestation is issued under SSAE No. 18.",
+            "<p>An SSAE 18 report is available.</p>",
+        ),
+        (
+            "Granted through the De Novo authorization pathway.",
+            "<p>De Novo classification granted.</p>",
+        ),
+        (
+            "Acme Payments is a registered MSB.",
+            "<p>A licensed money services business.</p>",
+        ),
+    ]
+
+    offenders = [
+        (source[:40], [c.text for c in unsupported_claims(source, delivered)])
+        for source, delivered in both_ways
+        if [c for c in unsupported_claims(source, delivered) if c.kind == "certification"]
+    ]
+    assert offenders == []
+
+
+def test_the_spelled_out_regulator_is_still_caught_when_the_source_is_silent():
+    """The widening may not cost detection: a page naming a regulator the
+    source never mentions is reported whichever spelling it uses."""
+    for delivered, expected in (
+        ("<p>An FCA-regulated team.</p>", "FCA"),
+        ("<p>Authorised by the Financial Conduct Authority.</p>", "FCA"),
+        ("<p>FDIC insured deposits.</p>", "FDIC"),
+        ("<p>Insured by the Federal Deposit Insurance Corporation.</p>", "FDIC"),
+        ("<p>The device holds 510k clearance.</p>", "510(k)"),
+        ("<p>A registered MSB.</p>", "money services business"),
+    ):
+        assert expected.lower() in _texts(unsupported_claims(_SOURCE, delivered)), delivered
+
+
+def test_a_spelled_out_name_that_is_also_an_ordinary_phrase_is_not_the_badge():
+    """The widening has the same precision bar every other entry has: a
+    spelled-out alternation earns its place only if a page could not mean it
+    as anything but the badge. "Built for the payment card industry" is who a
+    payments founder sells to, not a certification they hold."""
+    delivered = "<p>Built for the payment card industry and the teams inside it.</p>"
+
+    assert "pci dss" not in _texts(unsupported_claims(_SOURCE, delivered))
+    # The standard's full name is still the standard.
+    assert "pci dss" in _texts(
+        unsupported_claims(
+            _SOURCE,
+            "<p>We meet the Payment Card Industry Data Security Standard.</p>",
+        )
+    )
+
+
+def test_a_money_figure_is_not_a_medical_clearance():
+    """"510k" earns its place as the founder's spelling of "510(k)" only
+    because it cannot fire on "$510k in payouts" — a payments page telling a
+    founder they invented an FDA clearance would be the same false accusation
+    in a new costume."""
+    delivered = "<p>We have processed $510k in payouts across 1,510k records.</p>"
+
+    assert "510(k)" not in _texts(unsupported_claims(_SOURCE, delivered))
+
+
 def test_a_badge_the_founder_never_claimed_is_still_caught_either_way():
     """The widening may not cost detection: a page that names a regulator the
     source never mentions is reported whichever spelling it uses."""
@@ -331,6 +439,41 @@ def test_markup_in_the_delivered_page_is_not_read_as_copy():
     assert unsupported_claims(_SOURCE, delivered) == []
 
 
+def test_a_literal_angle_bracket_in_the_source_does_not_delete_the_facts_after_it():
+    """The strip has to know a tag from a "less than", and it did not.
+
+    `<[^>]+>` read the "<" in "Setup takes <5 minutes" as a tag opening and
+    deleted everything up to the next ">" — the "Read the docs >" two lines
+    later — so the founder's own price and their own metric stopped being
+    evidence. `unsupported_claims` reported both back to them as invented, and
+    `claim_complaint` then ordered a whole-document rewrite replacing them with
+    "[OWNER: fill in]": the delivered page loses the real price, and the
+    survivors land in the paid style guide under "Claims to verify before you
+    publish". "<5 minutes" plus a "Learn more >" is ordinary marketing copy.
+    """
+    page_text = (
+        "Acme Payroll\n"
+        "Setup takes <5 minutes and churn is <1%.\n"
+        "Plans start at $29 per month and we cut payroll errors by 40%.\n"
+        "Read the docs >\n"
+    )
+    delivered = (
+        "<p>Payroll from $29 per month. Teams cut payroll errors by 40%. "
+        "Setup takes under five minutes.</p>"
+    )
+
+    assert unsupported_claims(page_text, delivered) == []
+
+
+def test_the_stylesheet_guard_survives_the_narrower_strip():
+    """The reason `visible_copy` runs on the source at all: a caller holding
+    raw HTML must not be able to license a claim with a `<style>` block. The
+    narrower tag rule may not cost that."""
+    source_html = "<style>.bar{width:99%}</style><p>Ledgerline closes the books.</p>"
+
+    assert _texts(unsupported_claims(source_html, "<p>99% uptime, guaranteed.</p>")) == {"99%"}
+
+
 # ── social proof ─────────────────────────────────────────────────────
 
 
@@ -347,6 +490,46 @@ def test_a_customer_count_the_source_states_is_not_reported():
     delivered = "<p>4,000 teams.</p>"
 
     assert unsupported_claims(source, delivered) == []
+
+
+def test_the_or_more_mark_is_not_a_different_customer_count():
+    """"Trusted by 4,000+ teams" is the most common social-proof spelling on a
+    landing page, and adding or dropping the "+" is the most likely thing a
+    copy rewriter does to it. Keyed with the "+" attached, both directions
+    reported the founder's own customer count back to them as invented."""
+    assert unsupported_claims(
+        "Trusted by 4,000 teams who ship every day.",
+        "<p>Trusted by 4,000+ teams who ship every day.</p>",
+    ) == []
+    assert unsupported_claims(
+        "Trusted by 4,000+ teams who ship every day.",
+        "<p>Trusted by 4,000 teams who ship every day.</p>",
+    ) == []
+    # And across the magnitude letter, which is the same claim again.
+    assert unsupported_claims(
+        "Trusted by 50,000 creators worldwide.", "<p>Join 50k+ creators today.</p>"
+    ) == []
+
+
+def test_a_count_written_with_a_magnitude_and_a_plus_is_still_caught():
+    """The other half of the same gap. After a magnitude letter the "+" ended
+    the match before the noun, so a wholly fabricated "Join 50k+ creators" was
+    never flagged at all — an invented customer count waved through for being
+    spelled the way landing pages spell it."""
+    found = unsupported_claims(_SOURCE, "<p>Join 50k+ creators today. And 12m+ users.</p>")
+
+    assert {c.kind for c in found} == {"scale"}
+    assert _texts(found) == {"50k+ creators", "12m+ users"}
+
+
+def test_the_or_more_mark_does_not_launder_a_different_count():
+    """Dropping the "+" from the key is typography, not fuzziness: 4,000+ is
+    4,000 and nothing else."""
+    assert _texts(
+        unsupported_claims(
+            "Trusted by 4,000 teams.", "<p>Trusted by 40,000+ teams.</p>"
+        )
+    ) == {"40,000+ teams"}
 
 
 # ── the finding has to be actionable ─────────────────────────────────

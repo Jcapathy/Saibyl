@@ -337,6 +337,120 @@ def test_a_possible_count_from_measured_parts_is_left_alone():
     assert unsourced_figures(MEASURED_FINDINGS_EVIDENCE, section) == []
 
 
+# ── derived figures: arithmetic on measured values is measurement ────
+#
+# The checker had no subtraction and no absolute value, so it fired on the one
+# sentence shape *three* prompts mandate — `REPORT_SYSTEM_PROMPT` rule 3,
+# `CONCLUSION_PROMPT`'s formatting rules, and `EXECUTIVE_SUMMARY_PROMPT` Part
+# B's worked example. Each hit spends an Opus call after the section is already
+# written and paid for, and the acceptance test (fewer flagged figures, >=60%
+# of length) then rewards a rewrite that simply deletes the comparison. The
+# founder pays for "declined 0.59 points from -0.05 to -0.64" and receives
+# "declined".
+
+#: The seeded shapes as `analysis_schema` really returns them: a headline
+#: block with a signed trajectory delta, and the platform split.
+DERIVED_EVIDENCE = """
+[Measured analysis — the only source of numbers for this report]
+25 people, 5 rounds, 180 events measured.
+{"headline": {"valence": {"mean": -0.3814, "ci_low": -0.52, "ci_high": -0.24},
+"trajectory_delta": -0.44}, "sentiment_curve": [-0.05, -0.18, -0.41, -0.62,
+-0.64], "stance": {"oppose_pct": 55.2, "support_pct": 21.0}}
+[Measured platform split — the only source of per-platform numbers]
+{"platforms": {"reddit": {"mean_valence": -0.62, "oppose_pct": 61.4,
+"mean_intensity": 0.7, "n": 39}, "hackernews": {"mean_valence": -0.11,
+"oppose_pct": 33.3, "mean_intensity": 0.4, "n": 22}}}
+"""
+
+
+def test_the_executive_summary_prompts_own_worked_example_is_not_a_fabrication():
+    """`EXECUTIVE_SUMMARY_PROMPT` Part B, example 3, word for word. 0.51 is in
+    no artifact anywhere — it is -0.11 minus -0.62."""
+    section = (
+        "**Reddit is where the argument happens.** Sentiment hit -0.62 on "
+        "Reddit against -0.11 on Hacker News - a 0.51 gap between the two."
+    )
+
+    assert unsourced_figures(DERIVED_EVIDENCE, section) == []
+
+
+def test_a_decline_stated_as_a_magnitude_is_the_measured_delta():
+    """`_supported` compared signed Decimals; English puts the sign in the
+    verb. -0.44 *is* the evidence's `trajectory_delta`."""
+    section = "Sentiment declined 0.44 points across the run."
+
+    assert unsourced_figures(DERIVED_EVIDENCE, section) == []
+
+
+def test_the_shape_rule_three_mandates_survives():
+    """REPORT_SYSTEM_PROMPT rule 3: 'not "sentiment declined" but "sentiment
+    declined 0.59 points from -0.05 to -0.64."' — and 0.59 is stated nowhere in
+    the evidence."""
+    section = (
+        "Sentiment declined 0.59 points from -0.05 to -0.64 over five rounds."
+    )
+
+    assert unsourced_figures(DERIVED_EVIDENCE, section) == []
+
+
+def test_a_gap_between_two_measured_shares_is_not_invented():
+    section = "Opposition on Reddit (61.4%) ran 28.1 points above Hacker News (33.3%)."
+
+    assert unsourced_figures(DERIVED_EVIDENCE, section) == []
+
+
+def test_a_gap_between_two_measured_intensities_is_not_invented():
+    section = "Reddit's mean intensity of 0.7 ran 0.3 above Hacker News's 0.4."
+
+    assert unsourced_figures(DERIVED_EVIDENCE, section) == []
+
+
+def test_a_wrong_gap_between_two_correct_values_is_still_caught():
+    """The half that makes the escape narrow enough to keep. Both operands are
+    measured and correctly reported; the gap between them is not what it says."""
+    section = "The gap between Reddit (-0.62) and Hacker News (-0.11) was 0.93 points."
+
+    assert _texts(unsourced_figures(DERIVED_EVIDENCE, section)) == {"0.93"}
+
+
+def test_a_gap_resting_on_invented_operands_is_not_rescued():
+    """An operand must itself be sourced before it can anchor anything.
+    Otherwise a model could invent a pair, subtract them, and license all
+    three."""
+    section = "Reddit sat at -0.35 against Twitter/X at -0.19, a 0.16 gap."
+
+    found = _texts(unsourced_figures(DERIVED_EVIDENCE, section))
+
+    assert {"-0.35", "-0.19", "0.16"} <= found
+
+
+def test_a_difference_is_only_read_from_the_same_sentence():
+    """Differencing every pair in the evidence would license nearly any decimal
+    in range: a seeded findings blob holds hundreds of numbers. The mandated
+    shape states both operands and their gap in one breath, so that is all this
+    reads. -0.62 minus -0.11 is 0.51 — but not here."""
+    section = (
+        "Reddit ran hot and Hacker News did not. The verdict was a 0.51 shift."
+    )
+
+    assert _texts(unsourced_figures(DERIVED_EVIDENCE, section)) == {"0.51"}
+
+
+def test_the_inverted_platform_table_survives_the_derived_escape():
+    """The worst fabrication that shipped, re-checked against the evidence the
+    escape was built on. Neither the sign fold nor the difference rule may
+    rescue it."""
+    section = (
+        "**Reddit went deeper negative while Twitter/X stayed shallow.**\n\n"
+        "| Mean sentiment (overall) | Reddit -0.35 | Twitter/X -0.19 |\n\n"
+        "Reddit's threading let adversaries compound the critique."
+    )
+
+    found = _texts(unsourced_figures(PARRY_EVIDENCE, section))
+
+    assert {"-0.35", "-0.19"} <= found
+
+
 def test_a_thousands_separator_is_typography():
     evidence = 'Measured: {"events": 12500, "agents": 25} in this run.'
     section = "The room produced 12,500.0 scored events."

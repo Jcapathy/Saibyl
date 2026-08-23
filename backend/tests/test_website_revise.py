@@ -258,6 +258,54 @@ async def test_capture_html_installs_the_abort_route_before_the_document_loads(m
     assert inline.continued and not inline.aborted
 
 
+async def test_the_one_permitted_google_font_is_the_one_thing_that_gets_through(monkeypatch):
+    """Two sides of one contract, made to agree.
+
+    `revise._HARD_REQUIREMENTS` permits the generated page "at most one Google
+    Fonts <link> and nothing else remote"; the route aborted it, so a revision
+    that took the permitted option rendered in Times/Arial. The six critics
+    judge those screenshots and the design reviewer's very first signal is that
+    a system stack is the loudest tell of an undesigned page — while the style
+    census, read from the declared stack, reported the real family in the same
+    prompt. The same bytes are then served to the founder as the "after" image
+    of a page their own browser renders in the real face.
+    """
+    calls, _browser = _install_fake_playwright(monkeypatch, {"dom_text": "Hi"})
+    await capture_html(_HTML_IN)
+    handler = [c for c in calls if c[0] == "route"][0][3]
+
+    for url in (
+        "https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap",
+        "https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hjp-Ek-_EeA.woff2",
+    ):
+        permitted = _FakeInterceptedRoute(url)
+        await handler(permitted)
+        assert permitted.continued and not permitted.aborted, url
+
+    # An allowlist of two hosts, not a relaxation of the rule. A look-alike
+    # host, a host that merely mentions one in its query, and everything else
+    # remote are all still denied.
+    for url in (
+        "https://fonts.googleapis.com.evil.example/exfiltrate.js",
+        "https://analytics.example/beacon?ref=fonts.gstatic.com",
+        "https://cdn.example/lib.js",
+        "https://images.example/hero.png",
+    ):
+        denied = _FakeInterceptedRoute(url)
+        await handler(denied)
+        assert denied.aborted and not denied.continued, url
+
+
+def test_the_generation_prompt_and_the_render_agree_on_remote_fonts():
+    """The contract itself, pinned on both sides so they cannot drift apart
+    again: whatever the prompt permits, the route must let through."""
+    assert "at most one Google Fonts" in revise._HARD_REQUIREMENTS
+    assert "nothing else remote" in revise._HARD_REQUIREMENTS
+    assert capture_mod._FONT_HOSTS == frozenset(
+        {"fonts.googleapis.com", "fonts.gstatic.com"}
+    ), "the prompt permits Google Fonts and nothing else; so does the route"
+
+
 # ---------------------------------------------------------------------------
 # generate_revision fixtures: a checked page, its critique, its design brief
 # ---------------------------------------------------------------------------
@@ -693,6 +741,77 @@ async def test_a_judge_failure_after_a_completed_round_returns_the_best_so_far(m
     assert result.html == _doc(1)
     assert [r.round for r in result.rounds] == [1], "the rounds record where the loop stopped"
     assert len(vision.calls) == 2, "no round three after the judge failure"
+
+
+async def test_a_generation_failure_after_a_completed_round_returns_the_best_so_far(
+    monkeypatch,
+):
+    """Generation is the third failure kind, and it was the one the guard
+    missed.
+
+    `_generate_html` sat outside the try that catches render and judge
+    failures, so a transient 529 on round 2 raised past a completed, rendered,
+    gauntlet-scored round 1 and threw it away — and nothing is refunded, so a
+    finished page the founder paid 5,000 credits for was discarded because the
+    *next* round's model call blipped. It is also the likeliest of the three to
+    fire: two model calls, where the judge is one pipeline.
+    """
+    vision, _render, _gauntlet = _install(
+        monkeypatch,
+        replies=[_doc(1), RuntimeError("overloaded_error: the model is busy")],
+        verdicts=[_verdict(70)],
+    )
+
+    result = await generate_revision(
+        _capture(), ORIGINAL_CRITIQUE, None, max_rounds=3, target_overall=75
+    )
+
+    assert result.best_round == 1
+    assert result.html == _doc(1)
+    assert result.scores_after["overall"] == 70
+    assert [r.round for r in result.rounds] == [1], "the rounds record where the loop stopped"
+    assert len(vision.calls) == 2, "no round three after the generation failure"
+
+
+async def test_two_unparseable_answers_after_a_completed_round_keep_the_best_so_far(
+    monkeypatch,
+):
+    """The other way generation fails: the round's own retry is spent and both
+    answers come back as prose. Round 1 is still judged work in hand."""
+    _install(
+        monkeypatch,
+        replies=[_doc(1), "prose, not a page", "still prose"],
+        verdicts=[_verdict(70)],
+    )
+
+    result = await generate_revision(
+        _capture(), ORIGINAL_CRITIQUE, None, max_rounds=3, target_overall=75
+    )
+
+    assert result.best_round == 1
+    assert result.html == _doc(1)
+    assert [r.round for r in result.rounds] == [1]
+
+
+async def test_a_generation_failure_on_round_one_is_still_a_revision_error(monkeypatch):
+    """The guard may not swallow the failure it was not built for: with no
+    verdict to stand behind, the founder-readable sentence is the answer, and
+    it is the generation one — not the judge's."""
+    _install(
+        monkeypatch,
+        replies=[RuntimeError("overloaded_error: the model is busy")],
+        verdicts=[],
+    )
+
+    with pytest.raises(RevisionError) as excinfo:
+        await generate_revision(_capture(), ORIGINAL_CRITIQUE, None)
+
+    message = str(excinfo.value)
+    assert "could not finish" in message
+    assert "could not be reviewed" not in message, (
+        "a generation failure was relabelled as a judge failure"
+    )
+    assert "run the revision again" in message.lower()
 
 
 async def test_a_judge_failure_on_round_one_is_a_revision_error(monkeypatch):

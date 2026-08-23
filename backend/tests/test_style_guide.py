@@ -22,6 +22,7 @@ from app.services.website.style_guide import (
     extract_tokens,
     visible_copy,
 )
+from app.services.website.verticals import classify_vertical
 
 PAGE = """<html><head><style>
 body { font-family: Manrope, sans-serif; background: #f8fbff; color: #14294a }
@@ -240,6 +241,70 @@ def test_the_category_is_read_from_the_copy_not_the_class_names():
 def test_script_contents_never_reach_the_copy():
     html = "<script>const patient = fetchClinicalEhrHospital();</script><p>Hi</p>"
     assert "Clinical" not in visible_copy(html)
+
+
+# ── only well-formed markup is markup ────────────────────────────────
+#
+# `<[^>]+>` read the "<" in "Setup takes <5 minutes" as a tag opening and
+# deleted everything up to the next ">" — a "Learn more >" three sentences
+# later. `claims._normalise` runs this over the founder's own extracted page
+# text, so the span in between stopped being evidence: their real price and
+# their real metric came back to them in a paid artifact as invented claims,
+# and the rewrite that followed replaced both with "[OWNER: fill in]".
+
+_COPY_WITH_ANGLES = (
+    "Acme Payroll\n"
+    "Setup takes <5 minutes and churn is <1%.\n"
+    "Plans start at $29 per month and we cut payroll errors by 40%.\n"
+    "Read the docs >\n"
+)
+
+
+def test_a_literal_angle_bracket_in_copy_is_copy_not_a_tag():
+    copy = visible_copy(_COPY_WITH_ANGLES)
+
+    assert "<5 minutes" in copy
+    assert "<1%" in copy
+    assert "$29 per month" in copy, "the founder's own price was deleted as markup"
+    assert "40%" in copy, "the founder's own metric was deleted as markup"
+    assert "Read the docs >" in copy
+
+
+def test_well_formed_markup_is_still_stripped():
+    """The widening may not cost the strip: real tags, declarations and
+    comments all still go, including a comment whose body carries a ">" — the
+    generator is asked to declare a replaced design system in exactly that."""
+    html = (
+        "<!doctype html><html><head><style>.p{width:99%}</style></head>"
+        "<!-- replaced the system: 8px > 4px, one accent -->"
+        "<body><h1 data-x='a'>Ship faster</h1><p>Read <a href='#'>more</a>.</p>"
+        "</body></html>"
+    )
+
+    copy = visible_copy(html)
+
+    assert copy == "Ship faster Read more ."
+    assert "99%" not in copy, "a stylesheet is not copy"
+    assert "8px" not in copy, "a comment is not copy"
+
+
+def test_the_guide_reads_the_same_category_the_generator_does():
+    """Two sides, one page. `revise._generation_prompt` classifies the raw
+    extracted text and `build_style_guide` classifies `visible_copy` of it, so
+    a strip that ate plain copy made the guide and the page disagree about who
+    the page is for."""
+    page_text = (
+        "Chartwell Clinical\n"
+        "Prior authorisations in <5 minutes.\n"
+        "Built for clinics, hospitals and patient intake teams handling "
+        "patient records and clinical workflows for providers.\n"
+        "Read the docs >"
+    )
+
+    assert classify_vertical(page_text) == classify_vertical(visible_copy(page_text))
+    assert "Health and clinical software" in build_style_guide(
+        url="https://chartwell.example", page_text=page_text
+    )
 
 
 def test_a_page_with_no_system_gets_no_invented_one():

@@ -120,7 +120,18 @@ _DROP_BLOCKS = re.compile(
     r"<(script|style|noscript|template|svg)\b.*?</\1\s*>",
     re.IGNORECASE | re.DOTALL,
 )
-_TAG = re.compile(r"<[^>]+>")
+# Only well-formed markup, and the same shape `style_guide._TAG` uses — the
+# two are the codebase's two HTML-to-text strips and they must not disagree
+# about what a tag is.
+#
+# `<[^>]+>` treats any literal "<" as a tag opening and deletes everything up
+# to the next ">" anywhere later. A browser does not: HTML only starts a tag
+# when a name follows the "<", so "Setup takes <5 minutes" renders as written
+# and then a "Learn more >" further down the page ended the phantom tag,
+# taking every sentence in between out of the text the room is shown. That
+# text is a stored artifact the before/after cites, and an empty one raises
+# NO_READABLE_TEXT_ERROR.
+_TAG = re.compile(r"</?[a-zA-Z][^>]*>|<[!?][^>]*>")
 _H1 = re.compile(r"<h1\b[^>]*>(.*?)</h1\s*>", re.IGNORECASE | re.DOTALL)
 
 

@@ -7,7 +7,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from app.core.auth import get_current_org
+from app.core.auth import get_current_org, require_can_spend
 from app.core.database import get_supabase_admin
 from app.core.llm_client import _extract_json, llm_complete
 from app.services.engine.personas.pack_loader import (
@@ -57,8 +57,15 @@ async def get_pack_details(pack_id: str, auth: dict = Depends(get_current_org)):
 
 
 @router.post("/custom")
-async def create_custom_pack(body: CreateCustomPackBody, auth: dict = Depends(get_current_org)):
-    """Generate a custom persona pack from a user description using LLM."""
+async def create_custom_pack(body: CreateCustomPackBody, auth: dict = Depends(require_can_spend)):
+    """Generate a custom persona pack from a user description using LLM.
+
+    **Gated**, and this is the worst of the three that were not: an unbounded
+    `description` pasted straight into an Opus prompt at `max_tokens=4096`, plus
+    an INSERT into `custom_persona_packs` — a write, from a role whose entire
+    grant is to read. It reaches no `deduct_credits`, so the ledger scan never
+    saw it.
+    """
     log.info("create_custom_pack", name=body.name, org_id=auth["org_id"])
 
     pack_id = re.sub(r"[^a-z0-9]+", "-", body.name.lower()).strip("-")

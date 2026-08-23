@@ -538,10 +538,11 @@ async def generate_revision(
     is the result; every judged round's scores are in `rounds` regardless.
 
     Failure honesty: output that is not a complete HTML document gets one
-    retry carrying the complaint, then `RevisionError`. A render or judge
-    failure after at least one completed round returns the best-so-far with
-    `rounds` stopping at the last verdict; the same failure on round one is a
-    `RevisionError`, because no verdict exists to stand behind.
+    retry carrying the complaint. After that — and for a render or judge
+    failure alike — **any** of the three failures returns the best-so-far once
+    at least one round has completed, with `rounds` stopping at the last
+    verdict; the same failure on round one is a `RevisionError`, because no
+    verdict exists to stand behind.
     """
     if max_rounds < 1:
         raise ValueError("max_rounds must be at least 1")
@@ -565,7 +566,30 @@ async def generate_revision(
             # Always measured against the founder's own page, never against the
             # previous revision: a fabrication that survives round one would
             # otherwise become its own evidence in round two.
-            html, claims = await _generate_html(prompt, evidence, capture.dom_text)
+            #
+            # **Generation is the third failure kind, and it was the one the
+            # best-so-far guard did not cover.** It sat outside the try below,
+            # so a transient 529 or two unparseable replies on round 2 raised
+            # past a completed, rendered, gauntlet-scored round 1 and threw it
+            # away — the docstring promised the opposite, and nothing is
+            # refunded. It is also the likeliest of the three to fire, being
+            # two model calls where the judge is one pipeline.
+            try:
+                html, claims = await _generate_html(prompt, evidence, capture.dom_text)
+            except Exception as exc:
+                if best is None:
+                    # Round one: `_generate_html` already raised the
+                    # founder-readable sentence for whichever way it failed,
+                    # and there is no verdict to stand behind. Let it through
+                    # unchanged rather than relabel it as a judge failure.
+                    raise
+                logger.warning(
+                    "website_revision_generation_failed",
+                    round=round_no,
+                    completed_rounds=len(rounds),
+                    error=f"{type(exc).__name__}: {exc}",
+                )
+                break
 
             try:
                 render = await capture_html(html)

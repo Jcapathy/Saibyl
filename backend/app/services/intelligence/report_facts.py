@@ -68,6 +68,34 @@ evidence value rounds to it at the precision written: `-0.47` is supported by
 a measured `-0.4653`, and `81%` by `80.56`. Percentages also match a
 proportion, so `80.56%` is supported by `0.8056`. Only a figure that no
 measured value can round to is reported.
+
+**Neither is arithmetic on measured values.** Two shapes are derived, not
+invented, and the first version of this file called both fabrications — on the
+one sentence form that *three* separate prompts mandate:
+
+- **The sign lives in the verb.** `_supported` compares signed Decimals, and
+  English does not: "Sentiment declined 0.44 points across the run" reports a
+  measured `trajectory_delta` of **-0.44**. `REPORT_SYSTEM_PROMPT` rule 3 and
+  `CONCLUSION_PROMPT` both require exactly that sentence. So a magnitude is
+  sourced by a measured value of either sign.
+- **A difference between two measured values is a measurement.** "Sentiment
+  hit -0.62 on Reddit against -0.11 on Hacker News — a 0.51 gap between the
+  two" is `EXECUTIVE_SUMMARY_PROMPT` Part B's own worked example, word for
+  word, and 0.51 appears nowhere in any artifact. So a figure that is the
+  difference of two *other measured figures the same sentence already states*
+  is sourced.
+
+  Sentence-local on purpose, and this is the half worth defending. Differencing
+  every pair in the evidence would license nearly any decimal in range — a
+  6,000-character findings blob holds hundreds of numbers — and turn the
+  checker off while leaving it switched on. The mandated shape states both
+  operands and their gap in one breath, so that is all this reads. A gap whose
+  operands are themselves invented is not rescued: an operand must be sourced
+  before it can anchor anything.
+
+Both are one-sided by design: they can only ever *clear* a figure. The four
+fabrications that shipped are still caught, and each is pinned in
+`test_report_facts`.
 """
 from __future__ import annotations
 
@@ -216,31 +244,127 @@ def _supported(stated: Decimal, written: str, sourced: set[Decimal],
     Rounding at the *stated* precision is the whole trick. A model that reads
     -0.4653 and writes "-0.47" has reported the measurement; one that writes
     "-0.35" has not, and no amount of tolerance should blur those together.
+
+    Sign is the one thing not compared, because English does not put it in the
+    number. "Sentiment declined 0.44 points across the run" — the shape
+    `REPORT_SYSTEM_PROMPT` rule 3 and `CONCLUSION_PROMPT` both mandate — states
+    a measured `trajectory_delta` of -0.44 with the sign carried by the verb,
+    and was reported as an invention. This is also the standing repair for the
+    sign-parsing bugs `_NOT_A_SIGN` documents: every one of them showed up as a
+    measured value flagged with its sign read off.
+
+    What it gives up, stated plainly: a section that writes a measured -0.4653
+    as "+0.4653" is no longer reported. That was never this check's job — it
+    reports figures with no basis in the evidence, and both shipped inversions
+    were caught because the *values* were invented, not because their signs
+    were wrong. Trading a sign-only miss for a false alarm on every correctly
+    written trajectory sentence is the right side of that trade.
     """
     places = _places(written)
     for value in sourced:
-        try:
-            if round(value, places) == stated:
-                return True
-            # A share may be shown either way round: 80.56 or 0.8056.
-            if as_percentage and round(value * 100, places) == stated:
-                return True
-        except (InvalidOperation, ValueError):
-            continue
+        for candidate in (value, -value):
+            try:
+                if round(candidate, places) == stated:
+                    return True
+                # A share may be shown either way round: 80.56 or 0.8056.
+                if as_percentage and round(candidate * 100, places) == stated:
+                    return True
+            except (InvalidOperation, ValueError):
+                continue
     return False
 
 
-def _sentence_around(haystack: str, start: int, end: int) -> str:
-    """The sentence holding a figure, so a founder can find it."""
+def _sentence_span(haystack: str, start: int, end: int) -> tuple[int, int]:
+    """Bounds of the sentence holding a figure.
+
+    One definition, shared by the founder-facing quote and by the derived-figure
+    check below, so the sentence a complaint quotes is exactly the sentence its
+    operands were read from.
+    """
     left = max((haystack.rfind(m, 0, start) for m in (". ", "\n", "! ", "? ")), default=-1)
     left = 0 if left == -1 else left + 1
     rights = [p for p in (haystack.find(m, end) for m in (". ", "\n", "! ", "? ")) if p != -1]
     right = min(rights) + 1 if rights else min(len(haystack), end + _QUOTE_CHARS)
+    return left, right
+
+
+def _sentence_around(haystack: str, start: int, end: int) -> str:
+    """The sentence holding a figure, so a founder can find it."""
+    left, right = _sentence_span(haystack, start, end)
     quote = " ".join(haystack[left:right].split())
     if len(quote) <= _QUOTE_CHARS:
         return quote
     offset = max(0, (start - left) - 60)
     return "…" + quote[offset : offset + _QUOTE_CHARS].strip() + "…"
+
+
+#: How many measured operands in one sentence get paired up. Pairing is
+#: quadratic and a "sentence" with no terminator is whatever text is within
+#: `_QUOTE_CHARS` of the figure, so this is a ceiling, not a target: the shape
+#: being recognised states two operands and their gap, and a third rarely
+#: helps.
+_MAX_DERIVED_ANCHORS = 8
+
+#: A number written as a share, so an operand may be checked against the
+#: evidence's shares as well as its raw values.
+_TRAILING_PCT = re.compile(r"[ \t]*%")
+
+
+def _derived_from_sentence(
+    stated: Decimal,
+    written: str,
+    text: str,
+    start: int,
+    end: int,
+    sourced: set[Decimal],
+    shares: set[Decimal],
+) -> bool:
+    """Whether the figure is the gap between two measured values beside it.
+
+    "Sentiment hit -0.62 on Reddit against -0.11 on Hacker News — a 0.51 gap
+    between the two" is `EXECUTIVE_SUMMARY_PROMPT` Part B's worked example, and
+    0.51 is in no artifact anywhere: it is -0.11 minus -0.62. Same for the
+    mandated "declined 0.59 points from -0.05 to -0.64", and for "ran 28.1
+    points above" a stated pair of shares. An arithmetic difference between two
+    measured values is not a fabrication, and flagging it spends an Opus call
+    to talk the model out of the comparison the founder paid for.
+
+    Both operands must be *stated in the same sentence* and each must itself be
+    sourced. That is what keeps this from becoming a hole: differencing every
+    pair in the evidence would license nearly any decimal in range, and a gap
+    resting on invented operands is still reported — the operands as
+    fabrications, the gap along with them.
+    """
+    left, right = _sentence_span(text, start, end)
+    sentence = text[left:right]
+    places = _places(written)
+
+    anchors: list[Decimal] = []
+    for match in _ANY_NUMBER.finditer(sentence):
+        if left + match.start() == start:
+            continue  # a figure is not its own operand
+        raw = match.group(0)
+        value = _to_decimal(raw)
+        if value is None:
+            continue
+        if _supported(value, raw, sourced) or (
+            shares
+            and _TRAILING_PCT.match(sentence, match.end())
+            and _supported(value, raw, shares, as_percentage=True)
+        ):
+            anchors.append(value)
+            if len(anchors) >= _MAX_DERIVED_ANCHORS:
+                break
+
+    for index, first in enumerate(anchors):
+        for second in anchors[index + 1 :]:
+            for difference in (first - second, second - first):
+                try:
+                    if round(difference, places) == stated:
+                        return True
+                except (InvalidOperation, ValueError):
+                    continue
+    return False
 
 
 def unsourced_figures(evidence: str, answer: str) -> list[UnsourcedFigure]:
@@ -291,13 +415,23 @@ def unsourced_figures(evidence: str, answer: str) -> list[UnsourcedFigure]:
                 _add("count", match.group(0), match.start(), match.end())
                 break
 
+    # The derived-figure escape applies to decimals and percentages alike, and
+    # is wired into both branches deliberately: "a 0.51 gap" and "28.1 points
+    # above" are the same sentence written twice, and the mandated form puts
+    # the gap on either side of the % sign depending on what is being compared.
+    shares = sourced_shares(evidence)
+
     for match in _DECIMAL.finditer(text):
         written = match.group(0)
         stated = _to_decimal(written)
-        if stated is not None and not _supported(stated, written, sourced):
-            _add("decimal", written, match.start(), match.end())
+        if stated is None or _supported(stated, written, sourced):
+            continue
+        if _derived_from_sentence(
+            stated, written, text, match.start(), match.end(), sourced, shares
+        ):
+            continue
+        _add("decimal", written, match.start(), match.end())
 
-    shares = sourced_shares(evidence)
     if shares:
         labels = {m.start(1) for m in _CONFIDENCE_LABEL.finditer(text)}
         for match in _PERCENT.finditer(text):
@@ -305,10 +439,15 @@ def unsourced_figures(evidence: str, answer: str) -> list[UnsourcedFigure]:
                 continue
             written = match.group(0)
             stated = _to_decimal(written)
-            if stated is not None and not _supported(
+            if stated is None or _supported(
                 stated, written, shares, as_percentage=True
             ):
-                _add("percentage", written + "%", match.start(), match.end())
+                continue
+            if _derived_from_sentence(
+                stated, written, text, match.start(), match.end(), sourced, shares
+            ):
+                continue
+            _add("percentage", written + "%", match.start(), match.end())
 
     order = {"decimal": 0, "percentage": 1, "count": 2}
     found.sort(key=lambda f: (order.get(f.kind, 9), f.text))

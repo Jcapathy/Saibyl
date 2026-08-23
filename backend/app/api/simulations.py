@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.core.auth import get_current_org, require_can_destroy, require_can_spend
 from app.core.config import settings
-from app.core.database import get_supabase_admin
+from app.core.database import get_supabase_admin, maybe_one
 from app.core.tasks import spawn
 from app.services.billing.agent_pricing import MAX_AGENTS_ANY_TIER
 from app.services.engine.founder_stages import FOUNDER_STAGES, FounderStage
@@ -28,11 +28,48 @@ from app.workers.simulation_tasks import (
 log = structlog.get_logger()
 
 
+def _now_iso() -> str:
+    """This instant, for the `updated_at` stamps the reaper ages runs from."""
+    return datetime.now(UTC).isoformat()
+
+
+# The statuses a run is still in flight in — the same set the reaper's
+# `simulations` rule watches, and the only ones `_mark_simulation_failed` may
+# write over.
+#
+# A run that has reached `complete`, `stopped` or a `failed` some other writer
+# has already explained is finished, and a late `on_failure` must not rewrite
+# it. Named here rather than inlined because two things depend on the set
+# agreeing: this handler and the reaper.
+UNFINISHED_STATUSES = ("queued", "preparing", "running", "analyzing")
+
+
 def _mark_simulation_failed(simulation_id: str, name: str) -> Callable[[Exception], None]:
     """`on_failure` for `spawn`: a run whose worker died must say so.
 
     Without this the row stays `preparing`/`running` forever and the user
     watches a spinner for a failure that was logged and never surfaced.
+
+    **Conditional on the run still being in flight**, and it was not. This was
+    a bare `.update(...).eq("id", ...)` — the only writer in this row family
+    without a compare-and-set, while `website_tasks._advance`,
+    `revision_tasks._advance` and the reaper's own UPDATE all have one. Two
+    things went through the gap:
+
+    - `run_simulation` writes `status='complete'` (simulation_tasks.py:1189),
+      publishes, and *then* calls `reconcile_run_cost`, which makes two
+      unguarded network calls. A transient PostgREST or RPC error there
+      propagates to `spawn`, and this handler rewrote a run whose events,
+      analysis artifact and report were all stored and correct to `failed`.
+      Since `failed` is startable, the founder then paid the full price again
+      for work already delivered.
+    - `run_prepare_agents` refuses a run whose room has already posted with a
+      sentence written for the founder to read. This handler overwrote that
+      sentence with the generic one, so the founder was told to retry something
+      retrying cannot fix — and clicked again, and paid for another swarm.
+
+    The guard fixes both: a row that already carries a terminal status, or a
+    `failed` with a better sentence on it, is left exactly as its writer left it.
     """
     def _mark(exc: Exception) -> None:
         # The exception goes to the log, where we can act on it. The row gets
@@ -46,14 +83,31 @@ def _mark_simulation_failed(simulation_id: str, name: str) -> Callable[[Exceptio
             error_type=type(exc).__name__,
             error=str(exc)[:500],
         )
-        get_supabase_admin().table("simulations").update({
-            "status": "failed",
-            "error_message": (
-                "This run stopped before it finished. Anything it had already "
-                "measured is saved — start a new run when you're ready, and "
-                "tell us if it happens again."
-            ),
-        }).eq("id", simulation_id).execute()
+        written = (
+            get_supabase_admin().table("simulations").update({
+                "status": "failed",
+                "error_message": (
+                    "This run stopped before it finished. Anything it had already "
+                    "measured is saved — start a new run when you're ready, and "
+                    "tell us if it happens again."
+                ),
+            })
+            .eq("id", simulation_id)
+            .in_("status", list(UNFINISHED_STATUSES))
+            .execute()
+        ).data or []
+        if not written:
+            # Not an error: the ordinary case is a worker that already closed
+            # the row with a better sentence than this one. Logged because the
+            # other case — a run that finished and then had its tail raise — is
+            # the one worth being able to find.
+            log.info(
+                "simulation_failure_not_recorded",
+                simulation_id=simulation_id,
+                task=name,
+                detail="the row was no longer in flight; its own writer's "
+                       "status and sentence were left alone",
+            )
     return _mark
 
 
@@ -240,13 +294,11 @@ async def create_simulation(body: CreateSimulationBody, auth: dict = Depends(get
     admin = get_supabase_admin()
 
     # Verify project belongs to org
-    project = (
+    project = maybe_one(
         admin.table("projects")
         .select("id")
         .eq("id", body.project_id)
         .eq("organization_id", auth["org_id"])
-        .single()
-        .execute()
     )
     if not project.data:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -446,13 +498,11 @@ async def get_simulation(id: str, auth: dict = Depends(get_current_org)):
     """Get simulation details."""
     log.info("get_simulation", simulation_id=id)
     admin = get_supabase_admin()
-    result = (
+    result = maybe_one(
         admin.table("simulations")
         .select("*")
         .eq("id", id)
         .eq("organization_id", auth["org_id"])
-        .single()
-        .execute()
     )
     if not result.data:
         raise HTTPException(status_code=404, detail="Simulation not found")
@@ -477,6 +527,57 @@ async def delete_simulation(id: str, auth: dict = Depends(require_can_destroy)):
 
     if sim.data[0]["status"] == "running":
         raise HTTPException(status_code=409, detail="Stop the simulation before deleting it")
+
+    # Re-simulations are refused, not silently orphaned.
+    #
+    # Two foreign keys made routine tidying destructive in a way nothing said
+    # out loud (021_inoculation_loop.sql):
+    #
+    #   inoculation_results.parent_simulation_id  ON DELETE CASCADE
+    #   simulations.parent_simulation_id          ON DELETE SET NULL
+    #
+    # So deleting a completed parent cascaded away the stored before/after the
+    # founder paid for — after which `GET /api/inoculation/{child}/result`
+    # answers "This run is not a re-simulation" for an artifact that exists
+    # nowhere else — and nulled the child's link, which `start_simulation` used
+    # to derive `reuse_agents` from. That link is now only half the derivation
+    # (see below), but the deleted comparison cannot be rebuilt at all: it is
+    # measured from two artifacts, and one of them is being deleted here.
+    #
+    # This is the flagship V3 path — the website-room "prove" leg and the
+    # inoculation loop both create parent/child pairs — so it is reached by
+    # tidying an old run, not by anything unusual.
+    #
+    # Refused rather than warned. The two sibling delete routes written for
+    # this problem (`icp.py`'s `orphaned_pack_ids`, `packs.py`'s
+    # `detached_simulation_ids`) report what they broke because a detached pack
+    # is recoverable; a cascaded `inoculation_results` row is not. The founder
+    # is told which runs to delete first, which is a step they can take.
+    children = (
+        admin.table("simulations")
+        .select("id, name")
+        .eq("parent_simulation_id", id)
+        .eq("organization_id", auth["org_id"])
+        .limit(50)
+        .execute()
+    ).data or []
+    if children:
+        log.warning(
+            "delete_refused_has_resimulations",
+            simulation_id=id,
+            org_id=auth["org_id"],
+            children=[c["id"] for c in children],
+        )
+        names = ", ".join(str(c.get("name") or c["id"]) for c in children)
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"This run is the 'before' for {len(children)} re-simulation(s) "
+                f"({names}). Deleting it would destroy the before/after "
+                f"comparison you paid for, and that cannot be rebuilt. Delete "
+                f"the re-simulation(s) first if you really want this gone."
+            ),
+        )
 
     # Report sections are keyed by report_id, so they must go before the reports.
     reports = (
@@ -532,20 +633,23 @@ async def prepare_simulation(id: str, auth: dict = Depends(require_can_spend)):
     """
     log.info("prepare_simulation", simulation_id=id, org_id=auth["org_id"])
     admin = get_supabase_admin()
-    sim = (
+    sim = maybe_one(
         admin.table("simulations")
         .select("id, status")
         .eq("id", id)
         .eq("organization_id", auth["org_id"])
-        .single()
-        .execute()
     )
     if not sim.data:
         raise HTTPException(status_code=404, detail="Simulation not found")
 
     claimed = (
         admin.table("simulations")
-        .update({"status": "preparing"})
+        # `updated_at` is stamped, not left to the trigger. The reaper measures
+        # this run's 90-minute budget from it (see `StuckRule.age_column`), and
+        # a run may have rested at `draft` for a day before this moment — so
+        # the one write that means "the work starts now" says so itself rather
+        # than depending on migration 008 being present.
+        .update({"status": "preparing", "updated_at": _now_iso()})
         .eq("id", id)
         .eq("organization_id", auth["org_id"])
         .in_("status", list(PREPARABLE_STATUSES))
@@ -601,7 +705,7 @@ async def start_simulation(
     """Start running a simulation, redeeming its quote."""
     log.info("start_simulation", simulation_id=id, org_id=auth["org_id"])
     admin = get_supabase_admin()
-    sim = (
+    sim = maybe_one(
         admin.table("simulations")
         .select(
             # `project_id` is here for `run_will_carry_subject_brief`, which
@@ -615,8 +719,6 @@ async def start_simulation(
         )
         .eq("id", id)
         .eq("organization_id", auth["org_id"])
-        .single()
-        .execute()
     )
     if not sim.data:
         raise HTTPException(status_code=404, detail="Simulation not found")
@@ -685,12 +787,28 @@ async def start_simulation(
     # An inoculation re-simulation copies its parent's agents rather than
     # generating them, so it makes zero generation calls and must not be
     # charged for them.
-    reuse_agents = bool(sim.data.get("parent_simulation_id"))
+    #
+    # **Not derived from `parent_simulation_id` alone.** That column is
+    # `ON DELETE SET NULL` (021_inoculation_loop.sql:86), so deleting the parent
+    # rewrote this run's price: `estimate_simulation_cost(100, 5, 2, 1,
+    # inoculation_assets=2)` is 2,681 credits with `reuse_agents=True` and 2,996
+    # without — 315 credits, 11.7%, for an `agent_generation` stage that
+    # provably never executes, since the child's agents are copied rows that
+    # already exist.
+    #
+    # `inoculation_asset_ids` is the child's own state and survives the parent:
+    # `NOT NULL DEFAULT '{}'` on every ordinary run, and non-empty on every
+    # re-simulation because `ResimulateBody.asset_ids` is `min_length=1`.
+    # Either fact alone is enough to know this run will not generate a swarm.
+    inoculation_asset_ids = sim.data.get("inoculation_asset_ids") or []
+    reuse_agents = bool(sim.data.get("parent_simulation_id")) or bool(
+        inoculation_asset_ids
+    )
     # It does, however, carry its assets in every single action prompt. Measured
     # at 5.3x the parent's action input on the first live loop — the saving on
     # generation and the surcharge on actions are separate facts, and quoting
     # only the first one under-charged the re-simulation by roughly a fifth.
-    inoculation_assets = len(sim.data.get("inoculation_asset_ids") or [])
+    inoculation_assets = len(inoculation_asset_ids)
     # Uploaded material is distilled into a bounded brief that rides in every
     # agent action prompt, which is the highest-volume stage by an order of
     # magnitude — so a run whose project has material costs ~10% more to serve.
@@ -765,7 +883,12 @@ async def start_simulation(
     # QuoteError) can leave a run claimed and unstarted.
     started = (
         admin.table("simulations")
-        .update({"status": "running"})
+        # `updated_at`, for the same reason as `/prepare`: this is the instant
+        # the run's own 90-minute reaper budget begins, and the row it is
+        # written on may have been created a day ago in the wizard. Aged from
+        # `created_at` the deduction below was followed within one sweep by a
+        # `failed` row and no refund.
+        .update({"status": "running", "updated_at": _now_iso()})
         .eq("id", id)
         .eq("organization_id", auth["org_id"])
         .in_("status", list(STARTABLE_STATUSES))
@@ -800,13 +923,11 @@ async def stop_simulation_endpoint(id: str, auth: dict = Depends(get_current_org
     """Stop a running simulation."""
     log.info("stop_simulation", simulation_id=id, org_id=auth["org_id"])
     admin = get_supabase_admin()
-    sim = (
+    sim = maybe_one(
         admin.table("simulations")
         .select("id")
         .eq("id", id)
         .eq("organization_id", auth["org_id"])
-        .single()
-        .execute()
     )
     if not sim.data:
         raise HTTPException(status_code=404, detail="Simulation not found")
@@ -822,13 +943,11 @@ async def simulation_status(id: str, auth: dict = Depends(get_current_org)):
     """Get current simulation status."""
     log.info("simulation_status", simulation_id=id)
     admin = get_supabase_admin()
-    sim = (
+    sim = maybe_one(
         admin.table("simulations")
         .select("id")
         .eq("id", id)
         .eq("organization_id", auth["org_id"])
-        .single()
-        .execute()
     )
     if not sim.data:
         raise HTTPException(status_code=404, detail="Simulation not found")
@@ -848,13 +967,11 @@ async def list_events(
     log.info("list_events", simulation_id=id, limit=limit, offset=offset)
     admin = get_supabase_admin()
     # Verify simulation belongs to org
-    sim = (
+    sim = maybe_one(
         admin.table("simulations")
         .select("id")
         .eq("id", id)
         .eq("organization_id", auth["org_id"])
-        .single()
-        .execute()
     )
     if not sim.data:
         raise HTTPException(status_code=404, detail="Simulation not found")
@@ -875,13 +992,11 @@ async def list_agents(id: str, auth: dict = Depends(get_current_org)):
     """List agents in a simulation."""
     log.info("list_agents", simulation_id=id)
     admin = get_supabase_admin()
-    sim = (
+    sim = maybe_one(
         admin.table("simulations")
         .select("id")
         .eq("id", id)
         .eq("organization_id", auth["org_id"])
-        .single()
-        .execute()
     )
     if not sim.data:
         raise HTTPException(status_code=404, detail="Simulation not found")
@@ -900,13 +1015,11 @@ async def interview_agent_endpoint(id: str, body: InterviewBody, auth: dict = De
     """Interview a single agent."""
     log.info("interview_agent", simulation_id=id, agent_id=body.agent_id)
     admin = get_supabase_admin()
-    sim = (
+    sim = maybe_one(
         admin.table("simulations")
         .select("id")
         .eq("id", id)
         .eq("organization_id", auth["org_id"])
-        .single()
-        .execute()
     )
     if not sim.data:
         raise HTTPException(status_code=404, detail="Simulation not found")
@@ -920,13 +1033,11 @@ async def interview_batch_endpoint(id: str, body: BatchInterviewBody, auth: dict
     """Interview multiple agents."""
     log.info("interview_batch", simulation_id=id, count=len(body.agent_ids))
     admin = get_supabase_admin()
-    sim = (
+    sim = maybe_one(
         admin.table("simulations")
         .select("id")
         .eq("id", id)
         .eq("organization_id", auth["org_id"])
-        .single()
-        .execute()
     )
     if not sim.data:
         raise HTTPException(status_code=404, detail="Simulation not found")
@@ -948,13 +1059,11 @@ async def interview_by_persona_endpoint(id: str, body: PersonaInterviewBody, aut
     """
     log.info("interview_by_persona", simulation_id=id, persona_type=body.persona_type)
     admin = get_supabase_admin()
-    sim = (
+    sim = maybe_one(
         admin.table("simulations")
         .select("id")
         .eq("id", id)
         .eq("organization_id", auth["org_id"])
-        .single()
-        .execute()
     )
     if not sim.data:
         raise HTTPException(status_code=404, detail="Simulation not found")

@@ -26,7 +26,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.core.auth import get_current_org, require_can_spend
-from app.core.database import get_supabase_admin
+from app.core.database import get_supabase_admin, maybe_one
 from app.core.tasks import spawn
 from app.services.billing.agent_pricing import (
     answer_pack_credits,
@@ -53,10 +53,16 @@ def _mark_failed(pack_id: str) -> Callable[[Exception], None]:
     """
     def _mark(exc: Exception) -> None:
         log.error("answer_pack_worker_died", pack_id=pack_id, error=str(exc))
+        # Conditional on the row still being in flight, like every other writer
+        # to this family. `run_answer_pack` writes `complete` *outside* its own
+        # `except Exception`, so a write that lands in Postgres and then fails
+        # on the way back reaches this handler with a finished pack on the row —
+        # and a bare `.eq("id", ...)` would report it as a failure the founder
+        # never had. Same states the reaper's `answer_packs` rule watches.
         get_supabase_admin().table("answer_packs").update({
             "status": "failed",
             "error_message": GENERIC_FAILURE_MESSAGE,
-        }).eq("id", pack_id).execute()
+        }).eq("id", pack_id).in_("status", ["queued", "building"]).execute()
     return _mark
 
 
@@ -66,13 +72,11 @@ async def build_pack(body: BuildBody, auth: dict = Depends(require_can_spend)):
     admin = get_supabase_admin()
     org_id = auth["org_id"]
 
-    sim = (
+    sim = maybe_one(
         admin.table("simulations")
         .select("id, name")
         .eq("id", body.simulation_id)
         .eq("organization_id", org_id)
-        .single()
-        .execute()
     )
     if not sim.data:
         raise HTTPException(status_code=404, detail="We could not find that run.")
@@ -164,13 +168,11 @@ async def pack_for_simulation(simulation_id: str, auth: dict = Depends(get_curre
 @router.get("/{pack_id}")
 async def get_pack(pack_id: str, auth: dict = Depends(get_current_org)):
     admin = get_supabase_admin()
-    result = (
+    result = maybe_one(
         admin.table("answer_packs")
         .select("*")
         .eq("id", pack_id)
         .eq("organization_id", auth["org_id"])
-        .single()
-        .execute()
     )
     if not result.data:
         raise HTTPException(status_code=404, detail="We could not find those answers.")

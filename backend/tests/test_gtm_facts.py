@@ -242,6 +242,121 @@ def test_a_product_benchmark_is_never_exempted_by_the_meeting_rule():
         assert MISSING_NUMBER in text
 
 
+def test_a_booking_verb_alone_no_longer_exempts_a_product_benchmark():
+    """The round-one blocker in its most natural phrasing.
+
+    The exemption list carried the verbs a benchmark is written with — `takes`,
+    `got`, `get`, `have`, `spend`, `free up`, `need`, `under`, `no more than` —
+    and a hit on any of them returned True unconditionally, before the size
+    test, the savings-verb test or the interrogative test ever ran. Every line
+    here is a twin of one this file already pins as a fabrication, separated
+    from it by a digit or a copula: "Setup **is** 15 minutes." was scrubbed all
+    along and "Setup **takes** 15 minutes." was not, and "the close takes
+    **900** minutes" was caught only by accident, by being too big to be a
+    meeting. With MAX_MEETING_MINUTES at 120, every plausible invented
+    benchmark walked through under the founder's name.
+    """
+    for line in (
+        "The month-end close takes 90 minutes of manual work.",
+        "Setup takes 15 minutes.",
+        "Reconciliation takes 90 minutes a close.",
+        "We free up 90 minutes a close for every controller.",
+        "You get 45 minutes back per entity.",
+        "You have 100 minutes of manual reconciliation every close.",
+        "Month-end close takes 2 hours.",
+        "Onboarding takes 90 minutes.",
+        # The same shape wearing the two quantifiers that sat in the same list.
+        "Reviews are done in under 20 minutes.",
+        "It needs no more than 30 minutes.",
+    ):
+        text, replaced = _scrub(line)
+        assert replaced, f"a booking verb exempted an invented benchmark: {line}"
+        assert MISSING_NUMBER in text
+
+
+def test_the_asks_those_verbs_used_to_carry_still_survive():
+    """The other side of the same trade, which is why the verbs were listed.
+
+    Dropping them from the exemption list is only safe because the shape
+    underneath is recognised: an offer to show someone something is a meeting
+    whatever noun it is called by, and "20 minutes of your time" is the oldest
+    ask in cold copy. Both of these were exempted by `under` and `need` before,
+    and both are call-to-action lines.
+    """
+    for line in (
+        "Happy to keep it under 15 minutes.",
+        "I'd need 20 minutes of your time.",
+        "Let me run you through it in 15 minutes.",
+    ):
+        text, replaced = _scrub(line)
+        assert replaced == [], f"scrubbed a meeting ask in: {line}"
+        assert text == line
+
+
+def test_a_question_counts_wherever_its_mark_falls():
+    """The interrogative test read four characters and no further.
+
+    `_SENTENCE_SPLIT` eats the `?`, so the mark is read off the raw text — but
+    slicing that text to four characters meant it only counted when it landed
+    beside the number. "Any interest in 15 minutes?" passed with its mark at
+    index 0; every question with words between the duration and the mark came
+    back as "Would [TODO: your number] be useful?" in a subject line, and the
+    damage was counted into `placeholders_to_fill` as a fact the founder owed.
+    """
+    for line in (
+        "Would 15 minutes be useful?",
+        "Does 15 minutes sound reasonable?",
+        "Is 20 minutes worth it to you?",
+        "Would 20 minutes help?",
+        "Is 30 minutes too much to ask?",
+        "Would 30 minutes with the team be useful?",
+    ):
+        text, replaced = _scrub(line)
+        assert replaced == [], f"mangled a question CTA in: {line}"
+        assert text == line
+
+
+def test_a_question_in_the_next_sentence_does_not_launder_the_claim_before_it():
+    """Which mark ends *this* clause, not whether one exists nearby. Reading
+    forward without that bound would exempt the benchmark on the strength of
+    the CTA behind it."""
+    text, replaced = _scrub("Setup takes 15 minutes. Would that work?")
+
+    assert replaced == ["15 minutes"]
+    assert MISSING_NUMBER in text
+
+
+def test_a_forward_window_in_a_promise_is_not_a_request():
+    """`_WINDOW_BEFORE` matched `next` and `coming` alongside `last` and
+    `past`, and returned True before the size, savings-verb and adjective tests
+    ran. A window behind reports nothing about the product; a window ahead in a
+    declarative sentence is a payback or time-to-value promise for a company
+    with no customers to measure it on — the family this file already pins in
+    "Most teams see it visible in 30-60 days.", which was caught only because
+    it happens to carry no window word.
+    """
+    for line in (
+        "In the next 30 days you'll cut the close in half.",
+        "Teams like yours recover the cost in the next 90 days.",
+        "You will see it in the coming 6 weeks.",
+        "Your next 90 days look like this.",
+    ):
+        text, replaced = _scrub(line)
+        assert replaced, f"a forward window exempted a promise: {line}"
+        assert MISSING_NUMBER in text
+
+
+def test_a_window_that_really_is_asking_still_survives():
+    """The lookback twin, and a window ahead inside an actual request."""
+    for line in (
+        "Reply with the worst prior auth denial you've seen in the last 6 months.",
+        "Do you have anything in the next 2 weeks?",
+    ):
+        text, replaced = _scrub(line)
+        assert replaced == [], f"scrubbed a request in: {line}"
+        assert text == line
+
+
 def test_a_duration_bigger_than_a_meeting_is_a_claim_in_any_unit():
     """The size test existed only in hours.
 
@@ -455,6 +570,64 @@ def test_money_falls_back_to_the_whole_material_when_no_price_was_stated():
 
     assert replaced == []
     assert "$9,000" in pack.rows[0].respond
+
+
+def test_a_currency_word_with_no_figure_does_not_engage_the_narrowing():
+    """The guard engaged and empty, which is worse than the guard off.
+
+    The narrowing was gated on `_HAS_CURRENCY`, which matches a bare "$" or the
+    word USD with no digit required. A product summary of exactly the shape the
+    ICP synthesizer is prompted to write — one or two sentences on what the
+    product is — names a currency and no price often enough: "Priced in USD on
+    annual contracts", "reconciles ledgers in USD, EUR and GBP". `prices` then
+    came back empty, every money span failed against it including the buyers'
+    own measured costs, and the `elif` warning branch was skipped, so the one
+    signal added specifically so silence would not read as safety never fired.
+    """
+    from structlog.testing import capture_logs
+
+    product = (
+        "Ledgerline turns month-end into a same-day close for multi-entity "
+        "finance teams. Priced in USD on annual contracts."
+    )
+
+    with capture_logs() as logs:
+        pack, replaced = scrub_unsourced(
+            _Pack(
+                rows=[
+                    _Row(
+                        respond="You told us NetSuite quoted $9,000 and you "
+                        "pay $400 a month today."
+                    )
+                ]
+            ),
+            "their words: NetSuite quoted us $9,000 and we pay $400 a month today.",
+            product_material=product,
+        )
+
+    assert replaced == []
+    assert "$9,000" in pack.rows[0].respond and "$400" in pack.rows[0].respond
+    entry = next(e for e in logs if e["event"] == "gtm_price_narrowing_inactive")
+    assert entry["reason"] == "founder material states no price"
+
+
+def test_a_price_written_in_words_still_engages_the_narrowing():
+    """The other half: "40 dollars a seat" is a stated price, and the check
+    that decides whether the founder named one has to read money written the
+    way `_CLAIM_SPAN` reads it, not just the symbols."""
+    from structlog.testing import capture_logs
+
+    founder = "Basecrate is 40 dollars a seat, billed annually."
+
+    with capture_logs() as logs:
+        pack, replaced = scrub_unsourced(
+            _Pack(rows=[_Row(respond="At 90 dollars a seat, the ROI is clear.")]),
+            MATERIAL + "\n their words: we were quoted 90 dollars a seat.",
+            product_material=founder,
+        )
+
+    assert replaced == ["90 dollars"]
+    assert not [e for e in logs if e["event"] == "gtm_price_narrowing_inactive"]
 
 
 def test_a_blank_the_model_already_wrote_is_left_alone():

@@ -164,6 +164,71 @@ def _context_block(archetype) -> str:
     return "\n" + "\n".join(lines) + "\n" if lines else ""
 
 
+def _agents_with_events(admin, simulation_id: str) -> set[str]:
+    """Ids of this run's agents that have already posted something.
+
+    Non-empty means the room ran. Rebuilding it would either destroy measured
+    data or land a second swarm with colliding handles — the attribution defect
+    migration 019 exists to prevent.
+    """
+    return {
+        str(row["agent_id"])
+        for row in (
+            admin.table("simulation_events")
+            .select("agent_id")
+            .eq("simulation_id", simulation_id)
+            .limit(1000)
+            .execute()
+        ).data or []
+        if row.get("agent_id")
+    }
+
+
+# Every sentence `run_prepare_agents` can end on, written for the founder.
+#
+# They are constants, and they are written here rather than left to
+# `_mark_simulation_failed`, because this worker now closes its own row: the
+# `on_failure` handler is conditional on the run still being in flight, so
+# whichever sentence lands here is the one the founder reads. Before that it
+# was overwritten by the generic "This run stopped before it finished", which
+# says nothing a founder can act on and — for the already-posted case — invites
+# exactly the retry that cannot work.
+ROOM_ALREADY_RAN_MESSAGE = (
+    "This run's people have already posted, so its room cannot be rebuilt "
+    "without losing what they said. Start a new run to test this idea again."
+)
+NO_PACKS_MESSAGE = (
+    "No groups of buyers were selected for this run, so there was nobody to "
+    "build. Pick at least one audience and try again."
+)
+NO_VALID_PACKS_MESSAGE = (
+    "None of the audiences selected for this run could be loaded — they may "
+    "have been deleted since. Pick an audience that still exists and try again."
+)
+NO_AGENTS_MESSAGE = (
+    "The audiences selected for this run produced nobody to build. Pick a "
+    "different audience, or add a platform, and try again."
+)
+GENERATION_FAILED_MESSAGE = (
+    "We could not build the people for this run — every attempt to write them "
+    "failed. Nothing was charged. Try again in a few minutes."
+)
+
+
+def _fail_preparation(admin, simulation_id: str, message: str) -> None:
+    """Close the run with a sentence, then let the caller raise.
+
+    Guarded like every other writer to this row: a run the reaper already
+    closed keeps the sentence the founder has already been shown.
+    """
+    admin.table("simulations").update({
+        "status": "failed",
+        "error_message": message,
+    }).eq("id", simulation_id).in_(
+        "status", ["queued", "preparing", "running", "analyzing"]
+    ).execute()
+
+
 async def run_prepare_agents(simulation_id: str):
     """Generate agents from persona packs (or fallback to ontology entities)."""
     admin = get_supabase_admin()
@@ -173,6 +238,30 @@ async def run_prepare_agents(simulation_id: str):
     platforms = sim.get("platforms") or ["twitter_x"]
     persona_pack_ids = sim.get("persona_pack_ids") or []
     target_agent_count = sim.get("agent_count") or 20
+
+    # **Before anything is spent, not after.**
+    #
+    # This check used to sit 94 lines below, immediately in front of the DELETE
+    # it protects — after `asyncio.gather` had already made one `llm_fast` call
+    # per agent, up to 1,000 at enterprise. And it is reachable in the ordinary
+    # way: `PREPARABLE_STATUSES` includes `failed`, the frontend's
+    # `IDLE_STATUSES` includes `failed`, so "Start the run →" renders on a run
+    # that died mid-execution — which has events. Every click regenerated the
+    # whole swarm on Saibyl's account and then refused, on a route that deducts
+    # nothing and is therefore bounded only by how many times somebody clicks.
+    #
+    # One query answers it, and it costs nothing. It stays duplicated below as
+    # well: that copy guards the DELETE against the window between here and
+    # there, and a destructive statement should not be protected from a
+    # distance.
+    if _agents_with_events(admin, simulation_id):
+        logger.warning(
+            "prepare_refused_room_already_ran",
+            simulation_id=simulation_id,
+            detail="refused before any agent was generated",
+        )
+        _fail_preparation(admin, simulation_id, ROOM_ALREADY_RAN_MESSAGE)
+        raise ValueError(ROOM_ALREADY_RAN_MESSAGE)
 
     admin.table("simulations").update({"status": "preparing"}).eq("id", simulation_id).execute()
     logger.info("prepare_agents_start", simulation_id=simulation_id, packs=len(persona_pack_ids))
@@ -232,7 +321,7 @@ async def run_prepare_agents(simulation_id: str):
         pass  # Ontology enrichment is optional
 
     if not persona_pack_ids:
-        admin.table("simulations").update({"status": "failed"}).eq("id", simulation_id).execute()
+        _fail_preparation(admin, simulation_id, NO_PACKS_MESSAGE)
         raise ValueError(
             "No persona packs selected. Please select at least one persona pack "
             "(built-in or custom) to run a simulation."
@@ -267,7 +356,7 @@ async def run_prepare_agents(simulation_id: str):
             logger.warning("pack_not_found", pack_id=pack_id, org_id=org_id)
 
     if not all_archetypes:
-        admin.table("simulations").update({"status": "failed"}).eq("id", simulation_id).execute()
+        _fail_preparation(admin, simulation_id, NO_VALID_PACKS_MESSAGE)
         raise ValueError("No valid persona packs found")
 
     # Two apportionments, both exact. The swarm is *split* across platforms
@@ -408,7 +497,7 @@ Return a JSON object:
                 }
 
     if not agent_specs:
-        admin.table("simulations").update({"status": "failed"}).eq("id", simulation_id).execute()
+        _fail_preparation(admin, simulation_id, NO_AGENTS_MESSAGE)
         raise ValueError("No agents to generate — check persona pack archetypes and platform selection")
 
     # Attributed to the agent_generation stage so the quote can be reconciled
@@ -476,7 +565,7 @@ Return a JSON object:
 
     # Guard: if zero agents were created, fail explicitly
     if not agents_to_create:
-        admin.table("simulations").update({"status": "failed"}).eq("id", simulation_id).execute()
+        _fail_preparation(admin, simulation_id, GENERATION_FAILED_MESSAGE)
         logger.error("prepare_agents_zero", simulation_id=simulation_id)
         raise ValueError("Agent generation produced 0 agents — all LLM calls failed")
 
@@ -510,28 +599,22 @@ Return a JSON object:
     # that ran. Rebuilding it would either destroy measured data or land a
     # second swarm with colliding handles — the attribution defect migration
     # 019 exists to prevent. So it refuses, in a sentence, instead.
-    posted = {
-        str(row["agent_id"])
-        for row in (
-            admin.table("simulation_events")
-            .select("agent_id")
-            .eq("simulation_id", simulation_id)
-            .limit(1000)
-            .execute()
-        ).data or []
-        if row.get("agent_id")
-    }
+    #
+    # The same question is now asked at the top of this function, before a
+    # single model call — that is where the money is saved. This copy stays
+    # because it guards the DELETE immediately below it against the window in
+    # between, and a destructive statement should not be protected from ninety
+    # lines away.
+    posted = _agents_with_events(admin, simulation_id)
     if posted:
         logger.warning(
             "prepare_refused_room_already_ran",
             simulation_id=simulation_id,
             agents_with_events=len(posted),
+            detail="the room began posting while this preparation was running",
         )
-        raise ValueError(
-            "This run's people have already posted, so its room cannot be "
-            "rebuilt without losing what they said. Start a new run to test "
-            "this idea again."
-        )
+        _fail_preparation(admin, simulation_id, ROOM_ALREADY_RAN_MESSAGE)
+        raise ValueError(ROOM_ALREADY_RAN_MESSAGE)
 
     # Past the guard, no agent of this run has an event, so "every agent of
     # this run" and "the ones it is safe to delete" are the same set.
@@ -1228,7 +1311,31 @@ async def run_simulation(simulation_id: str):
         # has to be reconciled.
         logger.exception("report_generation_failed", simulation_id=simulation_id)
 
-    reconciliation = reconcile_run_cost(simulation_id, org_id)
+    # Guarded, like the report above it and the write below it.
+    #
+    # This call sat bare between two try/excepts, and it is not a local
+    # computation: `reconcile_run_cost` selects `run_quotes` over the network
+    # and can call `deduct_credits` -> `admin.rpc('deduct_credits', ...)`. A
+    # transient PostgREST or RPC error propagated out of `run_simulation`, and
+    # `spawn`'s `on_failure` then rewrote a run whose events, analysis artifact
+    # and report were all stored and correct to `failed` — which is startable,
+    # so the founder paid full price a second time for work already delivered.
+    #
+    # `_mark_simulation_failed` now refuses to write over a `complete` row, so
+    # this is the second of two guards rather than the only one. Both belong:
+    # the status guard keeps the row honest, and this keeps a reconciliation
+    # problem from being reported as a run failure at all. The run is already
+    # complete and its cost is recoverable from `llm_usage`; the artifact is not.
+    try:
+        reconciliation = reconcile_run_cost(simulation_id, org_id)
+    except Exception:
+        logger.exception(
+            "run_cost_reconciliation_failed",
+            simulation_id=simulation_id,
+            detail="the run is complete and stored; only the cost "
+                   "reconciliation failed and it can be re-run from llm_usage",
+        )
+        reconciliation = {}
     try:
         admin.table("simulations").update({
             "retail_cost_usd": reconciliation.get("measured_cost_usd", 0.0),

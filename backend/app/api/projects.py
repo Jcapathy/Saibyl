@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.core.auth import get_current_org, require_can_destroy
-from app.core.database import fetch_all, get_supabase_admin
+from app.core.database import fetch_all, get_supabase_admin, maybe_one
 
 log = structlog.get_logger()
 
@@ -109,13 +109,11 @@ async def get_project(id: str, auth: dict = Depends(get_current_org)):
     """Get project details."""
     log.info("get_project", project_id=id)
     admin = get_supabase_admin()
-    result = (
+    result = maybe_one(
         admin.table("projects")
         .select("*")
         .eq("id", id)
         .eq("organization_id", auth["org_id"])
-        .single()
-        .execute()
     )
     if not result.data:
         raise HTTPException(status_code=404, detail="Project not found")

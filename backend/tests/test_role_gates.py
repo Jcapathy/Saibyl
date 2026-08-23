@@ -320,6 +320,36 @@ def test_no_handler_reaches_deduct_credits_without_a_spending_gate():
     assert not ungated, f"routes that spend with no role check: {ungated}"
 
 
+def test_no_handler_reaches_the_model_without_a_spending_gate():
+    """The other half of the scan above, and the half that was missing.
+
+    `deduct_credits(` finds routes that spend the *org's* balance. It cannot
+    find routes that spend **Saibyl's** — a handler that calls the model and
+    never meters it appears nowhere in the ledger, so the list below was
+    hand-maintained, was not derived from anything, and missed three siblings:
+    `POST /api/compare`, `POST /api/accuracy/score` and
+    `POST /api/persona-packs/custom`. All three took `get_current_org` alone,
+    so any authenticated account — a `viewer` included — could drive unbounded
+    Opus calls in a loop with no entry anywhere to notice.
+
+    Derived, so the fourth one fails here instead of in production.
+    """
+    ungated = []
+    for route in _routes():
+        try:
+            source = inspect.getsource(route.endpoint)
+        except (OSError, TypeError):
+            continue
+        if not any(
+            call in source for call in ("llm_complete(", "llm_fast(", "llm_vision(")
+        ):
+            continue
+        if not _is_gated(route, require_can_spend):
+            ungated.append(f"{sorted(route.methods)[0]} {route.path}")
+
+    assert not ungated, f"routes that call the model with no role check: {ungated}"
+
+
 @pytest.mark.parametrize("path", [
     # `run_discovery` deducts; the handler only calls it.
     "/api/gtm/discover",
@@ -338,6 +368,12 @@ def test_no_handler_reaches_deduct_credits_without_a_spending_gate():
     "/api/simulations/{id}/interview",
     "/api/simulations/{id}/interview/batch",
     "/api/simulations/{id}/interview/by-persona",
+    # The three the hand-list missed. They are named here as well as caught by
+    # the scan above, because a route losing its `llm_complete(` call to a
+    # helper would silently drop out of the scan and should fail loudly here.
+    "/api/compare",
+    "/api/accuracy/score",
+    "/api/persona-packs/custom",
 ])
 def test_the_routes_whose_spend_is_one_call_deeper_are_gated_too(path):
     """The hand-maintained tail of the scan above, listed rather than inferred."""

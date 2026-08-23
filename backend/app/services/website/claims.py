@@ -101,39 +101,86 @@ class UnsupportedClaim(BaseModel):
 # the false accusation this module's docstring calls its worst failure, and it
 # was live in three entries below; the alternations exist for that reason and
 # each new spelling has to be one a page could only mean as the badge.
+#
+# **The rule is the whole family, not the entry that was reported.** An entry
+# holding only the acronym has exactly the same asymmetry as the three that
+# were fixed one at a time: "authorised and regulated by the Financial Conduct
+# Authority" is the legally-standard sentence on essentially every UK fintech
+# page, so an FCA entry spelled `\bfca\b` alone tells the highest-value fintech
+# founder alive, in a paid artifact, that they fabricated their own regulator.
+# Every acronym below whose spelled-out name could only mean the badge now
+# carries both. The spelled-out name is safe to add in either direction — it is
+# long and unambiguous — but a bare acronym is not, so `MAS`, `MTL`, `PMA` and
+# `CBI` are deliberately absent for the reason `SEC`, `MDR` and `ASIC` are:
+# each collides with an ordinary word or an unrelated term, and a miss costs
+# less here than an accusation.
 _CERTIFICATIONS: tuple[tuple[str, str], ...] = (
     # Security and assurance
     ("SOC 1", r"\bsoc[\s-]?1\b"),
     ("SOC 2", r"\bsoc[\s-]?2\b"),
-    ("SSAE 18", r"\bssae[\s-]?18\b"),
+    (
+        "SSAE 18",
+        r"\bssae[\s-]?(?:no\.?\s*)?18\b"
+        r"|\bstatement\s+on\s+standards\s+for\s+attestation\s+engagements\b",
+    ),
     ("ISO 27001", r"\biso(?:/iec)?[\s-]?27001\b"),
     ("ISO 9001", r"\biso[\s-]?9001\b"),
     ("ISO 13485", r"\biso[\s-]?13485\b"),
-    ("PCI DSS", r"\bpci(?:[\s-]?dss)?\b"),
-    ("FedRAMP", r"\bfedramp\b"),
+    # The whole standard's name, not the first three words of it: "built for
+    # the payment card industry" is a sector, not a badge, and half the entry
+    # would have accused a payments founder of claiming PCI DSS for saying who
+    # they sell to.
+    (
+        "PCI DSS",
+        r"\bpci(?:[\s-]?dss)?\b"
+        r"|\bpayment\s+card\s+industry\s+data\s+security\s+standard\b",
+    ),
+    (
+        "FedRAMP",
+        r"\bfedramp\b"
+        r"|\bfederal\s+risk\s+and\s+authori[sz]ation\s+management\s+program\b",
+    ),
     ("HITRUST", r"\bhitrust\b"),
     ("CSA STAR", r"\bcsa\s+star\b"),
-    ("NIST 800-53", r"\bnist\s+800[\s-]?53\b"),
+    # "NIST SP 800-53" is how NIST itself writes it; "NIST 800-53" is how a
+    # rewrite compresses it.
+    ("NIST 800-53", r"\bnist\s+(?:sp\s+)?800[\s-]?53\b"),
     ("Cyber Essentials", r"\bcyber\s+essentials\b"),
     ("TISAX", r"\btisax\b"),
     # Privacy
-    ("HIPAA", r"\bhipaa\b"),
-    ("GDPR", r"\bgdpr\b"),
-    ("CCPA", r"\bccpa\b"),
+    (
+        "HIPAA",
+        r"\bhipaa\b|\bhealth\s+insurance\s+portability\s+and\s+accountability\s+act\b",
+    ),
+    ("GDPR", r"\bgdpr\b|\bgeneral\s+data\s+protection\s+regulation\b"),
+    ("CCPA", r"\bccpa\b|\bcalifornia\s+consumer\s+privacy\s+act\b"),
     ("Data Privacy Framework", r"\b(?:eu[\s-]us\s+)?data\s+privacy\s+framework\b"),
     ("Privacy Shield", r"\bprivacy\s+shield\b"),
-    ("COPPA", r"\bcoppa\b"),
-    ("FERPA", r"\bferpa\b"),
+    (
+        "COPPA",
+        r"\bcoppa\b|\bchildren'?s?\s+online\s+privacy\s+protection\s+act\b",
+    ),
+    (
+        "FERPA",
+        r"\bferpa\b|\bfamily\s+educational\s+rights\s+and\s+privacy\s+act\b",
+    ),
     # Financial regulators and licences
-    ("FCA", r"\bfca\b"),
-    ("FinCEN", r"\bfincen\b"),
+    ("FCA", r"\bfca\b|\bfinancial\s+conduct\s+authority\b"),
+    ("FinCEN", r"\bfincen\b|\bfinancial\s+crimes\s+enforcement\s+network\b"),
     ("money transmitter licence", r"\bmoney\s+transmitter\b"),
-    ("money services business", r"\bmoney\s+services\s+business\b"),
+    # "MSB" alone is too short to be safe; qualified by registration or a
+    # licence it can only mean the badge.
+    (
+        "money services business",
+        r"\bmoney\s+services\s+business\b"
+        r"|\b(?:registered|licen[cs]ed)\s+msb\b"
+        r"|\bmsb\s+(?:registration|registered|licen[cs]ed?)\b",
+    ),
     ("Central Bank of Ireland", r"\bcentral\s+bank\s+of\s+ireland\b"),
-    ("BaFin", r"\bbafin\b"),
+    ("BaFin", r"\bbafin\b|\bbundesanstalt\s+f[üu]r\s+finanzdienstleistungsaufsicht\b"),
     ("Monetary Authority of Singapore", r"\bmonetary\s+authority\s+of\s+singapore\b"),
     ("MiCA", r"\bmica\b"),
-    ("PSD2", r"\bpsd\s?2\b"),
+    ("PSD2", r"\bpsd\s?2\b|\bpayment\s+services\s+directive\b"),
     (
         "e-money licence",
         r"\b(?:e[\s-]?money|electronic\s+money)\s+(?:licen[cs]e|institution)\b"
@@ -146,22 +193,34 @@ _CERTIFICATIONS: tuple[tuple[str, str], ...] = (
         r"\bsecurities\s+and\s+exchange\s+commission\b|\bsec[\s-]registered\b"
         r"|\bregistered\s+with\s+the\s+sec\b",
     ),
-    ("FINRA", r"\bfinra\b"),
-    ("SIPC", r"\bsipc\b"),
-    ("FDIC", r"\bfdic\b"),
-    ("NCUA", r"\bncua\b"),
+    ("FINRA", r"\bfinra\b|\bfinancial\s+industry\s+regulatory\s+authority\b"),
+    ("SIPC", r"\bsipc\b|\bsecurities\s+investor\s+protection\s+corporation\b"),
+    ("FDIC", r"\bfdic\b|\bfederal\s+deposit\s+insurance\s+corporation\b"),
+    ("NCUA", r"\bncua\b|\bnational\s+credit\s+union\s+administration\b"),
     # Medical and clinical
     (
         "FDA clearance",
         r"\bfda[\s-]?(?:cleared|approved|clearance|approval)\b"
-        r"|\b(?:cleared|approved)\s+by\s+the\s+fda\b",
+        r"|\b(?:cleared|approved)\s+by\s+the\s+(?:u\.?\s?s\.?\s+)?fda\b"
+        r"|\b(?:cleared|approved)\s+by\s+the\s+(?:u\.?\s?s\.?\s+)?"
+        r"food\s+and\s+drug\s+administration\b"
+        r"|\bfood\s+and\s+drug\s+administration[\s-]?"
+        r"(?:cleared|approved|clearance|approval)\b",
     ),
-    ("510(k)", r"\b510\s?\(\s?k\s?\)"),
-    ("De Novo", r"\bde\s+novo\s+(?:clearance|classification)\b"),
+    # "510k" is the founder's spelling of "510(k)". The lookbehind is what
+    # keeps it off a money figure: "$510k in payouts" is not a clearance.
+    ("510(k)", r"\b510\s?\(\s?k\s?\)|(?<![$£€\d.,])\b510[\s-]?k\b"),
+    (
+        "De Novo",
+        r"\bde\s+novo\s+(?:clearance|classification|authori[sz]ation|request)\b",
+    ),
     ("premarket approval", r"\bpremarket\s+approval\b"),
     ("CE mark", r"\bce[\s-]mark(?:ed|ing)?\b"),
     ("EU MDR", r"\bmedical\s+device\s+regulation\b|\beu\s+mdr\b"),
-    ("CLIA", r"\bclia\b"),
+    (
+        "CLIA",
+        r"\bclia\b|\bclinical\s+laboratory\s+improvement\s+amendments\b",
+    ),
     # Both word orders. The compressed form is the rewrite's voice; "accredited
     # by the College of American Pathologists" is how a lab actually writes it,
     # and matching only the first meant a founder who wrote it the second way
@@ -174,7 +233,7 @@ _CERTIFICATIONS: tuple[tuple[str, str], ...] = (
     ("AES-256", r"\baes[\s-]?256\b|\b256[\s-]bit\s+aes\b"),
     ("TLS", r"\btls\s?1\.\d\b"),
     # Accessibility conformance
-    ("WCAG", r"\bwcag\b"),
+    ("WCAG", r"\bwcag\b|\bweb\s+content\s+accessibility\s+guidelines\b"),
     ("Section 508", r"\bsection\s+508\b"),
     # Intellectual property, which is a legal assertion of its own
     ("patented", r"\bpatented\b"),
@@ -215,8 +274,17 @@ _NOT_A_MODIFIER = r"days?|weeks?|months?|years?|hours?|minutes?|seconds?|times?|
 #: wrote the first must not be told they invented the second. The count and the
 #: noun are captured separately for exactly that reason — the describing words
 #: are dropped from the key, so the two spellings compare equal.
+#:
+#: The "+" is a suffix on the count, not an alternative to the magnitude
+#: letter. Spelled as an alternative it fitted "4,000+ teams" and then blocked
+#: "50k+ creators" outright — the magnitude letter had already been consumed,
+#: so the "+" ended the match before the noun and a wholly fabricated "Join
+#: 50k+ creators" was never flagged at all. `_figure_key` drops it, so "4,000
+#: teams" and "4,000+ teams" are one claim in either direction: adding or
+#: dropping the "+" is the most likely thing a copy rewriter does to the most
+#: common social-proof line on a landing page.
 _SCALE = re.compile(
-    rf"(\d[\d,]*(?:\.\d+)?\s?(?:\+|k|m|million|billion)?)"
+    rf"(\d[\d,]*(?:\.\d+)?\s?(?:k|m|million|billion)?\+?)"
     rf"\s+(?:(?!(?:{_NOT_A_MODIFIER})\b)[a-z][a-z-]*\s+){{0,2}}"
     rf"({_SCALE_NOUNS})\b",
     re.I,
@@ -238,10 +306,21 @@ def _normalise(text: str) -> str:
     differ only cosmetically folded together.
 
     `visible_copy` runs on both sides even though the source is usually already
-    plain extracted text: it is a no-op on text without tags, and it is the
-    only thing standing between this check and a caller that hands it raw HTML
-    — in which case a `<style>` block full of percentages would count as
-    evidence for any percentage the page cared to claim.
+    plain extracted text: it is the only thing standing between this check and
+    a caller that hands it raw HTML — in which case a `<style>` block full of
+    percentages would count as evidence for any percentage the page cared to
+    claim.
+
+    It is safe on the source side only because `visible_copy` strips
+    *well-formed* markup and nothing else. It did not: `<[^>]+>` read the "<"
+    in "Setup takes <5 minutes" as a tag opening and deleted everything up to
+    the next ">" — a "Learn more >" or a breadcrumb, three sentences later —
+    taking the founder's own price and their own metric out of the evidence
+    with it. `unsupported_claims` then reported both back to them as invented,
+    and `claim_complaint` ordered a whole-document rewrite replacing them with
+    `[OWNER: fill in]`, so the delivered page lost the real price. The
+    tag-shape rule lives in `style_guide._TAG`; this docstring used to claim
+    the pass was "a no-op on text without tags", which was the false premise.
     """
     folded = visible_copy(text or "")
     folded = folded.lower()
@@ -278,11 +357,16 @@ _MAGNITUDES: dict[str, int] = {
 }
 
 #: A figure split into the parts that decide whether two of them are one claim:
-#: the currency it is in, the number, the magnitude it carries, and the unit it
-#: is measured in.
+#: the currency it is in, the number, the magnitude it carries, an "or more"
+#: mark, and the unit it is measured in.
+#:
+#: The "+" is matched so it can be **dropped**. Without it here the pattern
+#: simply failed on "4,000+", `_figure_key` fell through to the string path and
+#: returned "4000+" against the source's "4000", and the founder's own customer
+#: count came back as an invented one.
 _FIGURE_PARTS = re.compile(
     r"^(?P<prefix>[$£€]?)(?P<number>\d+(?:\.\d+)?)"
-    r"(?P<magnitude>million|billion|bn|k|m|b)?(?P<suffix>[%¢]?)$"
+    r"(?P<magnitude>million|billion|bn|k|m|b)?\+?(?P<suffix>[%¢]?)$"
 )
 
 
@@ -291,7 +375,10 @@ def _figure_key(token: str) -> str:
 
     `$1,200`, `$ 1200` and `$1,200.00` are one claim; spacing and thousands
     separators are typography. The trailing zeros go too, so a source that
-    writes `2.9%` covers a render that writes `2.90%`.
+    writes `2.9%` covers a render that writes `2.90%`. So is the "or more"
+    mark: `4,000 teams` and `4,000+ teams` are the same claim about the
+    business, and a rewrite that adds or drops the `+` has not invented a
+    customer count.
 
     **The magnitude word is arithmetic, not typography, so it is multiplied out
     rather than left in the key.** Compressing `$5 million` to `$5M` is the

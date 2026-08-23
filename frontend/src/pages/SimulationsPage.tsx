@@ -10,9 +10,11 @@ import {
   Download,
   FlaskConical,
   ArrowUpDown,
+  AlertTriangle,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import api, { unwrapList } from '@/lib/api';
+import { getErrorMessage } from '@/lib/errors';
 import { ACTIVE_STATUSES, SIMULATION_STATUSES } from '@/lib/constants';
 import { isFinished } from '@/lib/status';
 import type { Simulation } from '@/types';
@@ -128,6 +130,9 @@ export default function SimulationsPage() {
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  // What the server said when a delete was refused. Rendered above the table,
+  // because a delete that quietly does nothing reads as a broken button.
+  const [deleteError, setDeleteError] = useState('');
   const menuRef = useRef<HTMLTableCellElement>(null);
 
   /* --- fetch ------------------------------------------------------ */
@@ -258,7 +263,25 @@ export default function SimulationsPage() {
       )
     )
       return;
-    await Promise.all(ids.map((id) => api.delete(`/simulations/${id}`)));
+    setDeleteError('');
+    // `allSettled`, and the refusals are read.
+    //
+    // `DELETE /simulations/{id}` now answers 409 when the run is the "before"
+    // for a re-simulation — deleting it would cascade away a before/after the
+    // founder paid for and cannot rebuild. With `Promise.all` and no catch that
+    // rejection was unhandled: the delete silently did nothing, the selection
+    // was never cleared, and the list was never refetched, so the run appeared
+    // to survive for no stated reason. A guard on one side of a two-call
+    // contract is not a guard.
+    const outcomes = await Promise.allSettled(
+      ids.map((id) => api.delete(`/simulations/${id}`)),
+    );
+    const refused = outcomes
+      .filter((o): o is PromiseRejectedResult => o.status === 'rejected')
+      .map((o) => getErrorMessage(o.reason, 'We could not delete that run.'));
+    if (refused.length) {
+      setDeleteError(Array.from(new Set(refused)).join(' '));
+    }
     setSelected(new Set());
     setOpenMenu(null);
     refetchSims();
@@ -336,6 +359,17 @@ export default function SimulationsPage() {
           <Plus className="w-4 h-4" /> New run
         </Link>
       </div>
+
+      {/* ---- A delete the server refused, in its own words ---- */}
+      {deleteError && (
+        <div
+          role="alert"
+          className="mb-4 flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+        >
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>{deleteError}</span>
+        </div>
+      )}
 
       {/* ---- Toolbar ---- */}
       <div className="flex items-center gap-4 mb-4 flex-wrap">

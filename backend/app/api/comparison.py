@@ -4,8 +4,8 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from app.core.auth import get_current_org
-from app.core.database import fetch_all, get_supabase_admin
+from app.core.auth import require_can_spend
+from app.core.database import fetch_all, get_supabase_admin, maybe_one
 from app.core.llm_client import llm_complete
 from app.services.intelligence.analysis_data import load_run_data, mean_interval
 
@@ -35,8 +35,17 @@ def _sentiment_line(summary: dict) -> str:
 
 
 @router.post("")
-async def compare_simulations(body: CompareSimsBody, auth: dict = Depends(get_current_org)):
-    """Compare multiple simulation runs side-by-side with LLM analysis."""
+async def compare_simulations(body: CompareSimsBody, auth: dict = Depends(require_can_spend)):
+    """Compare multiple simulation runs side-by-side with LLM analysis.
+
+    **Gated, and it was not.** This route calls `llm_complete` and never touches
+    `deduct_credits` — the comparison is not metered anywhere — so the static
+    scan that catches routes which spend the *ledger* could not see it, and it
+    took `get_current_org` alone. A `viewer` could drive it in a loop: five full
+    `load_run_data` reads plus an Opus call per request, on Saibyl's own
+    account, with no entry anywhere to notice. Spending model calls is spending;
+    the gate is the same one `/prepare` and `/reports/generate` already carry.
+    """
     if len(body.simulation_ids) < 2:
         raise HTTPException(status_code=400, detail="Need at least 2 simulations to compare")
     if len(body.simulation_ids) > 5:
@@ -46,9 +55,9 @@ async def compare_simulations(body: CompareSimsBody, auth: dict = Depends(get_cu
     summaries = []
 
     for sim_id in body.simulation_ids:
-        sim = admin.table("simulations").select("*").eq(
+        sim = maybe_one(admin.table("simulations").select("*").eq(
             "id", sim_id
-        ).eq("organization_id", auth["org_id"]).single().execute()
+        ).eq("organization_id", auth["org_id"]))
         if not sim.data:
             raise HTTPException(status_code=404, detail=f"Simulation {sim_id} not found")
 

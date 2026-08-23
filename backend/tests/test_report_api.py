@@ -44,6 +44,7 @@ class _Table:
         self._op = "select"
         self._payload = None
         self._single = False
+        self._filters: list[tuple[str, set]] = []
 
     def select(self, *_a, **_k):
         return self
@@ -56,11 +57,23 @@ class _Table:
         self._op, self._payload = "update", payload
         return self
 
-    def eq(self, *_a):
+    def eq(self, column, value):
+        self._filters.append((column, {value}))
         return self
 
-    def in_(self, *_a):
+    def in_(self, column, values):
+        # A no-op here made every test in this file blind in both directions:
+        # a route that filtered on the wrong statuses and a route that filtered
+        # on none at all produced identical fixtures. The phantom-report defect
+        # sat behind exactly that.
+        self._filters.append((column, set(values)))
         return self
+
+    def _matching(self, rows):
+        return [
+            row for row in rows
+            if all(row.get(col) in wanted for col, wanted in self._filters)
+        ]
 
     def order(self, *_a, **_k):
         return self
@@ -76,8 +89,8 @@ class _Table:
         if self._op in ("insert", "update"):
             self._log.append((self._name, self._op, self._payload))
             return SimpleNamespace(data=[self._payload])
-        rows = self._store.get(self._name, [])
-        return SimpleNamespace(data=(rows[0] if self._single else list(rows)))
+        rows = self._matching(self._store.get(self._name, []))
+        return SimpleNamespace(data=(rows[0] if (self._single and rows) else list(rows)))
 
 
 class _Admin:
@@ -86,6 +99,25 @@ class _Admin:
 
     def table(self, name: str):
         return _Table(name, self.store, self.writes)
+
+
+def _sim(**over):
+    """A run the caller's org owns.
+
+    Carries `organization_id` because the route scopes on it — the fake used to
+    ignore filters, so a fixture missing the column matched anyway and the
+    tenancy filter was untested here.
+    """
+    row = {"id": SIM, "organization_id": ORG}
+    row.update(over)
+    return row
+
+
+def _report(**over):
+    row = {"id": "rep-1", "simulation_id": SIM, "organization_id": ORG,
+           "status": "generating"}
+    row.update(over)
+    return row
 
 
 @pytest.fixture
@@ -119,7 +151,7 @@ def spawned(monkeypatch):
 def test_a_caller_chosen_section_count_is_bounded(owner, monkeypatch, spawned):
     """`max_sections: 500` returned 200 and became the outline size."""
     monkeypatch.setattr(
-        reports_api, "get_supabase_admin", lambda: _Admin({"simulations": [{"id": SIM}]})
+        reports_api, "get_supabase_admin", lambda: _Admin({"simulations": [_sim()]})
     )
 
     response = owner.post("/api/reports/generate", json={
@@ -136,7 +168,7 @@ def test_an_evidence_depth_the_worker_cannot_accept_is_refused_at_the_edge(
     """The API said `str`, `ReACTConfig` says `Literal`, and the two disagreeing
     is what produced a report that never existed and never failed."""
     monkeypatch.setattr(
-        reports_api, "get_supabase_admin", lambda: _Admin({"simulations": [{"id": SIM}]})
+        reports_api, "get_supabase_admin", lambda: _Admin({"simulations": [_sim()]})
     )
 
     response = owner.post("/api/reports/generate", json={
@@ -150,7 +182,7 @@ def test_an_evidence_depth_the_worker_cannot_accept_is_refused_at_the_edge(
 def test_a_report_within_the_bounds_still_starts(owner, monkeypatch, spawned):
     """The bounds must refuse the abuse, not the feature."""
     monkeypatch.setattr(
-        reports_api, "get_supabase_admin", lambda: _Admin({"simulations": [{"id": SIM}]})
+        reports_api, "get_supabase_admin", lambda: _Admin({"simulations": [_sim()]})
     )
 
     response = owner.post("/api/reports/generate", json={
@@ -166,7 +198,7 @@ def test_a_report_within_the_bounds_still_starts(owner, monkeypatch, spawned):
 
 def test_the_spawn_carries_a_failure_handler(owner, monkeypatch, spawned):
     monkeypatch.setattr(
-        reports_api, "get_supabase_admin", lambda: _Admin({"simulations": [{"id": SIM}]})
+        reports_api, "get_supabase_admin", lambda: _Admin({"simulations": [_sim()]})
     )
 
     owner.post("/api/reports/generate", json={"simulation_id": SIM})
@@ -201,7 +233,7 @@ def test_a_report_that_died_before_its_row_existed_still_gets_a_row(monkeypatch)
 
 
 def test_a_report_that_died_mid_write_is_marked_rather_than_duplicated(monkeypatch):
-    admin = _Admin({"reports": [{"id": "rep-1", "status": "generating"}]})
+    admin = _Admin({"reports": [_report(status="generating")]})
     monkeypatch.setattr(reports_api, "get_supabase_admin", lambda: admin)
 
     reports_api._mark_report_failed(SIM, ORG)(RuntimeError("supabase blip"))
@@ -237,8 +269,8 @@ def test_a_second_report_is_refused_while_one_is_generating(
     Saibyl's own account with no ledger entry anywhere to notice it.
     """
     admin = _Admin({
-        "simulations": [{"id": SIM}],
-        "reports": [{"id": "rep-1", "status": "generating"}],
+        "simulations": [_sim()],
+        "reports": [_report(status="generating")],
     })
     monkeypatch.setattr(reports_api, "get_supabase_admin", lambda: admin)
 
@@ -249,11 +281,44 @@ def test_a_second_report_is_refused_while_one_is_generating(
     assert spawned == [], "a second report writer was started"
 
 
+def test_a_row_the_worker_already_failed_is_not_duplicated(monkeypatch):
+    """The phantom report, and it landed on the recovery path.
+
+    `generate_report` writes `status='failed'` on its way out and then
+    re-raises, so this handler ran against a row that was already `failed` — a
+    state its in-flight filter could not see. It inserted a second row;
+    `GET /reports/by-simulation` returns the newest; the newest was the phantom
+    and had no sections. A report that died after writing four of five sections
+    rendered as "Nobody has written this up yet", hiding the real one.
+
+    Wired only to the "Write it up again" button, so it fired on somebody
+    already recovering from one failure.
+    """
+    admin = _Admin({"reports": [_report(status="failed", error_message="ran out")]})
+    monkeypatch.setattr(reports_api, "get_supabase_admin", lambda: admin)
+
+    reports_api._mark_report_failed(SIM, ORG)(RuntimeError("re-raised"))
+
+    assert admin.writes == [], (
+        "a second reports row was written beside one the worker had already "
+        "closed, and the newest is what the founder is shown"
+    )
+
+
+def test_a_completed_report_is_never_overwritten_by_a_late_failure(monkeypatch):
+    admin = _Admin({"reports": [_report(status="complete")]})
+    monkeypatch.setattr(reports_api, "get_supabase_admin", lambda: admin)
+
+    reports_api._mark_report_failed(SIM, ORG)(RuntimeError("late blip"))
+
+    assert admin.writes == []
+
+
 def test_regenerating_a_finished_report_is_allowed(owner, monkeypatch, spawned):
     """`complete` and `failed` are deliberately not blocked — regenerating a
     finished or broken write-up is a thing a founder legitimately wants."""
     admin = _Admin({
-        "simulations": [{"id": SIM}],
+        "simulations": [_sim()],
         "reports": [],  # the in_() filter matches nothing
     })
     monkeypatch.setattr(reports_api, "get_supabase_admin", lambda: admin)

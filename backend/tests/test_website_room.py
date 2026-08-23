@@ -291,6 +291,48 @@ def _snapshot(**overrides) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# HTML → text: a "less than" is copy, not a tag
+# ---------------------------------------------------------------------------
+
+def test_a_literal_angle_bracket_in_the_copy_is_not_read_as_a_tag():
+    """The same defect `style_guide.visible_copy` carried, in the other strip.
+
+    `<[^>]+>` treats any literal "<" as a tag opening and deletes everything up
+    to the next ">" — so "Setup takes <5 minutes" plus a "Learn more >" further
+    down deleted every sentence between them. A browser renders both as copy
+    (HTML only starts a tag when a name follows the "<"), so the room would
+    have been shown a page the founder's visitors never see, and this text is a
+    stored artifact the before/after cites.
+    """
+    html = (
+        "<!doctype html><html><body>"
+        "<h1>Acme Payroll</h1>"
+        "<p>Setup takes <5 minutes and churn is <1%.</p>"
+        "<p>Plans start at $29 per month.</p>"
+        "<a href='/docs'>Read the docs ></a>"
+        "</body></html>"
+    )
+
+    body = room_run.page_text(html)
+
+    assert "Setup takes <5 minutes" in body
+    assert "$29 per month" in body, "the founder's own price was deleted as markup"
+    assert "Read the docs >" in body
+    assert "href" not in body, "real markup must still go"
+
+
+def test_well_formed_markup_is_still_stripped_from_the_room_copy():
+    """The widening may not cost the strip the asset depends on."""
+    body = room_run.page_text(REVISION_HTML)
+
+    assert "console.log" not in body
+    assert "color:red" not in body
+    assert "build 42" not in body
+    assert "<em>" not in body and "<h1>" not in body
+    assert room_run.page_title(REVISION_HTML) == "Ship the answer, not the homework"
+
+
+# ---------------------------------------------------------------------------
 # Eligibility encodes the machinery's real preconditions
 # ---------------------------------------------------------------------------
 

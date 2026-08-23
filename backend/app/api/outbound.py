@@ -32,7 +32,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.core.auth import get_current_org, require_can_spend
-from app.core.database import get_supabase_admin
+from app.core.database import get_supabase_admin, maybe_one
 from app.core.tasks import spawn
 from app.services.billing.agent_pricing import (
     deduct_credits,
@@ -60,10 +60,15 @@ def _mark_failed(sequence_id: str) -> Callable[[Exception], None]:
     """
     def _mark(exc: Exception) -> None:
         log.error("outbound_worker_died", sequence_id=sequence_id, error=str(exc))
+        # Conditional on the row still being in flight — the same guard every
+        # other writer to this family carries, and the same states the reaper's
+        # `outbound_sequences` rule watches. `run_outbound_sequences` writes
+        # `complete` outside its own `except Exception`, so a finished row can
+        # reach here.
         get_supabase_admin().table("outbound_sequences").update({
             "status": "failed",
             "error_message": GENERIC_FAILURE_MESSAGE,
-        }).eq("id", sequence_id).execute()
+        }).eq("id", sequence_id).in_("status", ["queued", "building"]).execute()
     return _mark
 
 
@@ -73,13 +78,11 @@ async def build_sequences(body: BuildBody, auth: dict = Depends(require_can_spen
     admin = get_supabase_admin()
     org_id = auth["org_id"]
 
-    sim = (
+    sim = maybe_one(
         admin.table("simulations")
         .select("id, name")
         .eq("id", body.simulation_id)
         .eq("organization_id", org_id)
-        .single()
-        .execute()
     )
     if not sim.data:
         raise HTTPException(status_code=404, detail="We could not find that run.")
@@ -176,13 +179,11 @@ async def sequences_for_simulation(simulation_id: str, auth: dict = Depends(get_
 @router.get("/{sequence_id}")
 async def get_sequences(sequence_id: str, auth: dict = Depends(get_current_org)):
     admin = get_supabase_admin()
-    result = (
+    result = maybe_one(
         admin.table("outbound_sequences")
         .select("*")
         .eq("id", sequence_id)
         .eq("organization_id", auth["org_id"])
-        .single()
-        .execute()
     )
     if not result.data:
         raise HTTPException(status_code=404, detail="We could not find those sequences.")

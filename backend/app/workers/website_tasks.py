@@ -128,23 +128,41 @@ async def run_website_check(snapshot_id: str, organization_id: str) -> None:
         # dropped the comparison would not be the check they paid for.
         reference_capture = None
         if snapshot.get("reference_url"):
+            # **Both of these refund, on the same argument as the page's own
+            # capture above.** They did not, and the asymmetry was not a
+            # decision — the comment above says the refund is for a failure
+            # "before spending anything", and nothing has been spent here
+            # either: `upload_screenshots` is below, `run_critic_gauntlet` is
+            # below that, and a `capture_website` call is a browser, not a
+            # model. The founder named a site they admire, that site turned a
+            # reader away, and they were charged 1,750 credits for it.
             try:
                 reference_capture = await capture_website(snapshot["reference_url"])
             except WebsiteCaptureError as exc:
-                _record_failure(snapshot_id, REFERENCE_FAILURE_PREFIX + str(exc))
+                if _record_failure(snapshot_id, REFERENCE_FAILURE_PREFIX + str(exc)):
+                    refund_credits(
+                        organization_id,
+                        int(snapshot.get("credits_charged") or 0),
+                        reason="website_reference_capture_failed_before_any_model_call",
+                    )
                 return
             # Bot walls return a tiny challenge page with a 200: the fetch
             # "succeeds" and the critics would measure a CAPTCHA instead of the
             # admired design. Found live when linear.app returned an 18KB
             # not-Linear. A near-empty reference is a failed reference.
             if len(reference_capture.dom_text or "") < 400:
-                _record_failure(
+                if _record_failure(
                     snapshot_id,
                     REFERENCE_FAILURE_PREFIX
                     + "that site blocked automated readers, so there was "
                     "nothing real to measure against. Try another site you "
                     "admire.",
-                )
+                ):
+                    refund_credits(
+                        organization_id,
+                        int(snapshot.get("credits_charged") or 0),
+                        reason="website_reference_blocked_before_any_model_call",
+                    )
                 return
 
         paths = await upload_screenshots(

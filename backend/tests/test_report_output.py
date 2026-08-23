@@ -637,3 +637,122 @@ def test_a_section_quoting_json_inline_is_still_prose():
 def test_an_empty_response_is_not_prose():
     assert not report_agent._looks_like_prose("")
     assert not report_agent._looks_like_prose("   \n  ")
+
+
+# ── and the guard belongs at every place a section is returned ───────
+#
+# The guard was added to one of the loop's two answer branches. A section can
+# be returned from three places — an `ANSWER:`-marked reply, an unmarked one,
+# and the forced answer after the tool budget runs out — and only the unmarked
+# one was checked. The in-loop comment ("the loop is bounded and ends at the
+# forced answer below, so this cannot spin") assumed the forced answer was
+# safe. A model prone to echoing echoes on the last turn too.
+
+ECHO = (
+    "<results>\n[{'tool': 'simulation_analytics', 'type': "
+    "'sentiment_over_time', 'data': {'rounds': [{'round': 1, 'mean': -0.24}, "
+    "{'round': 2, 'mean': -0.28}], 'objections_"
+)
+
+SHALLOW = ReACTConfig(evidence_depth="shallow")  # 2 tool calls, then forced
+
+
+def _echoing_model(monkeypatch, reply: str, *, then: str | None = None) -> list[str]:
+    """A model whose every reply is the incident's own shape.
+
+    `then` is the last word — what the forced answer comes back with once the
+    tool budget is spent.
+    """
+    calls: list[str] = []
+
+    async def _analytics(_sim_id, atype):
+        return _Analytics(atype)
+
+    async def _echo(messages, **kwargs):
+        calls.append(messages[-1]["content"])
+        if then is not None and len(calls) > SHALLOW.resolved().max_tool_calls_per_section:
+            return then
+        return reply
+
+    monkeypatch.setattr(report_agent, "simulation_analytics", _analytics)
+    monkeypatch.setattr(report_agent, "llm_complete", _echo)
+    return calls
+
+
+async def _section(config=SHALLOW) -> str:
+    return await report_agent._run_react_loop(
+        report_agent.SectionPlan(
+            title="Platform dynamics", research_angles=["who reacted how"]
+        ),
+        "00000000-0000-0000-0000-000000000001",
+        "will freelancers pay for this",
+        config,
+        platforms="reddit",
+    )
+
+
+@pytest.mark.asyncio
+async def test_the_forced_answer_may_not_ship_raw_tool_echo(monkeypatch):
+    """The exact repro: the in-loop branch refuses the echo twice, then the
+    forced answer hands the same payload back and it went to
+    `report_sections.content` with status `complete`."""
+    calls = _echoing_model(monkeypatch, ECHO)
+
+    with capture_logs() as logs:
+        result = await _section()
+
+    assert len(calls) == 3, "two loop turns and the forced answer"
+    assert not result.startswith("<results>")
+    assert "'tool': 'simulation_analytics'" not in result
+    assert "could not be produced" in result, (
+        "a named gap is a smaller loss than 10,000 characters of JSON"
+    )
+    refused = next(
+        e for e in logs
+        if e["event"] == "report_section_forced_answer_was_tool_output"
+    )
+    assert refused["section"] == "Platform dynamics"
+    assert refused["log_level"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_the_answer_marker_does_not_launder_an_echo(monkeypatch):
+    """The twin. `ANSWER:` is not evidence that a section follows it, and the
+    forced prompt demands the marker — which makes a marked echo the likelier
+    one. Only the *unmarked* branch was ever checked."""
+    calls = _echoing_model(monkeypatch, f"ANSWER:\n{ECHO}")
+
+    with capture_logs() as logs:
+        result = await _section()
+
+    assert len(calls) == 3, (
+        "a marked echo was returned as the section on the first turn"
+    )
+    assert "'tool': 'simulation_analytics'" not in result
+    assert "could not be produced" in result
+    assert sum(
+        1 for e in logs if e["event"] == "report_section_answer_was_tool_output"
+    ) == 2, "the marked echo was not fed back as an observation"
+
+
+@pytest.mark.asyncio
+async def test_a_written_forced_answer_still_ships(monkeypatch):
+    """The guard must not cost a founder a section that was actually written.
+    The safe path stays the default; only the echo is refused. Two tool calls
+    spend the budget, so this answer arrives on the forced call itself."""
+    written = (
+        "## Platform dynamics\n\n**Reddit carried the argument.** Sentiment "
+        "closed at -0.64 after five rounds, and the client-relationship "
+        "objection was raised by more buyers than price."
+    )
+    calls = _echoing_model(
+        monkeypatch,
+        "TOOL: simulation_analytics(sentiment_over_time)",
+        then=f"ANSWER: {written}",
+    )
+
+    result = await _section()
+
+    assert len(calls) == 3, "the answer did not come from the forced call"
+    assert result.startswith("## Platform dynamics")
+    assert "could not be produced" not in result

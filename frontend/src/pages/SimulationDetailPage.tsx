@@ -290,7 +290,16 @@ export default function SimulationDetailPage() {
         setSim(r.data);
         if (r.data.status === 'ready') { ready = true; break; }
         if (r.data.status === 'failed') {
-          setError('We could not build the room. Check that you picked at least one group of buyers.');
+          // The row's own sentence first. The worker writes one for every way
+          // preparation can end — including "this run's people have already
+          // posted", which is the one case a retry provably cannot fix. This
+          // branch used to guess instead, so the founder was told to check
+          // their audience, clicked again, and paid for another swarm. The
+          // guess stays only as the fallback for a row with nothing on it.
+          setError(
+            r.data.error_message ||
+            'We could not build the room. Check that you picked at least one group of buyers.'
+          );
           setRunning(false);
           setRunStatus('');
           return;

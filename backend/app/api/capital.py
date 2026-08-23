@@ -41,7 +41,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.core.auth import get_current_org, require_can_spend
-from app.core.database import get_supabase_admin
+from app.core.database import get_supabase_admin, maybe_one
 from app.services.billing.agent_pricing import (
     capital_shortlist_credits,
     deduct_credits,
@@ -264,22 +264,18 @@ def _load_objections(simulation_id: str, org_id: str) -> list[MeasuredObjection]
 
 def _product_summary(simulation_id: str, org_id: str) -> str:
     admin = get_supabase_admin()
-    sim = (
+    sim = maybe_one(
         admin.table("simulations")
         .select("icp_profile_id")
         .eq("id", simulation_id)
         .eq("organization_id", org_id)
-        .single()
-        .execute()
     ).data or {}
     if not sim.get("icp_profile_id"):
         return ""
-    icp = (
+    icp = maybe_one(
         admin.table("icp_profiles")
         .select("product_summary")
         .eq("id", sim["icp_profile_id"])
-        .single()
-        .execute()
     ).data or {}
     return str(icp.get("product_summary") or "")
 
@@ -290,13 +286,11 @@ async def create_shortlist(body: ShortlistBody, auth: dict = Depends(require_can
     admin = get_supabase_admin()
     org_id = auth["org_id"]
 
-    project = (
+    project = maybe_one(
         admin.table("projects")
         .select("id, name")
         .eq("id", body.project_id)
         .eq("organization_id", org_id)
-        .single()
-        .execute()
     )
     if not project.data:
         raise HTTPException(status_code=404, detail="We could not find that project.")
@@ -304,13 +298,11 @@ async def create_shortlist(body: ShortlistBody, auth: dict = Depends(require_can
     material = body.material
     objections: list[MeasuredObjection] = []
     if body.simulation_id:
-        sim = (
+        sim = maybe_one(
             admin.table("simulations")
             .select("id")
             .eq("id", body.simulation_id)
             .eq("organization_id", org_id)
-            .single()
-            .execute()
         )
         if not sim.data:
             raise HTTPException(status_code=404, detail="We could not find that run.")
@@ -475,13 +467,11 @@ async def shortlist_for_project(project_id: str, auth: dict = Depends(get_curren
 @router.get("/shortlist/{shortlist_id}")
 async def get_shortlist(shortlist_id: str, auth: dict = Depends(get_current_org)):
     admin = get_supabase_admin()
-    result = (
+    result = maybe_one(
         admin.table("capital_shortlists")
         .select("*")
         .eq("id", shortlist_id)
         .eq("organization_id", auth["org_id"])
-        .single()
-        .execute()
     )
     if not result.data:
         raise HTTPException(status_code=404, detail="We could not find that shortlist.")

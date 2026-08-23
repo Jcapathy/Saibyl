@@ -4,8 +4,8 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from app.core.auth import get_current_org
-from app.core.database import get_supabase_admin
+from app.core.auth import get_current_org, require_can_spend
+from app.core.database import get_supabase_admin, maybe_one
 from app.core.llm_client import llm_complete
 from app.services.intelligence.analysis_data import load_run_data, mean_interval
 
@@ -23,8 +23,15 @@ class SubmitOutcomeBody(BaseModel):
 
 
 @router.post("/score")
-async def score_prediction(body: SubmitOutcomeBody, auth: dict = Depends(get_current_org)):
-    """Submit actual outcomes and get an accuracy score for a simulation's predictions."""
+async def score_prediction(body: SubmitOutcomeBody, auth: dict = Depends(require_can_spend)):
+    """Submit actual outcomes and get an accuracy score for a simulation's predictions.
+
+    **Gated**: this calls `llm_complete` and writes a `prediction_accuracy` row,
+    and it took `get_current_org` alone. It reaches no `deduct_credits`, so the
+    ledger scan could not see it — the same blind spot that left `/api/compare`
+    and `/api/persona-packs/custom` open. A viewer's grant is to read, and this
+    both spends and writes.
+    """
     log.info("score_prediction", simulation_id=body.simulation_id, org_id=auth["org_id"])
     admin = get_supabase_admin()
 
@@ -38,13 +45,11 @@ async def score_prediction(body: SubmitOutcomeBody, auth: dict = Depends(get_cur
         )
 
     # Get simulation
-    sim = (
+    sim = maybe_one(
         admin.table("simulations")
         .select("*")
         .eq("id", body.simulation_id)
         .eq("organization_id", auth["org_id"])
-        .single()
-        .execute()
     )
     if not sim.data:
         raise HTTPException(status_code=404, detail="Simulation not found")

@@ -20,7 +20,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.auth import get_current_org, require_can_destroy
-from app.core.database import get_supabase_admin
+from app.core.database import get_supabase_admin, maybe_one
 from app.core.tasks import spawn
 from app.services.billing.storage_billing import check_storage_quota, update_org_storage_usage
 from app.services.ingestion.media_types import (
@@ -347,13 +347,11 @@ async def get_document(id: str, auth: dict = Depends(get_current_org)):
     """Get document details."""
     log.info("get_document", document_id=id)
     admin = get_supabase_admin()
-    result = (
+    result = maybe_one(
         admin.table("documents")
         .select("*")
         .eq("id", id)
         .eq("organization_id", auth["org_id"])
-        .single()
-        .execute()
     )
     if not result.data:
         raise HTTPException(status_code=404, detail="Document not found")

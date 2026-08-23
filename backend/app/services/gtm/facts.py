@@ -153,10 +153,22 @@ _DIGITS = re.compile(
 #:
 #: "keep it to" and "hold it to" are here because real copy asks that way and
 #: the earlier list did not know them.
+#:
+#: **Only verbs that can do nothing but reserve time.** The list used to also
+#: carry `takes`, `took`, `get`, `got`, `have`, `spend`, `free up`, `need`,
+#: `under` and `no more than`, and each of those measures work as readily as it
+#: asks for time. Because a hit here exempts unconditionally, "Setup takes 15
+#: minutes.", "Month-end close takes 2 hours.", "We free up 90 minutes a
+#: close.", "You get 45 minutes back per entity." and "Reviews are done in
+#: under 20 minutes." all shipped unchecked — every one of them a twin of a
+#: line this suite pins as a fabrication, separated from it by a digit or a
+#: copula ("Setup **is** 15 minutes." was scrubbed all along). Those verbs are
+#: not listed anywhere now: a clause carrying one falls through to
+#: `_looks_like_an_ask`, which is where a clause with no verb at all lands.
 _BOOKING_BEFORE = re.compile(
     r"(?:book|book in|grab|spare|schedule|hop on|jump on|set up|carve out|"
-    r"give (?:me|us)|steal|worth|takes?|took|got|get|have|spend|free up|"
-    r"block|find|need|want|keep it to|hold it to|no more than|under|"
+    r"give (?:me|us)|steal|worth|"
+    r"block|find|want|keep it (?:to|under)|hold it (?:to|under)|"
     r"buy me|borrow|pencil)\b",
     re.I,
 )
@@ -176,12 +188,28 @@ _CLAIM_BEFORE = re.compile(
 #: offer of time.
 _ATTRIBUTIVE = re.compile(r"\d\s*[-–—]\s*(?:" + _TIME_UNIT + r")\b", re.I)
 
-#: A lookback or lookahead window in a request — "the worst denial you've seen
-#: in the last 6 months", "anything in the next two weeks". Not a claim about
-#: the product, and scrubbing it leaves a sentence that asks for nothing.
-_WINDOW_BEFORE = re.compile(
-    r"(?:in|over|within|during)\s+the\s+(?:last|past|next|coming)\s*$"
-    r"|(?:^|\s)(?:last|past|next|coming)\s+$",
+#: A lookback window in a request — "the worst denial you've seen in the last 6
+#: months". Not a claim about the product, and scrubbing it leaves a sentence
+#: that asks for nothing.
+_LOOKBACK_BEFORE = re.compile(
+    r"(?:in|over|within|during)\s+the\s+(?:last|past)\s*$"
+    r"|(?:^|\s)(?:last|past)\s+$",
+    re.I,
+)
+
+#: The forward twin, which was living in the same list and taking the same
+#: unconditional exemption. It is not the same shape. A window behind reports
+#: nothing about the product; a window ahead in a declarative sentence is a
+#: payback or time-to-value promise about a product with no customers to
+#: measure it on — "In the next 30 days you'll cut the close in half.", "Teams
+#: like yours recover the cost in the next 90 days." The suite already pins
+#: that family as a fabrication ("Most teams see it visible in 30-60 days."),
+#: which was caught only because it happens to carry no window word. So a
+#: window ahead is an ask when the clause is actually asking ("anything in the
+#: next 2 weeks?") and a claim otherwise.
+_LOOKAHEAD_BEFORE = re.compile(
+    r"(?:in|over|within|during)\s+the\s+(?:next|coming)\s*$"
+    r"|(?:^|\s)(?:next|coming)\s+$",
     re.I,
 )
 _MEETING_AFTER = re.compile(
@@ -209,12 +237,28 @@ _MEETING_AFTER = re.compile(
 #: these reached sendable copy, one a line meant to be read down a phone.
 _STANDS_ALONE = re.compile(r"^\s*[—–\-,)(]|^\s*$")
 
-_ASK_MARK = re.compile(r"\?")
 _SCHEDULING_NEAR = re.compile(
     r"\b(?:today|tomorrow|tonight|monday|tuesday|wednesday|thursday|friday|"
-    r"this week|next week|the week|say when|let me know when|when(?:\?|\b)|"
+    r"this week|next week|the week|next few (?:days|weeks)|"
+    r"say when|let me know when|when(?:\?|\b)|"
     r"your calendar|my calendar|diary|availability)\b"
     r"|\bwith (?:you|your)\b",
+    re.I,
+)
+
+#: Offering to walk someone through something is offering a meeting, whatever
+#: noun it is called by — "the thing I wanted to **show you** takes 15
+#: minutes", "can we spend 30 minutes **walking through** how your denials
+#: flow", "I'd need 20 minutes **of your time**". These are the asks that the
+#: measuring verbs used to vouch for on their own; once those verbs stop
+#: exempting, the shape underneath them has to be recognised or real
+#: calls-to-action go down with the benchmarks. A savings verb still wins:
+#: `_CLAIM_BEFORE` is tested first, so "saves 90 minutes of your time" is a
+#: claim however it is phrased.
+_OFFER_NEAR = re.compile(
+    r"\b(?:show(?:ing)?\s+(?:you|your)|walk(?:ing)?\s+(?:you\s+)?through|"
+    r"run(?:ning)?\s+(?:you\s+)?through|tak(?:e|ing)\s+you\s+through|"
+    r"your\s+time)\b",
     re.I,
 )
 _CONTEXT_CHARS = 34
@@ -235,6 +279,15 @@ _RATE_AFTER = re.compile(
 )
 
 _SENTENCE_SPLIT = re.compile(r"[.!?\n]")
+
+#: Where the *clause* the number sits in ends. Wider than `_SENTENCE_SPLIT`,
+#: because widening the interrogative test from four characters to the whole
+#: sentence would otherwise let a bolted-on CTA vouch for the benchmark in
+#: front of it: "Reviews are done in 20 minutes, want to see?" is a claim with
+#: a question after it, not a question about 20 minutes. Only used for reading
+#: the question mark; the surrounding context stays at the sentence edge, which
+#: is what it has always been measured at.
+_CLAUSE_END = re.compile(r"[.!?\n,;:—–]")
 
 #: Every "<number> <time unit>" the material states, so a duration can be
 #: matched on both halves rather than on its digits alone. The range form is
@@ -375,6 +428,46 @@ def _meeting_sized(span: str) -> bool:
     return False
 
 
+def _ends_in_a_question(raw_after: str) -> bool:
+    """Whether the clause the duration sits in is a question.
+
+    The mark has to be read off the raw text because `_SENTENCE_SPLIT` treats
+    `?` as a boundary and consumes it — "Any interest in 15 minutes?" arrives
+    with an empty `after` and its one distinguishing mark already thrown away.
+
+    **It is which mark ends the clause, not how close it sits.** Reading only
+    the first four characters after the number meant the mark counted only when
+    it landed right beside it: "Any interest in 15 minutes?" passed while
+    "Would 15 minutes be useful?", "Does 15 minutes sound reasonable?" and
+    "Would 30 minutes with the team be useful?" — the same question, a few
+    words longer — came back as "Would [TODO: your number] be useful?" in a
+    subject line. Taking the *first* clause ending instead keeps the claim side
+    honest, in both directions: "Setup takes 15 minutes. Would that work?" ends
+    its own clause on a full stop, and "Reviews are done in 20 minutes, want to
+    see?" ends it on a comma. Both are still benchmarks.
+    """
+    terminator = _CLAUSE_END.search(raw_after)
+    return terminator is not None and terminator.group() == "?"
+
+
+def _looks_like_an_ask(span: str, before: str, after: str, raw_after: str) -> bool:
+    """Whether the clause around a duration is asking for time.
+
+    The one test for a duration with no booking verb to vouch for it:
+    interrogative, scheduled, spent with someone, pointed at a meeting noun, or
+    offering to walk someone through something. It lives in one place because
+    it is read from two — the forward-window branch and the fall-through — and
+    every blocker the last round produced was a correct guard applied to one
+    branch and not its twin.
+    """
+    return bool(
+        _MEETING_AFTER.search(after)
+        or _ends_in_a_question(raw_after)
+        or _SCHEDULING_NEAR.search(f"{before} {span} {after}")
+        or _OFFER_NEAR.search(f"{before} {after}")
+    )
+
+
 def _is_meeting_ask(span: str, before: str, after: str, raw_after: str = "") -> bool:
     """Whether this span offers someone's time rather than claiming a fact.
 
@@ -393,10 +486,16 @@ def _is_meeting_ask(span: str, before: str, after: str, raw_after: str = "") -> 
        duration is measuring the noun after it. A booking verb before, or a
        meeting noun after, says the noun *is* the meeting ("a 30-minute
        technical call", "grab a 15-minute slot") and the offer stands.
+    5. **A window ahead of a declarative sentence.** "in the next 90 days" is a
+       payback promise. Only the lookback twin — "in the last 6 months" — is
+       free, because it reports nothing about the product.
 
-    Everything else — "20 minutes next week?", "I'll keep it to 15 minutes",
-    "30 minutes with your ops lead would settle it" — is an ask, and the ask is
-    the one line in this copy that has to work.
+    Everything else has to *look* like an ask: a booking verb ("I'll keep it to
+    15 minutes"), or `_looks_like_an_ask` — interrogative, scheduled, with
+    someone, a meeting noun, an offer to show them. A verb that can measure
+    work as easily as it can reserve time ("takes", "got", "spend", "free up")
+    buys nothing on its own; that unconditional exemption is how "Setup takes
+    15 minutes." shipped.
     """
     if _RATE_AFTER.match(after):
         return False
@@ -404,8 +503,14 @@ def _is_meeting_ask(span: str, before: str, after: str, raw_after: str = "") -> 
     # "…the worst denial you've seen in the last 6 months" asks a question; it
     # claims nothing. Checked before the size test, because a window is often
     # months or years.
-    if _WINDOW_BEFORE.search(before):
+    if _LOOKBACK_BEFORE.search(before):
         return True
+
+    # A window *ahead* took that same exemption and should never have: "In the
+    # next 30 days you'll cut the close in half" is a payback promise, not a
+    # request. It is an ask only when the clause asks.
+    if _LOOKAHEAD_BEFORE.search(before):
+        return _looks_like_an_ask(span, before, after, raw_after)
 
     if not _meeting_sized(span):
         return False
@@ -441,16 +546,11 @@ def _is_meeting_ask(span: str, before: str, after: str, raw_after: str = "") -> 
         return True
 
     # No booking verb, so the clause has to look like an ask another way:
-    # interrogative, or scheduled, or time spent with someone.
-    #
-    # The question mark is read from `raw_after` rather than `after`, because
-    # `_SENTENCE_SPLIT` treats `?` as a boundary and consumes it — so "Any
-    # interest in 15 minutes?" arrives here with an empty `after` and its one
-    # distinguishing mark already thrown away.
-    context = f"{before} {span} {after}"
-    return bool(
-        _ASK_MARK.search(raw_after[:4]) or _SCHEDULING_NEAR.search(context)
-    )
+    # interrogative, or scheduled, or spent with someone, or offering to walk
+    # them through something. This is also where the measuring verbs land now
+    # — "takes", "got", "have", "spend", "free up", "under" — because each of
+    # them asks for time and reports a benchmark in the very same words.
+    return _looks_like_an_ask(span, before, after, raw_after)
 
 
 def _duration_supported(span: str, durations: set[tuple[str, str]]) -> bool:
@@ -470,6 +570,23 @@ def _duration_supported(span: str, durations: set[tuple[str, str]]) -> bool:
 #: "40 dollars a seat" outside the price check — and outside the test that
 #: decides whether the founder stated a price at all.
 _HAS_CURRENCY = re.compile(r"[$£€]|\b" + _CURRENCY_WORD + r"\b", re.I)
+
+#: Whether the founder actually named a **price** — a currency *and* a figure.
+#: `_HAS_CURRENCY` answers a different question, "is this span money", and
+#: standing in for this one it engaged the narrowing on a bare "USD". A product
+#: summary of exactly the shape the ICP synthesizer is prompted to write —
+#: "Ledgerline turns month-end into a same-day close… Priced in USD on annual
+#: contracts." — names a currency and no number, so `prices` came back as the
+#: empty set, every money figure in the document failed against it (including
+#: the buyers' own measured costs: "$9,000" and "$400" both blanked), and the
+#: `gtm_price_narrowing_inactive` warning was skipped, because the guard was
+#: engaged — just empty. Silence reading as safety is the one thing that
+#: warning exists to prevent.
+_HAS_PRICE = re.compile(
+    r"[$£€]\s?\d"
+    r"|\d[\d,]*(?:\.\d+)?(?:\s*" + _MAGNITUDE + r"\b)?\s*" + _CURRENCY_WORD + r"\b",
+    re.I,
+)
 
 
 def _scrub_text(
@@ -568,7 +685,7 @@ def scrub_unsourced[M: BaseModel](
     # only thing distinguishing "no laundering happened" from "nothing was
     # watching".
     prices = None
-    if product_material and _HAS_CURRENCY.search(product_material):
+    if product_material and _HAS_PRICE.search(product_material):
         prices = sourced_numbers(product_material)
     elif product_material:
         log.warning(

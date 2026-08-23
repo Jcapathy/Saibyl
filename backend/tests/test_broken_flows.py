@@ -68,6 +68,14 @@ class _TableStub:
         self._single = True
         return self
 
+    # `maybe_one` calls this. Real `.single()` raises `APIError` on zero rows
+    # rather than answering `data=None`, which is why every `if not
+    # result.data: raise 404` under one was dead code and a deleted id came
+    # back as a 500. `.maybe_single()` is the one that answers with nothing —
+    # here the stub already behaves that way for both.
+    def maybe_single(self):
+        return self.single()
+
     def execute(self):
         if self._update is not None:
             matched = [

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Security
+from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel
 
-from app.core.auth import get_current_org, get_current_user
-from app.core.database import get_supabase, get_supabase_admin
+from app.core.auth import get_current_org, get_current_user, security
+from app.core.database import get_supabase_admin, new_auth_client
 from app.core.rate_limit import check_rate_limit
 from app.services.billing.agent_pricing import tier_grant
 
@@ -132,7 +133,11 @@ async def signup(body: SignupRequest, request: Request):
 async def login(body: LoginRequest, request: Request):
     """Sign in and return session tokens."""
     await check_rate_limit(request, "login", max_attempts=10, window_seconds=60, fail_open=False)
-    supabase = get_supabase()
+    # A per-request client, never the shared singleton: `sign_in_with_password`
+    # ends in `_save_session`, so every login on the shared object replaced the
+    # session the whole process was holding — and `sign_out()` reads exactly
+    # that. See `new_auth_client`.
+    supabase = new_auth_client()
     try:
         result = supabase.auth.sign_in_with_password({
             "email": body.email,
@@ -148,13 +153,52 @@ async def login(body: LoginRequest, request: Request):
 
 
 @router.post("/logout")
-async def logout():
-    """Sign out (invalidate Supabase refresh token, client should discard tokens)."""
+async def logout(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Security(security),
+):
+    """Sign out **the caller**, named by the token they present.
+
+    This route revoked whoever had authenticated most recently, and needed no
+    credentials to do it.
+
+    `supabase.auth.sign_out()` takes no argument: it reads `self.get_session()`
+    and calls `admin.sign_out(that_token, scope='global')`. The client it read
+    from is `get_supabase()`, a process-wide singleton that
+    `sign_in_with_password` and `refresh_session` both write their session into.
+    So Alice logs in at 10:00, Bob at 10:01, Alice presses Log Out — and **Bob's**
+    refresh tokens are revoked on every device he owns, dropping him mid-run at
+    his next `/auth/refresh`, while Alice's own token is never revoked at all.
+    With no auth dependency on the route, an unauthenticated attacker could POST
+    here in a loop and keep signing out whoever last logged in; `except
+    Exception: pass` made it silent.
+
+    Two changes close it, and both are needed. The token to revoke is now taken
+    from the caller's own `Authorization` header and passed to `admin.sign_out`
+    explicitly, so this call can only ever end the session it was given. And
+    login and refresh no longer write into a shared client at all — see
+    `new_auth_client` — so there is no ambient session left for anything to
+    read.
+
+    `Security(security)` also means a request with no bearer token is refused
+    before any of this runs. A *stale* token is still accepted here on purpose:
+    GoTrue simply finds nothing to revoke, and the frontend clears local state
+    either way, so there is no value in making log-out fail for someone whose
+    session already expired.
+    """
+    await check_rate_limit(
+        request, "logout", max_attempts=20, window_seconds=60, fail_open=True
+    )
     try:
-        supabase = get_supabase()
-        supabase.auth.sign_out()
+        # `admin` here is the GoTrue admin *API surface* on an anon client, not
+        # the service-role client — it is the same call the browser SDK makes to
+        # end its own session, and it authenticates as the presented token.
+        new_auth_client().auth.admin.sign_out(credentials.credentials, "global")
     except Exception:
-        pass
+        # Not fatal, but no longer silent: the caller's tokens are discarded
+        # client-side regardless, and a GoTrue that is refusing sign-outs is
+        # something we want to be able to find afterwards.
+        log.warning("logout_revoke_failed", exc_info=True)
     return {"message": "Logged out"}
 
 
@@ -162,7 +206,10 @@ async def logout():
 async def refresh(body: RefreshRequest, request: Request):
     """Refresh session token."""
     await check_rate_limit(request, "refresh", max_attempts=20, window_seconds=60, fail_open=False)
-    supabase = get_supabase()
+    # A per-request client. `refresh_session` ends in `_save_session`, so on the
+    # shared singleton every refresh overwrote the stored session for the whole
+    # process — which is the state `sign_out()` used to read.
+    supabase = new_auth_client()
     try:
         result = supabase.auth.refresh_session(body.refresh_token)
         return {

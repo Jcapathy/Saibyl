@@ -69,6 +69,28 @@ class StuckRule:
     message: str
     # Refund only where the state itself proves no model was called.
     refund_states: tuple[str, ...] = ()
+    # Which timestamp the deadline is measured from — i.e. where this table
+    # records "when the work now in flight began".
+    #
+    # `created_at` is right only for tables whose row is inserted and whose
+    # worker is spawned in the same request. Every table here is like that
+    # **except `simulations`**, where `draft` is a real resting state: the
+    # wizard writes the row, the founder leaves, and `POST /start` deducts
+    # ~17,000 credits a day later. Aged from `created_at` that run was 26 hours
+    # old the instant it began, so the very next sweep matched it against the
+    # 90-minute budget, won its compare-and-set on `running`, and wrote it
+    # `failed` — the largest single charge in the product taken and destroyed
+    # minutes later, with no refund and a sentence blaming the run. The
+    # `preparing` variant closed the same way, so a draft older than 90 minutes
+    # could never be started at all.
+    #
+    # `simulations.updated_at` exists (migration 005) and is maintained by the
+    # `set_updated_at` trigger (migration 008); `prepare_simulation` and
+    # `start_simulation` also stamp it explicitly in their compare-and-sets, so
+    # the deadline is measured from the transition into flight whether or not
+    # the trigger is present. No other table in this list has the column, and
+    # none of them needs it.
+    age_column: str = "created_at"
     # Where this table keeps its founder-readable failure sentence.
     #
     # Six tables call it `error_message`; `gtm_discovery_runs` calls it `error`.
@@ -103,10 +125,16 @@ STUCK: tuple[StuckRule, ...] = (
     #
     # Ninety minutes because a large run is genuinely long: agents, rounds and
     # arenas multiply, and the analysis pass that follows is model-heavy.
+    #
+    # Aged from `updated_at`, not `created_at` — see `StuckRule.age_column`.
+    # This is the one table in the list with a resting state before the work
+    # starts, so it is the one table where "when the row was created" and "when
+    # the work began" are different questions.
     StuckRule(
         "simulations", ("queued", "preparing", "running", "analyzing"), 90,
         "This run stopped before it finished. Anything it had already measured "
         "is saved — start a new run when you're ready.",
+        age_column="updated_at",
     ),
     # Forty-five minutes, not twenty, and the arithmetic is the argument.
     #
@@ -140,18 +168,39 @@ STUCK: tuple[StuckRule, ...] = (
         # see. `test_every_non_terminal_status_a_worker_writes_is_reapable`
         # pins the rules against the workers so this cannot drift again.
         # 45 was shorter than the work. Do the arithmetic once, here, so the
-        # next person does not have to: a revision runs up to 3 rounds, each
-        # one a `capture_html` that may queue 330s for the two-slot browser and
-        # then work for 300s, on top of up to 2 `capture_website` calls for the
-        # page and its reference. That is ~52 minutes of legitimate work
-        # against a 45-minute rule, so the reaper was closing revisions that
-        # were still running — and the worker then wrote `complete` over the
-        # closed row, because its compare-and-set was missing too.
+        # next person does not have to — and do it against the constants as
+        # they are *now*, because the last version of this comment did not.
         #
-        # 80 covers the worst case with headroom. A founder whose revision is
-        # genuinely wedged waits longer; one whose revision is merely slow gets
-        # the artifact they paid 5,000 credits for.
-        "page_revisions", ("queued", "generating"), 80,
+        # 80 was sized against "queue 330s", which gave ~52 minutes. The same
+        # commit that raised this number to 80 also raised a revision render's
+        # queue wait to `_REVISION_QUEUE_WAIT_S` = 600s, and the two halves were
+        # never reconciled. With 600 the real ceiling is:
+        #
+        #     capture_website = _QUEUE_WAIT_S(330) + _overall_deadline(45)(300)
+        #                     = 630s, and a revision runs 2 (page + reference)
+        #     capture_html    = _REVISION_QUEUE_WAIT_S(600) + 300 = 900s,
+        #                       and a revision runs up to 3 (one per round)
+        #     2*630 + 3*900   = 3,960s = 66 minutes of *capture alone*
+        #
+        # against an 80-minute rule — 14 minutes left for up to 6 `llm_vision`
+        # calls at 32,000 max tokens (an answer plus one retry per round), 3
+        # six-critic gauntlets and 2 storage uploads. That is the same defect
+        # the 45->80 change was made to fix, reintroduced beside it.
+        #
+        # 150 = the 66-minute capture ceiling plus 84 minutes for the model
+        # calls and uploads, which is a comparable margin to the 45-vs-21 this
+        # list already carries for `website_snapshots`.
+        # `test_a_capture_driven_deadline_outlasts_the_worker_it_watches` pins
+        # both against the shipped constants, so the next change to either
+        # number fails here instead of in production.
+        #
+        # The cost of being generous is asymmetric and that is the whole
+        # argument: `refund_states` is `('queued',)`, so when this rule fires on
+        # a `generating` row the founder is told the revision stopped and keeps
+        # none of the 5,000 credits. Closing a revision that was still working
+        # takes the artifact *and* the money; leaving a genuinely wedged one
+        # open longer only makes somebody wait.
+        "page_revisions", ("queued", "generating"), 150,
         "This revision stopped before it finished. Your original check is "
         "safe; start the revision again when you're ready.",
         # Still `queued` only. `generating` means vision calls were made and
@@ -262,7 +311,7 @@ async def sweep_once(now: datetime | None = None) -> dict[str, int]:
                 # correctly. These rows are small and capped at 200.
                 .select("*")
                 .in_("status", list(rule.states))
-                .lt("created_at", cutoff)
+                .lt(rule.age_column, cutoff)
                 .limit(200)
                 .execute()
             ).data or []

@@ -58,13 +58,18 @@ def _mark_clearance_failed(run_id: str, name: str) -> Callable[[Exception], None
             error_type=type(exc).__name__,
             error=str(exc)[:500],
         )
+        # Conditional on the row still being in flight — the same guard every
+        # other writer to this family carries, and the same states the reaper's
+        # `clearance_runs` rule watches. A COMPREHENSIVE clearance costs 6,000
+        # credits, so reporting a finished one as failed is the most expensive
+        # version of this mistake in the product.
         get_supabase_admin().table("clearance_runs").update({
             "status": "failed",
             "error_message": (
                 "This search stopped before it finished. Nothing was left "
                 "half-saved — try it again, and tell us if it keeps failing."
             ),
-        }).eq("id", run_id).execute()
+        }).eq("id", run_id).in_("status", ["queued", "running"]).execute()
     return _mark
 
 
