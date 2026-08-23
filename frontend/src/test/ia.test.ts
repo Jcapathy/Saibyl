@@ -1,5 +1,5 @@
 /**
- * The five acceptance tests for the staged rail.
+ * The six acceptance tests for the staged rail.
  *
  * They exist because the person who built the rail is the worst available judge
  * of whether it reads well — every label looks obvious to whoever wrote it. So
@@ -13,6 +13,7 @@
  *   3. No grey button — no disabled control without an explanation beside it
  *   4. Inheritance   — every stage declares what it got, or what is missing
  *   5. Reachability  — every built route is ≤ 3 clicks from /app
+ *   6. One design    — every page composes the shared design primitives
  *
  * Where a rule is not yet true of the whole app, the exceptions are **listed by
  * name with a reason** and the count is asserted. That is a ratchet: the debt
@@ -274,6 +275,32 @@ describe('4. Inheritance is declared', () => {
 const NOT_CLICKABLE: Record<string, string> = {
   '/app/simulations/:p/run': 'entered by the configurator after a run starts',
   '/app/simulations/:p/report/print': 'opened by the print flow, not by a link',
+  // Retired paths kept alive for bookmarks and shared links. Each renders an
+  // `<Absorbed>` redirect to the stage that took it over, so nothing links to
+  // them on purpose — being unlinked is the point, not an oversight. That they
+  // still lead somewhere sensible is asserted below, by their own test.
+  '/app/ip-check': 'absorbed by Validate; kept as a redirect for old links',
+  '/app/website': 'absorbed by Position; kept as a redirect for old links',
+  '/app/sales': 'absorbed by Launch; kept as a redirect for old links',
+  '/app/marketing': 'absorbed by Launch; kept as a redirect for old links',
+};
+
+/**
+ * Routes deliberately pushed out of the primary navigation.
+ *
+ * Companies. GTM discovery ranks candidates against a buyer archetype rather
+ * than against any intent to buy, and on a live security run it returned the
+ * competitors building the same product — companies that would never be
+ * customers. The founder's call was to drop it from the product; the module,
+ * its routes and its backend stay, so the call is reversible.
+ *
+ * Exempt from the depth budget and **not** from reachability. Demoted is not
+ * deleted: if the last link into Companies disappears the test above still
+ * fails, because a route nothing can reach is a different mistake from a route
+ * somebody chose to bury.
+ */
+const DEMOTED: Record<string, string> = {
+  '/app/prospects/settings': 'Companies, demoted 2026-08-23; reachable from the list',
 };
 
 describe('5. Reachability', () => {
@@ -295,7 +322,11 @@ describe('5. Reachability', () => {
       if (node.pattern in NOT_CLICKABLE) continue;
       const depth = depths.get(node.pattern);
       if (depth === undefined) unreachable.push(node.pattern);
-      else if (depth > 3) tooDeep.push(`${node.pattern} (${depth})`);
+      // A demoted route is still checked for reachability — losing the last
+      // link into Companies must still fail — but not for depth.
+      else if (depth > 3 && !(node.pattern in DEMOTED)) {
+        tooDeep.push(`${node.pattern} (${depth})`);
+      }
     }
 
     // This is the test that would have caught the original defect: Audiences,
@@ -306,7 +337,7 @@ describe('5. Reachability', () => {
     }).toEqual({ unreachable: [], tooDeep: [] });
   });
 
-  it('every module a founder pays for is one click from anywhere', () => {
+  it('every stage the landing page sells is one click from anywhere', () => {
     /* Reachable is not the same as findable, and the difference cost us the
        flagship.
 
@@ -317,16 +348,17 @@ describe('5. Reachability', () => {
        adversarial review missed it too, because every check called the API
        directly and none asked what a person can click.
 
-       A paid module is something a founder goes looking for by name. If it is
-       not in the primary nav it is not findable, however few clicks it is
-       behind something else. */
+       The names a founder goes looking for are now the five the landing page
+       taught him on the way in. Those are the primary nav, so those are what
+       must be one click; the modules live inside their stage. */
     const depths = clickDepths();
     const buried: string[] = [];
     for (const [path, what] of [
-      ['/app/website', 'the website check'],
-      ['/app/sales', 'the objection answers, messaging and outbound'],
-      ['/app/ip-check', 'the USPTO clearance check'],
-      ['/app/capital', 'the family-office shortlist'],
+      ['/app/validate', 'Validate — is anyone going to want this'],
+      ['/app/position', 'Position — say it so the room hears it'],
+      ['/app/launch', 'Launch — the words that go out'],
+      ['/app/grow', 'Grow — what to build, and for whom, next'],
+      ['/app/capital', 'Raise — the family-office shortlist'],
       ['/app/dashboard', 'the reports export surface'],
     ] as const) {
       const depth = depths.get(path);
@@ -335,6 +367,56 @@ describe('5. Reachability', () => {
       }
     }
     expect(buried).toEqual([]);
+  });
+
+  it('every retired path still lands on the stage that absorbed it', () => {
+    /* Four modules lost their own noun when the nav became the journey, and
+       their pages were deleted rather than left as a second implementation of
+       a screen. The paths stay: a bookmark, a shared link or muscle memory
+       would otherwise fall through the catch-all onto the marketing site,
+       which reads as "your account is gone".
+
+       Checked against `App.tsx` rather than through `clickDepths`, because
+       being unlinked is the point — a redirect nothing points at is exactly
+       what these are, and a reachability walk cannot tell that apart from a
+       route somebody forgot to wire. */
+    const app = sourceFiles().find((f) => f.path === 'src/App.tsx');
+    expect(app, 'App.tsx not found by the source scan').toBeDefined();
+
+    const broken: string[] = [];
+    for (const [retired, stage] of [
+      ['ip-check', '/app/validate'],
+      ['website', '/app/position'],
+      ['sales', '/app/launch'],
+      ['marketing', '/app/launch'],
+    ] as const) {
+      const declared = new RegExp(
+        `path="${retired}"[^\\n]*<Absorbed by="${stage}"`,
+      );
+      if (!declared.test(app!.code)) broken.push(`${retired} -> ${stage}`);
+    }
+    expect(broken).toEqual([]);
+  });
+
+  it('nothing links to a path that only redirects', () => {
+    /* A link that bounces is a link that rots quietly: it keeps working, so
+       nobody notices it names a surface that no longer exists, and the next
+       person to read it learns the wrong map of the app. Four of these were
+       live when the stages landed — `WhatNext` still sent people to the
+       clearance page, and three surfaces still sent them to Message tests. */
+    const RETIRED = ['/app/ip-check', '/app/website', '/app/sales', '/app/marketing'];
+    const offenders: string[] = [];
+    for (const file of sourceFiles()) {
+      if (file.path === 'src/App.tsx') continue;
+      for (const path of RETIRED) {
+        // A route target, not prose: quoted, and followed by `"`, `?` or a
+        // template hole rather than by more path.
+        if (new RegExp(`['"\`]${path}(\\?|['"\`]|\\$\\{)`).test(file.code)) {
+          offenders.push(`${file.path} -> ${path}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 
   it('the five steps are each one click from a product', () => {
@@ -364,5 +446,147 @@ describe('5. Reachability', () => {
       if (/['"`]\/app\/crisis/.test(file.code)) offenders.push(`${file.path}: route`);
     }
     expect(offenders).toEqual([]);
+  });
+});
+
+/* ================================================================== */
+/*  6. One design, composed rather than re-typed                       */
+/* ================================================================== */
+
+/**
+ * The founder approved a design canvas on 2026-08-20 — `design/`, four
+ * artboards and `design/canvas.json`, whose annotations state the rules
+ * verbatim. Three days later a session built two brand-new app pages without
+ * ever opening that folder, because nothing in the repo pointed at it, and the
+ * founder found the drift himself on his first read-through of the site.
+ *
+ * The pointers now exist (`CLAUDE.md`, `design/README.md`, `docs/HANDOFF.md`
+ * §2) but prose is the weakest possible guarantee: a cold session reads a
+ * compaction summary, not the file, and the summary is where "read `design/`
+ * first" quietly stops existing. So the rule is also a test.
+ *
+ * A page that renders its own top-level heading is a page a founder looks at
+ * whole. Every one of them must compose `src/components/design/` rather than
+ * re-typing a washed ground, a dotted eyebrow, a soft-shadow card or a
+ * serif-italic phrase inline — because four hand-rolled copies of one system
+ * are four dialects of it, which is exactly what a blind critic called the app
+ * before the restyle.
+ */
+const DESIGN_PRIMITIVES =
+  /from\s+['"](?:@\/|(?:\.\.?\/)+)components\/design(?:\/[^'"]*)?['"]/;
+
+/** `<h1>` — the heading a page owns, as opposed to one inside a card. */
+const TOP_LEVEL_HEADING = /<h1[\s/>]/;
+
+/**
+ * Pages that carry the system directly instead of through the primitives.
+ *
+ * These three style from `pages/landing.css` — the approved stylesheet the
+ * whole system was designed in, and still the source of truth for its values.
+ * They are not debt and they are not exempt by convenience: the assertion
+ * below checks that each one really does import that stylesheet, so the
+ * exemption cannot be claimed by a page that has not earned it.
+ *
+ * The five stage pages need no entry here. They render no `<h1>` of their own —
+ * their heading comes from `StageHeader`, one component, already on the system.
+ */
+const SYSTEM_ORIGIN: Record<string, string> = {
+  'src/pages/LandingPage.tsx': 'the public page the system was designed on',
+  'src/pages/PrivacyPage.tsx': 'landing tokens, scoped under .v3land',
+  'src/pages/TermsPage.tsx': 'landing tokens, scoped under .v3land',
+};
+
+/**
+ * Pages the sweep has not reached yet.
+ *
+ * **This list may only ever shrink.** It is asserted to match the tree
+ * *exactly*, in both directions, which is the whole point:
+ *
+ *   - Adding a page that renders a heading without composing the primitives
+ *     fails, so the debt cannot grow while nobody is looking.
+ *   - Converting a page and leaving its name here **also** fails, so the list
+ *     cannot rot into a stale glob that quietly exempts live code. Converting
+ *     a page means deleting its line, in the same change.
+ *
+ * Never add an entry to make a red suite green. An entry here is a promise
+ * that somebody will come back, and the number of promises is the debt.
+ */
+const AWAITING_THE_SWEEP = [
+  // The rail and the modules a founder pays for.
+  'src/pages/CapitalPage.tsx',
+  'src/pages/DashboardPage.tsx',
+  'src/pages/GuidePage.tsx',
+  'src/pages/SettingsPage.tsx',
+  'src/pages/product/NewProductPage.tsx',
+  'src/pages/product/ProductHomePage.tsx',
+  // The way in.
+  'src/pages/LoginPage.tsx',
+  'src/pages/SignupPage.tsx',
+  // Prospecting.
+  'src/pages/ProspectDetailPage.tsx',
+  'src/pages/ProspectDiscoverPage.tsx',
+  'src/pages/ProspectSettingsPage.tsx',
+  'src/pages/ProspectsPage.tsx',
+  // The reports, and the print view that is read on paper.
+  'src/pages/ComparisonPage.tsx',
+  'src/pages/ReportPrintPage.tsx',
+  'src/pages/ReportViewerPage.tsx',
+  // Surfaces the rail does not lead to. Reachable on purpose — see AppLayout.
+  'src/pages/NewSimulationPage.tsx',
+  'src/pages/PackLibraryPage.tsx',
+  'src/pages/ProjectDetailPage.tsx',
+  'src/pages/ProjectsPage.tsx',
+  'src/pages/SimulationDetailPage.tsx',
+  'src/pages/SimulationRunPage.tsx',
+  'src/pages/SimulationsPage.tsx',
+];
+
+function headingPages() {
+  return sourceFiles().filter(
+    (f) => f.path.startsWith('src/pages/') && TOP_LEVEL_HEADING.test(f.code),
+  );
+}
+
+describe('6. One design, composed rather than re-typed', () => {
+  it('the page scan found the pages', () => {
+    // Every assertion below is a claim about a set. If the set is empty — a
+    // renamed directory, a `.code` field that stopped being populated — they
+    // all pass by finding nothing to check, which is the vacuous-test failure
+    // this codebase has now shipped three times.
+    const pages = headingPages();
+    expect(pages.length).toBeGreaterThan(20);
+    expect(pages.map((f) => f.path)).toContain('src/pages/DashboardPage.tsx');
+  });
+
+  it('the pages exempted as the system origin really do style from landing.css', () => {
+    const byPath = new Map(sourceFiles().map((f) => [f.path, f]));
+    const unearned = Object.keys(SYSTEM_ORIGIN).filter(
+      (p) => !/import\s+['"]\.\/landing\.css['"]/.test(byPath.get(p)?.code ?? ''),
+    );
+    expect(unearned).toEqual([]);
+  });
+
+  it('the pages awaiting the sweep are exactly the ones named', () => {
+    /*
+      True today and a ratchet tomorrow.
+
+      Today most pages predate `src/components/design/`, so this list is long
+      and the test passes honestly rather than by being scoped to the files
+      that already comply — a test scoped to what passes is a test of the
+      scope, which is the mistake this file's header opens with.
+
+      Tomorrow it is the thing that stops the next session from repeating the
+      one that made it necessary: a new page that renders a heading and skips
+      the primitives turns up on the left of this diff, by name, before it is
+      ever deployed.
+    */
+    const origin = new Set(Object.keys(SYSTEM_ORIGIN));
+    const unconverted = headingPages()
+      .filter((f) => !origin.has(f.path))
+      .filter((f) => !DESIGN_PRIMITIVES.test(f.code))
+      .map((f) => f.path)
+      .sort();
+
+    expect(unconverted).toEqual([...AWAITING_THE_SWEEP].sort());
   });
 });

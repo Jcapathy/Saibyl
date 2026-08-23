@@ -58,7 +58,18 @@ export default function MessagesStagePage() {
         }
         return api
           .get(`/simulations/${compared.id}/analysis`)
-          .then((a) => setBoard(a.data?.scoreboard ?? null))
+          // `payload.artifact.scoreboard`, not `payload.scoreboard`.
+          //
+          // `GET /simulations/{id}/analysis` answers an envelope —
+          // `{simulation_id, schema_version, artifact, generated_at}` — and this
+          // read went straight to the root, so it resolved `undefined` on every
+          // run that ever finished. The step therefore always fell into its
+          // "the comparison has not been worked out yet" branch: no error, no
+          // log, a green suite, and the head-to-head message scoreboard has
+          // never once been rendered to a founder since it shipped.
+          //
+          // `ReportViewerPage` reads `payload.artifact` and was right all along.
+          .then((a) => setBoard(a.data?.artifact?.scoreboard ?? null))
           // No scoreboard is the normal answer for a run that has not been
           // analysed yet. Kept distinct from a request that failed.
           .catch(() => setBoard(null));
@@ -92,7 +103,9 @@ export default function MessagesStagePage() {
      of them on their first run. The comparison makes the document richer (it
      gains the message-test section) rather than possible. */
   const source = runs.find((s) => isFinished(s.status) && !s.parent_simulation_id);
-  const setupHref = `/app/marketing?project=${product.id}`;
+  /* Launch is where writing and comparing versions lives now — `/app/marketing`
+     was its own noun in the old sidebar and is a panel on that stage today. */
+  const setupHref = `/app/launch?product=${product.id}`;
 
   return (
     <div className="space-y-6">

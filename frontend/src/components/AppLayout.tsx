@@ -4,14 +4,8 @@ import {
   FileText,
   LayoutDashboard,
   FolderOpen,
-  Building2,
   Clock,
-  Globe,
-  Landmark,
-  MessageSquare,
-  MessagesSquare,
   Search,
-  ShieldCheck,
   Users,
   Settings,
   LogOut,
@@ -21,7 +15,6 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import api from '@/lib/api';
-import { IP_CHECK_NAME } from '@/components/clearance/types';
 
 interface CreditBalance {
   balance: number;
@@ -34,57 +27,65 @@ interface CreditBalance {
 /*  Nav definitions                                                    */
 /* ------------------------------------------------------------------ */
 
-interface NavItem {
-  path: string;
-  label: string;
-  Icon: React.ComponentType<{ className?: string }>;
-}
+/**
+ * A nav row carries a lucide icon **or** a journey mark, never both and never
+ * neither — the union is what keeps a stage from quietly falling back to a
+ * generic glyph, which is how the nav drifted from the landing page the first
+ * time.
+ */
+type NavItem = { path: string; label: string } & (
+  | { Icon: React.ComponentType<{ className?: string }>; Mark?: never }
+  | { Mark: string; Icon?: never }
+);
 
 /**
- * The global navigation is two items.
+ * The five stages the landing page sells, in the order it sells them.
  *
- * Everything else lives inside a product, on the numbered rail, because that is
- * the shape of a founder's week — one product, five steps, in the order each one
- * consumes the last. The sidebar used to list eight nouns, which was a map of
- * the codebase rather than of anything the reader was trying to do.
+ * **This nav used to be a list of nouns that mapped to none of them.** A
+ * founder read "Validate · Position · Launch · Grow · Raise" on the way in,
+ * signed up, and arrived at Home · Your reports · IP check · Who would fund
+ * this · Settings — a different product wearing the same name. The website
+ * check and the three sales artifacts were reachable only as steps inside a
+ * product, three clicks behind "Everything you uploaded", which is why the
+ * founder could not find his own flagship on his first read of the live site.
  *
- * There is no Crisis entry, and there must not be one until the lens exists. A
- * nav item leading nowhere is worse than its absence.
+ * The marks are the landing page's own (`LandingPage.tsx`, the journey
+ * section), and the copy on each page is that section's copy verbatim. Two
+ * surfaces telling one story, in the same words and the same symbols — so the
+ * promise and the product cannot drift apart without somebody noticing.
  */
+const STAGE_MARKS = {
+  validate: '◎',
+  position: '✦',
+  launch: '⌁',
+  grow: '↗',
+  raise: '◈',
+} as const;
+
 const coreNav: NavItem[] = [
   { path: '/app/home', label: 'Home', Icon: LayoutDashboard },
-  /* The flagship, and it was unreachable from here.
+  /* Second, deliberately. It is the tutorial for everything under it, and it
+     sat at the bottom of "Everything else" where nobody looking for help would
+     think to open it. */
+  { path: '/app/guide', label: 'How this works', Icon: Search },
 
-     The check and the revision are step one of a product's rail, and that was
-     the ONLY way in: a founder landing on Home saw five entries, none of them
-     this, and the module was three clicks deep behind "Everything you
-     uploaded". The entry below for the family-office bank already records this
-     exact lesson — "it shipped built, priced and with no way to reach it,
-     which is the same as not having shipped it" — and it happened twice more
-     without anyone noticing, because every test called the API directly.
-     Nothing in two rounds of adversarial review looked at what a person can
-     actually click. */
-  { path: '/app/website', label: 'Website check', Icon: Globe },
-  /* The objection answers, the messaging document and the outbound sequences.
-     Same story: three paid artifacts, each reachable only as a step inside a
-     product, none of them findable by a founder who went looking for them by
-     name. Named for the question they answer rather than for the module. */
-  { path: '/app/sales', label: 'What to say', Icon: MessagesSquare },
-  /* Was unlinked, and was an account summary duplicating Home. It is now the
-     export surface - every report, and three ways to take each one out - so it
-     has a reason to exist and therefore a link. Named for what it holds. */
+  /* ── The journey ── */
+  { path: '/app/validate', label: 'Validate', Mark: STAGE_MARKS.validate },
+  /* The website check and its revision live here. The landing already
+     describes them without jargon — "test the fix on the same room, and watch
+     the delta" — so they are that sentence rather than a noun of their own. */
+  { path: '/app/position', label: 'Position', Mark: STAGE_MARKS.position },
+  /* Go-to-market: the messaging document, the outbound sequences, and the
+     head-to-head message test that was a separate noun only because the
+     comparison had no door when it shipped. */
+  { path: '/app/launch', label: 'Launch', Mark: STAGE_MARKS.launch },
+  { path: '/app/grow', label: 'Grow', Mark: STAGE_MARKS.grow },
+  /* The family-office bank. Route stays `/app/capital` — every existing link
+     to it keeps working — while the label joins the journey. */
+  { path: '/app/capital', label: 'Raise', Mark: STAGE_MARKS.raise },
+
+  /* After the journey, because it holds what the journey produced. */
   { path: '/app/dashboard', label: 'Your reports', Icon: FileText },
-  /* "Is this even mine to build?" — the USPTO clearance tab (PRD §11). Global
-     rather than inside a product because a founder checks an idea before it is
-     a product; the run form associates one optionally. */
-  { path: '/app/ip-check', label: IP_CHECK_NAME, Icon: ShieldCheck },
-  /* "Who would fund this?" — the family-office bank (docs/CAPITAL_MODULE.md).
-     Here rather than on a product's rail for the same reason as the check
-     above: a founder asks it at any point, including before a room has ever
-     reacted to anything. It shipped built, priced and with no way to reach it,
-     which is the same as not having shipped it. */
-  { path: '/app/capital', label: 'Who would fund this', Icon: Landmark },
-  { path: '/app/settings', label: 'Settings', Icon: Settings },
 ];
 
 /**
@@ -104,11 +105,23 @@ const coreNav: NavItem[] = [
 const alsoNav: NavItem[] = [
   { path: '/app/projects', label: 'Everything you uploaded', Icon: FolderOpen },
   { path: '/app/audiences', label: 'Audiences you can reuse', Icon: Users },
-  { path: '/app/prospects', label: 'Companies', Icon: Building2 },
-  { path: '/app/marketing', label: 'Message tests', Icon: MessageSquare },
   { path: '/app/simulations', label: 'Every run', Icon: Clock },
-  { path: '/app/guide', label: 'How this works', Icon: Search },
+  /* Last, because it is the only entry here nobody visits to do work. */
+  { path: '/app/settings', label: 'Settings', Icon: Settings },
 ];
+
+/* **Companies is gone, and Message tests moved.**
+ *
+ * Companies: GTM discovery ranks candidates against a buyer archetype rather
+ * than against intent to buy, and on a live security run it returned the
+ * competitors building the same product — companies that would never be
+ * customers. Founder's decision to drop it. Its routes and backend remain for
+ * now, so the decision is reversible; only the way in is gone.
+ *
+ * Message tests: folded into Launch, where the landing page already sells it —
+ * "up to eight versions of the message, head to head, in front of the same
+ * room". It was a separate noun only because the comparison shipped without a
+ * door, which is the same defect this whole restructure exists to close. */
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -150,7 +163,8 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 function NavLink({ item, pathname, onClick }: { item: NavItem; pathname: string; onClick?: () => void }) {
   const isActive = pathname.startsWith(item.path);
-  const { Icon } = item;
+  const { Icon, Mark } = item;
+  const glyphTone = isActive ? 'text-saibyl-blue' : 'text-saibyl-muted';
 
   return (
     <Link
@@ -162,11 +176,20 @@ function NavLink({ item, pathname, onClick }: { item: NavItem; pathname: string;
           : 'text-saibyl-silver hover:bg-[#14294a]/[0.04] hover:text-saibyl-ink'
       }`}
     >
-      <Icon
-        className={`w-4 h-4 shrink-0 ${
-          isActive ? 'text-saibyl-blue' : 'text-saibyl-muted'
-        }`}
-      />
+      {Mark ? (
+        /* The landing page's mark, at the icon's width so the two kinds of row
+           share one text column. `aria-hidden` because the label already says
+           the word — a screen reader announcing "black circle Validate" is
+           noise. */
+        <span
+          aria-hidden
+          className={`w-4 shrink-0 text-center text-[12px] leading-4 ${glyphTone}`}
+        >
+          {Mark}
+        </span>
+      ) : (
+        Icon && <Icon className={`w-4 h-4 shrink-0 ${glyphTone}`} />
+      )}
       {item.label}
     </Link>
   );

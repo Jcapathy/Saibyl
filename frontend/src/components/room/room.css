@@ -1,0 +1,466 @@
+/* The room, inside the app — the landing page's hero where the founder paid
+ * for it.
+ *
+ * `design/canvas.json`, annotation `the-room`: "The landing page's hero is a
+ * room of buyers orbiting a pitch. Inside the app, where the founder has
+ * actually paid for a room, the room has always been a table of numbers." The
+ * artboard is `design/Report.dc.html`.
+ *
+ * Every value below is `pages/landing.css`'s own, copied rather than
+ * re-derived. The keyframe bodies, the four durations and the easing are
+ * character-for-character the landing page's — `src/test/room.test.ts` asserts
+ * that parity, because a room that moves differently here reads as a different
+ * product, and because the two files are the sort of pair that drifts silently.
+ *
+ * Scoped under `.sbroom` for the same reason `capital.css` is scoped: the
+ * app-wide restyle is in other hands, and a shared sheet is where two sessions
+ * collide. Nothing here selects an element it does not own.
+ *
+ * Sizing is by container query, not viewport. The room sits inside a content
+ * column beside a sidebar, so viewport width overstates the space it has by
+ * whatever the shell is currently spending — a mistake that only shows up on
+ * the one screen size nobody tested.
+ */
+
+.sbroom {
+  container-type: inline-size;
+  color: #14294a;
+  font-family: Manrope, 'Segoe UI', Arial, sans-serif;
+}
+
+.sbroom *,
+.sbroom *::before,
+.sbroom *::after {
+  box-sizing: border-box;
+}
+
+/* ── The dotted eyebrow (DESIGN_GUIDE §"four things", rule 3) ────────── */
+
+.sbroom-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #48628c;
+  font-family: 'DM Mono', ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.sbroom-eyebrow::before {
+  content: '';
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #35c7d5;
+  box-shadow: 0 0 0 5px rgba(53, 199, 213, .12);
+}
+
+/* ── The stage ───────────────────────────────────────────────────────── */
+
+.sbroom-stage {
+  position: relative;
+  height: 400px;
+  margin-top: 14px;
+  border: 1px solid rgba(38, 79, 139, .14);
+  border-radius: 28px;
+  background: linear-gradient(180deg, #edf5ff 0%, #f8fbff 87%);
+  box-shadow: 0 22px 60px rgba(52, 96, 164, .12);
+  overflow: hidden;
+}
+
+/* The two rings are the room's frame, not a reading of it. They are drawn at
+   the same two sizes on every run and are not scaled, counted or coloured by
+   anything measured — so they claim nothing. Every element that does carry a
+   number is built in `model.ts` and omitted when the number is absent. */
+.sbroom-orbit {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border: 1px solid rgba(79, 119, 182, .19);
+  border-radius: 50%;
+}
+
+.sbroom-orbit i {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.sbroom-orbit-one {
+  width: 378px;
+  height: 158px;
+  transform: translate(-50%, -50%) rotate(-20deg);
+  animation: sbroom-slowspin 20s linear infinite;
+}
+
+.sbroom-orbit-one i {
+  top: -4px;
+  left: 19%;
+  background: #35c7d5;
+  box-shadow: 0 0 0 6px rgba(53, 199, 213, .12), 0 0 15px #35c7d5;
+}
+
+.sbroom-orbit-two {
+  width: 505px;
+  height: 238px;
+  transform: translate(-50%, -50%) rotate(31deg);
+  animation: sbroom-slowspin-reverse 25s linear infinite;
+}
+
+.sbroom-orbit-two i {
+  right: 19%;
+  bottom: -4px;
+  background: #9679ef;
+  box-shadow: 0 0 0 6px rgba(150, 121, 239, .12), 0 0 15px #9679ef;
+}
+
+/* ── The pitch, at the centre ────────────────────────────────────────── */
+
+.sbroom-core {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 168px;
+  height: 168px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, .9);
+  border-radius: 36px;
+  color: #ffffff;
+  text-align: center;
+  transform: translate(-50%, -50%) rotate(-9deg);
+  background: linear-gradient(145deg, #306fe9, #725ce1 72%);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, .42), 0 24px 52px rgba(61, 90, 185, .28);
+  animation: sbroom-core-float 6s ease-in-out infinite;
+}
+
+.sbroom-core::before {
+  content: '';
+  position: absolute;
+  inset: 11px;
+  border: 1px solid rgba(255, 255, 255, .25);
+  border-radius: 27px;
+}
+
+.sbroom-core-inner {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.sbroom-core-label {
+  margin-bottom: 7px;
+  opacity: .78;
+  font: 500 9px 'DM Mono', ui-monospace, monospace;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+/* Two lines, then an ellipsis. A founder's product name is whatever they typed
+   and some of them are long; letting it overflow a 168px tile is the one way
+   this card can look broken on real data. */
+.sbroom-core-name {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -.05em;
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.sbroom-core-meta {
+  display: block;
+  margin-top: 3px;
+  opacity: .85;
+  font: 500 9px 'DM Mono', ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+/* ── The buyers ──────────────────────────────────────────────────────── */
+
+.sbroom-chip {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 148px;
+  /* 32%, not the landing page's unbounded width. Two of the six anchors sit
+     level with the 168px pitch tile, and a founder's group names are whatever
+     the audience step produced — "Operations manager at a mid-market agency"
+     is a real one. Wider than this and a long label walks over the pitch at
+     the middle of the container range. The name ellipses instead. */
+  max-width: 32%;
+  padding: 10px 12px 10px 10px;
+  border: 1px solid rgba(255, 255, 255, .9);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .86);
+  box-shadow: 0 13px 30px rgba(48, 84, 143, .12);
+  backdrop-filter: blur(10px);
+  animation: sbroom-chip-float 5s ease-in-out infinite;
+}
+
+.sbroom-chip-avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.sbroom-chip-text {
+  min-width: 0;
+}
+
+.sbroom-chip-name {
+  display: block;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: -.025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sbroom-chip-meta {
+  display: block;
+  margin-top: 2px;
+  color: #7483a0;
+  font: 9px 'DM Mono', ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Six anchors, taken in order of how many people the group actually holds.
+   The negative delays are the landing page's stagger — a shared 5s cycle that
+   every chip enters at a different point, so they drift rather than pulse. */
+.sbroom-slot-0 { top: 24px;  left: 6px;   transform: rotate(-5deg); animation-delay: 0s; }
+.sbroom-slot-1 { top: 16px;  right: 10px; transform: rotate(6deg);  animation-delay: -1.9s; }
+.sbroom-slot-2 { top: 150px; left: 0;     transform: rotate(-4deg); animation-delay: -3.1s; }
+.sbroom-slot-3 { top: 142px; right: 0;    transform: rotate(4deg);  animation-delay: -2.3s; }
+.sbroom-slot-4 { top: 268px; left: 10px;  transform: rotate(5deg);  animation-delay: -0.8s; }
+.sbroom-slot-5 { top: 262px; right: 14px; transform: rotate(-3deg); animation-delay: -4.1s; }
+
+/* ── What they pushed back on ────────────────────────────────────────── */
+
+.sbroom-console {
+  position: absolute;
+  z-index: 4;
+  bottom: 18px;
+  left: 50%;
+  width: min(96%, 430px);
+  padding: 14px 15px;
+  border: 1px solid rgba(91, 126, 188, .18);
+  border-radius: 16px;
+  background: rgba(249, 252, 255, .86);
+  box-shadow: 0 18px 38px rgba(72, 104, 157, .14);
+  backdrop-filter: blur(10px);
+  transform: translateX(-50%) rotate(-2deg);
+  transition: transform .45s ease;
+}
+
+.sbroom-stage:hover .sbroom-console {
+  transform: translateX(-50%) rotate(0deg) translateY(-4px);
+}
+
+.sbroom-console-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(72, 108, 164, .13);
+  color: #637895;
+  font: 9px 'DM Mono', ui-monospace, monospace;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.sbroom-live {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  white-space: nowrap;
+  gap: 5px;
+  color: #2da871;
+  font-variant-numeric: tabular-nums;
+}
+
+.sbroom-live i {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: sbroom-blink 1.7s infinite;
+}
+
+.sbroom-row {
+  display: grid;
+  grid-template-columns: 8px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding-top: 9px;
+  font: 11.5px 'DM Mono', ui-monospace, monospace;
+}
+
+.sbroom-row i {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+}
+
+.sbroom-row span {
+  overflow: hidden;
+  color: #44546f;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sbroom-row b {
+  color: #33507e;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ── What the room rests on ──────────────────────────────────────────── */
+
+.sbroom-note {
+  margin: 12px 0 0;
+  color: #60718e;
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+/* ── The measured numbers, landing last ──────────────────────────────── */
+
+/* `auto-fit`, not four fixed columns: a run that measured two of the four
+   numbers gets two full-width cards rather than two cards and two holes. The
+   holes are what a reader reads as "something failed to load". */
+.sbroom-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.sbroom-stat {
+  padding: 18px 20px;
+  border: 1px solid rgba(38, 79, 139, .14);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, .72);
+  box-shadow: 0 14px 44px rgba(57, 91, 146, .06);
+}
+
+.sbroom-stat-top {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.sbroom-stat-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.sbroom-stat-label {
+  color: #60718e;
+  font: 500 9.5px 'DM Mono', ui-monospace, monospace;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+
+.sbroom-stat-value {
+  margin-top: 8px;
+  font-size: 30px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.05em;
+}
+
+.sbroom-stat-note {
+  margin: 5px 0 0;
+  color: #60718e;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+/* ── The one orchestrated moment ─────────────────────────────────────── */
+
+/* The room assembles, then what it argued about lands underneath it, then the
+   numbers follow. One sequence, in the order it happened — not scattered
+   micro-interactions (DESIGN_GUIDE §Motion).
+ *
+ * Carried by the eyebrow, the stage, the objection rows and the stat cards —
+ * never by a chip. A chip already holds a `rotate()` from its slot, and a
+ * second animation on `transform` would silently drop the tilt; the artboard
+ * arrives the whole stage instead and lets the chips drift inside it. */
+.sbroom-rise { animation: sbroom-rise .55s cubic-bezier(.22, .61, .36, 1) both; }
+.sbroom-arrive { animation: sbroom-arrive .5s cubic-bezier(.22, .61, .36, 1) both; }
+
+/* ── The landing page's keyframes, verbatim ──────────────────────────── */
+
+@keyframes sbroom-slowspin { to { transform: translate(-50%, -50%) rotate(340deg); } }
+@keyframes sbroom-slowspin-reverse { to { transform: translate(-50%, -50%) rotate(-329deg); } }
+@keyframes sbroom-core-float { 0%,100% { transform: translate(-50%, -50%) rotate(-9deg) translateY(0); } 50% { transform: translate(-50%, -50%) rotate(-5deg) translateY(-10px); } }
+@keyframes sbroom-chip-float { 0%,100% { margin-top: 0; } 50% { margin-top: -9px; } }
+@keyframes sbroom-blink { 0%,100% { opacity: 1; box-shadow: 0 0 0 0 rgba(45,168,113,.42); } 50% { opacity: .56; box-shadow: 0 0 0 5px rgba(45,168,113,0); } }
+@keyframes sbroom-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes sbroom-arrive { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
+
+/* ── Narrower columns ────────────────────────────────────────────────── */
+
+@container (max-width: 1000px) {
+  .sbroom-slot-4, .sbroom-slot-5 { display: none; }
+}
+
+@container (max-width: 720px) {
+  .sbroom-stage { height: 430px; }
+  .sbroom-orbit-one { width: 300px; height: 126px; }
+  .sbroom-orbit-two { width: 392px; height: 188px; }
+  .sbroom-core { top: 42%; width: 144px; height: 144px; border-radius: 30px; }
+  .sbroom-core::before { border-radius: 21px; }
+  .sbroom-chip { min-width: 126px; max-width: 52%; gap: 7px; padding: 8px; }
+  .sbroom-slot-2, .sbroom-slot-3 { display: none; }
+  .sbroom-console { bottom: 12px; }
+}
+
+@container (max-width: 460px) {
+  .sbroom-slot-0 { top: 12px; left: 0; }
+  .sbroom-slot-1 { top: 84px; right: 0; }
+}
+
+/* ── The collapse ────────────────────────────────────────────────────── */
+
+/* Identical to `pages/landing.css`'s block, scoped to this module's root. The
+   landing page collapses every animation and transition it owns under
+   `prefers-reduced-motion: reduce`; so does this. Not optional — a room that
+   ignores it is a room that makes somebody ill. */
+@media (prefers-reduced-motion: reduce) {
+  .sbroom,
+  .sbroom *,
+  .sbroom *::before,
+  .sbroom *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+  }
+}

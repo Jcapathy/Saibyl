@@ -130,13 +130,22 @@ export default function CapitalPage() {
     <div className="capital-ground min-h-full p-6 lg:p-8">
       <div className="max-w-4xl mx-auto space-y-8">
         {/* ── Header ── */}
+        {/* The nav calls this Raise, so the page does too.
+            It used to be headed "Who would actually fund this" under a nav item
+            reading "Who would fund this" — fine while the sidebar was a list of
+            questions, wrong now that it is the journey the landing page sells.
+            Eyebrow, name and the italic phrase are that section's own, verbatim;
+            only the styling still awaits the sweep. */}
         <header>
-          <MonoLabel>Access to capital</MonoLabel>
-          <h1 className="text-h1 text-saibyl-ink mt-2">
-            Who would{' '}
-            <em className="font-serif italic text-[#6a4fe0]">actually</em> fund
-            this
-          </h1>
+          <MonoLabel>Fundraise</MonoLabel>
+          <h1 className="text-h1 text-saibyl-ink mt-2">Raise</h1>
+          <p className="text-[13px] text-saibyl-muted mt-2 leading-relaxed max-w-2xl">
+            <em className="font-serif italic text-[#6a4fe0]">
+              How the story reads to investors &mdash; and the questions
+              you&rsquo;ll be asked, before you&rsquo;re in the room that
+              matters.
+            </em>
+          </p>
           <p className="text-[13px] text-saibyl-muted mt-2 leading-relaxed max-w-2xl">
             A curated bank of family offices, matched against your sector, your
             stage and the objections real buyers raised &mdash; not a contact

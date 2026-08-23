@@ -30,6 +30,13 @@
 
   body {
     background-color: #f8fbff;
+    /* Canvas rule 1 — "Radial washes on the ground (the app is flat #f8fbff
+       today)". Painted on <body> so the ground is washed everywhere by
+       default; a page that paints its own opaque panel simply covers it, and
+       `.sb-ground` below re-applies the same wash to that panel. */
+    background-image:
+      radial-gradient(circle at 87% 1%, rgba(127, 184, 255, .19), transparent 22rem),
+      radial-gradient(circle at 2% 26%, rgba(143, 119, 245, .10), transparent 26rem);
     color: #14294a;
     font-family: Manrope, 'Segoe UI', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
@@ -70,6 +77,22 @@
   --insight-violet: #8b73ee;
   --brand-purple: #8b73ee;
   --brand-cyan: #35c7d5;
+}
+
+/* ── The washed ground ──
+   Canvas rule 1, as a utility: two radial washes over paper, for any element
+   that paints its own page background instead of letting <body> show through.
+
+   The stops are the landing page's own numbers, copied out of
+   `pages/landing.css` rather than re-derived — a second set of numbers is a
+   second brand within a month. `components/design`'s `<Ground>` is the React
+   spelling of this class; both exist because a page that already has a root
+   element only needs the class on it. */
+.sb-ground {
+  background:
+    radial-gradient(circle at 87% 1%, rgba(127, 184, 255, .19), transparent 22rem),
+    radial-gradient(circle at 2% 26%, rgba(143, 119, 245, .10), transparent 26rem),
+    #f8fbff;
 }
 
 /* ── Gradient text (violet → blue brand) ── */
@@ -131,6 +154,20 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
+
+/* ── The design system's entrance keyframes ──
+   One moment per screen, not five: the rail deals its steps in sequence, then
+   the open stage arrives. Copied out of the approved artboard
+   (`design/Main.dc.html`) unchanged — `design_primitives.test.ts` reads that
+   file and fails if these three drift from it.
+
+   They live here, global, because keyframes cannot be scoped and two copies of
+   `sb-rise` in two stylesheets is how a system starts moving two ways. The
+   classes that consume them live in `components/design/design.css`, beside the
+   components that spell them, along with the reduced-motion collapse. */
+@keyframes sb-deal { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
+@keyframes sb-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes sb-pulse-dot { 0%,100% { box-shadow: 0 0 0 5px rgba(53,199,213,.12); } 50% { box-shadow: 0 0 0 9px rgba(53,199,213,0); } }
 
 /* ── Print-mode prose — matches SectionRenderer printMode output ── */
 .print-prose h1, .print-prose h2, .print-prose h3, .print-prose h4 {

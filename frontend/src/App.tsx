@@ -19,11 +19,11 @@ import ComparisonPage from '@/pages/ComparisonPage';
 import LandingPage from '@/pages/LandingPage';
 import DashboardPage from '@/pages/DashboardPage';
 import GuidePage from '@/pages/GuidePage';
-import IpCheckPage from '@/pages/IpCheckPage';
-import SalesToolkitPage from '@/pages/SalesToolkitPage';
-import WebsitePage from '@/pages/WebsitePage';
+import GrowPage from '@/pages/GrowPage';
+import LaunchPage from '@/pages/LaunchPage';
+import PositionPage from '@/pages/PositionPage';
+import ValidatePage from '@/pages/ValidatePage';
 import LoginPage from '@/pages/LoginPage';
-import MarketingPage from '@/pages/MarketingPage';
 import NewSimulationPage from '@/pages/NewSimulationPage';
 import PackLibraryPage from '@/pages/PackLibraryPage';
 import ProjectDetailPage from '@/pages/ProjectDetailPage';
@@ -42,6 +42,25 @@ import SimulationDetailPage from '@/pages/SimulationDetailPage';
 import SimulationRunPage from '@/pages/SimulationRunPage';
 import SimulationsPage from '@/pages/SimulationsPage';
 import { useAuthStore } from '@/store/auth';
+
+/**
+ * A path a stage absorbed, kept alive for the links people already hold.
+ *
+ * Four modules stopped having a noun of their own when the nav became the
+ * journey. Their pages were deleted rather than left orphaned — a second
+ * implementation of a screen is how two surfaces end up disagreeing — but the
+ * paths stay, because a bookmark, a shared link or a founder's muscle memory
+ * would otherwise fall through to the catch-all and land on the marketing site.
+ *
+ * `<Navigate to="/app/launch">` with a literal string would drop the query,
+ * and every inbound link to these carried `?project=<id>`. That redirect puts
+ * the founder on the right stage looking at the wrong product, which is worse
+ * than a 404 because nothing about it looks wrong.
+ */
+function Absorbed({ by }: { by: string }) {
+  const { search } = useLocation();
+  return <Navigate to={`${by}${search}`} replace />;
+}
 
 function AnimatedRoutes() {
   const location = useLocation();
@@ -86,20 +105,38 @@ function AnimatedRoutes() {
             <Route path="messages" element={<MessagesStagePage />} />
           </Route>
           <Route path="dashboard" element={<PageTransition><DashboardPage /></PageTransition>} />
-          <Route path="ip-check" element={<PageTransition><IpCheckPage /></PageTransition>} />
-          {/* "Who would fund this?" — the family-office bank. Global for the
-              same reason the clearance check is: it is asked before there is a
-              rail to hang it on, and the answer is stored against one product
-              rather than being a step in one. */}
+
+          {/* ── The journey ──────────────────────────────────────────────
+              Validate · Position · Launch · Grow · Raise, the five stages the
+              landing page sells, at the paths their names imply.
+
+              The nav these replaced was a list of nouns that mapped to none of
+              them, so a founder read one product on the way in and arrived at
+              another. Each stage page composes the modules that already
+              existed — no module moved, and every old path below still
+              resolves, so backing the journey out is a navigation change
+              rather than a revert. */}
+          <Route path="validate" element={<PageTransition><ValidatePage /></PageTransition>} />
+          <Route path="position" element={<PageTransition><PositionPage /></PageTransition>} />
+          <Route path="launch" element={<PageTransition><LaunchPage /></PageTransition>} />
+          <Route path="grow" element={<PageTransition><GrowPage /></PageTransition>} />
+          {/* Raise. The path stays `capital` — every link, bookmark and test
+              that points at it keeps working; only the label joined the
+              journey. */}
           <Route path="capital" element={<PageTransition><CapitalPage /></PageTransition>} />
-          {/* The website check and the three sales artifacts, global as well
-              as being steps on a product's rail. They were reachable only from
-              inside a product, so a founder on `/app/home` had no path to the
-              flagship module at all — see the pages' own docstrings. Same
-              components, same props; these routes add a way in, not a second
-              implementation. */}
-          <Route path="website" element={<PageTransition><WebsitePage /></PageTransition>} />
-          <Route path="sales" element={<PageTransition><SalesToolkitPage /></PageTransition>} />
+
+          {/* ── Absorbed ──
+              Four modules that were their own noun in the old sidebar and are
+              now a panel inside the stage that owns them. In each case the
+              stage's component is a superset of the page it replaced — the
+              clearance card and the head-to-head panel render strictly more
+              than `IpCheckPage` and `MarketingPage` did — so the pages were
+              deleted rather than kept as a second way to see the same thing. */}
+          <Route path="ip-check" element={<Absorbed by="/app/validate" />} />
+          <Route path="website" element={<Absorbed by="/app/position" />} />
+          <Route path="sales" element={<Absorbed by="/app/launch" />} />
+          <Route path="marketing" element={<Absorbed by="/app/launch" />} />
+
           <Route path="guide" element={<PageTransition><GuidePage /></PageTransition>} />
           <Route path="projects" element={<PageTransition><ProjectsPage /></PageTransition>} />
           <Route path="projects/:id" element={<PageTransition><ProjectDetailPage /></PageTransition>} />
@@ -111,10 +148,6 @@ function AnimatedRoutes() {
           <Route path="prospects/discover" element={<PageTransition><ProspectDiscoverPage /></PageTransition>} />
           <Route path="prospects/settings" element={<PageTransition><ProspectSettingsPage /></PageTransition>} />
           <Route path="prospects/:id" element={<PageTransition><ProspectDetailPage /></PageTransition>} />
-          {/* Testing more than one message had no surface at all — it was
-              reachable only by setting a variant count inside the simulation
-              wizard, which is why nobody could find it. */}
-          <Route path="marketing" element={<PageTransition><MarketingPage /></PageTransition>} />
           <Route path="simulations" element={<PageTransition><SimulationsPage /></PageTransition>} />
           <Route path="simulations/new" element={<PageTransition><NewSimulationPage /></PageTransition>} />
           <Route path="simulations/:id" element={<PageTransition><SimulationDetailPage /></PageTransition>} />

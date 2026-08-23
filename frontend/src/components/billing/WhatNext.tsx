@@ -85,8 +85,11 @@ export default function WhatNext({ productId }: { productId?: string | null }) {
           <div className="mt-3">
             <PriceTag entry={prices?.clearance?.STANDARD} />
           </div>
+          {/* The clearance check is a card on Validate now. `/app/ip-check`
+              still redirects here, but a link that bounces is a link that can
+              rot quietly — this one goes where the card is. */}
           <Link
-            to="/app/ip-check"
+            to="/app/validate"
             className="inline-flex items-center gap-1.5 mt-3 px-4 py-2 rounded-xl bg-saibyl-blue text-white font-semibold text-[12.5px] hover:bg-saibyl-gold-hover transition-colors self-start"
           >
             Check who owns it

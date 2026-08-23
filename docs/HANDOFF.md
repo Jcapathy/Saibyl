@@ -588,6 +588,23 @@ From the user directly. These persist across sessions.
   of the phase for a fraction of what they cost discovered one at a time. **Run
   the sweep at the phase boundary.** The failure classes worth sweeping for are
   in §2a, because they are the ones this codebase actually produces.
+- **Any UI work reads `design/` before it writes code.** The founder approved a
+  canvas on 2026-08-20 — four artboards and `design/canvas.json`, whose
+  `annotations` state the rules verbatim. **Those annotations are the design
+  law for everything behind the login**, and they cover motion as well as
+  palette: a screen that adopts the washes and drops the keyframes has
+  implemented half the design. Three days later a session built two brand-new
+  app pages without ever opening the folder, because nothing in the repo
+  pointed at it, and **the founder found the drift himself on his first
+  read-through of the site**. The pointer now exists in three places, so a cold
+  session has no excuse: `CLAUDE.md` at the repo root (loaded automatically),
+  `design/README.md` (how to read the artboards), and
+  `frontend/src/test/ia.test.ts`, which fails when a page renders a heading
+  without composing `frontend/src/components/design/`. Prose is lost to a
+  compaction summary; a red suite is not. `docs/DESIGN_GUIDE.md` is the
+  written-out system, and `frontend/src/pages/landing.css` is where the values
+  actually live — when they disagree, `landing.css` wins and the docs are
+  stale.
 - **Authorship is Saido Labs LLC.** Commit with
   `--author="Saido Labs LLC <info@saidolabs.com>"`. **No Claude or Claude Code
   attribution** — no `Co-Authored-By`, no "Generated with", no 🤖. The committer

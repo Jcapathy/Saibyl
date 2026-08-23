@@ -8,6 +8,81 @@ choices.
 
 ---
 
+## 2026-08-23 — The app behind the login mirrors the journey the landing sells
+
+Founder's decisions, taken on his first end-to-end read of the live site.
+
+**What prompted it.** The landing page sells five stages — Validate, Position,
+Launch, Grow, Raise — and the app behind the login was a list of nouns that
+mapped to none of them. A founder who bought the story on the landing arrived
+at a different product. Separately, the approved design canvas in `design/`
+(four artboards, 2026-08-20, carrying the landing aesthetic *and* its motion)
+had never been implemented, and two new pages were built three days later
+without anyone opening the folder — because nothing in the repo pointed at it.
+
+**Decided:**
+
+1. **The navigation is the journey.** Home · How this works · Validate ·
+   Position · Launch · Grow · Raise · Your reports, then Everything else with
+   Settings last. Each stage carries the landing page's own copy as its
+   on-page explanation and the landing's mark beside it in the rail —
+   ◎ Validate, ✦ Position, ⌁ Launch, ↗ Grow, ◈ Raise. Two surfaces telling one
+   story, in the same words and the same symbols.
+
+2. **The website check folds into Position**, rather than being a nav item of
+   its own. The landing already describes it exactly — *"which objections kill
+   the pitch, and which answers actually move them. Test the fix on the same
+   room, and watch the delta"* — which is the check, the revision and the
+   before/after, named without jargon.
+
+3. **The USPTO clearance check folds into Validate**, as a card. "Is this even
+   mine to build?" is an idea-stage question; it was top-level only because it
+   had nowhere else to live.
+
+4. **Grow gets built.** It was the one stage the landing sells with nothing
+   behind it. The founder's reasoning: it is the stage reached *after* the
+   first four — validated, positioned, gone to market, now needing traction —
+   and it rehearses pricing moves, feature drops and expansion pitches
+   **before** the founder commits to a pivot, an addition or a subtraction.
+   The alternative was shipping a stage that leads nowhere, which the
+   no-dead-ends rule forbids.
+
+5. **Companies is removed.** GTM discovery scores candidates against an
+   archetype rather than against buying intent, and on the ParryAI run it
+   returned the competitors building the same product — companies that would
+   never buy it. The nav item and routes go; the backend stays, so the decision
+   is reversible.
+
+6. **Message tests folds into Launch.** It is already what the landing promises
+   there — *"up to eight versions of the message, head to head, in front of the
+   same room"* — and it existed as a separate noun only because the arenas had
+   no door when they shipped.
+
+7. **`design/` becomes a standing pointer.** A root `CLAUDE.md`, a
+   `design/README.md`, a rule in `HANDOFF.md` §2, and — the part that actually
+   holds — a test that fails when a page renders a heading without the shared
+   design primitives. Prose gets lost to a compaction summary; a red suite does
+   not. This rule exists because the failure already happened.
+
+**Engineering decisions taken while implementing the above:**
+
+- **An absorbed page is deleted, not kept.** `WebsitePage`, `SalesToolkitPage`,
+  `IpCheckPage` and `MarketingPage` were all strict subsets of the stage
+  component that replaced them, and two live surfaces rendering the same thing
+  is how two surfaces end up disagreeing. Their four **paths** stay, as
+  `<Absorbed by="…">` redirects, because a bookmark falling through the
+  catch-all lands on the marketing site and reads as "your account is gone".
+  `Absorbed` carries the query string through — `<Navigate to="/app/launch">`
+  drops it, and every inbound link carried `?project=<id>`, so the plain
+  redirect would land the founder on the right stage showing the wrong product.
+  Two tests hold it: the retired paths must point at their stage, and nothing
+  may *link* to a path that only redirects.
+
+- **Companies is demoted, not deleted, and the ratchet says so out loud.**
+  `DEMOTED` in `ia.test.ts` exempts `/app/prospects/settings` from the
+  three-click budget and **not** from reachability — so burying it is recorded,
+  while losing the last link into it still fails the suite.
+
 ## 2026-08-22 — An honest page outranks a higher-scoring one
 
 A live fintech revision delivered a page claiming **SOC 2 Type II, ISO 27001,

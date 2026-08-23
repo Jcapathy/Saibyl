@@ -8,6 +8,47 @@ running delta record.
 
 ---
 
+## 2026-08-23 — The app behind the login becomes the journey, and gets a design layer
+
+Front-end only. No endpoint, table or service changed; every module kept its
+API and its behaviour, and what moved was where a founder finds it.
+
+- **`components/design/` is new, and is the shared design layer** the four
+  landing-page rules are expressed in once instead of per page: `Ground`
+  (radial washes), `Card(carries='stage'|'meaning'|'density')`, `Eyebrow` (the
+  dotted mono label), `PageHeader` (which owns the one Playfair-italic phrase
+  per heading), and `Deal`/`Rise` for the deal-then-arrive motion. `Card`
+  deliberately paints no padding — a primitive that sets its own spacing is a
+  primitive every caller fights.
+
+  The layer exists because prose pointing at `design/` had already failed:
+  the canvas was approved 2026-08-20 and two new pages were built three days
+  later without it. `test/ia.test.ts` §6 is the part that holds — a page
+  rendering its own `<h1>` without composing these primitives fails the suite,
+  and `AWAITING_THE_SWEEP` is asserted to match the tree **exactly in both
+  directions**, so the debt list can shrink but never quietly grow.
+
+- **Five stage pages, composed from modules that already existed.**
+  `ValidatePage`, `PositionPage`, `LaunchPage`, `GrowPage` and `CapitalPage`
+  (relabelled Raise) are the nav. Each carries the landing page's own copy and
+  its mark — ◎ ✦ ⌁ ↗ ◈. `GrowPage` adds no backend at all: it composes runs,
+  archetypes and the room the other stages already produce.
+
+- **`components/room/` replaces `analysis/HeadlineStats`** on the report page.
+  Same two props (`headline`, `quality`), same four measured stats, drawn as
+  the room the landing page's hero promises rather than as a table of tiles.
+  `model.ts` is pure and holds every number and label; `Room.tsx` holds only
+  the animation schedule, so there is nowhere for a plausible-looking default
+  to enter. `HeadlineStats` is deleted rather than left as a second renderer of
+  the same figures.
+
+- **Four routes became redirects, and their pages were deleted.**
+  `/app/ip-check`, `/app/website`, `/app/sales`, `/app/marketing` now render
+  `<Absorbed by="…">`, which carries the query string through — the inbound
+  links all passed `?project=<id>`, and a plain `<Navigate to="…">` drops it.
+  `LaunchPage` reads `?product=` and legacy `?project=` so those deep links
+  still select the right product.
+
 ## 2026-08-22 — A verification stage between the generator and the founder
 
 - **`services/website/claims.py`** is new: `unsupported_claims(page_text,

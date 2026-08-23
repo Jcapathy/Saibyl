@@ -19,7 +19,7 @@ import {
 import SectionRenderer from '@/components/report/SectionRenderer';
 import ReportExport from '@/components/report/ReportExport';
 import WhatNext from '@/components/billing/WhatNext';
-import HeadlineStats from '@/components/analysis/HeadlineStats';
+import Room from '@/components/room/Room';
 import QualityNotice from '@/components/analysis/QualityNotice';
 import AdversarialNotice from '@/components/analysis/AdversarialNotice';
 import SentimentArc from '@/components/analysis/SentimentArc';
@@ -653,7 +653,21 @@ export default function ReportViewerPage() {
                   </p>
                 </>
               ) : null}
-              <HeadlineStats headline={analysis.headline} quality={analysis.quality} />
+              {/* The room, where the table of numbers used to be.
+                  `design/canvas.json`, annotation `the-room`: the landing
+                  page's hero is a room of buyers orbiting a pitch, and inside
+                  the app — where the founder paid for it — that same room had
+                  always been four stat tiles. `Room` renders those same four,
+                  from the same two props, around the thing they measured.
+                  It draws nothing it was not given and returns null on a run
+                  that carried nothing measurable. */}
+              <Room
+                pitchName={simulation?.name ?? ''}
+                groups={analysis.by_archetype}
+                objections={analysis.objections}
+                headline={analysis.headline}
+                quality={analysis.quality}
+              />
               {/* Above the quality notice, not below it. The headline mixes
                   both cohorts, so a reader who has just looked at a negative
                   number needs to know a share of the swarm was constructed to

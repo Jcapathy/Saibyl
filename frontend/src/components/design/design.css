@@ -1,0 +1,104 @@
+/* The design system, in the four rules the founder wrote on the canvas.
+ *
+ * `design/canvas.json`, verbatim:
+ *
+ *   1. Radial washes on the ground (the app is flat #f8fbff today)
+ *   2. Soft blue shadows on cards that carry meaning — hairlines stay on dense lists
+ *   3. The dotted eyebrow on every mono label
+ *   4. One Playfair italic phrase per major heading
+ *
+ * Rule 1 lives in `index.css` (a ground cannot be scoped to a component, and
+ * <body> should carry it). Rules 2–4 live here, next to the components in
+ * `DesignPrimitives.tsx` that spell them.
+ *
+ * Every value is the landing page's own, copied out of `pages/landing.css` and
+ * the approved artboard `design/Main.dc.html` rather than re-derived. There is
+ * exactly one set of numbers for this system; a second set is a second brand
+ * within a month.
+ *
+ * On the canvas's other constraint — "Density is deliberately unchanged. Same
+ * type sizes, same 13px body, same row rhythm" — nothing in this file sets
+ * padding, line-height or a row height. Depth and colour are what changed;
+ * spacing is not, and a primitive that quietly re-padded every call site is how
+ * an app starts reading like a marketing page.
+ *
+ * This supersedes `components/capital/capital.css`, which ported the same
+ * system to one page while the app-wide restyle was still in other hands. The
+ * classes there are the same values under `capital-` names; fold that module
+ * onto these and delete it.
+ */
+
+/* ── Rule 3 — the dotted eyebrow ────────────────────────────────────────────
+   Every mono label that names a block wears the dot. The qualifier matters:
+   the dot marks where a block begins, so the 9.5px captions *inside* a card —
+   a stat's term, the speaker above a quote — do not get one. Dotting those
+   turns a dense record into a constellation, and rule 4's neighbour ("density
+   does not change") says not to. */
+.sb-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+}
+.sb-eyebrow::before {
+  content: '';
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #35c7d5;
+  box-shadow: 0 0 0 5px rgba(53, 199, 213, .12);
+}
+
+/* The artboard's one exception: the eyebrow over a stage that is *open* has a
+   dot that breathes. It is a state, not decoration — reserve it for a surface
+   that is actually live, or it stops meaning anything. */
+.sb-eyebrow-live::before {
+  animation: sb-pulse-dot 2.6s ease-in-out infinite;
+}
+
+/* ── Rule 2 — depth means meaning ───────────────────────────────────────────
+   Two shadows and a deliberate absence. `sb-stage` is the one panel a screen
+   is about; `sb-meaning` is a card carrying a claim; a dense-list row gets no
+   shadow rule at all, only its hairline. Shadow every row and the page turns
+   to soup — which is why `<Card>` makes the caller say which of the three it
+   is rather than letting a call site guess. */
+.sb-stage { box-shadow: 0 22px 60px rgba(52, 96, 164, .12); }
+.sb-meaning { box-shadow: 0 14px 44px rgba(57, 91, 146, .06); }
+
+/* ── Motion ─────────────────────────────────────────────────────────────────
+   Durations and easings are the artboard's, unchanged. The rail deals its
+   steps ~70ms apart — fast enough not to be a wait, slow enough to read as a
+   sequence rather than a flicker — and the open stage rises once the deal is
+   done. One orchestrated arrival per screen, not scattered micro-interactions. */
+.sb-deal { animation: sb-deal .45s cubic-bezier(.22,.61,.36,1) both; }
+.sb-rise { animation: sb-rise .5s cubic-bezier(.22,.61,.36,1) both; }
+
+/* The hairline lift, for a card that goes somewhere. Navigation should feel
+   like it can be touched; a card that cannot be clicked must not lift, because
+   then the lift is a promise the surface does not keep. */
+.sb-lift { transition: transform .22s ease, box-shadow .22s ease; }
+.sb-lift:hover { transform: translateY(-2px); }
+
+/* ── And all of it collapses under a reduced-motion preference ───────────────
+   The landing page does this, the artboard does this, so the app does this. It
+   is not optional and it is not a nicety: for a reader with vestibular
+   sensitivity a page that deals itself in is a page that costs them something
+   to open. Every animated class this file ships is named below —
+   `design_primitives.test.ts` re-derives that list from this file and fails if
+   a new one is added without a line here. */
+@media (prefers-reduced-motion: reduce) {
+  .sb-deal,
+  .sb-rise {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .sb-eyebrow-live::before {
+    animation: none;
+  }
+  .sb-lift,
+  .sb-lift:hover {
+    transition: none;
+    transform: none;
+  }
+}

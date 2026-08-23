@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Building2,
   Download,
   FileText,
   Loader2,
@@ -65,14 +64,13 @@ const SHORTCUTS = [
     blurb: 'Buyers you already worked out, ready for anything else you sell',
     Icon: Users,
   },
+  /* Companies used to be the third entry here. It is gone by decision: GTM
+     discovery ranks candidates against a buyer archetype rather than against
+     any intent to buy, and on a live security run it returned the competitors
+     building the same product. The module and its routes remain, so the call
+     is reversible; this was the last surface still recommending it. */
   {
-    to: '/app/prospects',
-    label: 'Companies',
-    blurb: 'Real companies that match your buyers, with the page that says so',
-    Icon: Building2,
-  },
-  {
-    to: '/app/marketing',
+    to: '/app/launch',
     label: 'Message tests',
     blurb: 'Several versions of a pitch, in front of one shared room',
     Icon: MessageSquare,

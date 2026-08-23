@@ -293,7 +293,7 @@ export default function ProjectDetailPage() {
       label: 'Test more than one message',
       blurb:
         'Put two or more versions of your pitch in front of the same room and see which one lands.',
-      to: `/app/marketing?project=${id}`,
+      to: `/app/launch?product=${id}`,
       Icon: MessageSquare,
     },
     {
