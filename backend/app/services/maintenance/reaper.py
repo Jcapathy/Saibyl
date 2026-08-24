@@ -99,6 +99,15 @@ class StuckRule:
     # sweep for days. This is a schema fact per table, not a flag somebody
     # maintains by hand: a rule cannot be written without answering it.
     error_column: str = "error_message"
+    # Where this table keeps the state itself.
+    #
+    # Nine tables call it `status`; `documents` calls it `processing_status`.
+    # Exactly the same class of fact as `error_column` above, and it bites the
+    # same way: `.in_("status", …)` against a table with no `status` column
+    # makes PostgREST reject the read, `sweep_once` logs it, and that table is
+    # skipped on every sweep forever. The first `documents` rule was written
+    # without this and would have done precisely nothing.
+    status_column: str = "status"
 
     # There was a `writes_message` flag here, because `reports` had no
     # `error_message` column and naming one that does not exist makes PostgREST
@@ -283,6 +292,37 @@ STUCK: tuple[StuckRule, ...] = (
         "found are saved — start a new search when you're ready.",
         error_column="error",
     ),
+    # The upload itself, and it was the omission this list had left.
+    #
+    # Found by running Saibyl through Saibyl on 2026-08-23: the script uploaded
+    # its two documents, the process ended, and both rows sat at `processing`
+    # for good. `store_upload` queues extraction as an `asyncio.create_task` —
+    # there is no durable queue in this codebase — so **any restart of the API
+    # strands every upload currently in flight**, which on Render means every
+    # deploy. Nothing here closed them, so the founder saw a file listed with a
+    # spinner that would never resolve, and audience synthesis kept answering
+    # "No processed documents in this project" about a project that visibly had
+    # two.
+    #
+    # Ten minutes: extraction is a fetch, a text conversion and one fast-model
+    # call. `llm_vision` on a slide deck is the slow path and is still minutes,
+    # not tens of them — and this deadline only has to be longer than the
+    # slowest honest extraction, not longer than the slowest run.
+    #
+    # No refund state. Extraction spends a `claude-haiku` call the moment it
+    # starts and storage is already consumed by the upload; there is no state
+    # here that proves no model was called.
+    #
+    # `processing_status`, not `status`: this is the one table that spells the
+    # state that way, and the default would have made this rule match nothing
+    # on every sweep — silently, which is the failure mode the whole
+    # `error_column` comment above exists to warn about.
+    StuckRule(
+        "documents", ("pending", "processing"), 10,
+        "We could not finish reading this file. Nothing else was affected — "
+        "upload it again, and tell us if it keeps happening.",
+        status_column="processing_status",
+    ),
 )
 
 
@@ -310,7 +350,7 @@ async def sweep_once(now: datetime | None = None) -> dict[str, int]:
                 # while the website rows beside them were being closed
                 # correctly. These rows are small and capped at 200.
                 .select("*")
-                .in_("status", list(rule.states))
+                .in_(rule.status_column, list(rule.states))
                 .lt(rule.age_column, cutoff)
                 .limit(200)
                 .execute()
@@ -324,12 +364,12 @@ async def sweep_once(now: datetime | None = None) -> dict[str, int]:
             # Read before the write. The refund decision turns on the state the
             # row was found in, and reading it back afterwards would ask the
             # question of a row this loop has already changed.
-            was = str(row.get("status") or "")
+            was = str(row.get(rule.status_column) or "")
             org_id = row.get("organization_id")
             charged = int(row.get("credits_charged") or 0)
 
             payload: dict[str, object] = {
-                "status": "failed",
+                rule.status_column: "failed",
                 rule.error_column: rule.message,
             }
 
@@ -338,7 +378,10 @@ async def sweep_once(now: datetime | None = None) -> dict[str, int]:
                     admin.table(rule.table)
                     .update(payload)
                     .eq("id", row["id"])
-                    .eq("status", was)
+                    # The compare-and-set, on this table's own state column: a
+                    # row its real worker finished between the read and this
+                    # write must not be overwritten with a failure.
+                    .eq(rule.status_column, was)
                     .execute()
                 )
             except Exception:  # noqa: BLE001
@@ -348,7 +391,7 @@ async def sweep_once(now: datetime | None = None) -> dict[str, int]:
                 )
                 continue
 
-            # The `.eq("status", was)` guard above is a compare-and-set, and its
+            # The `.eq(rule.status_column, was)` guard above is a compare-and-set, and its
             # result has to be read or the guard protects only the row.
             #
             # Zero rows means the worker moved this row on between the SELECT

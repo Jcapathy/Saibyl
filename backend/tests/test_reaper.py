@@ -659,3 +659,75 @@ def test_a_capture_driven_deadline_outlasts_the_worker_it_watches():
             f"{rule.minutes - ceiling_min:.0f} min for every model call the "
             f"worker makes"
         )
+
+
+# ── documents: the table this list had left out ────────────────────────────
+
+@pytest.mark.asyncio
+async def test_an_upload_stranded_by_a_restart_is_closed(world):
+    """Found by running Saibyl through Saibyl on 2026-08-23.
+
+    `store_upload` queues extraction as an `asyncio.create_task` — there is no
+    durable queue in this codebase — so any restart of the API strands every
+    upload in flight, which on Render means every deploy. Nothing closed them:
+    the founder saw a file listed with a spinner that would never resolve, and
+    audience synthesis kept answering "No processed documents in this project"
+    about a project that visibly had two.
+    """
+    store, _admin, _refunds = world
+    store["documents"] = [
+        {
+            "id": "doc-stranded",
+            "organization_id": ORG,
+            # **`processing_status`, not `status`.** This is the whole test.
+            "processing_status": "processing",
+            "created_at": (NOW - timedelta(minutes=30)).isoformat(),
+        }
+    ]
+
+    await reaper.sweep_once(now=NOW)
+
+    row = store["documents"][0]
+    assert row["processing_status"] == "failed", (
+        "the documents rule did not fire — the sweep filters on this table's "
+        "own state column, and naming `status` would silently match nothing"
+    )
+    assert "could not finish reading this file" in row["error_message"]
+
+
+@pytest.mark.asyncio
+async def test_an_upload_still_being_read_is_left_alone(world):
+    """Ten minutes is the deadline; a file two minutes in is still working."""
+    store, _admin, _refunds = world
+    store["documents"] = [
+        {
+            "id": "doc-working",
+            "organization_id": ORG,
+            "processing_status": "processing",
+            "created_at": (NOW - timedelta(minutes=2)).isoformat(),
+        }
+    ]
+
+    await reaper.sweep_once(now=NOW)
+
+    assert store["documents"][0]["processing_status"] == "processing"
+
+
+def test_every_rule_names_a_state_column_its_table_actually_has():
+    """The `error_column` lesson, applied to the state column.
+
+    Six tables spell the failure sentence `error_message` and one spells it
+    `error`; nine spell the state `status` and `documents` spells it
+    `processing_status`. Naming a column a table does not have makes PostgREST
+    reject the read, `sweep_once` logs it, and that table is skipped on every
+    sweep forever — which is how `reports` went unswept for days.
+
+    Asserted per table rather than trusted to the default, because the default
+    is what was wrong: the first `documents` rule inherited `status` and would
+    have done nothing at all.
+    """
+    spelled = {r.table: r.status_column for r in reaper.STUCK}
+    assert spelled["documents"] == "processing_status"
+    assert spelled["simulations"] == "status"
+    # And nothing invented a third spelling.
+    assert set(spelled.values()) == {"status", "processing_status"}
