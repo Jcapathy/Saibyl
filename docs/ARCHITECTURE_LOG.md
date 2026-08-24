@@ -8,6 +8,46 @@ running delta record.
 
 ---
 
+## 2026-08-23 — Every page behind the login is a landing page
+
+The founder read the swept app against the public site: **"very sterile,
+mechanical, and looks AI-generated."** The instruction was to give each nav page
+the landing page's own shape — hero, large type, then scroll, with content
+fading in as the reader reaches it. `How this works` is the built example and
+the pattern for the rest.
+
+- **New in `components/design/`:** `Longform` (the measure, and it runs the
+  reveal observer over its own subtree), `Hero` (eyebrow, `clamp(3rem, 5.9vw,
+  5.5rem)` heading with one Playfair phrase, lead, actions), `Chapter` (kicker,
+  `clamp(2.2rem, 4.2vw, 4rem)` title with an `<em>` accent, copy) and `Reveal`.
+
+- **`useReveal` is one implementation, and `LandingPage` now calls it too.** It
+  was ~45 lines inside that page — observer, reduced-motion branch, and the
+  2.5s post-load fallback that stops a full-page capture photographing a blank
+  page (`CRITICS_LOG` 2026-08-16). A second copy behind the login is precisely
+  the drift that produced this work, so there is one.
+
+- **Every value is copied from `landing.css`, and §7 of
+  `design_primitives.test.ts` asserts it property by property.** Thirteen
+  pairings — width, hero padding, both heading ramps, both leads, the reveal's
+  transition and transform. A hero size invented here would be a second brand
+  inside a month, which is the risk this grant carries.
+
+- **Not `.v3land` itself**, though that was the tempting shortcut. That scope
+  carries `a { color: inherit }`, which outranks a Tailwind text colour on an
+  element selector and would have turned every link inside an app component the
+  colour of its body text. The values travel; the cascade does not.
+
+- **`.sb-hero` was already taken** — by the gradient panel added earlier the
+  same day — so that one is now `.sb-tinted`. Two different things under one
+  class name is how a stylesheet starts lying.
+
+- **Two rules in the density section were rewritten rather than deleted.**
+  `design.css` could previously name no `font-size` and no `padding` at all;
+  both now enumerate the exact selectors allowed to, so the page frame may size
+  and space itself while padding a card from the stylesheet — the back door
+  around the no-padding rule — still fails.
+
 ## 2026-08-23 — Four defects the sweep surfaced, fixed
 
 Found by the agents restyling these pages; each is a claim the product made and
@@ -68,8 +108,9 @@ before it is allowed in `design.css` — so the system cannot invent one.
 
 New in `components/design/`: **`Action`** (the gradient control with its blue
 glow, plus a white `quiet` variant), **`Notice`** (violet blocked / amber thin /
-cyan live), inset highlights on `.sb-stage` and `.sb-meaning`, and `.sb-hero`
-for a panel with a ground of its own. `Card` and `Action` are polymorphic via
+cyan live), inset highlights on `.sb-stage` and `.sb-meaning`, and a class for a
+panel with a ground of its own — added as `.sb-hero`, renamed `.sb-tinted` later
+the same day when the longform work claimed that name for the page's opening. `Card` and `Action` are polymorphic via
 `as` and now forward arbitrary props — `Card` could previously be told to render
 as a `Link` and then had no way to be given the destination.
 

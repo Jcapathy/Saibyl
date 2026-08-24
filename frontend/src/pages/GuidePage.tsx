@@ -2,8 +2,16 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
 
-import { Action, Card, Deal, Eyebrow, Ground, Notice, PageHeader, Rise } from '@/components/design';
-import { dealDelayMs } from '@/components/design';
+import {
+  Action,
+  Card,
+  Chapter,
+  Ground,
+  Hero,
+  Longform,
+  Notice,
+  Reveal,
+} from '@/components/design';
 
 /**
  * How this works — the guide, teaching the product Saibyl actually is.
@@ -25,10 +33,21 @@ import { dealDelayMs } from '@/components/design';
  * stated as fact, neither was sourced, and this page cannot check either.
  * Saibyl's own numbers stay, because those are measured.
  *
- * The guide now teaches the five stages the landing page sells and the
- * navigation lists, in that order, with each card leading to its stage — the
- * whole point of a guide being that the reader can leave it for the thing it
- * describes.
+ * ---
+ *
+ * **The shape, decided later the same day: this page is a landing page.**
+ *
+ * The founder's words for what the app felt like next to the public site were
+ * "very sterile, mechanical, and looks AI-generated", and his instruction was
+ * to treat every page behind the login the way the landing page treats itself —
+ * a hero, large type, then scroll, with the content arriving as you reach it.
+ * This is the first page built that way and the test case for the rest.
+ *
+ * So the frame is `Longform` / `Hero` / `Chapter` / `Reveal`, whose values are
+ * `pages/landing.css`'s own. What is *inside* each chapter did not change: the
+ * cards, the table and the answers are the same density they were, because the
+ * canvas's constraint was about those and it still holds. A guide that opens
+ * like the landing page and then gets on with the work is the whole idea.
  */
 
 /** The journey, in the marks and words the landing page and the nav both use. */
@@ -170,60 +189,56 @@ const FAQ = [
   },
 ] as const;
 
-/** A section heading, on the system's eyebrow rather than an uppercase h2. */
-function Section({
-  eyebrow,
-  title,
-  children,
-  delayMs = 0,
-}: {
-  eyebrow: string;
-  title: string;
-  children: React.ReactNode;
-  delayMs?: number;
-}) {
-  return (
-    <Rise as="section" delayMs={delayMs} className="mb-12">
-      <Eyebrow>{eyebrow}</Eyebrow>
-      <h2 className="text-[1.375rem] font-bold tracking-[-0.02em] font-display text-saibyl-ink mt-2 mb-5">
-        {title}
-      </h2>
-      {children}
-    </Rise>
-  );
-}
-
 export default function GuidePage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   return (
-    <Ground className="p-6 lg:p-8 min-h-full">
-      <div className="max-w-4xl mx-auto">
-        <Rise className="mb-11">
-          <PageHeader
-            eyebrow="How this works"
-            title="How this works"
-            phrase="Find out what they object to, before you launch and not after."
-          >
-            <p>
-              Saibyl builds a room of the buyers you are trying to reach, puts
-              what you have written in front of them, and reports what they
-              pushed back on &mdash; with the sentences behind every number.
-              Five stages, in the order each one feeds the next. You do not have
-              to do them in order, but each one is better with the last one
-              behind it.
-            </p>
-          </PageHeader>
-        </Rise>
+    <Ground className="min-h-full pb-24">
+      <Longform>
+        {/* The hero is not wrapped in `Reveal`: it is the first screen, and a
+            page whose opening fades in looks broken for 700ms. */}
+        <Hero
+          eyebrow="How this works"
+          title="Find out what they object to,"
+          serif="before you launch."
+          actions={
+            <>
+              <Action as={Link} to="/app/validate">
+                Start with Validate
+              </Action>
+              <Action as={Link} to="/app/home" kind="quiet">
+                See what you are building
+              </Action>
+            </>
+          }
+        >
+          <p>
+            Saibyl builds a room of the buyers you are trying to reach, puts what
+            you have written in front of them, and reports what they pushed back
+            on &mdash; <b className="text-saibyl-ink font-semibold">with the
+            sentences behind every number</b>. Five stages, in the order each one
+            feeds the next. You do not have to do them in order, but each one is
+            better with the last one behind it.
+          </p>
+        </Hero>
 
         {/* ── The journey ── */}
-        <Section eyebrow="The five stages" title="Where you are, and what happens there" delayMs={dealDelayMs(1)}>
+        <Chapter
+          kicker="The five stages"
+          title={
+            <>
+              Where you are, and <em>what happens there</em>
+            </>
+          }
+          lead="Each one leads to the stage it describes — this page is a map, and a map you cannot leave is a poster."
+        >
           <div className="space-y-3">
             {STAGES.map((stage, i) => (
-              <Deal key={stage.name} index={i}>
-                {/* `meaning`, and it lifts — each card is the door to its own
-                    stage. A guide whose cards cannot be left for the thing they
-                    describe is a guide the reader has to navigate around. */}
+              /* Dealt three at a time. The landing page carries exactly three
+                 stagger delays and a fourth stops reading as a sequence, so the
+                 fourth and fifth cards land with the third rather than growing
+                 the wait. */
+              <Reveal key={stage.name} step={(Math.min(i, 3) || 0) as 0 | 1 | 2 | 3}>
                 <Card carries="meaning" lift as={Link} to={stage.to} className="block p-5">
                   <div className="flex items-start gap-4">
                     <span
@@ -247,131 +262,162 @@ export default function GuidePage() {
                     </div>
                   </div>
                 </Card>
-              </Deal>
+              </Reveal>
             ))}
           </div>
-        </Section>
+        </Chapter>
 
         {/* ── What a run costs you in time ── */}
-        <Section eyebrow="Time and cost" title="What makes a run longer, and what that buys" delayMs={dealDelayMs(2)}>
-          <Notice tone="live" title="Start at 20 people, 5 rounds, one place" className="mb-4">
-            That finishes in about three minutes and is enough to see your top
-            two or three objections. Scale up once you know which one you are
-            chasing.
-          </Notice>
+        <Chapter
+          kicker="Time and cost"
+          title={
+            <>
+              What makes a run longer, and <em>what that buys</em>
+            </>
+          }
+        >
+          <Reveal>
+            <Notice tone="live" title="Start at 20 people, 5 rounds, one place" className="mb-4">
+              That finishes in about three minutes and is enough to see your top
+              two or three objections. Scale up once you know which one you are
+              chasing.
+            </Notice>
+          </Reveal>
 
-          {/* A dense table: hairlines, no shadow per row. */}
-          <Card carries="density" className="overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-[13px]">
-                <thead>
-                  <tr className="border-b border-saibyl-border">
-                    {['What you choose', 'Quick', 'Full', 'What the extra time buys'].map((h) => (
-                      <th
-                        key={h}
-                        className="text-left px-5 py-3 font-mono text-[10px] uppercase tracking-[0.16em] text-saibyl-muted font-medium"
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {WHAT_COSTS_TIME.map((row) => (
-                    <tr key={row.choice} className="border-b border-saibyl-border last:border-0">
-                      <td className="px-5 py-3.5 text-saibyl-ink font-medium">{row.choice}</td>
-                      <td className="px-5 py-3.5 font-mono tabular-nums text-saibyl-positive">
-                        {row.quick}
-                      </td>
-                      <td className="px-5 py-3.5 font-mono tabular-nums text-saibyl-muted">
-                        {row.full}
-                      </td>
-                      <td className="px-5 py-3.5 text-saibyl-muted leading-relaxed">{row.buys}</td>
+          {/* A dense table: hairlines, no shadow per row. The chapter around it
+              grew; the rows inside it did not. */}
+          <Reveal step={1}>
+            <Card carries="density" className="overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-[13px]">
+                  <thead>
+                    <tr className="border-b border-saibyl-border">
+                      {['What you choose', 'Quick', 'Full', 'What the extra time buys'].map((h) => (
+                        <th
+                          key={h}
+                          className="text-left px-5 py-3 font-mono text-[10px] uppercase tracking-[0.16em] text-saibyl-muted font-medium"
+                        >
+                          {h}
+                        </th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        </Section>
+                  </thead>
+                  <tbody>
+                    {WHAT_COSTS_TIME.map((row) => (
+                      <tr key={row.choice} className="border-b border-saibyl-border last:border-0">
+                        <td className="px-5 py-3.5 text-saibyl-ink font-medium">{row.choice}</td>
+                        <td className="px-5 py-3.5 font-mono tabular-nums text-saibyl-positive">
+                          {row.quick}
+                        </td>
+                        <td className="px-5 py-3.5 font-mono tabular-nums text-saibyl-muted">
+                          {row.full}
+                        </td>
+                        <td className="px-5 py-3.5 text-saibyl-muted leading-relaxed">{row.buys}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </Reveal>
+        </Chapter>
 
         {/* ── Tips ── */}
-        <Section eyebrow="Getting more out of it" title="Where founders lose time" delayMs={dealDelayMs(3)}>
+        <Chapter
+          kicker="Getting more out of it"
+          title={
+            <>
+              Where founders <em>lose time</em>
+            </>
+          }
+        >
           <div className="space-y-3">
             {TIPS.map((tip, i) => (
-              <Card key={tip.title} carries="density" className="p-5">
-                <div className="flex items-start gap-3">
-                  <span className="w-6 h-6 rounded-lg bg-saibyl-blue/[0.09] flex items-center justify-center shrink-0 mt-0.5">
-                    <span className="font-mono text-[11px] font-bold text-saibyl-blue tabular-nums">
-                      {i + 1}
+              <Reveal key={tip.title} step={(Math.min(i, 3) || 0) as 0 | 1 | 2 | 3}>
+                <Card carries="density" className="p-5">
+                  <div className="flex items-start gap-3">
+                    <span className="w-6 h-6 rounded-lg bg-saibyl-blue/[0.09] flex items-center justify-center shrink-0 mt-0.5">
+                      <span className="font-mono text-[11px] font-bold text-saibyl-blue tabular-nums">
+                        {i + 1}
+                      </span>
                     </span>
-                  </span>
-                  <div>
-                    <h3 className="text-[13.5px] font-semibold text-saibyl-ink mb-1">
-                      {tip.title}
-                    </h3>
-                    <p className="text-[13px] text-saibyl-muted leading-relaxed">{tip.body}</p>
+                    <div>
+                      <h3 className="text-[13.5px] font-semibold text-saibyl-ink mb-1">
+                        {tip.title}
+                      </h3>
+                      <p className="text-[13px] text-saibyl-muted leading-relaxed">{tip.body}</p>
+                    </div>
                   </div>
-                </div>
-              </Card>
+                </Card>
+              </Reveal>
             ))}
           </div>
-        </Section>
+        </Chapter>
 
         {/* ── FAQ ── */}
-        <Section eyebrow="Questions" title="The ones people actually ask" delayMs={dealDelayMs(4)}>
+        <Chapter
+          kicker="Questions"
+          title={
+            <>
+              The ones people <em>actually ask</em>
+            </>
+          }
+        >
           <div className="space-y-2">
             {FAQ.map((item, i) => {
               const isOpen = openFaq === i;
               return (
-                <Card key={item.q} carries="density" className="overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => setOpenFaq(isOpen ? null : i)}
-                    aria-expanded={isOpen}
-                    className="w-full flex items-center justify-between px-5 py-4 text-left group"
-                  >
-                    <span className="text-[13.5px] font-medium text-saibyl-ink group-hover:text-saibyl-blue transition-colors">
-                      {item.q}
-                    </span>
-                    <ChevronDown
-                      className={`w-4 h-4 text-saibyl-muted transition-transform duration-200 shrink-0 ml-4 ${
-                        isOpen ? 'rotate-180' : ''
-                      }`}
-                    />
-                  </button>
-                  {/* Height is not animated. The old version tweened `height:
-                      auto` on every answer, which is a per-item micro-interaction
-                      — the canvas asks for one orchestrated arrival per screen,
-                      not a page that moves every time it is touched. */}
-                  {isOpen && (
-                    <p className="px-5 pb-4 text-[13px] text-saibyl-muted leading-relaxed">
-                      {item.a}
-                    </p>
-                  )}
-                </Card>
+                <Reveal key={item.q}>
+                  <Card carries="density" className="overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setOpenFaq(isOpen ? null : i)}
+                      aria-expanded={isOpen}
+                      className="w-full flex items-center justify-between px-5 py-4 text-left group"
+                    >
+                      <span className="text-[13.5px] font-medium text-saibyl-ink group-hover:text-saibyl-blue transition-colors">
+                        {item.q}
+                      </span>
+                      <ChevronDown
+                        className={`w-4 h-4 text-saibyl-muted transition-transform duration-200 shrink-0 ml-4 ${
+                          isOpen ? 'rotate-180' : ''
+                        }`}
+                      />
+                    </button>
+                    {/* Height is not animated. The old version tweened `height:
+                        auto` on every answer — a per-item micro-interaction, where
+                        the page wants one arrival per section. */}
+                    {isOpen && (
+                      <p className="px-5 pb-4 text-[13px] text-saibyl-muted leading-relaxed">
+                        {item.a}
+                      </p>
+                    )}
+                  </Card>
+                </Reveal>
               );
             })}
           </div>
-        </Section>
+        </Chapter>
 
-        {/* ── The way out ── */}
-        <Rise delayMs={dealDelayMs(5)} className="pb-8">
-          <Card carries="stage" className="sb-hero p-7 text-center">
-            <h2 className="text-[1.375rem] font-bold tracking-[-0.02em] font-display text-saibyl-ink">
-              Nothing here is worth reading twice
-            </h2>
-            <p className="text-[13px] text-saibyl-muted leading-relaxed mt-2 max-w-xl mx-auto">
-              The first run tells you more than this page can. Name what you are
-              building &mdash; a sentence is enough &mdash; and the first room is
-              about three minutes away.
-            </p>
-            <Action as={Link} to="/app/validate" className="mt-5">
+        {/* ── The way out ──
+            The landing page closes by asking for the next step, and so does
+            this. A guide is a means, and the honest end of one is the door. */}
+        <Chapter
+          kicker="Then stop reading"
+          title={
+            <>
+              Nothing here is worth <em>reading twice</em>
+            </>
+          }
+          lead="The first run tells you more than this page can. Name what you are building — a sentence is enough — and the first room is about three minutes away."
+        >
+          <Reveal>
+            <Action as={Link} to="/app/validate">
               Start with Validate
             </Action>
-          </Card>
-        </Rise>
-      </div>
+          </Reveal>
+        </Chapter>
+      </Longform>
     </Ground>
   );
 }

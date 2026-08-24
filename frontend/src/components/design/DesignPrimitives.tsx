@@ -1,4 +1,4 @@
-import type { CSSProperties, ElementType, ReactNode } from 'react';
+import { useRef, type CSSProperties, type ElementType, type ReactNode } from 'react';
 
 import { cn } from '@/lib/utils';
 
@@ -12,6 +12,7 @@ import {
   type NoticeTone,
 } from './surfaces';
 
+import { useReveal } from './useReveal';
 import './design.css';
 
 /**
@@ -281,6 +282,159 @@ export function Card({
       style={style}
       {...rest}
     >
+      {children}
+    </Tag>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  The longform page — hero, then scroll                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A page shaped like the landing page: hero, large type, then scroll.
+ *
+ * Founder's decision on 2026-08-23, and the reason is worth keeping in front of
+ * whoever reads this next. The public site opens with a hero and reveals itself
+ * as you scroll; the app opened with a 32px heading and a wall of cards. His
+ * words for the result were "very sterile, mechanical, and looks
+ * AI-generated" — a founder who bought the story on the way in arrived at
+ * something that did not feel like the same product.
+ *
+ * `Longform` owns the measure and runs the reveal observer over its own
+ * subtree. Put `Hero` first, then `Chapter`s; wrap anything that should arrive
+ * on scroll in `Reveal`.
+ *
+ * **It does not loosen density inside the work.** A card, a row and a list are
+ * exactly as tight as they were — the canvas's constraint was about those, and
+ * it still holds. What changed is the frame around them.
+ */
+export function Longform({
+  className,
+  children,
+}: {
+  className?: string;
+  children?: ReactNode;
+}) {
+  const root = useRef<HTMLDivElement>(null);
+  useReveal(root);
+  return (
+    <div ref={root} className={cn('sb-longform', className)}>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * The opening. One eyebrow, one very large heading, one lead paragraph.
+ *
+ * `serif` is the phrase set in Playfair violet *inside* the heading, which is
+ * how the landing page spends its one accent — `<h1>Find out what they
+ * <em>actually</em> think</h1>`. Passing it as a separate prop rather than
+ * letting callers put markup in `title` keeps that to one per heading, the same
+ * way `PageHeader.phrase` does.
+ *
+ * The hero is never wrapped in `Reveal`: it is above the fold, and a page whose
+ * first screen fades in is a page that looks broken for 700ms.
+ */
+export function Hero({
+  eyebrow,
+  title,
+  serif,
+  children,
+  actions,
+}: {
+  eyebrow?: ReactNode;
+  /** The words before the accent. */
+  title: ReactNode;
+  /** The Playfair italic phrase, closing the heading. One per hero. */
+  serif?: string;
+  /** The lead paragraph, at the landing page's own hero size. */
+  children?: ReactNode;
+  /** The controls under it — normally one `Action` and one `quiet`. */
+  actions?: ReactNode;
+}) {
+  return (
+    <header className="sb-hero">
+      {eyebrow && <Eyebrow>{eyebrow}</Eyebrow>}
+      <h1 className="font-display font-extrabold text-saibyl-ink">
+        {title}
+        {serif && (
+          <>
+            {' '}
+            <span className="sb-serif">{serif}</span>
+          </>
+        )}
+      </h1>
+      {children && <div className="sb-hero-text text-saibyl-muted">{children}</div>}
+      {actions && <div className="flex flex-wrap items-center gap-3 mt-8">{actions}</div>}
+    </header>
+  );
+}
+
+/**
+ * One section of a longform page: kicker, big title, copy, then the content.
+ *
+ * `title` takes an `<em>` for the Playfair accent, matching the landing page's
+ * `.section-title em`. The whole block reveals as one — the heading and its
+ * copy arriving together is the landing page's rhythm, and staggering them
+ * reads as two separate events.
+ */
+export function Chapter({
+  kicker,
+  title,
+  lead,
+  children,
+  className,
+}: {
+  kicker?: ReactNode;
+  title: ReactNode;
+  lead?: ReactNode;
+  children?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={cn('sb-chapter', className)}>
+      <Reveal>
+        {kicker && (
+          <div className="mb-4">
+            <Eyebrow>{kicker}</Eyebrow>
+          </div>
+        )}
+        <h2 className="sb-chapter-title font-display font-extrabold text-saibyl-ink">
+          {title}
+        </h2>
+        {lead && (
+          <div className="sb-chapter-copy text-saibyl-muted mt-5">{lead}</div>
+        )}
+      </Reveal>
+      {children && <div className="mt-9">{children}</div>}
+    </section>
+  );
+}
+
+/**
+ * Arrives as the reader reaches it. Must sit inside a {@link Longform}.
+ *
+ * `step` is the landing page's three stagger delays, for a row of cards that
+ * should land one after another rather than all at once. Above three the
+ * stagger stops reading as a sequence and starts reading as a slow page, so
+ * there is no fourth.
+ */
+export function Reveal({
+  step = 0,
+  as = 'div',
+  className,
+  children,
+}: {
+  step?: 0 | 1 | 2 | 3;
+  as?: ElementType;
+  className?: string;
+  children?: ReactNode;
+}) {
+  const Tag: ElementType = as;
+  return (
+    <Tag className={cn('sb-reveal', step > 0 && `sb-reveal-${step}`, className)}>
       {children}
     </Tag>
   );

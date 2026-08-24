@@ -11,13 +11,19 @@
 export {
   Action,
   Card,
+  Chapter,
   Deal,
   Eyebrow,
   Ground,
+  Hero,
+  Longform,
   Notice,
   PageHeader,
+  Reveal,
   Rise,
 } from './DesignPrimitives';
+
+export { useReveal } from './useReveal';
 
 export {
   actionSurface,

@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 
+import { useReveal } from '@/components/design/useReveal';
+
 import './landing.css';
 
 /**
@@ -59,56 +61,15 @@ export default function LandingPage() {
     };
   }, []);
 
-  // Reveal-on-scroll: observe after mount, unobserve each element once it has
-  // revealed, disconnect on unmount.
-  useEffect(() => {
-    const root = rootRef.current;
-    if (!root) return;
+  /* Reveal-on-scroll, from the design system.
 
-    const targets = Array.from(root.querySelectorAll<HTMLElement>('.reveal'));
-    const revealAll = () => {
-      for (const el of targets) el.classList.add('is-visible');
-    };
-
-    // Reduced motion: transitions are collapsed to .01ms in the CSS, so the
-    // honest rendering is everything visible at once — no travel, no waiting.
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      revealAll();
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('is-visible');
-            observer.unobserve(entry.target);
-          }
-        }
-      },
-      { threshold: 0.12 },
-    );
-    for (const el of targets) observer.observe(el);
-
-    // Robustness fallback, not a capture hack: a page whose reveals never fire
-    // for any reason — an environment that suppresses intersection callbacks,
-    // printing, a full-page capture with a virtual viewport — must not stay
-    // invisible. 2.5s after the window has loaded, anything still hidden is
-    // shown. (docs/CRITICS_LOG.md 2026-08-16: full-page screenshots lie about
-    // scroll-reveal pages.)
-    let fallbackTimer: number | undefined;
-    const armFallback = () => {
-      fallbackTimer = window.setTimeout(revealAll, 2500);
-    };
-    if (document.readyState === 'complete') armFallback();
-    else window.addEventListener('load', armFallback, { once: true });
-
-    return () => {
-      window.removeEventListener('load', armFallback);
-      if (fallbackTimer !== undefined) window.clearTimeout(fallbackTimer);
-      observer.disconnect();
-    };
-  }, []);
+     This was ~45 lines here — observer, reduced-motion branch, and the 2.5s
+     post-load fallback that keeps a screenshot from photographing a blank
+     page. It moved to `components/design/useReveal` on 2026-08-23 so the app
+     pages behind the login could have the same behaviour rather than a second
+     implementation of it, which is exactly the divergence that made the app
+     feel like a different product from this page. Same code, one copy. */
+  useReveal(rootRef, '.reveal');
 
   return (
     <div className="v3land" ref={rootRef}>

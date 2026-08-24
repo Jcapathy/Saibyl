@@ -227,7 +227,17 @@ describe('1. Motion collapses under prefers-reduced-motion', () => {
 
     // Non-vacuous: if the sheet stops animating anything, this test has stopped
     // meaning anything, and that should be loud rather than green.
-    expect([...animated].sort()).toEqual(['.sb-deal', '.sb-eyebrow-live', '.sb-lift', '.sb-rise']);
+    expect([...animated].sort()).toEqual([
+      '.sb-deal',
+      '.sb-eyebrow-live',
+      '.sb-lift',
+      // The scroll reveal. It transitions rather than animating, and it is the
+      // one that matters most here: a reveal that does not collapse leaves a
+      // reduced-motion reader looking at `opacity: 0` for content that will
+      // never arrive, because the travel it was waiting for was removed.
+      '.sb-reveal',
+      '.sb-rise',
+    ]);
 
     const collapsed = new Set(
       rules(collapse).flatMap((rule) => classesIn(rule.selector)),
@@ -378,11 +388,28 @@ describe('4. The Playfair accent is one per heading', () => {
     expect([...code.matchAll(/\{phrase\}/g)]).toHaveLength(1);
   });
 
-  it('nothing else in the system renders Playfair, so the budget is spent here', () => {
+  it('the accent is spent in two places, and both of them are headings', () => {
+    /* This asserted that `design.css` named Playfair nowhere at all, which was
+       true while the only accent was `PageHeader`'s phrase, set with the
+       `font-serif` utility. The longform hero and chapter headings need it in
+       the stylesheet — they size and letter-space it to match the landing page,
+       and a Tailwind class cannot carry `letter-spacing: -.07em` at
+       `clamp(3rem, 5.9vw, 5.5rem)` without becoming an arbitrary-value soup.
+
+       So the rule is unchanged in substance — the serif is a heading accent and
+       nothing else — and now says so by enumerating where it lives. */
+    // The components: still exactly one file, still exactly one `font-serif`.
+    // (`designFiles()` reads TS and TSX; the sheet is checked below.)
     const serif = designFiles().filter((f) => /font-serif|Playfair/.test(f.code));
     expect(serif.map((f) => f.path)).toEqual([PRIMITIVES]);
     expect([...serif[0].code.matchAll(/font-serif/g)]).toHaveLength(1);
-    expect(stripCssComments(DESIGN_CSS)).not.toMatch(/Playfair/);
+
+    // In the sheet, only the two heading accents may name it.
+    const wearing = rules(DESIGN_CSS)
+      .filter((r) => /Playfair/.test(r.body))
+      .map((r) => r.selector)
+      .sort();
+    expect(wearing).toEqual(['.sb-chapter-title em', '.sb-hero h1 .sb-serif']);
   });
 
   it('it is italic and violet, as the landing page and the artboard both have it', () => {
@@ -462,8 +489,20 @@ describe('6. Density is deliberately unchanged', () => {
       });
       expect(offenders, `${file.path} re-pads its call sites`).toEqual([]);
     }
-    expect(stripCssComments(DESIGN_CSS), 'design.css sets padding').not.toMatch(
-      /\bpadding\b/,
+    /* The sheet may pad the page frame, and nothing else.
+       It named no `padding` at all until the longform hero and chapters
+       arrived: those two carry the landing page's own section rhythm, which is
+       the whole of what the founder asked for. Enumerated rather than banned,
+       so padding a card from the stylesheet — the back door around the rule
+       above — is still a failure. */
+    const padded = rules(DESIGN_CSS)
+      .filter((r) => /\bpadding(-top)?:/.test(r.body))
+      .map((r) => r.selector)
+      .sort();
+    expect(padded, 'design.css pads something that is not the page frame').toEqual(
+      // `.sb-hero` and `.sb-chapter` appear twice each: once at full size and
+      // once in the ≤660px step-down.
+      ['.sb-chapter', '.sb-chapter', '.sb-hero', '.sb-hero'],
     );
   });
 
@@ -564,9 +603,112 @@ describe('6. Density is deliberately unchanged', () => {
         `${file.path} sizes type outside the page header`,
       ).toEqual([]);
     }
-    expect(stripCssComments(DESIGN_CSS), 'design.css sizes type').not.toMatch(
-      /font-size/,
+    /* `design.css` may size type, but **only for the page frame**.
+       It could name no `font-size` at all until the longform hero and chapters
+       arrived, and the substance of the rule has not moved: the constraint was
+       always about rows, cards and lists, and nothing that sizes a dense
+       surface has appeared. Enumerated by selector rather than banned outright,
+       so adding a `font-size` to a card is still a failure. */
+    const sized = rules(DESIGN_CSS)
+      .filter((r) => /\bfont-size:/.test(r.body))
+      .map((r) => r.selector)
+      .sort();
+    expect(sized, 'design.css sizes type outside the page frame').toEqual(
+      [
+        '.sb-chapter-copy',
+        '.sb-chapter-title',
+        '.sb-hero h1',
+        '.sb-hero-text',
+        // The mobile step-down for the same two headings.
+        '.sb-hero h1',
+        '.sb-chapter-title',
+      ].sort(),
     );
     expect(CANVAS).toContain('same 13px body');
+  });
+});
+
+/* ================================================================== */
+/*  7. The longform page is the landing page's own                     */
+/* ================================================================== */
+
+/**
+ * Founder's decision, 2026-08-23: **every page behind the login is a landing
+ * page.** Hero, large type, then scroll, with content arriving as the reader
+ * reaches it. His words for what was there instead were "very sterile,
+ * mechanical, and looks AI-generated".
+ *
+ * The danger in granting that is the one this whole suite exists for: a second
+ * set of hero numbers, drifting from the public site, and within a month the
+ * app is a *different* marketing page rather than the same one. So `design.css`
+ * carries copies of `landing.css`'s values, and this section asserts value for
+ * value that they are copies.
+ *
+ * Each row is (app selector, app property, landing selector, landing property).
+ */
+const LONGFORM_MIRRORS: [string, string, string, string][] = [
+  ['.sb-longform', 'width', '.v3land .container', 'width'],
+  ['.sb-hero', 'padding', '.v3land .hero', 'padding'],
+  ['.sb-hero h1', 'font-size', '.v3land .hero h1', 'font-size'],
+  ['.sb-hero h1', 'line-height', '.v3land .hero h1', 'line-height'],
+  ['.sb-hero h1', 'letter-spacing', '.v3land .hero h1', 'letter-spacing'],
+  ['.sb-hero-text', 'font-size', '.v3land .hero-text', 'font-size'],
+  ['.sb-hero-text', 'line-height', '.v3land .hero-text', 'line-height'],
+  ['.sb-chapter-title', 'font-size', '.v3land .section-title', 'font-size'],
+  ['.sb-chapter-title', 'line-height', '.v3land .section-title', 'line-height'],
+  ['.sb-chapter-title', 'letter-spacing', '.v3land .section-title', 'letter-spacing'],
+  ['.sb-chapter-copy', 'font-size', '.v3land .section-copy', 'font-size'],
+  ['.sb-reveal', 'transition', '.v3land .reveal', 'transition'],
+  ['.sb-reveal', 'transform', '.v3land .reveal', 'transform'],
+];
+
+describe("7. The longform page carries the landing page's numbers", () => {
+  it("every hero and chapter value is the landing page's, not a new one", () => {
+    for (const [appSel, appProp, landSel, landProp] of LONGFORM_MIRRORS) {
+      expect(
+        normalise(declaration(DESIGN_CSS, appSel, appProp)),
+        `${appSel} { ${appProp} } drifted from ${landSel}`,
+      ).toBe(normalise(declaration(LANDING_CSS, landSel, landProp)));
+    }
+  });
+
+  it('the Playfair accent in a hero and a chapter is the landing violet', () => {
+    for (const selector of ['.sb-hero h1 .sb-serif', '.sb-chapter-title em']) {
+      expect(normalise(declaration(DESIGN_CSS, selector, 'color'))).toBe('#8b73ee');
+      expect(declaration(DESIGN_CSS, selector, 'font-family')).toContain('Playfair Display');
+    }
+    // …and the landing token behind it holds the same hex. Read rather than
+    // assumed: `--violet` carrying another value is how two brands start.
+    expect(LANDING_CSS).toMatch(/--violet:\s*#8b73ee/);
+  });
+
+  it('a reveal that never fires shows its content rather than hiding it', () => {
+    /* The failure worth testing, and it has happened once: a scroll-reveal page
+       photographed as blank in a full-page capture and was reported as a broken
+       deploy (`docs/CRITICS_LOG.md`, 2026-08-16).
+
+       Two independent guarantees, because either alone leaves a hole — the CSS,
+       for a reader who asked for no motion, and the hook's 2.5s post-load
+       fallback, for an environment that never delivers the callbacks at all. */
+    const sheet = stripCssComments(DESIGN_CSS);
+    const reduced = sheet.slice(sheet.indexOf('prefers-reduced-motion'));
+    expect(reduced, 'the reveal keeps opacity:0 under reduced motion').toContain('.sb-reveal');
+
+    const hook = readFileSync(join(SRC, 'components/design/useReveal.ts'), 'utf8');
+    expect(hook, 'the reduced-motion branch is gone').toContain(
+      "matchMedia('(prefers-reduced-motion: reduce)')",
+    );
+    expect(hook, 'the blank-capture fallback is gone').toMatch(/setTimeout\(revealAll, 2500\)/);
+    expect(hook, 'revealed elements are no longer unobserved').toContain('unobserve');
+  });
+
+  it('there is one reveal implementation, and the landing page uses it too', () => {
+    // If `LandingPage` grows its own observer again, the public site and the
+    // app drift apart in exactly the way that produced this work.
+    const landing = readFileSync(join(SRC, 'pages/LandingPage.tsx'), 'utf8');
+    expect(landing).toContain('useReveal(rootRef');
+    expect(landing, 'LandingPage built a second observer').not.toContain(
+      'new IntersectionObserver',
+    );
   });
 });

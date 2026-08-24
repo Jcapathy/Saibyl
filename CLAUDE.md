@@ -87,7 +87,34 @@ collapsing every animation is not optional.
 > spacing things further apart. An app that reads like a marketing page is the
 > opposite failure.
 
-**The one exception, granted by the founder on 2026-08-23: `PageHeader`.**
+**Superseded for the page frame, later the same day. Read this before you
+"restore" anything.**
+
+The canvas closes with *"An app that reads like a marketing page is the opposite
+failure."* The founder read the swept app against the public site and reversed
+that, in these words: the app was **"very sterile, mechanical, and looks
+AI-generated"**, and the instruction was to *"treat each clickable page like a
+landing page that has the same feel as the primary landing page. Hero section,
+large type font, then scroll for information. As a user is scrolling, various
+cards, text, information, or graphics will fade in."*
+
+So a page opens like the landing page: `Longform` → `Hero` → `Chapter`, with
+`Reveal` on anything that should arrive on scroll. **`How this works`
+(`GuidePage.tsx`) is the built example — copy its shape.**
+
+What did **not** change is everything inside a chapter. A card, a row, a table
+and a list are exactly as dense as they were, and the canvas's constraint still
+governs them. The frame grew; the work did not. `design_primitives.test.ts` §6
+enumerates every selector in `design.css` allowed to set a size or a padding —
+adding a card to that list is a failure, not a fix.
+
+Every hero and chapter value is **copied from `pages/landing.css`**, and §7
+asserts it value-for-value. Do not invent a hero size; if the landing page
+changes, that test tells you what to update. The scroll reveal is one shared
+implementation — `components/design/useReveal` — which `LandingPage` also calls,
+so the public site and the app cannot drift.
+
+**The earlier exception, granted the same day: `PageHeader`.**
 He read the five live stage pages and could not comfortably read them on his
 own monitor — the accent phrase was 15px serif italic sitting *above* a 13px
 paragraph, on a block whose whole job is to teach a stage to somebody who has

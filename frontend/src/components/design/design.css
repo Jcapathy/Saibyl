@@ -104,10 +104,13 @@
 }
 .sb-action-quiet:hover { border-color: rgba(40, 108, 240, .30); }
 
-/* A panel with a ground of its own, rather than white on a wash. The report's
-   room is drawn on this. Once per screen at most — a page where everything has
-   its own ground has no ground. */
-.sb-hero { background: linear-gradient(180deg, #edf5ff 0%, #f8fbff 87%); }
+/* A panel with a ground of its own, rather than white on a wash — the landing
+   page's `.rehearsal` band, value for value. Once per screen at most: a page
+   where everything has its own ground has no ground.
+   Named `sb-tinted` and not `sb-hero`, which is now the page's opening block
+   below. Two different things under one class name is how a stylesheet starts
+   lying to the next reader. */
+.sb-tinted { background: linear-gradient(180deg, #edf5ff 0%, #f8fbff 87%); }
 
 /* ── Colour carries state ───────────────────────────────────────────────────
    The artboard says a blocked step in violet and a thin one in amber, as a
@@ -143,6 +146,98 @@
 .sb-lift { transition: transform .22s ease, box-shadow .22s ease; }
 .sb-lift:hover { transform: translateY(-2px); }
 
+/* ── The longform page ──────────────────────────────────────────────────────
+   Founder's decision, 2026-08-23: **every page behind the login is a landing
+   page.** Hero, large type, then scroll — with cards and copy fading in as the
+   reader arrives at them. His words for what was there instead: "very sterile,
+   mechanical, and looks AI-generated."
+
+   This supersedes the canvas's density constraint for the *page frame* — the
+   hero and the section headings. It does not touch the inside of a card, a row
+   or a list, which stay exactly as dense as they were; the point is that a page
+   should open like the landing page and then get on with the work.
+
+   **Every number below is `pages/landing.css`, copied not re-derived.**
+   `design_primitives.test.ts` §7 reads both files and fails if any of them
+   drifts. There is one set of numbers for this system and a second set is a
+   second brand inside a month.
+
+   Why copies rather than `.v3land` itself: that scope carries
+   `a { color: inherit }`, which outranks a Tailwind text colour on an element
+   selector and would turn every link inside an app component the same colour as
+   its body text. The values travel; the cascade does not. */
+
+.sb-longform { width: min(1180px, calc(100% - 48px)); margin: 0 auto; }
+
+.sb-hero { padding: 74px 0 62px; }
+.sb-hero h1 {
+  max-width: 700px;
+  margin: 18px 0 22px;
+  font-size: clamp(3rem, 5.9vw, 5.5rem);
+  line-height: .93;
+  letter-spacing: -.08em;
+}
+/* The one Playfair phrase, at hero scale. Canvas rule 4, unchanged — it is the
+   same accent the app header already spends, drawn bigger. */
+.sb-hero h1 .sb-serif {
+  color: #8b73ee;
+  font-family: "Playfair Display", Georgia, serif;
+  font-weight: 600;
+  font-style: italic;
+  letter-spacing: -.07em;
+}
+.sb-hero-text {
+  max-width: 540px;
+  margin: 0;
+  font-size: clamp(.98rem, 1.25vw, 1.08rem);
+  line-height: 1.75;
+}
+
+/* The gap between one chapter and the next. `.v3land .journey`'s own 104px,
+   applied as top padding only — the landing page's sections each pad both
+   edges and stack to ~200px between them, which is right for a marketing page
+   somebody scrolls once and wrong for a page a founder returns to.
+   In the stylesheet rather than as a Tailwind class on `Chapter`, so the
+   section rhythm sits beside the type it spaces and the primitives keep their
+   rule: nothing that wraps caller content sets padding. */
+.sb-chapter { padding-top: 104px; }
+
+.sb-chapter-title {
+  max-width: 780px;
+  margin: 0;
+  font-size: clamp(2.2rem, 4.2vw, 4rem);
+  line-height: .99;
+  letter-spacing: -.065em;
+}
+.sb-chapter-title em {
+  color: #8b73ee;
+  font-family: "Playfair Display", Georgia, serif;
+  font-weight: 600;
+  font-style: italic;
+  letter-spacing: -.055em;
+}
+.sb-chapter-copy { max-width: 600px; font-size: 1.02rem; line-height: 1.75; }
+
+/* ── Reveal on scroll ───────────────────────────────────────────────────────
+   `useReveal` adds `is-visible` as each element arrives. Landing's values. */
+.sb-reveal {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity .7s ease, transform .7s cubic-bezier(.2,.65,.25,1);
+}
+.sb-reveal.is-visible { opacity: 1; transform: translateY(0); }
+.sb-reveal-1 { transition-delay: .1s; }
+.sb-reveal-2 { transition-delay: .2s; }
+.sb-reveal-3 { transition-delay: .3s; }
+
+@media (max-width: 660px) {
+  .sb-longform { width: min(100% - 32px, 1180px); }
+  .sb-hero { padding: 44px 0 47px; }
+  .sb-hero h1 { font-size: clamp(2.7rem, 13.5vw, 3.9rem); }
+  .sb-chapter { padding-top: 64px; }
+  .sb-chapter-title { font-size: clamp(2.2rem, 11vw, 3.2rem); }
+}
+
 /* ── And all of it collapses under a reduced-motion preference ───────────────
    The landing page does this, the artboard does this, so the app does this. It
    is not optional and it is not a nicety: for a reader with vestibular
@@ -156,6 +251,19 @@
     animation: none;
     opacity: 1;
     transform: none;
+  }
+  /* A reveal that never fires is a page that stays blank, so this is not just
+     "stop the travel" — it is "show everything". `useReveal` also takes the
+     reduced-motion branch and marks every target visible on mount rather than
+     waiting for scroll positions a non-scrolling reader will never produce. */
+  .sb-reveal,
+  .sb-reveal-1,
+  .sb-reveal-2,
+  .sb-reveal-3 {
+    opacity: 1;
+    transform: none;
+    transition: none;
+    transition-delay: 0s;
   }
   .sb-eyebrow-live::before {
     animation: none;
