@@ -26,7 +26,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { railFiles, renderedStrings, sourceFiles, SRC } from './source';
-import { clickDepths, routeNodes } from './routes';
+import { clickDepths, componentSources, routeNodes } from './routes';
 
 /* ================================================================== */
 /*  1. Jargon                                                          */
@@ -556,8 +556,15 @@ const DESIGN_PRIMITIVES =
  * with no heading at all. The sweep would have "passed" by making its own
  * subject invisible — and the canary counting the scanned pages would have gone
  * down, not up, as the work succeeded.
+ *
+ * **`<Hero>` had to join it the same day, for the identical reason, and it was
+ * missed at first.** `GuidePage` was converted to a longform hero and quietly
+ * left the scan — the fix above was applied to one primitive and not to the
+ * concept, so the next primitive that rendered an `<h1>` reopened the hole. A
+ * reviewing agent caught it. If a third heading primitive is ever added, it
+ * belongs here in the same commit.
  */
-const TOP_LEVEL_HEADING = /<h1[\s/>]|<PageHeader[\s/>]/;
+const TOP_LEVEL_HEADING = /<h1[\s/>]|<PageHeader[\s/>]|<Hero[\s/>]/;
 
 /**
  * Pages that carry the system directly instead of through the primitives.
@@ -734,6 +741,95 @@ describe('7. No rendered class names a colour from the dark theme', () => {
           }
         }
       });
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
+/* ================================================================== */
+/*  8. Every page in the nav opens like the landing page               */
+/* ================================================================== */
+
+/**
+ * Founder's decision, 2026-08-23, after reading the swept app beside the public
+ * site: **"treat each clickable page like a landing page that has the same feel
+ * as the primary landing page. Hero section, large type font, then scroll for
+ * information."** His word for what was there instead was "sterile", twice.
+ *
+ * `How this works` was built as the example and approved, and the shape then
+ * went to every page in the navigation. This is the ratchet that keeps it
+ * there — and, more usefully, what makes the *next* page somebody adds to the
+ * nav inherit it. The failure it catches is not a page being restyled back; it
+ * is a page added in six weeks that quietly is not this.
+ *
+ * Derived from `AppLayout`'s own nav arrays rather than a list typed here, so
+ * adding a nav entry adds the obligation automatically. A hand-written list is
+ * a list somebody forgets to extend, which is how `AWAITING_THE_SWEEP` came to
+ * exist in the first place.
+ */
+function navPaths(): string[] {
+  const layout = sourceFiles().find(
+    (f) => f.path === 'src/components/AppLayout.tsx',
+  );
+  expect(layout, 'AppLayout not found by the source scan').toBeDefined();
+  return [...layout!.code.matchAll(/path:\s*'(\/app\/[^']*)'/g)].map((m) => m[1]);
+}
+
+describe('8. Every page in the nav opens like the landing page', () => {
+  it('the nav was actually read', () => {
+    // The canary. A regex that stops matching turns every assertion below into
+    // a loop over nothing — the vacuous pass this suite has shipped before.
+    const paths = navPaths();
+    expect(paths.length).toBeGreaterThan(8);
+    expect(paths).toContain('/app/validate');
+    expect(paths).toContain('/app/settings');
+  });
+
+  it('each one composes Longform and opens with a Hero', () => {
+    const byPattern = new Map(routeNodes().map((n) => [n.pattern, n]));
+    const sources = componentSources();
+
+    const missing: string[] = [];
+    for (const path of navPaths()) {
+      const node = byPattern.get(path);
+      if (!node) {
+        missing.push(`${path} — no route`);
+        continue;
+      }
+      const file = sources.get(node.component);
+      if (!file) {
+        missing.push(`${path} — no source for <${node.component}>`);
+        continue;
+      }
+      if (!/<Longform[\s/>]/.test(file.code)) missing.push(`${file.path} — no <Longform>`);
+      if (!/<Hero[\s/>]/.test(file.code)) missing.push(`${file.path} — no <Hero>`);
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it('no hero is wrapped in a Reveal', () => {
+    /* A page whose first screen fades in looks broken for 700ms, and the reader
+       who notices is the one on a slow connection who was already unsure. The
+       hero is above the fold by definition: there is no scroll event to wait
+       for, so waiting is the only thing the wrapper would do. */
+    const offenders: string[] = [];
+    for (const file of sourceFiles()) {
+      if (!/<Hero[\s/>]/.test(file.code)) continue;
+      if (/<Reveal\b[^>]*>\s*(?:\{\/\*[\s\S]*?\*\/\}\s*)?<Hero\b/.test(file.code)) {
+        offenders.push(file.path);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('a longform page still declares its ground', () => {
+    // `Longform` sets the measure and nothing else. Without `Ground` the page
+    // is the flat `#f8fbff` the canvas's first rule exists to end — and on a
+    // page that now opens with 88px of type, a flat ground is very visible.
+    const offenders: string[] = [];
+    for (const file of sourceFiles()) {
+      if (!/<Longform[\s/>]/.test(file.code)) continue;
+      if (!/<Ground[\s/>]/.test(file.code)) offenders.push(file.path);
     }
     expect(offenders).toEqual([]);
   });

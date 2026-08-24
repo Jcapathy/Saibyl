@@ -186,12 +186,17 @@ describe('4. It looks like Saibyl, and it stops when asked', () => {
     ).not.toContain('capital-ground');
     expect(page.code).toMatch(/from '@\/components\/design'/);
 
-    // Zero, not one: `PageHeader` owns the single Playfair line now, and a
+    // Zero, not one: the heading primitive owns the single Playfair line, and a
     // serif here would be the second one on the same heading.
     const serif = [...page.code.matchAll(/font-serif/g)];
-    expect(serif.length, 'the page grew a serif line beside PageHeader\'s').toBe(0);
+    expect(serif.length, 'the page grew a serif line beside the header\'s').toBe(0);
+    /* `serif=` as well as `phrase=`. The page became a longform landing page on
+       2026-08-23 and its accent moved from `PageHeader phrase=` into the `<h1>`
+       itself as `Hero serif=` — the same one Playfair line, spent in the same
+       place, spelled by a different primitive. Matching only the old spelling
+       would have read a successful conversion as a lost accent. */
     expect(page.code, 'the page lost its accent phrase entirely').toMatch(
-      /phrase="/,
+      /(?:phrase|serif)="/,
     );
 
     // And every mono label here wears its dot, because they all go through the

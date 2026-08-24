@@ -491,8 +491,19 @@ describe('6. The house rules apply here too', () => {
       is one word and this page is a stage.
     */
     const page = pageSource();
+    /* The stage is named by the **eyebrow**, and that is where the assertion
+       belongs. The heading used to be the bare word `Launch`; on 2026-08-23 the
+       page became a longform landing page and its `<h1>` became a sentence —
+       "Eight ways to say it, one room decides." — with `GO TO MARKET` above it.
+       That is precisely how the public site is built: its heroes are sentences
+       and the stage names live in the eyebrow beside them.
+
+       Requiring the literal word in the title would have made a faithful
+       conversion look like a regression, so the check moved to the thing the
+       rule was always about: this page must say, in its own words, which moment
+       of a company it is for. */
     expect(page.code).toContain('eyebrow="Go to market"');
-    expect(page.code).toContain('title="Launch"');
+    expect(page.code, 'the hero lost its accent').toMatch(/serif="/);
     expect(page.code).toMatch(/take it to market/i);
   });
 });

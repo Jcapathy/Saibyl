@@ -11,7 +11,15 @@ import {
 import api, { unwrapList } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
 import { EmptyState, StageError } from '@/components/stages/StagePrimitives';
-import { Card, Deal, Ground, PageHeader, Rise } from '@/components/design';
+import {
+  Card,
+  Chapter,
+  Deal,
+  Ground,
+  Hero,
+  Longform,
+  Reveal,
+} from '@/components/design';
 
 /**
  * One place to take your work out of the product, and shortcuts to the rest.
@@ -35,22 +43,32 @@ import { Card, Deal, Ground, PageHeader, Rise } from '@/components/design';
  *
  * ---
  *
- * **Restyled onto the design system on 2026-08-23**, having been built after
- * the canvas was approved and without opening it. What was wrong here is the
- * same list `ProductHomePage` carried:
+ * **The shape, 2026-08-23: this page is a landing page.**
  *
- * 1. `bg-saibyl-void` on the page root — a flat `#f8fbff` panel laid *over*
- *    the radial wash `<body>` carries, which is canvas rule 1 switched off.
- * 2. `saibyl-white`, `saibyl-platinum` and `saibyl-gold` throughout — legacy
- *    dark-theme aliases that still resolve to light values, which is exactly
- *    why nobody noticed the page had never been converted.
- * 3. No eyebrow, no accent phrase, no depth and no arrival motion.
+ * Restyled onto the design system earlier the same day — it had been built
+ * after the canvas was approved and without opening it, so it carried a flat
+ * `bg-saibyl-void` root over the radial wash, three legacy dark-theme colour
+ * aliases, and no eyebrow, accent or arrival motion. Then the founder read the
+ * app against the public site, called it "very sterile, mechanical, and looks
+ * AI-generated", and asked for every page behind the login to open the way the
+ * landing page opens. So the frame is now `Longform` / `Hero` / `Chapter`, the
+ * shape `GuidePage` set.
  *
- * On the two shapes below: the report list is a **dense** surface — hairline
- * rows, no shadow, and its format controls stay chip-sized, because three
- * gradient buttons per row on a list of thirty reports is thirty claims that
- * this is the thing to press. The shortcuts underneath are `meaning` cards and
- * they lift, because each one goes somewhere.
+ * On the two shapes below, unchanged by the reframe: the report list is a
+ * **dense** surface — hairline rows, no shadow, and its format controls stay
+ * chip-sized, because three gradient buttons per row on a list of thirty
+ * reports is thirty claims that this is the thing to press. The shortcuts
+ * underneath are `meaning` cards and they lift, because each one goes
+ * somewhere.
+ *
+ * **Why the report list is not wrapped in `Reveal`.** `useReveal` collects its
+ * targets once, in a mount effect, and never looks again — so a `Reveal` that
+ * mounts after `/reports` resolves is never observed, never gets `is-visible`,
+ * and sits at `opacity: 0` forever (the 2.5s fallback iterates the same
+ * captured list, so it does not save it either). The rows keep `Deal`, which
+ * animates on its own mount and is therefore correct for content that arrives
+ * late. `Reveal` is used here only on the shortcuts, which exist on the first
+ * render.
  */
 
 interface ReportRow {
@@ -183,30 +201,45 @@ export default function DashboardPage() {
        panel over the radial wash `<body>` already carries, so the one screen
        whose whole job is to hand work to somebody else was also the one screen
        with canvas rule 1 switched off. */
-    <Ground className="p-6 lg:p-8 min-h-full">
-      <div className="max-w-5xl mx-auto">
-        <Rise>
-          <PageHeader
-            eyebrow="Your workspace"
-            title="Your reports"
-            phrase="Work you can hand to somebody who was not in the room."
-          >
-            <p>
-              Every run that finished wrote one of these. Take it out as a
-              typeset PDF to read, as slides to present, or as the raw data
-              behind it &mdash; the same report, in whichever shape the next
-              conversation needs.
-            </p>
-          </PageHeader>
-        </Rise>
+    <Ground className="min-h-full pb-24">
+      <Longform>
+        {/* Never wrapped in an arrival: the hero is the first screen, and a
+            page whose opening fades in looks broken for 700ms. It also renders
+            on every branch — loading, error and empty all switch the body of a
+            chapter below, so a founder with nothing here still lands on the
+            page rather than on a spinner. */}
+        <Hero
+          eyebrow="Your workspace"
+          title="Everything the room said,"
+          serif="ready to hand over."
+        >
+          <p>
+            Every run that finished wrote one of these. Take it out as a
+            typeset PDF to read, as slides to present, or as the raw data
+            behind it &mdash; the same report, in whichever shape the next
+            conversation needs.{' '}
+            <b className="text-saibyl-ink font-semibold">
+              Work you can hand to somebody who was not in the room.
+            </b>
+          </p>
+        </Hero>
 
-        {error && (
-          <div className="mt-6">
-            <StageError message={error} retry={retry} />
-          </div>
-        )}
+        {/* ── The reports ── */}
+        <Chapter
+          kicker="The reports"
+          title={
+            <>
+              Take one out in <em>whichever shape</em>
+            </>
+          }
+          lead="PDF to read or print, slides to put in front of people, or the raw data behind it. The link beside each one opens the report here instead, with the sentences under every number still attached."
+        >
+          {error && (
+            <div className="mb-6">
+              <StageError message={error} retry={retry} />
+            </div>
+          )}
 
-        <section className="mt-7">
           {loading && reports.length === 0 ? (
             <p className="flex items-center gap-2 text-[12.5px] text-saibyl-muted">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -221,7 +254,9 @@ export default function DashboardPage() {
           ) : (
             <ul className="space-y-3">
               {/* Dealt at the artboard's 70ms, capped inside `dealDelayMs` so a
-                  founder with a quarter of reports does not wait for the tail. */}
+                  founder with a quarter of reports does not wait for the tail.
+                  `Deal` and not `Reveal`: these rows mount after the fetch, and
+                  the reveal observer only ever looks once, at mount. */}
               {reports.map((report, i) => {
                 const when = whenReadable(report.created_at);
                 return (
@@ -299,34 +334,49 @@ export default function DashboardPage() {
               })}
             </ul>
           )}
-        </section>
+        </Chapter>
 
-        <section className="mt-10">
-          <h2 className="text-[15px] font-medium text-saibyl-ink">
-            Everywhere else
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-            {SHORTCUTS.map(({ to, label, blurb, Icon }) => (
+        {/* ── Everywhere else ── */}
+        <Chapter
+          kicker="Everywhere else"
+          title={
+            <>
+              Where the work on this page <em>gets made</em>
+            </>
+          }
+          lead="A report is the end of a run. These are the three places a run starts."
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {SHORTCUTS.map(({ to, label, blurb, Icon }, i) => (
               /* `meaning`, and it lifts: each one is a claim about where to go
                  next, and each one goes there — the only condition under which
                  the artboard's hover rise is an honest promise. The Link wraps
                  the Card rather than becoming it, because `Card` takes no
-                 router props of its own. */
-              <Link key={to} to={to} className="block h-full">
-                <Card carries="meaning" lift className="p-4 h-full">
-                  <span className="flex items-center gap-2 text-[13.5px] text-saibyl-ink">
-                    <Icon className="w-4 h-4 text-saibyl-blue shrink-0" />
-                    {label}
-                  </span>
-                  <span className="block text-[12px] text-saibyl-muted mt-1 leading-relaxed">
-                    {blurb}
-                  </span>
-                </Card>
-              </Link>
+                 router props of its own.
+
+                 These three are static, so they are safe to `Reveal`: they are
+                 in the DOM when the observer collects its targets. */
+              <Reveal
+                key={to}
+                step={Math.min(i, 3) as 0 | 1 | 2 | 3}
+                className="h-full"
+              >
+                <Link to={to} className="block h-full">
+                  <Card carries="meaning" lift className="p-4 h-full">
+                    <span className="flex items-center gap-2 text-[13.5px] text-saibyl-ink">
+                      <Icon className="w-4 h-4 text-saibyl-blue shrink-0" />
+                      {label}
+                    </span>
+                    <span className="block text-[12px] text-saibyl-muted mt-1 leading-relaxed">
+                      {blurb}
+                    </span>
+                  </Card>
+                </Link>
+              </Reveal>
             ))}
           </div>
-        </section>
-      </div>
+        </Chapter>
+      </Longform>
     </Ground>
   );
 }

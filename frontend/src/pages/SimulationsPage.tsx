@@ -16,27 +16,39 @@ import { EmptyState } from '@/components/stages/StagePrimitives';
 import {
   Action,
   Card,
+  Chapter,
   Ground,
+  Hero,
+  Longform,
   Notice,
-  PageHeader,
-  Rise,
-  dealDelayMs,
+  Reveal,
 } from '@/components/design';
 import type { Simulation } from '@/types';
 
 /**
  * Every run this workspace has ever started.
  *
- * A long list is a **dense** surface, and the canvas is explicit about what
- * that means: "soft blue shadows on cards that carry meaning — hairlines stay
- * on dense lists." So the table sits in one `carries="density"` card and every
- * row keeps its hairline; shadowing twenty rows would leave nothing on the
- * screen claiming to matter more than anything else on it.
+ * **The frame is the landing page's.** Founder's decision on 2026-08-23: every
+ * page behind the login opens the way the public site opens — a hero, large
+ * type, then scroll, with the work arriving as the reader reaches it. His words
+ * for what was here instead were "very sterile, mechanical, and looks
+ * AI-generated". `GuidePage` is the approved example and this page copies its
+ * shape: `Longform` owns the measure and runs the reveal observer, `Hero` opens,
+ * and each `Chapter` is one section.
  *
- * The header, the toolbar and the table arrive in that order — one orchestrated
- * arrival, at the artboard's own 70ms. The rows themselves are not dealt: a
- * page of twenty staggered rows stops being an arrival and becomes a loading
- * bar made of content.
+ * **What is inside a chapter did not change.** A long list is a *dense* surface
+ * and the canvas is explicit about what that means: "soft blue shadows on cards
+ * that carry meaning — hairlines stay on dense lists." So the table still sits
+ * in one `carries="density"` card, every row keeps its hairline, and the search
+ * box, the chips and the pager are exactly as tight as they were. The frame grew;
+ * the work did not.
+ *
+ * **One `Reveal`, and it is static on purpose.** The list body swaps between a
+ * skeleton, an empty state and the table, so the wrapper is rendered once and
+ * the *children* are what change — one arrival for the section, rather than a
+ * second fade every time the fetch resolves. It also means this page does not
+ * lean on `useReveal` tracking nodes that appear after mount: the element the
+ * observer finds on load is the element that is still there afterwards.
  */
 
 /* ------------------------------------------------------------------ */
@@ -251,9 +263,9 @@ export default function SimulationsPage() {
      harmless but would quietly hide a mismatch between the two rules instead of
      letting it show.
 
-     **Sort is deliberately still page-local, and the header says so.** Ordering
-     twenty rows the server chose by recency is a different operation from
-     ordering the whole account, and a control that silently does the first
+     **Sort is deliberately still page-local, and the chapter lead says so.**
+     Ordering twenty rows the server chose by recency is a different operation
+     from ordering the whole account, and a control that silently does the first
      while looking like the second is the defect this page has just been fixed
      for. Server-side ordering is a small backend change and belongs with the
      decision to make it. */
@@ -270,11 +282,7 @@ export default function SimulationsPage() {
     return list;
   }, [sims, sortField, sortDir]);
 
-  /* Counts for the filter chips, over the rows this page holds.
-     They are **not** labelled as workspace totals anywhere — see the header,
-     which reports `total` from the server and nothing derived from `sims`.
-     Mixing the two produced a line that read as an account summary and was
-     computed from twenty rows. */
+  /* Counts for the filter chips, over the rows this page holds. */
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = { all: sims.length };
     for (const s of sims) {
@@ -360,383 +368,437 @@ export default function SimulationsPage() {
     branches — three early returns, three different top-of-page treatments, and
     the empty branch had no header at all. A founder with no runs landed on a
     screen with no title, no eyebrow and no way to tell which surface they were
-    on. The header is rendered once now and the body is what changes.
+    on. The hero is rendered once now and the body is what changes.
   */
   return (
-    <Ground className="p-6 lg:p-8 min-h-full">
-      <div className="max-w-6xl mx-auto">
-        <Rise className="flex flex-wrap items-end justify-between gap-4 mb-7">
-          <PageHeader
-            eyebrow="Your workspace"
-            title="Your runs"
-            mark={
-              loading
-                ? undefined
-                : `${total} in total · ${runningCount} going now · ${completeCount} finished`
-            }
-            phrase="Every room you have paid for, and what came out of it."
-          >
-            <p>
-              A run is one message put in front of one room of buyers. Open any
-              of them to see what was said, what people pushed back on, and what
-              it would take to change their minds &mdash; and start a new one
-              whenever the wording, the price or the audience changes.
-            </p>
-          </PageHeader>
-          {/* The one gradient on this screen. Everything else here opens
-              something that already exists. */}
-          <Action as={Link} to="/app/simulations/new" className="shrink-0">
-            <Plus className="w-4 h-4" /> New run
-          </Action>
-        </Rise>
+    <Ground className="min-h-full pb-24">
+      <Longform>
+        {/* Never wrapped in `Reveal`: it is the first screen, and a page whose
+            opening fades in looks broken for 700ms. */}
+        <Hero
+          eyebrow="Your workspace"
+          title="Every room you have"
+          serif="ever built."
+          actions={
+            <>
+              {/* The one gradient on this screen. Everything else here opens
+                  something that already exists. */}
+              <Action as={Link} to="/app/simulations/new">
+                <Plus className="w-4 h-4" /> New run
+              </Action>
+              <Action as={Link} to="/app/guide" kind="quiet">
+                How this works
+              </Action>
+            </>
+          }
+        >
+          <p>
+            A run is one message put in front of one room of buyers. Open any of
+            them to see what was said, what people pushed back on, and what it
+            would take to change their minds &mdash; and start a new one whenever
+            the wording, the price or the audience changes.{' '}
+            <b className="text-saibyl-ink font-semibold">
+              Every room you have paid for, and what came out of it.
+            </b>
+          </p>
+        </Hero>
 
-        {/* ---- A delete the server refused, in its own words ---- */}
-        {deleteError && (
-          <Notice
-            tone="blocked"
-            title="That delete was refused"
-            className="mb-4"
-          >
-            {deleteError}
-          </Notice>
-        )}
-
-        {loading ? (
-          /* Skeleton, on the same hairline card the real table lands on, so
-             the page does not change shape underneath the reader. */
-          <Card carries="density" className="overflow-hidden">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-4 px-5 py-4 border-b border-saibyl-border last:border-b-0"
+        {/* ── The list ── */}
+        <Chapter
+          kicker="The list"
+          title={
+            <>
+              Every run, <em>newest first</em>
+            </>
+          }
+          lead="Search and the status chips are answered by the server, so what you filter to is the whole workspace and not just the rows in front of you. Sorting reorders this page only."
+        >
+          {/* One wrapper, rendered on mount, holding whichever body applies —
+              skeleton, empty state or table. See the note at the top of this
+              file: the section arrives once, and the fetch resolving is not a
+              second arrival. */}
+          <Reveal>
+            {/* ---- A delete the server refused, in its own words ---- */}
+            {deleteError && (
+              <Notice
+                tone="blocked"
+                title="That delete was refused"
+                className="mb-4"
               >
-                <div className="h-4 w-4 bg-[#14294a]/[0.04] rounded animate-pulse" />
-                <div className="h-4 w-48 bg-[#14294a]/[0.04] rounded animate-pulse" />
-                <div className="h-4 w-20 bg-[#14294a]/[0.04] rounded animate-pulse ml-auto" />
-                <div className="h-4 w-16 bg-[#14294a]/[0.04] rounded animate-pulse" />
-                <div className="h-4 w-24 bg-[#14294a]/[0.04] rounded animate-pulse" />
-              </div>
-            ))}
-          </Card>
-        ) : total === 0 ? (
-          <EmptyState
-            headline="No runs here"
-            body="Start one and you'll see what people say about your product before you spend anything putting it in front of them."
-            action={{ label: 'Start your first run', href: '/app/simulations/new' }}
-          />
-        ) : (
-          <>
-            {/* ---- Toolbar ---- */}
-            <Rise
-              delayMs={dealDelayMs(1)}
-              className="flex items-center gap-4 mb-4 flex-wrap"
-            >
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-saibyl-muted" />
-                <input
-                  type="text"
-                  placeholder="Search your runs…"
-                  value={search}
-                  onChange={(e) => changeSearch(e.target.value)}
-                  className="bg-white border border-saibyl-border-light rounded-xl pl-9 pr-4 py-2 text-sm text-saibyl-ink placeholder:text-saibyl-muted/70 focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20 transition-colors w-64"
-                />
-              </div>
-
-              {/* Filter chips */}
-              <div className="flex items-center gap-1">
-                {STATUS_FILTERS.map((f) => {
-                  const active = statusFilter === f;
-                  const count = f === 'all' ? sims.length : (statusCounts[f] ?? 0);
-                  return (
-                    <button
-                      key={f}
-                      onClick={() => changeStatus(f)}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                        active
-                          ? 'bg-saibyl-blue/[0.10] text-saibyl-ink'
-                          : 'text-saibyl-muted hover:text-saibyl-silver'
-                      }`}
-                    >
-                      {f !== 'all' && statusDot(f)}
-                      {f === 'all' ? 'All' : stateWord(f)}
-                      <span className="ml-0.5 text-[10px] opacity-60">{count}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </Rise>
-
-            {/* ---- Bulk Actions Bar ---- */}
-            {selected.size > 0 && (
-              <Rise className="mb-4">
-                <div className="rounded-xl border border-saibyl-violet/25 bg-saibyl-violet/10 px-4 py-2 flex items-center gap-3">
-                  <span className="text-sm text-saibyl-ink font-medium">
-                    {selected.size} selected
-                  </span>
-                  {/* Export and Archive stood here and did nothing.
-                      Both were `onClick={() => { /* TODO * / }}` — controls
-                      that render, take a click and swallow it, which is the
-                      failure the no-grey-button rule exists to prevent wearing
-                      its opposite face: the button looks live, so the founder
-                      concludes the archive silently failed rather than that it
-                      was never built. There is no archive endpoint and
-                      `/exports` is per-report, reachable from Your reports.
-                      Deleting them removes no capability, because there was
-                      none. */}
-                  <button
-                    className="inline-flex items-center gap-1.5 text-xs text-saibyl-negative hover:bg-saibyl-negative/10 px-2 py-1 rounded transition-colors"
-                    onClick={() => handleDelete(Array.from(selected))}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" /> Delete
-                  </button>
-                </div>
-              </Rise>
+                {deleteError}
+              </Notice>
             )}
 
-            {/* ---- Data Table ---- */}
-            <Rise delayMs={dealDelayMs(2)}>
+            {loading ? (
+              /* Skeleton, on the same hairline card the real table lands on, so
+                 the page does not change shape underneath the reader. */
               <Card carries="density" className="overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-saibyl-border">
-                      <th className="w-10 px-4 py-3">
-                        <input
-                          type="checkbox"
-                          checked={selected.size === filteredSims.length && filteredSims.length > 0}
-                          onChange={toggleSelectAll}
-                          className="accent-[#8b73ee] w-3.5 h-3.5 cursor-pointer"
-                        />
-                      </th>
-                      {(
-                        [
-                          ['name', 'Name'],
-                          ['status', 'Where it got to'],
-                          [null, 'Platforms'],
-                          ['agent_count', 'People'],
-                          ['created_at', 'Started'],
-                          [null, ''],
-                        ] as const
-                      ).map(([field, label], i) => (
-                        <th
-                          key={i}
-                          className={`text-left px-4 py-3 text-[10px] font-medium tracking-widest uppercase text-saibyl-muted ${
-                            field ? 'cursor-pointer select-none hover:text-saibyl-silver' : ''
-                          }`}
-                          onClick={() => field && toggleSort(field as SortField)}
-                        >
-                          <span className="inline-flex items-center gap-1">
-                            {label}
-                            {field && sortField === field && (
-                              <ArrowUpDown className="w-3 h-3 text-saibyl-violet" />
-                            )}
-                          </span>
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredSims.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="text-center py-12 text-saibyl-muted text-sm">
-                          Nothing matches what you have filtered to.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredSims.map((sim) => {
-                        const ns = normalizeStatus(sim.status);
-                        const color = STATUS_COLOR[sim.status] ?? '#60718e';
-                        return (
-                          <tr
-                            key={sim.id}
-                            className={`border-b border-saibyl-border last:border-b-0 hover:bg-[#14294a]/[0.02] transition-colors cursor-pointer ${
-                              selected.has(sim.id) ? 'bg-saibyl-violet/5' : ''
-                            }`}
-                            onClick={(e) => {
-                              /* don't navigate when clicking checkbox or actions */
-                              const target = e.target as HTMLElement;
-                              if (
-                                target.closest('input[type="checkbox"]') ||
-                                target.closest('[data-actions]')
-                              )
-                                return;
-                              navigate(`/app/simulations/${sim.id}`);
-                            }}
-                          >
-                            {/* Checkbox */}
-                            <td className="w-10 px-4 py-3">
-                              <input
-                                type="checkbox"
-                                checked={selected.has(sim.id)}
-                                onChange={() => toggleSelect(sim.id)}
-                                className="accent-[#8b73ee] w-3.5 h-3.5 cursor-pointer"
-                              />
-                            </td>
-
-                            {/* Name.
-
-                                There used to be a second line here reading
-                                `SIM-{first four characters of the id}`. It looked
-                                like a reference number and was not one: four
-                                characters off the front of a UUID identify
-                                nothing, collide between rows, and a founder
-                                reported three different runs all showing the same
-                                "SIM-1111". A run is identified by its name and
-                                when it started — both of which are already on this
-                                row and are both real. */}
-                            <td className="px-4 py-3">
-                              <div className="font-medium text-saibyl-ink">{sim.name}</div>
-                              {sim.prediction_goal && (
-                                <div className="text-[11px] text-saibyl-muted mt-0.5 line-clamp-1 max-w-md">
-                                  {sim.prediction_goal}
-                                </div>
-                              )}
-                            </td>
-
-                            {/* Status pill */}
-                            <td className="px-4 py-3">
-                              <span
-                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap"
-                                style={{
-                                  backgroundColor: `${color}1A`,
-                                  color,
-                                }}
-                              >
-                                {statusDot(sim.status, ACTIVE_STATUSES.includes(ns))}
-                                {stateWord(sim.status)}
-                              </span>
-                            </td>
-
-                            {/* Platforms */}
-                            <td className="px-4 py-3">
-                              {sim.platforms && sim.platforms.length > 0 ? (
-                                <div className="flex items-center gap-1 flex-wrap">
-                                  {sim.platforms.map((p) => (
-                                    <span
-                                      key={p}
-                                      className="bg-[#14294a]/[0.04] rounded px-1.5 py-0.5 text-[10px] font-mono text-saibyl-silver"
-                                    >
-                                      {PLATFORM_MAP[p] ?? p}
-                                    </span>
-                                  ))}
-                                </div>
-                              ) : (
-                                <span className="text-saibyl-muted">&mdash;</span>
-                              )}
-                            </td>
-
-                            {/* Agents */}
-                            <td className="px-4 py-3 font-mono text-xs text-saibyl-silver">
-                              {formatAgentCount(sim.agent_count)}
-                            </td>
-
-                            {/* No "how they felt" column. A run's row carries no
-                                such field, and the measured reading is only
-                                addressable one id at a time via
-                                /simulations/{id}/analysis — a column here would be
-                                one request per row, most of them 404. */}
-
-                            {/* Created */}
-                            <td className="px-4 py-3 font-mono text-xs text-saibyl-muted whitespace-nowrap">
-                              {formatDistanceToNow(new Date(sim.created_at), { addSuffix: true })}
-                            </td>
-
-                            {/* Actions */}
-                            <td className="px-4 py-3 relative" data-actions ref={openMenu === sim.id ? menuRef : undefined}>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setOpenMenu(openMenu === sim.id ? null : sim.id);
-                                }}
-                                className="p-1.5 rounded-lg hover:bg-[#14294a]/[0.04] text-saibyl-muted hover:text-saibyl-ink transition-colors"
-                              >
-                                <MoreHorizontal className="w-4 h-4" />
-                              </button>
-
-                              {openMenu === sim.id && (
-                                <div
-                                  className="absolute right-4 top-10 z-50 w-40 bg-white border border-saibyl-border-light rounded-xl shadow-[0_22px_60px_rgba(52,96,164,0.18)] py-1 text-xs"
-                                >
-                                  <button
-                                    className="w-full text-left px-3 py-2 text-saibyl-ink hover:bg-[#14294a]/[0.04] transition-colors"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      navigate(`/app/simulations/${sim.id}`);
-                                    }}
-                                  >
-                                    Open it
-                                  </button>
-                                  {/* Duplicate and Archive were here and did
-                                      nothing — see the bulk bar above. Neither
-                                      has a backend, and a menu item that
-                                      swallows a click teaches a founder that
-                                      the app is unreliable rather than that the
-                                      feature is unbuilt. */}
-                                  <button
-                                    className="w-full text-left px-3 py-2 text-saibyl-negative hover:bg-saibyl-negative/10 transition-colors"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDelete([sim.id]);
-                                    }}
-                                  >
-                                    Delete
-                                  </button>
-                                </div>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </Card>
-            </Rise>
-
-            {/* ---- Pagination ----
-                Previous and Next are rendered only when they lead somewhere.
-                They used to be `disabled` at the ends of the list, which is the
-                grey rectangle the founder's standing rule forbids: a control
-                either does something or it is not a control. */}
-            <div className="flex items-center justify-between mt-4">
-              <p className="text-xs text-saibyl-muted font-mono">
-                Showing {pageStart}&ndash;{pageEnd} of {total}
-              </p>
-              <div className="flex items-center gap-1">
-                {page > 1 && (
-                  <button
-                    onClick={() => goToPage((p) => p - 1)}
-                    className="px-3 py-1.5 rounded-lg border border-saibyl-border text-xs text-saibyl-silver hover:bg-[#14294a]/[0.04] transition-colors"
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-4 px-5 py-4 border-b border-saibyl-border last:border-b-0"
                   >
-                    Previous
-                  </button>
-                )}
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                  <button
-                    key={p}
-                    onClick={() => goToPage(p)}
-                    className={`px-2.5 py-1.5 rounded-lg text-xs font-mono transition-colors ${
-                      p === page
-                        ? 'bg-saibyl-blue/[0.10] text-saibyl-ink'
-                        : 'text-saibyl-muted hover:text-saibyl-silver'
-                    }`}
-                  >
-                    {p}
-                  </button>
+                    <div className="h-4 w-4 bg-[#14294a]/[0.04] rounded animate-pulse" />
+                    <div className="h-4 w-48 bg-[#14294a]/[0.04] rounded animate-pulse" />
+                    <div className="h-4 w-20 bg-[#14294a]/[0.04] rounded animate-pulse ml-auto" />
+                    <div className="h-4 w-16 bg-[#14294a]/[0.04] rounded animate-pulse" />
+                    <div className="h-4 w-24 bg-[#14294a]/[0.04] rounded animate-pulse" />
+                  </div>
                 ))}
-                {page < totalPages && (
-                  <button
-                    onClick={() => goToPage((p) => p + 1)}
-                    className="px-3 py-1.5 rounded-lg border border-saibyl-border text-xs text-saibyl-silver hover:bg-[#14294a]/[0.04] transition-colors"
-                  >
-                    Next
-                  </button>
+              </Card>
+            ) : total === 0 ? (
+              <EmptyState
+                headline="No runs here"
+                body="Start one and you'll see what people say about your product before you spend anything putting it in front of them."
+                action={{ label: 'Start your first run', href: '/app/simulations/new' }}
+              />
+            ) : (
+              <>
+                {/* ---- Toolbar ----
+                    Exactly as dense as it was. The chapter around it grew; the
+                    controls inside it did not. */}
+                <div className="flex items-center gap-4 mb-4 flex-wrap">
+                  {/* Search */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-saibyl-muted" />
+                    <input
+                      type="text"
+                      placeholder="Search your runs…"
+                      value={search}
+                      onChange={(e) => changeSearch(e.target.value)}
+                      className="bg-white border border-saibyl-border-light rounded-xl pl-9 pr-4 py-2 text-sm text-saibyl-ink placeholder:text-saibyl-muted/70 focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20 transition-colors w-64"
+                    />
+                  </div>
+
+                  {/* Filter chips */}
+                  <div className="flex items-center gap-1">
+                    {STATUS_FILTERS.map((f) => {
+                      const active = statusFilter === f;
+                      const count = f === 'all' ? sims.length : (statusCounts[f] ?? 0);
+                      return (
+                        <button
+                          key={f}
+                          onClick={() => changeStatus(f)}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                            active
+                              ? 'bg-saibyl-blue/[0.10] text-saibyl-ink'
+                              : 'text-saibyl-muted hover:text-saibyl-silver'
+                          }`}
+                        >
+                          {f !== 'all' && statusDot(f)}
+                          {f === 'all' ? 'All' : stateWord(f)}
+                          <span className="ml-0.5 text-[10px] opacity-60">{count}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* The summary that used to sit beside the page title. It has
+                      nowhere to live in a hero — `Hero` takes no `mark` — and
+                      dropping it would lose the only place the workspace total
+                      is stated above the pager. */}
+                  <p className="ml-auto font-mono tabular-nums text-[11px] text-saibyl-muted">
+                    {total} in total · {runningCount} going now · {completeCount} finished
+                  </p>
+                </div>
+
+                {/* ---- Bulk Actions Bar ---- */}
+                {selected.size > 0 && (
+                  <div className="mb-4">
+                    <div className="rounded-xl border border-saibyl-violet/25 bg-saibyl-violet/10 px-4 py-2 flex items-center gap-3">
+                      <span className="text-sm text-saibyl-ink font-medium">
+                        {selected.size} selected
+                      </span>
+                      {/* Export and Archive stood here and did nothing.
+                          Both were `onClick={() => { /* TODO * / }}` — controls
+                          that render, take a click and swallow it, which is the
+                          failure the no-grey-button rule exists to prevent wearing
+                          its opposite face: the button looks live, so the founder
+                          concludes the archive silently failed rather than that it
+                          was never built. There is no archive endpoint and
+                          `/exports` is per-report, reachable from Your reports.
+                          Deleting them removes no capability, because there was
+                          none. */}
+                      <button
+                        className="inline-flex items-center gap-1.5 text-xs text-saibyl-negative hover:bg-saibyl-negative/10 px-2 py-1 rounded transition-colors"
+                        onClick={() => handleDelete(Array.from(selected))}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Delete
+                      </button>
+                    </div>
+                  </div>
                 )}
-              </div>
-            </div>
-          </>
-        )}
-      </div>
+
+                {/* ---- Data Table ----
+                    A dense surface: hairline rows, no shadow per row, the same
+                    row rhythm and type sizes it had before the frame changed.
+                    The rows are not dealt or revealed one by one — twenty
+                    staggered rows stop being an arrival and become a loading bar
+                    made of content. */}
+                <Card carries="density" className="overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-saibyl-border">
+                        <th className="w-10 px-4 py-3">
+                          <input
+                            type="checkbox"
+                            checked={selected.size === filteredSims.length && filteredSims.length > 0}
+                            onChange={toggleSelectAll}
+                            className="accent-[#8b73ee] w-3.5 h-3.5 cursor-pointer"
+                          />
+                        </th>
+                        {(
+                          [
+                            ['name', 'Name'],
+                            ['status', 'Where it got to'],
+                            [null, 'Platforms'],
+                            ['agent_count', 'People'],
+                            ['created_at', 'Started'],
+                            [null, ''],
+                          ] as const
+                        ).map(([field, label], i) => (
+                          <th
+                            key={i}
+                            className={`text-left px-4 py-3 text-[10px] font-medium tracking-widest uppercase text-saibyl-muted ${
+                              field ? 'cursor-pointer select-none hover:text-saibyl-silver' : ''
+                            }`}
+                            onClick={() => field && toggleSort(field as SortField)}
+                          >
+                            <span className="inline-flex items-center gap-1">
+                              {label}
+                              {field && sortField === field && (
+                                <ArrowUpDown className="w-3 h-3 text-saibyl-violet" />
+                              )}
+                            </span>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredSims.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="text-center py-12 text-saibyl-muted text-sm">
+                            Nothing matches what you have filtered to.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredSims.map((sim) => {
+                          const ns = normalizeStatus(sim.status);
+                          const color = STATUS_COLOR[sim.status] ?? '#60718e';
+                          return (
+                            <tr
+                              key={sim.id}
+                              className={`border-b border-saibyl-border last:border-b-0 hover:bg-[#14294a]/[0.02] transition-colors cursor-pointer ${
+                                selected.has(sim.id) ? 'bg-saibyl-violet/5' : ''
+                              }`}
+                              onClick={(e) => {
+                                /* don't navigate when clicking checkbox or actions */
+                                const target = e.target as HTMLElement;
+                                if (
+                                  target.closest('input[type="checkbox"]') ||
+                                  target.closest('[data-actions]')
+                                )
+                                  return;
+                                navigate(`/app/simulations/${sim.id}`);
+                              }}
+                            >
+                              {/* Checkbox */}
+                              <td className="w-10 px-4 py-3">
+                                <input
+                                  type="checkbox"
+                                  checked={selected.has(sim.id)}
+                                  onChange={() => toggleSelect(sim.id)}
+                                  className="accent-[#8b73ee] w-3.5 h-3.5 cursor-pointer"
+                                />
+                              </td>
+
+                              {/* Name.
+
+                                  There used to be a second line here reading
+                                  `SIM-{first four characters of the id}`. It looked
+                                  like a reference number and was not one: four
+                                  characters off the front of a UUID identify
+                                  nothing, collide between rows, and a founder
+                                  reported three different runs all showing the same
+                                  "SIM-1111". A run is identified by its name and
+                                  when it started — both of which are already on this
+                                  row and are both real. */}
+                              <td className="px-4 py-3">
+                                <div className="font-medium text-saibyl-ink">{sim.name}</div>
+                                {sim.prediction_goal && (
+                                  <div className="text-[11px] text-saibyl-muted mt-0.5 line-clamp-1 max-w-md">
+                                    {sim.prediction_goal}
+                                  </div>
+                                )}
+                              </td>
+
+                              {/* Status pill */}
+                              <td className="px-4 py-3">
+                                <span
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap"
+                                  style={{
+                                    backgroundColor: `${color}1A`,
+                                    color,
+                                  }}
+                                >
+                                  {statusDot(sim.status, ACTIVE_STATUSES.includes(ns))}
+                                  {stateWord(sim.status)}
+                                </span>
+                              </td>
+
+                              {/* Platforms */}
+                              <td className="px-4 py-3">
+                                {sim.platforms && sim.platforms.length > 0 ? (
+                                  <div className="flex items-center gap-1 flex-wrap">
+                                    {sim.platforms.map((p) => (
+                                      <span
+                                        key={p}
+                                        className="bg-[#14294a]/[0.04] rounded px-1.5 py-0.5 text-[10px] font-mono text-saibyl-silver"
+                                      >
+                                        {PLATFORM_MAP[p] ?? p}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-saibyl-muted">&mdash;</span>
+                                )}
+                              </td>
+
+                              {/* Agents */}
+                              <td className="px-4 py-3 font-mono text-xs text-saibyl-silver">
+                                {formatAgentCount(sim.agent_count)}
+                              </td>
+
+                              {/* No "how they felt" column. A run's row carries no
+                                  such field, and the measured reading is only
+                                  addressable one id at a time via
+                                  /simulations/{id}/analysis — a column here would be
+                                  one request per row, most of them 404. */}
+
+                              {/* Created */}
+                              <td className="px-4 py-3 font-mono text-xs text-saibyl-muted whitespace-nowrap">
+                                {formatDistanceToNow(new Date(sim.created_at), { addSuffix: true })}
+                              </td>
+
+                              {/* Actions */}
+                              <td className="px-4 py-3 relative" data-actions ref={openMenu === sim.id ? menuRef : undefined}>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenMenu(openMenu === sim.id ? null : sim.id);
+                                  }}
+                                  className="p-1.5 rounded-lg hover:bg-[#14294a]/[0.04] text-saibyl-muted hover:text-saibyl-ink transition-colors"
+                                >
+                                  <MoreHorizontal className="w-4 h-4" />
+                                </button>
+
+                                {openMenu === sim.id && (
+                                  <div
+                                    className="absolute right-4 top-10 z-50 w-40 bg-white border border-saibyl-border-light rounded-xl shadow-[0_22px_60px_rgba(52,96,164,0.18)] py-1 text-xs"
+                                  >
+                                    <button
+                                      className="w-full text-left px-3 py-2 text-saibyl-ink hover:bg-[#14294a]/[0.04] transition-colors"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigate(`/app/simulations/${sim.id}`);
+                                      }}
+                                    >
+                                      Open it
+                                    </button>
+                                    {/* Duplicate and Archive were here and did
+                                        nothing — see the bulk bar above. Neither
+                                        has a backend, and a menu item that
+                                        swallows a click teaches a founder that
+                                        the app is unreliable rather than that the
+                                        feature is unbuilt. */}
+                                    <button
+                                      className="w-full text-left px-3 py-2 text-saibyl-negative hover:bg-saibyl-negative/10 transition-colors"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDelete([sim.id]);
+                                      }}
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </Card>
+
+                {/* ---- Pagination ----
+                    Previous and Next are rendered only when they lead somewhere.
+                    They used to be `disabled` at the ends of the list, which is the
+                    grey rectangle the founder's standing rule forbids: a control
+                    either does something or it is not a control. */}
+                <div className="flex items-center justify-between mt-4">
+                  <p className="text-xs text-saibyl-muted font-mono">
+                    Showing {pageStart}&ndash;{pageEnd} of {total}
+                  </p>
+                  <div className="flex items-center gap-1">
+                    {page > 1 && (
+                      <button
+                        onClick={() => goToPage((p) => p - 1)}
+                        className="px-3 py-1.5 rounded-lg border border-saibyl-border text-xs text-saibyl-silver hover:bg-[#14294a]/[0.04] transition-colors"
+                      >
+                        Previous
+                      </button>
+                    )}
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                      <button
+                        key={p}
+                        onClick={() => goToPage(p)}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-mono transition-colors ${
+                          p === page
+                            ? 'bg-saibyl-blue/[0.10] text-saibyl-ink'
+                            : 'text-saibyl-muted hover:text-saibyl-silver'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                    {page < totalPages && (
+                      <button
+                        onClick={() => goToPage((p) => p + 1)}
+                        className="px-3 py-1.5 rounded-lg border border-saibyl-border text-xs text-saibyl-silver hover:bg-[#14294a]/[0.04] transition-colors"
+                      >
+                        Next
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </Reveal>
+        </Chapter>
+
+        {/* ── The way out ──
+            The landing page closes by asking for the next step, and so does
+            this. Rendered unconditionally and worded so it reads the same
+            whether the list above holds forty runs or none — a closing section
+            that blinked in and out with the fetch would move the whole page
+            under the reader every time a filter changed. */}
+        <Chapter
+          kicker="Starting another"
+          title={
+            <>
+              The room is <em>always open</em>
+            </>
+          }
+          lead="Nothing here changes until you run something. When the wording, the price or the audience moves, put it in front of a room again — and send it back to the room that objected the first time if you want a measured difference rather than a second opinion."
+        >
+          <Reveal>
+            <Action as={Link} to="/app/simulations/new" kind="quiet">
+              <Plus className="w-4 h-4" /> Start a run
+            </Action>
+          </Reveal>
+        </Chapter>
+      </Longform>
     </Ground>
   );
 }

@@ -43,9 +43,17 @@ export function useReveal(
     const el = root.current;
     if (!el) return;
 
-    const targets = Array.from(el.querySelectorAll<HTMLElement>(selector));
+    /* Queried on every call, never captured once.
+       The landing page is static markup, so a single `querySelectorAll` at
+       mount saw everything it would ever need to. **Every page behind the login
+       is not**: the lists, tables and cards arrive after a fetch, seconds after
+       this effect ran. A captured array would leave each of those nodes at
+       `opacity: 0` with nothing watching them — permanently invisible content
+       on a page that reported no error, which is the worst rendering of this
+       whole idea. */
+    const found = () => Array.from(el.querySelectorAll<HTMLElement>(selector));
     const revealAll = () => {
-      for (const target of targets) target.classList.add('is-visible');
+      for (const target of found()) target.classList.add('is-visible');
     };
 
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -64,11 +72,44 @@ export function useReveal(
       },
       { threshold: 0.12 },
     );
-    for (const target of targets) observer.observe(target);
+    /* Once the fallback has fired, this stops observing and starts revealing.
+       Otherwise the fallback only rescues the nodes that existed when it ran:
+       in an environment where intersection callbacks never arrive, a list that
+       loads at t=5s would be observed by a dead observer and stay invisible
+       forever — the exact failure the fallback exists to prevent, moved four
+       seconds later. */
+    let gaveUp = false;
+
+    /* `observe` is idempotent per element, so re-observing one already being
+       watched is a no-op rather than a duplicate callback. That is what lets
+       this be called again on every mutation without bookkeeping. */
+    const track = () => {
+      for (const target of found()) {
+        if (gaveUp) target.classList.add('is-visible');
+        else observer.observe(target);
+      }
+    };
+    track();
+
+    /* Content that arrives later gets tracked when it arrives.
+       Watching `childList` on the subtree covers every way React can add a
+       node: a resolved fetch, a tab switch, an expanded row. Attributes are
+       deliberately not watched — `is-visible` is itself an attribute change,
+       and observing those would have this re-enter on its own writes. */
+    const mutations = new MutationObserver((records) => {
+      // Only re-query when something was actually added. A removal cannot
+      // produce a node that needs watching, and this runs on every keystroke
+      // in a filter box.
+      if (records.some((r) => r.addedNodes.length > 0)) track();
+    });
+    mutations.observe(el, { childList: true, subtree: true });
 
     let fallbackTimer: number | undefined;
     const armFallback = () => {
-      fallbackTimer = window.setTimeout(revealAll, 2500);
+      fallbackTimer = window.setTimeout(() => {
+        gaveUp = true;
+        revealAll();
+      }, 2500);
     };
     if (document.readyState === 'complete') armFallback();
     else window.addEventListener('load', armFallback, { once: true });
@@ -76,6 +117,7 @@ export function useReveal(
     return () => {
       window.removeEventListener('load', armFallback);
       if (fallbackTimer !== undefined) window.clearTimeout(fallbackTimer);
+      mutations.disconnect();
       observer.disconnect();
     };
   }, [root, selector]);

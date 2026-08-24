@@ -698,8 +698,36 @@ describe("7. The longform page carries the landing page's numbers", () => {
     expect(hook, 'the reduced-motion branch is gone').toContain(
       "matchMedia('(prefers-reduced-motion: reduce)')",
     );
-    expect(hook, 'the blank-capture fallback is gone').toMatch(/setTimeout\(revealAll, 2500\)/);
+    expect(hook, 'the blank-capture fallback is gone').toMatch(/2500\)/);
     expect(hook, 'revealed elements are no longer unobserved').toContain('unobserve');
+  });
+
+  it('content that arrives after the fetch is revealed too', () => {
+    /* **The bug this exists to prevent, found before it shipped.**
+     *
+     * The landing page is static markup, so the original hook queried its
+     * targets once on mount and that saw everything. Every page behind the
+     * login is not static: the lists, tables and cards arrive when a request
+     * resolves, seconds later. Those nodes would have been left at
+     * `opacity: 0` with nothing watching them — permanently invisible content,
+     * on a page reporting no error.
+     *
+     * Two halves, and both are needed. A `MutationObserver` tracks nodes as
+     * they appear; and once the 2.5s fallback has fired, late arrivals are
+     * revealed on sight rather than handed to an observer whose callbacks are
+     * evidently never coming.
+     */
+    const hook = readFileSync(join(SRC, 'components/design/useReveal.ts'), 'utf8');
+    expect(hook, 'late content is never picked up').toContain('MutationObserver');
+    expect(hook, 'the mutation observer is never disconnected').toMatch(
+      /mutations\.disconnect\(\)/,
+    );
+    // Targets are re-queried, not captured once at mount.
+    expect(hook, 'targets are captured once again').toMatch(
+      /const found = \(\) =>[\s\S]*querySelectorAll/,
+    );
+    // And the fallback latches, so anything arriving after it is shown.
+    expect(hook, 'the fallback does not latch for late content').toMatch(/gaveUp/);
   });
 
   it('there is one reveal implementation, and the landing page uses it too', () => {

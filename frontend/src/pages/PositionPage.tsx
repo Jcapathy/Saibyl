@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import api, { unwrapList } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
 import { findStage, stageHref, type ProductState } from '@/lib/stages';
-import { Ground, PageHeader, Rise, dealDelayMs } from '@/components/design';
+import {
+  Action,
+  Chapter,
+  Ground,
+  Hero,
+  Longform,
+  Reveal,
+} from '@/components/design';
 import { EmptyState, StageError } from '@/components/stages/StagePrimitives';
 import AnswerPackPanel from '@/components/gtm/AnswerPackPanel';
 import SiteCheckPanel from '@/components/position/SiteCheckPanel';
@@ -23,7 +31,7 @@ import { useSiteChecks } from '@/components/position/checks';
  * The first is the objection matrix: what real buyers said against this, in the
  * order the room said it matters, with what to say back. The second is the
  * website check and its revision — the page a stranger reads, rewritten, put in
- * front of the same six readers, scored both ways.
+ * front of the same six readers, scored both ways. One chapter each.
  *
  * ── Why the site check lives here and not on a tab of its own ───────────────
  *
@@ -47,10 +55,17 @@ import { useSiteChecks } from '@/components/position/checks';
  * started earlier and finished later is the latest to one of them and not the
  * other, and a page that chooses for itself eventually shows answers from a
  * different run than the step it is standing next to.
+ *
+ * ── The frame, 2026-08-23: this page opens like the landing page ────────────
+ *
+ * The founder read the app against the public site and called it "very sterile,
+ * mechanical, and looks AI-generated"; the instruction was to treat every page
+ * behind the login the way the landing page treats itself — hero, large type,
+ * then scroll, with the content arriving as the reader reaches it. So the frame
+ * is `Longform` / `Hero` / `Chapter` / `Reveal` and `GuidePage` is the built
+ * example it copies. What is *inside* each chapter is the same density it was:
+ * the panels, the picker and the empty states are untouched.
  */
-
-/** The answers arrive after the check panel and its findings have landed. */
-const AFTER_THE_CHECK_MS = dealDelayMs(3);
 
 export default function PositionPage() {
   const [products, setProducts] = useState<ProductState[]>([]);
@@ -84,9 +99,8 @@ export default function PositionPage() {
     loadProducts();
   }, [loadProducts]);
 
-  /* Held here rather than inside the panel because the heading reads it too:
-     the mark counts what has been checked, and the eyebrow's dot only pulses
-     while a page is actually being read. */
+  /* Held here rather than inside the panel because the hero reads it too: the
+     mark under the lead counts what has been checked. */
   const checks = useSiteChecks(selectedId);
 
   const selected = useMemo(
@@ -101,104 +115,159 @@ export default function PositionPage() {
   const checked = checks.rows.length;
 
   return (
-    <Ground className="min-h-full p-6 lg:p-8">
-      <div className="max-w-4xl mx-auto space-y-8">
-        <Rise>
-          <PageHeader
-            eyebrow="Pre-launch"
-            title="Position"
-            phrase="Which objection kills the pitch? What answer moves them? Did the fix actually work?"
-            mark={
-              checked > 0
-                ? `${checked} ${checked === 1 ? 'page' : 'pages'} checked`
-                : undefined
-            }
-          >
-            <p>
-              A good product still loses to the one objection nobody
-              rehearsed. Your page has a few seconds to answer it, and you are
-              the last person alive who can read that page fresh. So the room
-              reads it for you and says what stopped them, in their own words,
-              ranked by how many it stopped. Then Saibyl rewrites the page to
-              answer the worst of it and puts the new version in front of that
-              same room &mdash; so what you get is a measured difference
-              rather than a hope.
-            </p>
-          </PageHeader>
-        </Rise>
-
-        {/* ── Which product this is about ── */}
-        {productsError && (
-          <StageError message={productsError} retry={loadProducts} />
-        )}
-
-        {productsLoading ? (
-          <p className="text-[12.5px] text-saibyl-muted" aria-live="polite">
-            Loading&hellip;
+    <Ground className="min-h-full pb-24">
+      <Longform>
+        <Hero
+          eyebrow="Pre-launch"
+          title="Find the objection"
+          serif="that kills the pitch."
+          actions={
+            /* The one gradient on this screen. Everything on the page is built
+               from what a room said, so the control that unblocks all of it is
+               the room — the same handoff the empty state below offers. */
+            <>
+              {selected ? (
+                <Action as={Link} to={stageHref(selected.id, 'reactions')}>
+                  Put it in front of a room
+                </Action>
+              ) : (
+                <Action as={Link} to="/app/products/new">
+                  Add what you are building
+                </Action>
+              )}
+              <Action as={Link} to="/app/guide" kind="quiet">
+                How this works
+              </Action>
+            </>
+          }
+        >
+          <p>
+            A good product still loses to the one objection nobody rehearsed.
+            Your page has a few seconds to answer it, and you are the last
+            person alive who can read that page fresh. So the room reads it for
+            you and says what stopped them, in their own words, ranked by how
+            many it stopped. Then Saibyl rewrites the page to answer the worst
+            of it and puts the new version in front of that same room &mdash; so
+            what you get is a measured difference rather than a hope.{' '}
+            <b className="text-saibyl-ink font-semibold">
+              Which objection kills the pitch? What answer moves them? Did the
+              fix actually work?
+            </b>
           </p>
-        ) : products.length === 0 ? (
-          <EmptyState
-            headline="There is nothing to position yet"
-            body="A check and its answers are stored against one thing you are building, so they can be rebuilt when the pitch changes. Add what you are building and this fills in."
-            action={{
-              label: 'Add what you are building',
-              href: '/app/products/new',
-            }}
-          />
-        ) : (
-          <>
-            {products.length > 1 && (
-              <div>
-                <label
-                  htmlFor="position-product"
-                  className="block text-[12.5px] text-saibyl-silver mb-1.5"
-                >
-                  Which one are you positioning?
-                </label>
-                <select
-                  id="position-product"
-                  value={selectedId}
-                  onChange={(e) => setSelectedId(e.target.value)}
-                  className="w-full sm:max-w-sm rounded-xl border border-saibyl-border-light bg-white px-3 py-2.5 text-[13.5px] text-saibyl-ink focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20"
-                  style={{ colorScheme: 'light' }}
-                >
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+          {checked > 0 && (
+            <p className="mt-5 text-[12.5px] text-saibyl-muted">
+              {checked} {checked === 1 ? 'page' : 'pages'} checked
+            </p>
+          )}
+        </Hero>
+
+        {/* ── Test the fix on the same room, and watch the delta ──
+            Every branch of the load renders inside this chapter: the hero is
+            rendered once and only the body switches, so a founder who is
+            loading, errored or has nothing yet still sees the same page. */}
+        <Chapter
+          kicker="The page they read"
+          title={
+            <>
+              What a stranger takes away, <em>and where they stop</em>
+            </>
+          }
+          lead="Paste the address and six readers tell you what they understood, what they did not believe, and the line they gave up on. Then the rewrite goes back to those same six, and the difference between the two readings is the answer."
+        >
+          <div className="space-y-6">
+            {productsError && (
+              <Reveal>
+                <StageError message={productsError} retry={loadProducts} />
+              </Reveal>
             )}
 
-            {selected && (
+            {productsLoading ? (
+              <Reveal>
+                <p className="text-[12.5px] text-saibyl-muted" aria-live="polite">
+                  Loading&hellip;
+                </p>
+              </Reveal>
+            ) : products.length === 0 ? (
+              <Reveal>
+                <EmptyState
+                  headline="There is nothing to position yet"
+                  body="A check and its answers are stored against one thing you are building, so they can be rebuilt when the pitch changes. Add what you are building and this fills in."
+                  action={{
+                    label: 'Add what you are building',
+                    href: '/app/products/new',
+                  }}
+                />
+              </Reveal>
+            ) : (
               <>
-                {/* ── Test the fix on the same room, and watch the delta ── */}
-                <SiteCheckPanel productId={selected.id} checks={checks} />
+                {products.length > 1 && (
+                  <Reveal>
+                    <div>
+                      <label
+                        htmlFor="position-product"
+                        className="block text-[12.5px] text-saibyl-silver mb-1.5"
+                      >
+                        Which one are you positioning?
+                      </label>
+                      <select
+                        id="position-product"
+                        value={selectedId}
+                        onChange={(e) => setSelectedId(e.target.value)}
+                        className="w-full sm:max-w-sm rounded-xl border border-saibyl-border-light bg-white px-3 py-2.5 text-[13.5px] text-saibyl-ink focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20"
+                        style={{ colorScheme: 'light' }}
+                      >
+                        {products.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </Reveal>
+                )}
 
-                {/* ── Which objections kill the pitch ──
-                    The panel is self-contained down to its own label and
-                    heading, so it is handed the run and left to speak for
-                    itself rather than given a second heading to argue with. */}
-                <Rise delayMs={AFTER_THE_CHECK_MS}>
-                  {runId ? (
-                    <AnswerPackPanel simulationId={runId} />
-                  ) : (
-                    <EmptyState
-                      headline="Nothing has pushed back on this yet"
-                      body="The answers are built from what buyers actually objected to, hardest first, with the sentence each of them used. Put this in front of a room once and it fills in."
-                      action={{
-                        label: 'Put it in front of a room',
-                        href: stageHref(selected.id, 'reactions'),
-                      }}
-                    />
-                  )}
-                </Rise>
+                {selected && (
+                  <Reveal step={1}>
+                    <SiteCheckPanel productId={selected.id} checks={checks} />
+                  </Reveal>
+                )}
               </>
             )}
-          </>
+          </div>
+        </Chapter>
+
+        {/* ── Which objections kill the pitch ──
+            The panel is self-contained down to its own label and heading, so it
+            is handed the run and left to speak for itself rather than given a
+            second heading to argue with. The chapter around it is gated on the
+            product, exactly as the block it replaces was. */}
+        {selected && (
+          <Chapter
+            kicker="What to say back"
+            title={
+              <>
+                The objections, <em>hardest first</em>
+              </>
+            }
+            lead="Ranked by how much of the room actually carried each one rather than by how often the words came up — with the sentence a buyer used, and the answer that has to survive it."
+          >
+            <Reveal>
+              {runId ? (
+                <AnswerPackPanel simulationId={runId} />
+              ) : (
+                <EmptyState
+                  headline="Nothing has pushed back on this yet"
+                  body="The answers are built from what buyers actually objected to, hardest first, with the sentence each of them used. Put this in front of a room once and it fills in."
+                  action={{
+                    label: 'Put it in front of a room',
+                    href: stageHref(selected.id, 'reactions'),
+                  }}
+                />
+              )}
+            </Reveal>
+          </Chapter>
         )}
-      </div>
+      </Longform>
     </Ground>
   );
 }

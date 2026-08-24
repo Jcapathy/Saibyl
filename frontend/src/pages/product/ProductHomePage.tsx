@@ -6,7 +6,16 @@ import api, { unwrapList } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
 import type { AttentionLine, ProductState } from '@/lib/stages';
 import { EmptyState, StageError } from '@/components/stages/StagePrimitives';
-import { Action, Card, Deal, Ground, PageHeader, Rise } from '@/components/design';
+import {
+  Action,
+  Card,
+  Chapter,
+  Deal,
+  Ground,
+  Hero,
+  Longform,
+  Reveal,
+} from '@/components/design';
 
 /**
  * Home leads with the product.
@@ -41,7 +50,61 @@ import { Action, Card, Deal, Ground, PageHeader, Rise } from '@/components/desig
  *    claimed to matter more than anything else on it.
  * 4. No eyebrow, no accent phrase, no arrival motion. The four rules had
  *    simply never been applied here.
+ *
+ * ---
+ *
+ * **And then the frame, later the same day: this page is a landing page.**
+ *
+ * The restyle above fixed the colours and left the shape alone — a 32px
+ * heading, a create button beside it, then a wall of cards. Read next to the
+ * public site, that is still the thing the founder called "very sterile,
+ * mechanical, and looks AI-generated", and this is the first screen behind the
+ * login so it is the one that decides whether the product he bought on the way
+ * in is the product he arrived at.
+ *
+ * So the frame is `Longform` / `Hero` / `Chapter` — `GuidePage`'s shape, whose
+ * values are `pages/landing.css`'s own. **Nothing inside a chapter got looser.**
+ * The product card is the same card at the same density, dealt at the same
+ * 70ms; what changed is that the page opens like the landing page and then gets
+ * on with the work.
+ *
+ * **The hero renders in every branch.** Loading, failed, empty and full are a
+ * switch on the *body* of the first chapter and nothing else, because a page
+ * whose opening disappears while it fetches is a page that flickers between two
+ * different products.
+ *
+ * The reveal observer only sees the nodes present when `Longform` mounts
+ * (`useReveal` queries once), so the product list stays on `Deal` — an
+ * animation that needs no observer — rather than `Reveal`, which would leave
+ * every card that arrives after the fetch at `opacity: 0`.
  */
+
+/**
+ * How to read a product card, for the founder looking at their first one.
+ *
+ * Every line is a description of what the card above actually renders — the
+ * heading row, the two dot weights in `Attention`, and `nextStep`'s rule. This
+ * chapter is allowed to exist only because it is checkable against the code
+ * fifty lines up; a "getting started" section that describes a nicer product
+ * than the one on screen is the filler this page's own docstring bans.
+ */
+const HOW_TO_READ = [
+  {
+    title: 'The line at the top',
+    body:
+      'The name, where the company is, and how many of the five steps already have what they need. A step that has what it needs will run — the rest tell you what they are waiting for when you open them.',
+  },
+  {
+    title: 'The dots underneath',
+    body:
+      'Blue is the thing worth opening: a run that finished, an answer nobody has read. Amber is something that will still run and give you a thinner answer than it could.',
+  },
+  {
+    title: 'The button',
+    body:
+      'The earliest step that has not produced anything, which is the one that unblocks whatever sits behind it. Once every step has produced something it offers the last one instead.',
+  },
+] as const;
 
 function Attention({ line, productId }: { line: AttentionLine; productId: string }) {
   const body = (
@@ -157,7 +220,7 @@ function ProductCard({ product }: { product: ProductState }) {
         {/* `quiet`, not `primary`. There is one of these per card, and on a
             page with four products four gradient buttons would each be
             shouting that they are the thing to do next. The one gradient on
-            this screen is "New product", in the header. */}
+            this screen is "New product", in the hero. */}
         <Action as={Link} to={nextStep.href} kind="quiet" className="mt-4">
           {nextStep.number}. {nextStep.label} &mdash; {nextStep.blurb}
         </Action>
@@ -202,62 +265,142 @@ export default function ProductHomePage() {
        panel across the whole page, on top of the radial wash `<body>` already
        carries — so the first screen every founder sees was the one screen with
        canvas rule 1 switched off. */
-    <Ground className="p-6 lg:p-8 min-h-full">
-      <div className="max-w-4xl mx-auto">
-        <Rise className="flex flex-wrap items-end justify-between gap-4 mb-7">
-          <PageHeader
-            eyebrow="Your workspace"
-            title="Your products"
-            phrase="One product, five steps, in the order each one feeds the next."
-          >
-            <p>
-              Everything you are building lives here, and each one carries its
-              own audience, its own objections and its own buyer list. A card
-              tells you what has changed since you last looked and what the
-              next step is &mdash; never a row of zeroes, because a card padded
-              with filler teaches you to stop reading the cards.
-            </p>
-          </PageHeader>
-          {/* The one gradient on this screen. There is exactly one thing a
-              founder can do here that is not "open something that already
-              exists", and the artboard says that thing is never a flat fill. */}
-          <Action as={Link} to="/app/products/new" className="shrink-0">
-            <Plus className="w-4 h-4" />
-            New product
-          </Action>
-        </Rise>
+    <Ground className="min-h-full pb-24">
+      <Longform>
+        {/* Outside every branch, and never inside a `Reveal`: this is the first
+            screen, and a page whose opening fades in looks broken for 700ms. */}
+        <Hero
+          eyebrow="Your workspace"
+          title="Everything you are building,"
+          serif="and what it needs next."
+          actions={
+            <>
+              <Action as={Link} to="/app/products/new">
+                <Plus className="w-4 h-4" />
+                New product
+              </Action>
+              <Action as={Link} to="/app/guide" kind="quiet">
+                How this works
+              </Action>
+            </>
+          }
+        >
+          <p>
+            Everything you are building lives here, and each one carries its own
+            audience, its own objections and its own buyer list. A card tells
+            you what has changed since you last looked and what the next step is
+            &mdash; never a row of zeroes, because a card padded with filler
+            teaches you to stop reading the cards.{' '}
+            <b className="text-saibyl-ink font-semibold">
+              One product, five steps, in the order each one feeds the next.
+            </b>
+          </p>
+        </Hero>
 
-        {error && (
-          <div className="mb-5">
-            <StageError message={error} retry={retry} />
-          </div>
-        )}
+        {/* ── The products ──
+            One chapter, and the four states are a switch on its body alone. The
+            heading, the lead and the hero above it render identically whether
+            the fetch is in flight, failed, empty or done. */}
+        <Chapter
+          kicker="What you are building"
+          title={
+            <>
+              Your products, and <em>what each one needs</em>
+            </>
+          }
+          lead="Open one to pick up where you left off. The button under each card names the earliest step that has not produced anything — the one that unblocks whatever sits behind it."
+        >
+          {error && (
+            <div className="mb-5">
+              <StageError message={error} retry={retry} />
+            </div>
+          )}
 
-        {loading && products.length === 0 ? (
-          <div className="flex items-center gap-2.5 text-saibyl-muted text-[13px]">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Loading…
-          </div>
-        ) : products.length === 0 && !error ? (
-          <EmptyState
-            headline="Nothing here yet"
-            body="A product is whatever you are trying to sell. Add one, upload the deck or the landing page, and we will work out who buys it."
-            action={{ label: 'Add your first product', href: '/app/products/new' }}
-          />
-        ) : (
-          <div className="space-y-4">
-            {/* Dealt, at the artboard's 70ms — the same arrival the rail has,
-                because this list is the rail's equivalent on a page that shows
-                several products rather than one. Capped inside `dealDelayMs`,
-                so a founder with thirty products does not wait for the tail. */}
-            {products.map((product, i) => (
-              <Deal key={product.id} index={i}>
-                <ProductCard product={product} />
-              </Deal>
+          {loading && products.length === 0 ? (
+            <div className="flex items-center gap-2.5 text-saibyl-muted text-[13px]">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Loading…
+            </div>
+          ) : products.length === 0 && !error ? (
+            <EmptyState
+              headline="Nothing here yet"
+              body="A product is whatever you are trying to sell. Add one, upload the deck or the landing page, and we will work out who buys it."
+              action={{ label: 'Add your first product', href: '/app/products/new' }}
+            />
+          ) : (
+            <div className="space-y-4">
+              {/* Dealt, at the artboard's 70ms — the same arrival the rail has,
+                  because this list is the rail's equivalent on a page that shows
+                  several products rather than one. Capped inside `dealDelayMs`,
+                  so a founder with thirty products does not wait for the tail. */}
+              {products.map((product, i) => (
+                <Deal key={product.id} index={i}>
+                  <ProductCard product={product} />
+                </Deal>
+              ))}
+            </div>
+          )}
+        </Chapter>
+
+        {/* ── How to read one ──
+            Static, so it is safe to reveal on scroll: these nodes exist when
+            `Longform` mounts and the observer picks them up. */}
+        <Chapter
+          kicker="Reading a card"
+          title={
+            <>
+              Three lines, and <em>what each one is telling you</em>
+            </>
+          }
+        >
+          <div className="space-y-3">
+            {HOW_TO_READ.map((item, i) => (
+              <Reveal key={item.title} step={i as 0 | 1 | 2}>
+                {/* `density` — hairlines, no shadow per row. These carry no
+                    claim a founder has to weigh; the cards above do. */}
+                <Card carries="density" className="p-5">
+                  <div className="flex items-start gap-3">
+                    <span className="w-6 h-6 rounded-lg bg-saibyl-blue/[0.09] flex items-center justify-center shrink-0 mt-0.5">
+                      <span className="font-mono text-[11px] font-bold text-saibyl-blue tabular-nums">
+                        {i + 1}
+                      </span>
+                    </span>
+                    <div>
+                      <h3 className="text-[13.5px] font-semibold text-saibyl-ink mb-1">
+                        {item.title}
+                      </h3>
+                      <p className="text-[13px] text-saibyl-muted leading-relaxed">
+                        {item.body}
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+              </Reveal>
             ))}
           </div>
-        )}
-      </div>
+        </Chapter>
+
+        {/* ── The way out ──
+            The landing page closes by asking for the next step, and so does
+            every page built on its frame. `quiet`, because the one gradient on
+            this screen was spent in the hero. */}
+        <Chapter
+          kicker="Adding another"
+          title={
+            <>
+              One card for each thing <em>you are selling</em>
+            </>
+          }
+          lead="Name it and hand Saibyl the deck or the landing page. It derives your buyers from what you have already written, which is a better input than your description of them."
+        >
+          <Reveal>
+            <Action as={Link} to="/app/products/new" kind="quiet">
+              <Plus className="w-4 h-4" />
+              New product
+            </Action>
+          </Reveal>
+        </Chapter>
+      </Longform>
     </Ground>
   );
 }

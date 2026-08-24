@@ -1,15 +1,28 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import api, { unwrapList } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
 import type { StageSpec } from '@/lib/founder';
 import type { ProductState } from '@/lib/stages';
-import { Ground, PageHeader, Rise, dealDelayMs } from '@/components/design';
+import {
+  Action,
+  Chapter,
+  Ground,
+  Hero,
+  Longform,
+  Reveal,
+} from '@/components/design';
 import { EmptyState, StageError } from '@/components/stages/StagePrimitives';
 import { Limits, RoomNote } from '@/components/grow/GrowPrimitives';
 import MoveCards from '@/components/grow/MoveCards';
 import RehearsalList from '@/components/grow/RehearsalList';
-import { GROWTH_STAGE_ID, growthRuns, type GrowthRun } from '@/components/grow/grow';
+import {
+  GROWTH_STAGE_ID,
+  growthRuns,
+  rehearsalHref,
+  type GrowthRun,
+} from '@/components/grow/grow';
 
 /**
  * Grow — rehearse a change before the market grades it.
@@ -45,10 +58,17 @@ import { GROWTH_STAGE_ID, growthRuns, type GrowthRun } from '@/components/grow/g
  * what to write for each, hands off to the one screen that creates runs, and
  * reports what came back — including, prominently, when what came back was
  * "these two did not separate".
+ *
+ * ── The frame, 2026-08-23: this page opens like the landing page ────────────
+ *
+ * The founder read the app against the public site and called it "very sterile,
+ * mechanical, and looks AI-generated"; the instruction was to treat every page
+ * behind the login the way the landing page treats itself — hero, large type,
+ * then scroll, with the content arriving as the reader reaches it. So the frame
+ * is `Longform` / `Hero` / `Chapter` / `Reveal`, copied from `GuidePage`. What
+ * is *inside* a chapter is the density it always was: the move cards, the room
+ * note, the rehearsal list and the honesty floor are untouched.
  */
-
-/** How long the room-note waits, so it arrives after the three cards are dealt. */
-const AFTER_THE_CARDS_MS = dealDelayMs(3);
 
 export default function GrowPage() {
   const [products, setProducts] = useState<ProductState[]>([]);
@@ -159,109 +179,195 @@ export default function GrowPage() {
   );
 
   return (
-    <Ground className="min-h-full p-6 lg:p-8">
-      <div className="max-w-4xl mx-auto space-y-8">
-        <Rise>
-          <PageHeader
-            eyebrow="Traction"
-            title="Grow"
-            phrase="Will they pay more? Do they want this next? Will a new market buy it?"
-            mark={runs.length > 0 ? `${runs.length} rehearsed so far` : undefined}
-          >
-            <p>
-              You have shipped and you have customers, and now you want to move
-              &mdash; put the price up, add something, take something away, go
-              after a buyer who is not today&rsquo;s buyer. Each of those is a
-              change to what you sell, and each is normally made first and
-              understood three months later, from churn, with no way to tell
-              which part of it did the damage.
-            </p>
-            <p className="mt-2">
-              This puts the change in front of a room built for the moment you
-              are in, and reports what they said. It is not a forecast. It is
-              the argument you were going to have anyway, held a week early, in
-              front of people who cannot cost you a customer.
-            </p>
-          </PageHeader>
-        </Rise>
-
-        {/* ── Which product this is about ── */}
-        {productsError && <StageError message={productsError} retry={loadProducts} />}
-
-        {productsLoading ? (
-          <p className="text-[12.5px] text-saibyl-muted" aria-live="polite">
-            Loading&hellip;
+    <Ground className="min-h-full pb-24">
+      <Longform>
+        <Hero
+          eyebrow="Traction"
+          title="Rehearse the move"
+          serif="before it costs you."
+          actions={
+            /* The one gradient on this screen, and it leads to the screen that
+               already quotes and starts a run. This page starts none. */
+            <>
+              {selected ? (
+                <Action as={Link} to={rehearsalHref(selected.id)}>
+                  Rehearse a change
+                </Action>
+              ) : (
+                <Action as={Link} to="/app/products/new">
+                  Add what you are building
+                </Action>
+              )}
+              <Action as={Link} to="/app/guide" kind="quiet">
+                How this works
+              </Action>
+            </>
+          }
+        >
+          <p>
+            You have shipped and you have customers, and now you want to move
+            &mdash; put the price up, add something, take something away, go
+            after a buyer who is not today&rsquo;s buyer. Each of those is a
+            change to what you sell, and each is normally made first and
+            understood three months later, from churn, with no way to tell which
+            part of it did the damage.
           </p>
-        ) : products.length === 0 ? (
-          <EmptyState
-            headline="There is nothing here to change yet"
-            body="A rehearsal is a change to one thing you sell, so it is stored against it. Add what you are building and this fills in."
-            action={{ label: 'Add what you are building', href: '/app/products/new' }}
-          />
-        ) : (
-          <>
-            {products.length > 1 && (
-              <div>
-                <label
-                  htmlFor="grow-product"
-                  className="block text-[12.5px] text-saibyl-silver mb-1.5"
-                >
-                  Which one are you changing?
-                </label>
-                <select
-                  id="grow-product"
-                  value={selectedId}
-                  onChange={(e) => setSelectedId(e.target.value)}
-                  className="w-full sm:max-w-sm rounded-xl border border-saibyl-border-light bg-white px-3 py-2.5 text-[13.5px] text-saibyl-ink focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20"
-                  style={{ colorScheme: 'light' }}
-                >
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+          <p className="mt-4">
+            This puts the change in front of a room built for the moment you are
+            in, and reports what they said. It is not a forecast. It is the
+            argument you were going to have anyway, held a week early, in front
+            of people who cannot cost you a customer.{' '}
+            <b className="text-saibyl-ink font-semibold">
+              Will they pay more? Do they want this next? Will a new market buy
+              it?
+            </b>
+          </p>
+          {runs.length > 0 && (
+            <p className="mt-5 text-[12.5px] text-saibyl-muted">
+              {runs.length} rehearsed so far
+            </p>
+          )}
+        </Hero>
+
+        {/* ── The three moves ──
+            Every branch of the load renders inside this chapter, so the hero is
+            rendered once and only the body switches. A founder who is loading,
+            errored or has nothing yet lands on the same page as everybody
+            else. */}
+        <Chapter
+          kicker="Three kinds of move"
+          title={
+            <>
+              Price, feature, <em>or a market you have not sold to</em>
+            </>
+          }
+          lead="Pick the one you are weighing and write two things: what you sell today, and what you are proposing instead. Both go to the same room, so the only difference between them is the change itself."
+        >
+          <div className="space-y-6">
+            {productsError && (
+              <Reveal>
+                <StageError message={productsError} retry={loadProducts} />
+              </Reveal>
             )}
 
-            {selected && (
+            {productsLoading ? (
+              <Reveal>
+                <p className="text-[12.5px] text-saibyl-muted" aria-live="polite">
+                  Loading&hellip;
+                </p>
+              </Reveal>
+            ) : products.length === 0 ? (
+              <Reveal>
+                <EmptyState
+                  headline="There is nothing here to change yet"
+                  body="A rehearsal is a change to one thing you sell, so it is stored against it. Add what you are building and this fills in."
+                  action={{ label: 'Add what you are building', href: '/app/products/new' }}
+                />
+              </Reveal>
+            ) : (
               <>
-                <MoveCards productId={selected.id} />
-
-                {/* Who the room is, straight from the registry that builds it.
-                    Arrives after the three cards have dealt — one orchestrated
-                    arrival per screen, per the canvas. */}
-                {spec && (
-                  <Rise delayMs={AFTER_THE_CARDS_MS}>
-                    <RoomNote
-                      inputs={spec.expected_inputs}
-                      defendingShare={spec.default_adversarial_share}
-                      rounds={spec.default_rounds}
-                    />
-                  </Rise>
+                {products.length > 1 && (
+                  <Reveal>
+                    <div>
+                      <label
+                        htmlFor="grow-product"
+                        className="block text-[12.5px] text-saibyl-silver mb-1.5"
+                      >
+                        Which one are you changing?
+                      </label>
+                      <select
+                        id="grow-product"
+                        value={selectedId}
+                        onChange={(e) => setSelectedId(e.target.value)}
+                        className="w-full sm:max-w-sm rounded-xl border border-saibyl-border-light bg-white px-3 py-2.5 text-[13.5px] text-saibyl-ink focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20"
+                        style={{ colorScheme: 'light' }}
+                      >
+                        {products.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </Reveal>
                 )}
 
-                {runsError && (
+                {selected && (
+                  <>
+                    <Reveal step={1}>
+                      <MoveCards productId={selected.id} />
+                    </Reveal>
+
+                    {/* Who the room is, straight from the registry that builds
+                        it — arriving after the three cards. */}
+                    {spec && (
+                      <Reveal step={2}>
+                        <RoomNote
+                          inputs={spec.expected_inputs}
+                          defendingShare={spec.default_adversarial_share}
+                          rounds={spec.default_rounds}
+                        />
+                      </Reveal>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        </Chapter>
+
+        {/* ── What came back ── */}
+        {selected && (
+          <Chapter
+            kicker="What came back"
+            title={
+              <>
+                Every change you have <em>put in front of a room</em>
+              </>
+            }
+            lead="Open one to read the argument that produced the number. Where the two did not separate it says so in the same weight as a win, because a change the room could not tell apart is an answer rather than an absence."
+          >
+            <div className="space-y-6">
+              {runsError && (
+                <Reveal>
                   <StageError message={runsError} retry={() => loadRuns(selected.id)} />
-                )}
+                </Reveal>
+              )}
 
+              <Reveal>
                 <RehearsalList
                   key={selected.id}
                   productId={selected.id}
                   runs={runs}
                   settled={settled}
                 />
-
-                {/* The honesty floor, last and unmissable rather than in a
-                    footnote: what this will not be able to tell you, in the
-                    server's own words — the same ones the finished write-up
-                    uses. */}
-                {spec && <Limits items={spec.cannot_conclude} />}
-              </>
-            )}
-          </>
+              </Reveal>
+            </div>
+          </Chapter>
         )}
-      </div>
+
+        {/* ── The honesty floor ──
+            Last and unmissable rather than in a footnote: what this will not be
+            able to tell you, in the server's own words — the same ones the
+            finished write-up uses. Gated on the registry having said something,
+            because `Limits` renders nothing for an empty list and a chapter
+            heading with nothing under it is its own kind of broken page. */}
+        {selected && spec && spec.cannot_conclude.length > 0 && (
+          <Chapter
+            kicker="The honesty floor"
+            title={
+              <>
+                What a rehearsal <em>cannot tell you</em>
+              </>
+            }
+            lead="Read before anything is charged, in the server's own sentences — the same ones the finished write-up says back to you afterwards."
+          >
+            <Reveal>
+              <Limits items={spec.cannot_conclude} />
+            </Reveal>
+          </Chapter>
+        )}
+      </Longform>
     </Ground>
   );
 }

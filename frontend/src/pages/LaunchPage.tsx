@@ -1,16 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 import api, { unwrapList } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
 import { findStage, type ProductState } from '@/lib/stages';
 import type { Simulation } from '@/types';
-import { Ground, PageHeader, Rise, dealDelayMs } from '@/components/design';
+import {
+  Action,
+  Chapter,
+  Ground,
+  Hero,
+  Longform,
+  Reveal,
+} from '@/components/design';
 import { EmptyState, StageError } from '@/components/stages/StagePrimitives';
 import MessagingDocPanel from '@/components/gtm/MessagingDocPanel';
 import OutboundPanel from '@/components/gtm/OutboundPanel';
 import MessageTests from '@/components/launch/MessageTests';
-import { isHeadToHead } from '@/components/launch/launch';
+import { isHeadToHead, newRunHref } from '@/components/launch/launch';
 
 /**
  * Launch — the go-to-market stage.
@@ -19,7 +26,7 @@ import { isHeadToHead } from '@/components/launch/launch';
  * the message, head to head, in front of the same room — the winner earns your
  * budget."* This is the screen that sentence was a promise about, and it holds
  * the three things a founder taking something to market actually needs, in the
- * order they need them:
+ * order they need them — one chapter each:
  *
  *   1. **Which way of saying it wins** — several wordings, one shared room, and
  *      a scoreboard that refuses to name a winner when the leading two do not
@@ -53,11 +60,16 @@ import { isHeadToHead } from '@/components/launch/launch';
  * to the screen that already prices, gates and starts them. A second creation
  * path is how two surfaces end up disagreeing about what a run is, and the way
  * that failure presents is a founder billed for work the engine never did.
+ *
+ * ── The frame, 2026-08-23: this page opens like the landing page ─────────────
+ *
+ * The founder read the app against the public site and called it "very sterile,
+ * mechanical, and looks AI-generated"; the instruction was to treat every page
+ * behind the login the way the landing page treats itself — hero, large type,
+ * then scroll, with the content arriving as the reader reaches it. So the frame
+ * is `Longform` / `Hero` / `Chapter` / `Reveal`, copied from `GuidePage`. The
+ * three panels inside those chapters are the density they always were.
  */
-
-/** Each of the three blocks arrives one deal-step after the one above it. */
-const AFTER_THE_TESTS_MS = dealDelayMs(1);
-const AFTER_THE_DOCUMENT_MS = dealDelayMs(2);
 
 export default function LaunchPage() {
   const [params] = useSearchParams();
@@ -156,8 +168,8 @@ export default function LaunchPage() {
   );
 
   /* How many sets of wordings this product has already put in front of a room.
-     Counted from the same predicate the panel filters on, so the figure beside
-     the title and the rows underneath it can never disagree. */
+     Counted from the same predicate the panel filters on, so the figure in the
+     hero and the rows underneath it can never disagree. */
   const tested = useMemo(() => shown.filter(isHeadToHead).length, [shown]);
 
   /* The run whose measured objections the document and the outreach are written
@@ -169,122 +181,211 @@ export default function LaunchPage() {
     : null;
 
   return (
-    <Ground className="min-h-full p-6 lg:p-8">
-      <div className="max-w-4xl mx-auto space-y-8">
-        <Rise>
-          <PageHeader
-            eyebrow="Go to market"
-            title="Launch"
-            phrase="Which words land? Who changed their mind? Which version earns the budget?"
-            mark={tested > 0 ? `${tested} tested so far` : undefined}
-          >
-            <p>
-              This is the stage where you take it to market, and it answers the
-              three questions that decide how that goes: which way of saying it
-              wins, what your messaging actually is once you have decided, and
-              what goes out on Monday morning.
-            </p>
-            <p className="mt-2">
-              None of it is written from memory. The wording is picked by a room
-              of buyers rather than settled in a meeting, and everything under
-              it is built from the objections those buyers raised, in their own
-              words. Where a line needs a figure nobody measured, you get a
-              blank you can fill rather than a number we made up.
-            </p>
-          </PageHeader>
-        </Rise>
-
-        {/* ── Which product this is for ── */}
-        {productsError && (
-          <StageError message={productsError} retry={loadProducts} />
-        )}
-
-        {productsLoading ? (
-          <p className="text-[12.5px] text-saibyl-muted" aria-live="polite">
-            Loading&hellip;
+    <Ground className="min-h-full pb-24">
+      <Longform>
+        <Hero
+          eyebrow="Go to market"
+          title="Eight ways to say it,"
+          serif="one room decides."
+          actions={
+            /* The one gradient on this screen, and it goes to the screen that
+               already prices and starts runs. This page creates none. */
+            <>
+              {selected ? (
+                <Action as={Link} to={newRunHref(selected.id)}>
+                  Write the next set of wordings
+                </Action>
+              ) : (
+                <Action as={Link} to="/app/products/new">
+                  Add what you are building
+                </Action>
+              )}
+              <Action as={Link} to="/app/guide" kind="quiet">
+                How this works
+              </Action>
+            </>
+          }
+        >
+          <p>
+            This is the stage where you take it to market, and it answers the
+            three questions that decide how that goes: which way of saying it
+            wins, what your messaging actually is once you have decided, and
+            what goes out on Monday morning.
           </p>
-        ) : products.length === 0 ? (
-          <EmptyState
-            headline="There is nothing here to launch yet"
-            body="Everything on this page is written about one thing you are taking to market, so it is stored against it. Add what you are building and this fills in."
-            action={{
-              label: 'Add what you are building',
-              href: '/app/products/new',
-            }}
-          />
-        ) : (
-          <>
-            {products.length > 1 && (
-              <div>
-                <label
-                  htmlFor="launch-product"
-                  className="block text-[12.5px] text-saibyl-silver mb-1.5"
-                >
-                  Which one are you launching?
-                </label>
-                <select
-                  id="launch-product"
-                  value={selectedId}
-                  onChange={(e) => setSelectedId(e.target.value)}
-                  className="w-full sm:max-w-sm rounded-xl border border-saibyl-border-light bg-white px-3 py-2.5 text-[13.5px] text-saibyl-ink focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20"
-                  style={{ colorScheme: 'light' }}
-                >
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+          <p className="mt-4">
+            None of it is written from memory. The wording is picked by a room
+            of buyers rather than settled in a meeting, and everything under it
+            is built from the objections those buyers raised, in their own
+            words. Where a line needs a figure nobody measured, you get a blank
+            you can fill rather than a number we made up.{' '}
+            <b className="text-saibyl-ink font-semibold">
+              Which words land? Who changed their mind? Which version earns the
+              budget?
+            </b>
+          </p>
+          {tested > 0 && (
+            <p className="mt-5 text-[12.5px] text-saibyl-muted">
+              {tested} tested so far
+            </p>
+          )}
+        </Hero>
+
+        {/* ── The centrepiece: what the landing page sells this stage on ──
+            Every branch of the load renders inside this chapter, so the hero is
+            rendered once and only the body switches. A founder who is loading,
+            errored or has nothing yet lands on the same page as everybody
+            else. */}
+        <Chapter
+          kicker="Which words win"
+          title={
+            <>
+              Eight wordings, <em>one shared room</em>
+            </>
+          }
+          lead="Everyone reads every version, so the only thing that differs is your wording and not who happened to be listening. When the leading two do not separate, the scoreboard says so instead of picking one — and tells you how many more readers it would take to know."
+        >
+          <div className="space-y-6">
+            {productsError && (
+              <Reveal>
+                <StageError message={productsError} retry={loadProducts} />
+              </Reveal>
             )}
 
-            {selected && (
+            {productsLoading ? (
+              <Reveal>
+                <p className="text-[12.5px] text-saibyl-muted" aria-live="polite">
+                  Loading&hellip;
+                </p>
+              </Reveal>
+            ) : products.length === 0 ? (
+              <Reveal>
+                <EmptyState
+                  headline="There is nothing here to launch yet"
+                  body="Everything on this page is written about one thing you are taking to market, so it is stored against it. Add what you are building and this fills in."
+                  action={{
+                    label: 'Add what you are building',
+                    href: '/app/products/new',
+                  }}
+                />
+              </Reveal>
+            ) : (
               <>
-                {runsError && (
-                  <StageError
-                    message={runsError}
-                    retry={() => loadRuns(selected.id)}
-                  />
+                {products.length > 1 && (
+                  <Reveal>
+                    <div>
+                      <label
+                        htmlFor="launch-product"
+                        className="block text-[12.5px] text-saibyl-silver mb-1.5"
+                      >
+                        Which one are you launching?
+                      </label>
+                      <select
+                        id="launch-product"
+                        value={selectedId}
+                        onChange={(e) => setSelectedId(e.target.value)}
+                        className="w-full sm:max-w-sm rounded-xl border border-saibyl-border-light bg-white px-3 py-2.5 text-[13.5px] text-saibyl-ink focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20"
+                        style={{ colorScheme: 'light' }}
+                      >
+                        {products.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </Reveal>
                 )}
 
-                {/* The centrepiece: what the landing page sells this stage on. */}
-                <MessageTests
-                  key={selected.id}
-                  productId={selected.id}
-                  runs={shown}
-                />
-
-                {/* ── The two artifacts written from measured objections ──
-                    Gated on the run rather than rendered empty, because both
-                    panels would otherwise open with a price and a button for a
-                    build with nothing honest to build from. Keyed on the run so
-                    changing product mounts a fresh panel instead of leaving the
-                    previous product's document on screen while the new one
-                    loads. */}
-                {!runId ? (
-                  <EmptyState
-                    headline="Nothing has been in front of a room yet"
-                    body="Your messaging and your outreach are written from objections real buyers raised, so there is nothing honest to build until a room has reacted to this. Put it in front of one and both fill in."
-                    action={{
-                      label: 'Put it in front of a room',
-                      href: `/app/products/${selected.id}/reactions`,
-                    }}
-                  />
-                ) : (
+                {selected && (
                   <>
-                    <Rise delayMs={AFTER_THE_TESTS_MS}>
-                      <MessagingDocPanel key={runId} simulationId={runId} />
-                    </Rise>
-                    <Rise delayMs={AFTER_THE_DOCUMENT_MS}>
-                      <OutboundPanel key={runId} simulationId={runId} />
-                    </Rise>
+                    {runsError && (
+                      <Reveal>
+                        <StageError
+                          message={runsError}
+                          retry={() => loadRuns(selected.id)}
+                        />
+                      </Reveal>
+                    )}
+
+                    <Reveal step={1}>
+                      <MessageTests
+                        key={selected.id}
+                        productId={selected.id}
+                        runs={shown}
+                      />
+                    </Reveal>
                   </>
                 )}
               </>
             )}
-          </>
-        )}
-      </div>
+          </div>
+        </Chapter>
+
+        {/* ── The two artifacts written from measured objections ──
+            Gated on the run rather than rendered empty, because both panels
+            would otherwise open with a price and a button for a build with
+            nothing honest to build from. Keyed on the run so changing product
+            mounts a fresh panel instead of leaving the previous product's
+            document on screen while the new one loads.
+
+            The gate now chooses between chapters rather than between blocks:
+            one chapter apiece when there is a run to write from, and one saying
+            why there is not when there is not. A chapter heading with nothing
+            underneath it is the failure this shape avoids. */}
+        {selected &&
+          (runId ? (
+            <>
+              <Chapter
+                kicker="Once you have decided"
+                title={
+                  <>
+                    The document <em>everything else inherits</em>
+                  </>
+                }
+                lead="The problem, the solution, who it is for, the value props and the pitch — each line filled in from something a buyer actually said, and left blank where nobody measured it."
+              >
+                <Reveal>
+                  <MessagingDocPanel key={runId} simulationId={runId} />
+                </Reveal>
+              </Chapter>
+
+              <Chapter
+                kicker="Monday morning"
+                title={
+                  <>
+                    A fortnight of outreach, <em>per kind of buyer</em>
+                  </>
+                }
+                lead="Each step written against a pain the room measured, with the sentences behind it attached — so you can see why a line is there before you send it to anyone."
+              >
+                <Reveal>
+                  <OutboundPanel key={runId} simulationId={runId} />
+                </Reveal>
+              </Chapter>
+            </>
+          ) : (
+            <Chapter
+              kicker="What comes after the wording"
+              title={
+                <>
+                  The document and the outreach, <em>once a room has read it</em>
+                </>
+              }
+              lead="Both are written from objections real buyers raised, so neither exists until somebody has objected."
+            >
+              <Reveal>
+                <EmptyState
+                  headline="Nothing has been in front of a room yet"
+                  body="Your messaging and your outreach are written from objections real buyers raised, so there is nothing honest to build until a room has reacted to this. Put it in front of one and both fill in."
+                  action={{
+                    label: 'Put it in front of a room',
+                    href: `/app/products/${selected.id}/reactions`,
+                  }}
+                />
+              </Reveal>
+            </Chapter>
+          ))}
+      </Longform>
     </Ground>
   );
 }

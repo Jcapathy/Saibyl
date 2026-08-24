@@ -10,12 +10,14 @@ import type { BillingStatus } from '@/types';
 import {
   Action,
   Card,
+  Chapter,
   Deal,
   Eyebrow,
   Ground,
+  Hero,
+  Longform,
   Notice,
-  PageHeader,
-  Rise,
+  Reveal,
 } from '@/components/design';
 
 /**
@@ -58,6 +60,21 @@ import {
  * over the grant — and Settings, the page a founder opens *because* they are
  * thinking about credits, printed the same number as a bare integer inside the
  * top-up panel. The artboard's own treatment is now on both.
+ *
+ * ---
+ *
+ * **And re-framed as a longform page later the same day.** Founder's decision:
+ * every page behind the login opens the way the public site opens — a hero,
+ * large type, then scroll. `GuidePage` is the approved example; this page copies
+ * its shape. The hero renders once, above the tab strip, so the two panels no
+ * longer each have to say what the page is. The tab strip is one chapter and
+ * the selected panel is the next — and that second chapter's *heading* changes
+ * with the tab rather than the chapter itself being swapped for another one,
+ * so a tab click re-letters a section that is already on screen instead of
+ * fading a whole new one in under the reader.
+ *
+ * Nothing inside either panel moved. The cards, the meter and the top-up form
+ * are the same density they were — the frame grew, the work did not.
  */
 
 type SettingsTab = 'billing' | 'account';
@@ -416,48 +433,97 @@ export default function SettingsPage() {
   const initial: SettingsTab = segment === 'account' ? 'account' : 'billing';
   const [tab, setTab] = useState<SettingsTab>(initial);
 
+  /* One chapter, two headings. Computed rather than written as two `<Chapter>`
+     elements in a ternary, so switching tabs re-letters the section that is
+     already on screen instead of tearing one down and fading another in. */
+  const panel =
+    tab === 'billing'
+      ? {
+          kicker: 'Plan and credits',
+          title: (
+            <>
+              What a run is <em>charged against</em>
+            </>
+          ),
+          lead: 'The plan sets how many people can be in a room. The balance is what each run is drawn from, and topping it up is a one-off payment — nothing renews, and the credits do not expire.',
+        }
+      : {
+          kicker: 'Account',
+          title: (
+            <>
+              Who is <em>signed in</em>
+            </>
+          ),
+          lead: 'The email these runs belong to, and the workspace they sit in. A password change or a deletion is handled by email rather than in the app, because neither is a button we would trust ourselves to build once and never look at again.',
+        };
+
   return (
-    <Ground className="p-6 lg:p-8 min-h-full">
-      <div className="max-w-4xl mx-auto">
-        <Rise>
-          <PageHeader
-            eyebrow="Your workspace"
-            title="Settings"
-            phrase="What you are paying for, and who is signed in."
-          >
-            <p>
-              Two things live here and nothing else does: the plan and the
-              credit balance a run is charged against, and the account those
-              runs belong to. Everything to do with cards, receipts and
-              cancellation happens in Stripe &mdash; we never see a card.
-            </p>
-          </PageHeader>
-        </Rise>
+    <Ground className="min-h-full pb-24">
+      <Longform>
+        {/* Never wrapped in `Reveal`: it is the first screen, and a page whose
+            opening fades in looks broken for 700ms. */}
+        <Hero
+          eyebrow="Your workspace"
+          title="What you are on,"
+          serif="and what is left."
+        >
+          <p>
+            Two things live here and nothing else does: the plan and the credit
+            balance a run is charged against, and the account those runs belong
+            to. Everything to do with cards, receipts and cancellation happens in
+            Stripe &mdash; we never see a card.{' '}
+            <b className="text-saibyl-ink font-semibold">
+              What you are paying for, and who is signed in.
+            </b>
+          </p>
+        </Hero>
 
-        {/* The selected tab used to be `bg-saibyl-gold` on `text-saibyl-void`
-            — a dark-era pairing that resolved to blue-on-paper and therefore
-            never looked broken. It is now the artboard's own active-nav
-            treatment: a 10% blue wash under ink, so the accent still reads as
-            "the thing you pressed" without spending the page's one gradient. */}
-        <div className="flex gap-1 p-1 glass rounded-xl w-fit my-6">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              aria-pressed={tab === t.id}
-              className={`px-5 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                tab === t.id
-                  ? 'bg-saibyl-blue/10 text-saibyl-ink'
-                  : 'text-saibyl-muted hover:text-saibyl-ink'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+        {/* ── The tab strip ── */}
+        <Chapter
+          kicker="What is in here"
+          title={
+            <>
+              Two things, and <em>nothing else</em>
+            </>
+          }
+          lead="There is nothing else on purpose. A tab that promises something and then does nothing is worse than not having the tab, and this page carried five of those."
+        >
+          <Reveal>
+            {/* The selected tab used to be `bg-saibyl-gold` on `text-saibyl-void`
+                — a dark-era pairing that resolved to blue-on-paper and therefore
+                never looked broken. It is now the artboard's own active-nav
+                treatment: a 10% blue wash under ink, so the accent still reads as
+                "the thing you pressed" without spending the page's one gradient. */}
+            <div className="flex gap-1 p-1 glass rounded-xl w-fit">
+              {TABS.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
+                  aria-pressed={tab === t.id}
+                  className={`px-5 py-2 rounded-lg text-[13px] font-medium transition-colors ${
+                    tab === t.id
+                      ? 'bg-saibyl-blue/10 text-saibyl-ink'
+                      : 'text-saibyl-muted hover:text-saibyl-ink'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </Reveal>
+        </Chapter>
 
-        {tab === 'billing' ? <BillingTab /> : <AccountTab />}
-      </div>
+        {/* ── The selected panel ──
+            Not wrapped in `Reveal`. Both panels already carry their own arrival
+            with `Deal`, a mount animation that fires when the tab is switched —
+            a scroll reveal on top of it would be a second, contradictory
+            arrival for the same content. It also keeps `#add-credits` honest:
+            an anchor jump has to land on something already painted, and this
+            panel is painted the moment it mounts. */}
+        <Chapter kicker={panel.kicker} title={panel.title} lead={panel.lead}>
+          {tab === 'billing' ? <BillingTab /> : <AccountTab />}
+        </Chapter>
+      </Longform>
     </Ground>
   );
 }
