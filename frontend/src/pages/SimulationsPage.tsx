@@ -292,8 +292,8 @@ export default function SimulationsPage() {
     return counts;
   }, [sims]);
 
-  const runningCount = statusCounts['running'] ?? 0;
-  const completeCount = statusCounts['complete'] ?? 0;
+  /** Is the list narrowed right now? Decides several honesty questions below. */
+  const filtering = Boolean(debouncedSearch) || statusFilter !== 'all';
 
   const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
   const pageStart = (page - 1) * PER_PAGE + 1;
@@ -446,7 +446,14 @@ export default function SimulationsPage() {
                   </div>
                 ))}
               </Card>
-            ) : total === 0 ? (
+            ) : total === 0 && !filtering ? (
+              /* `&& !filtering` — and without it this page trapped the reader.
+                 Filtering moved to the server earlier today, so a search that
+                 matches nothing returns `total = 0` and this branch replaced the
+                 whole toolbar, **including the search box the founder had just
+                 typed into**. There was no way back except reloading the page.
+                 A filter that matches nothing is not an empty workspace, and the
+                 two must not render the same way. */
               <EmptyState
                 headline="No runs here"
                 body="Start one and you'll see what people say about your product before you spend anything putting it in front of them."
@@ -470,7 +477,14 @@ export default function SimulationsPage() {
                     />
                   </div>
 
-                  {/* Filter chips */}
+                  {/* Filter chips.
+                      **The counts only render while nothing is filtered.**
+                      They are computed from `sims` — the rows on this page —
+                      and once the server is filtering, it returns only the
+                      matching status, so every other chip would read `0` while
+                      still being clickable and still returning rows. A number
+                      that is wrong is worse than no number, and these are
+                      offered as a reason to click. */}
                   <div className="flex items-center gap-1">
                     {STATUS_FILTERS.map((f) => {
                       const active = statusFilter === f;
@@ -487,20 +501,51 @@ export default function SimulationsPage() {
                         >
                           {f !== 'all' && statusDot(f)}
                           {f === 'all' ? 'All' : stateWord(f)}
-                          <span className="ml-0.5 text-[10px] opacity-60">{count}</span>
+                          {!filtering && (
+                            <span className="ml-0.5 text-[10px] opacity-60">{count}</span>
+                          )}
                         </button>
                       );
                     })}
                   </div>
 
-                  {/* The summary that used to sit beside the page title. It has
-                      nowhere to live in a hero — `Hero` takes no `mark` — and
-                      dropping it would lose the only place the workspace total
-                      is stated above the pager. */}
+                  {/* The workspace total, and only that.
+                      It read `{total} in total · {runningCount} going now ·
+                      {completeCount} finished`, which mixed two scopes in one
+                      sentence: `total` is the server's count of everything, and
+                      the other two were derived from the ≤20 rows on screen. On
+                      page 2 of 3 it read as an account summary and was not one.
+                      `total` follows the filter, so it is true either way. */}
                   <p className="ml-auto font-mono tabular-nums text-[11px] text-saibyl-muted">
-                    {total} in total · {runningCount} going now · {completeCount} finished
+                    {filtering ? `${total} matching` : `${total} in total`}
                   </p>
                 </div>
+
+                {/* A filter that matched nothing — with the way out beside it.
+                    Reachable now: the toolbar above renders whether or not the
+                    filter found anything, which is the whole of the fix. */}
+                {total === 0 && (
+                  <Notice
+                    tone="thin"
+                    title="Nothing matches what you have filtered to"
+                    className="mb-4"
+                    action={
+                      <Action
+                        kind="quiet"
+                        onClick={() => {
+                          changeSearch('');
+                          changeStatus('all');
+                        }}
+                      >
+                        Clear the filters
+                      </Action>
+                    }
+                  >
+                    Your runs are still here &mdash; nothing on this page is
+                    hidden by anything other than the search and the status
+                    above.
+                  </Notice>
+                )}
 
                 {/* ---- Bulk Actions Bar ---- */}
                 {selected.size > 0 && (
@@ -575,13 +620,14 @@ export default function SimulationsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredSims.length === 0 ? (
-                        <tr>
-                          <td colSpan={7} className="text-center py-12 text-saibyl-muted text-sm">
-                            Nothing matches what you have filtered to.
-                          </td>
-                        </tr>
-                      ) : (
+                      {/* No in-table "nothing matches" row. It existed when the
+                          browser did the filtering and rows could vanish under
+                          a full table; the server filters now, so an empty
+                          result is an empty response — said once, above the
+                          table, by the `Notice` that carries the way out. Two
+                          statements of the same fact, one of them without a
+                          control, is how a reader learns to ignore both. */}
+                      {filteredSims.length === 0 ? null : (
                         filteredSims.map((sim) => {
                           const ns = normalizeStatus(sim.status);
                           const color = STATUS_COLOR[sim.status] ?? '#60718e';

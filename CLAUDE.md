@@ -108,6 +108,14 @@ governs them. The frame grew; the work did not. `design_primitives.test.ts` §6
 enumerates every selector in `design.css` allowed to set a size or a padding —
 adding a card to that list is a failure, not a fix.
 
+**On "one gradient action per screen":** that rule was written for a page you
+see all of at once, and a longform page is not one. The landing page carries
+nine call-to-action buttons — one pair in the hero and the same ask again at the
+close — because a reader who has scrolled a thousand pixels should not have to
+scroll back. So: **one primary per viewport, and the same ask may be repeated at
+the foot of the page.** Two different gradient actions competing in one chapter
+is still the failure the rule is about.
+
 Every hero and chapter value is **copied from `pages/landing.css`**, and §7
 asserts it value-for-value. Do not invent a hero size; if the landing page
 changes, that test tells you what to update. The scroll reveal is one shared

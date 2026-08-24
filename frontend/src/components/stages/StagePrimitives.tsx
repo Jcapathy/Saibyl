@@ -288,9 +288,14 @@ export function EmptyState({
         {body}
       </p>
       <div className="flex items-center justify-center gap-3 mt-5">
+        {/* The gradient, like every other primary control in the app.
+            `ACTION_SMALL` above was converted and this one was missed — which
+            mattered more than any of them: on an empty screen this is the only
+            button there is, so the single most important control in the product
+            was also the one thing on it not wearing the design system. */}
         <Link
           to={action.href}
-          className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-saibyl-blue text-saibyl-paper font-semibold text-[13px] hover:bg-saibyl-blue-hover transition-colors"
+          className={`inline-flex items-center gap-1.5 px-5 py-2 rounded-xl font-extrabold text-[13px] transition-colors sb-lift ${actionSurface('primary')}`}
         >
           {action.label}
           <ArrowRight className="w-3.5 h-3.5" />

@@ -8,6 +8,47 @@ running delta record.
 
 ---
 
+## 2026-08-23 — The longform shape goes to all eleven nav pages
+
+Four agents, disjoint file sets, hero copy written centrally so eleven pages
+speak in one voice. `ia.test.ts` §8 derives the obligation from `AppLayout`'s own
+nav arrays, so a page added to the nav later inherits it rather than relying on
+somebody remembering.
+
+**Three bugs the rollout surfaced, all mine, all fixed:**
+
+- **`useReveal` captured its targets once.** Correct for the static landing page
+  and for `GuidePage`; wrong for every page that renders a list after a fetch —
+  those nodes would have mounted with nothing watching them and stayed at
+  `opacity: 0` **permanently**, on a page reporting no error. Now re-queried, with
+  a `MutationObserver` tracking arrivals and a latching fallback so anything
+  appearing after the 2.5s give-up is revealed rather than handed to a dead
+  observer. Two agents found this independently.
+
+- **`TOP_LEVEL_HEADING` did not know about `<Hero>`.** The same hole that was
+  closed for `PageHeader` three hours earlier reopened the moment a second
+  heading primitive existed: `GuidePage` silently left the design scan when it
+  converted, and by the time the agents reported, four pages were unchecked. The
+  fix was applied to one primitive rather than to the concept.
+
+- **A search matching nothing locked the founder out of the search box.** Server-
+  side filtering (added earlier the same day) makes a non-matching search return
+  `total = 0`, which took the empty-workspace branch and replaced the entire
+  toolbar — including the input just typed into. No way back but a reload. An
+  empty *filter* and an empty *workspace* now render differently, and the filter
+  case carries a "Clear the filters" control. The chip counts and the summary
+  line were mixing page-scope and workspace-scope numbers in the same sentence;
+  both now state only what they can actually see.
+
+- Also: `EmptyState`'s action was the last flat-blue primary in the app —
+  missed when `StagePrimitives` was converted, and the one that mattered most,
+  since on an empty screen it is the only button there is.
+
+**One rule qualified rather than enforced:** "one gradient action per screen"
+was written for a page you see at once. The landing page carries nine, because a
+reader a thousand pixels down should not scroll back. One primary per *viewport*
+now, with the same ask allowed at the foot.
+
 ## 2026-08-23 — Every page behind the login is a landing page
 
 The founder read the swept app against the public site: **"very sterile,
