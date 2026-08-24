@@ -44,6 +44,7 @@ import os
 import sys
 from io import BytesIO
 from pathlib import Path
+from typing import NamedTuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -74,6 +75,77 @@ PREDICTION_GOAL = (
     "Will founders who build with AI pay $99 a month to test their product on a "
     "room of synthetic buyers before they launch?"
 )
+
+# ── Run two ────────────────────────────────────────────────────────────────
+# Same room, same shape, two things changed — so the difference between the
+# runs is attributable rather than merely observed.
+#
+# **The material.** Run one described Saibyl as one thing: a room of synthetic
+# buyers. Run one's answer was that the room is not the hard part — four real
+# buyers said they had already built one with Claude and a spreadsheet, and the
+# thing that broke was everything *after* the room. So run two is given the
+# pitch deck written against exactly that objection, uploaded as a PDF through
+# the same path a founder's deck takes.
+#
+# **The question.** Reframed from a single-purpose tool to the suite: the five
+# stages, named. A founder is not being asked to pay $99 for a room; they are
+# being asked to pay it for validation, positioning, go-to-market, growth and
+# capital — which is what the product actually is, and what run one's pitch
+# never said out loud.
+RUN_TWO_GOAL = (
+    "Will founders who build with AI pay $99 per month for a full suite of "
+    "tools that gives them synthetic feedback on their idea and product "
+    "validation, their product positioning, their go-to-market, how to grow "
+    "their product sales, and who they can go to for capital?"
+)
+
+DECK_PATH = Path(
+    r"C:\Users\jcapa\OneDrive\Personal\Saido Labs LLC\Saibyl"
+    r"\sample-run-review\Saibyl\02-pitch-deck.pdf"
+)
+
+
+class RunSpec(NamedTuple):
+    """One run: what it is about, what it reads, and what it is asked."""
+
+    key: str
+    product: str
+    blurb: str
+    goal: str
+    audience_name: str
+
+    def materials(self) -> list[tuple[str, str | bytes, str, str | None]]:
+        """`(filename, body, material_kind, source_url)` for each upload."""
+        if self.key == "one":
+            return [
+                ("idea-brief.md", IDEA_BRIEF, "idea_brief", None),
+                ("website.md", WEBSITE_COPY, "own",
+                 "https://saibyl-frontend.onrender.com"),
+            ]
+        # Run two reads the deck itself — a PDF, through the same extraction
+        # path a founder's uploaded deck takes. Feeding the markdown source
+        # instead would test a document nobody will ever send us.
+        if not DECK_PATH.exists():
+            raise SystemExit(f"Pitch deck not found at {DECK_PATH}")
+        return [("saibyl-pitch-deck.pdf", DECK_PATH.read_bytes(), "own", None)]
+
+
+RUNS = {
+    "one": RunSpec(
+        key="one",
+        product="Saibyl",
+        blurb="Test your startup on a synthetic market.",
+        goal=PREDICTION_GOAL,
+        audience_name="Founders who build with AI",
+    ),
+    "two": RunSpec(
+        key="two",
+        product="Saibyl — the suite",
+        blurb="Five stages: validate, position, launch, grow, raise.",
+        goal=RUN_TWO_GOAL,
+        audience_name="Founders who build with AI (suite framing)",
+    ),
+}
 
 # ── The material ───────────────────────────────────────────────────────────
 # Saibyl's five answers, in the order and shape `_compose_idea_brief` writes
@@ -243,8 +315,8 @@ async def _wait_for_extraction(project_id: str, timeout_s: int = 120) -> None:
     raise SystemExit("Extraction did not finish within two minutes.")
 
 
-async def build() -> tuple[str, str]:
-    """Create the product and ingest its material. Returns (project_id, icp_id)."""
+async def build(spec: RunSpec) -> tuple[str, dict]:
+    """Create the product and ingest its material. Returns (project_id, icp)."""
     # `store_upload` lives on the documents router rather than in a service —
     # it is the one intake path both upload routes share, and calling it here
     # is what makes this ingestion and not a row insert that resembles it.
@@ -252,17 +324,17 @@ async def build() -> tuple[str, str]:
 
     admin = get_supabase_admin()
 
-    # Reuse a "Saibyl" product that already has its material.
+    # Reuse a product of this name that already has its material.
     #
-    # The first attempt raced extraction and died after the uploads had landed,
-    # leaving a product with two documents in it. Creating a second one would
-    # re-upload the same bytes, bill the org's storage twice, and leave two
-    # identically-named products in a founder-facing list.
+    # Run one raced extraction and died after the uploads had landed, leaving a
+    # product with two documents in it. Creating a second would re-upload the
+    # same bytes, bill the org's storage twice, and leave two identically-named
+    # products in a founder-facing list.
     existing = (
         admin.table("projects")
         .select("id")
         .eq("organization_id", ORG_ID)
-        .eq("name", "Saibyl")
+        .eq("name", spec.product)
         .order("created_at", desc=True)
         .limit(1)
         .execute()
@@ -271,13 +343,13 @@ async def build() -> tuple[str, str]:
         pid = existing[0]["id"]
         print(f"  product     {pid} (reusing)")
         await _wait_for_extraction(pid)
-        return pid, await _audience(pid)
+        return pid, await _audience(pid, spec)
 
     project = (
         admin.table("projects")
         .insert({
-            "name": "Saibyl",
-            "description": "Test your startup on a synthetic market.",
+            "name": spec.product,
+            "description": spec.blurb,
             "organization_id": ORG_ID,
             "created_by": CREATED_BY,
         })
@@ -286,28 +358,24 @@ async def build() -> tuple[str, str]:
     pid = project["id"]
     print(f"  product     {pid}")
 
-    for filename, body, kind in (
-        ("idea-brief.md", IDEA_BRIEF, "idea_brief"),
-        ("website.md", WEBSITE_COPY, "own"),
-    ):
-        raw = body.encode("utf-8")
+    for filename, body, kind, source in spec.materials():
+        raw = body if isinstance(body, bytes) else body.encode("utf-8")
         upload = UploadFile(file=BytesIO(raw), size=len(raw), filename=filename)
         stored = await store_upload(
             project_id=pid,
             org_id=ORG_ID,
             file=upload,
             material_kind=kind,
-            source_url=(
-                "https://saibyl-frontend.onrender.com" if kind == "own" else None
-            ),
+            source_url=source,
         )
-        print(f"  material    {filename} · {stored.get('processing_status')}")
+        print(f"  material    {filename} · {len(raw):,} bytes · "
+              f"{stored.get('processing_status')}")
 
     await _wait_for_extraction(pid)
-    return pid, await _audience(pid)
+    return pid, await _audience(pid, spec)
 
 
-async def _audience(pid: str) -> dict:
+async def _audience(pid: str, spec: RunSpec) -> dict:
     """Work out who buys this, from the material just ingested."""
     from app.services.engine.personas.icp_synthesizer import synthesize_icp
 
@@ -319,7 +387,7 @@ async def _audience(pid: str) -> dict:
         platforms=PLATFORMS,
         adversarial_share=ADVERSARIAL_SHARE,
         created_by=CREATED_BY,
-        name="Founders who build with AI",
+        name=spec.audience_name,
     )
     profile = icp.get("profile") or {}
     buyers = [a.get("name") for a in profile.get("archetypes", [])]
@@ -331,14 +399,14 @@ async def _audience(pid: str) -> dict:
     return icp
 
 
-def create(pid: str, icp: dict) -> str:
+def create(pid: str, icp: dict, spec: RunSpec) -> str:
     """Create the run itself. Returns the simulation id."""
     admin = get_supabase_admin()
     sim = (
         admin.table("simulations")
         .insert({
-            "name": "Saibyl",
-            "prediction_goal": PREDICTION_GOAL,
+            "name": spec.product,
+            "prediction_goal": spec.goal,
             "project_id": pid,
             "organization_id": ORG_ID,
             "platforms": PLATFORMS,
@@ -434,19 +502,24 @@ def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--dry-run", action="store_true", help="price it and stop")
     p.add_argument("--read", metavar="SIM_ID", help="re-read a finished run")
+    p.add_argument("--run", choices=("one", "two"), default="one",
+                   help="one = the original pitch; two = the deck and the suite question")
     args = p.parse_args()
 
     if args.read:
         raise SystemExit(read_back(args.read))
 
+    spec = RUNS[args.run]
+    print(f"\n  run         {spec.key} — {spec.product}")
+    print(f"  asking      {spec.goal}")
     price()
     if args.dry_run:
         print("  --dry-run: nothing created, nothing spent.\n")
         return
 
     print("── Creating the product ────────────────────────────")
-    pid, icp = asyncio.run(build())
-    sim_id = create(pid, icp)
+    pid, icp = asyncio.run(build(spec))
+    sim_id = create(pid, icp, spec)
     asyncio.run(execute(sim_id))
     raise SystemExit(read_back(sim_id))
 

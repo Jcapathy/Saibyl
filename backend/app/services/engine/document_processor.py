@@ -65,11 +65,38 @@ def _extract_pdf(file_path: str) -> tuple[str, int]:
 def _extract_text(file_bytes: bytes, file_type: str) -> tuple[str, str, int | None]:
     """Extract text, detect encoding. Returns (text, encoding, page_count)."""
     if file_type == "pdf":
-        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        # The unlink happens **after** the handle is closed, and the whole read
+        # is wrapped so cleanup can never destroy a successful extraction.
+        #
+        # It used to sit inside the `with`, where the file is still open. POSIX
+        # allows unlinking an open file, so this worked on the Linux image and
+        # every CI run. On Windows it raises `PermissionError: [WinError 32] the
+        # process cannot access the file because it is being used by another
+        # process` — and it raised it *after* `_extract_pdf` had already
+        # returned the text. A twelve-page deck was read correctly, ~11,000
+        # characters in hand, and the document was then written `failed`
+        # because deleting a scratch file did not work.
+        #
+        # Found on 2026-08-23 uploading Saibyl's own pitch deck to Saibyl. Not
+        # a production outage — Render is Linux — but a defect that made local
+        # PDF work impossible, which is where anyone testing an upload starts.
+        tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+        try:
             tmp.write(file_bytes)
             tmp.flush()
+            tmp.close()
             text, pages = _extract_pdf(tmp.name)
-            Path(tmp.name).unlink(missing_ok=True)
+        finally:
+            # Logged, never raised. A scratch file that outlives the request is
+            # a housekeeping problem; a scratch file that fails the upload is a
+            # founder's deck rejected for no reason they can see. Those are not
+            # the same size of mistake, and the original code chose the wrong one.
+            try:
+                Path(tmp.name).unlink(missing_ok=True)
+            except OSError as exc:  # pragma: no cover - platform dependent
+                logger.warning(
+                    "pdf_scratch_file_not_removed", path=tmp.name, error=str(exc)
+                )
         return text, "utf-8", pages
 
     # DOCX is a binary ZIP format — must be handled before charset detection
