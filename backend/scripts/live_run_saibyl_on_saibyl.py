@@ -105,6 +105,33 @@ DECK_PATH = Path(
 )
 
 
+# ── Run three ──────────────────────────────────────────────────────────────
+# The v2 deck, and two more places to be read in.
+#
+# **The deck.** Run two's report recommended leading with the two claims that
+# were believed *and* discussed on both platforms — synthetic feedback and
+# positioning — and demoting the other three. `04-pitch-deck-v2.pdf` does that:
+# the two claims are slides 4–6, capital is slide 10.
+#
+# **The platforms.** LinkedIn and Hacker News join Reddit and Twitter/X. Run
+# two's single most useful finding was platform divergence — Reddit at 46.2%
+# support against Twitter/X's 86.1%, with intervals that did not overlap — so
+# more places is the highest-value axis to widen.
+#
+# **And the room grows with them.** 25 buyers over four platforms is ~6 each,
+# which cannot support a per-platform interval worth reading: the thing this run
+# exists to measure would come back as four shrugs. 48 keeps ~12 per platform,
+# the same per-platform density run two had at 25 over two. Costing more is the
+# point of the change, not a side effect of it.
+RUN_THREE_PLATFORMS = ["reddit", "twitter_x", "linkedin", "hacker_news"]
+RUN_THREE_AGENTS = 48
+
+DECK_V2_PATH = Path(
+    r"C:\Users\jcapa\OneDrive\Personal\Saido Labs LLC\Saibyl"
+    r"\sample-run-review\Saibyl\04-pitch-deck-v2.pdf"
+)
+
+
 class RunSpec(NamedTuple):
     """One run: what it is about, what it reads, and what it is asked."""
 
@@ -114,6 +141,14 @@ class RunSpec(NamedTuple):
     goal: str
     audience_name: str
 
+    @property
+    def platforms(self) -> list[str]:
+        return RUN_THREE_PLATFORMS if self.key == "three" else PLATFORMS
+
+    @property
+    def agents(self) -> int:
+        return RUN_THREE_AGENTS if self.key == "three" else AGENTS
+
     def materials(self) -> list[tuple[str, str | bytes, str, str | None]]:
         """`(filename, body, material_kind, source_url)` for each upload."""
         if self.key == "one":
@@ -122,12 +157,13 @@ class RunSpec(NamedTuple):
                 ("website.md", WEBSITE_COPY, "own",
                  "https://saibyl-frontend.onrender.com"),
             ]
-        # Run two reads the deck itself — a PDF, through the same extraction
-        # path a founder's uploaded deck takes. Feeding the markdown source
-        # instead would test a document nobody will ever send us.
-        if not DECK_PATH.exists():
-            raise SystemExit(f"Pitch deck not found at {DECK_PATH}")
-        return [("saibyl-pitch-deck.pdf", DECK_PATH.read_bytes(), "own", None)]
+        # Runs two and three read a deck itself — a PDF, through the same
+        # extraction path a founder's uploaded deck takes. Feeding the markdown
+        # source instead would test a document nobody will ever send us.
+        deck = DECK_V2_PATH if self.key == "three" else DECK_PATH
+        if not deck.exists():
+            raise SystemExit(f"Pitch deck not found at {deck}")
+        return [(deck.name, deck.read_bytes(), "own", None)]
 
 
 RUNS = {
@@ -144,6 +180,13 @@ RUNS = {
         blurb="Five stages: validate, position, launch, grow, raise.",
         goal=RUN_TWO_GOAL,
         audience_name="Founders who build with AI (suite framing)",
+    ),
+    "three": RunSpec(
+        key="three",
+        product="Saibyl — two claims",
+        blurb="Synthetic feedback, and proof your positioning fix worked.",
+        goal=RUN_TWO_GOAL,
+        audience_name="Founders who build with AI (four places)",
     ),
 }
 
@@ -251,17 +294,18 @@ rounds — and every run shows its exact price before it starts.
 """
 
 
-def price() -> None:
+def price(spec: RunSpec) -> None:
     """What this costs to serve, before anything is created."""
     est = estimate_simulation_cost(
-        agent_count=AGENTS,
+        agent_count=spec.agents,
         rounds=ROUNDS,
-        platforms=len(PLATFORMS),
+        platforms=len(spec.platforms),
         variants=1,
         depth="standard",
     )
     print("\n── What this run costs ─────────────────────────────")
-    print(f"  shape       {AGENTS} buyers / {ROUNDS} rounds / {len(PLATFORMS)} places")
+    print(f"  shape       {spec.agents} buyers / {ROUNDS} rounds / "
+          f"{len(spec.platforms)} places — {', '.join(spec.platforms)}")
     print(f"  stage       {FOUNDER_STAGE} · {int(ADVERSARIAL_SHARE * 100)}% incumbent-aligned")
     print(f"  COGS        ${est.actual_cost_usd:.2f}")
     print(f"  credits     {est.credits:,}")
@@ -384,7 +428,7 @@ async def _audience(pid: str, spec: RunSpec) -> dict:
         pid,
         ORG_ID,
         adversarial=True,
-        platforms=PLATFORMS,
+        platforms=spec.platforms,
         adversarial_share=ADVERSARIAL_SHARE,
         created_by=CREATED_BY,
         name=spec.audience_name,
@@ -409,9 +453,9 @@ def create(pid: str, icp: dict, spec: RunSpec) -> str:
             "prediction_goal": spec.goal,
             "project_id": pid,
             "organization_id": ORG_ID,
-            "platforms": PLATFORMS,
+            "platforms": spec.platforms,
             "max_rounds": ROUNDS,
-            "agent_count": AGENTS,
+            "agent_count": spec.agents,
             "persona_pack_ids": [icp["pack_id"]],
             "icp_profile_id": icp["id"],
             "adversarial_share": ADVERSARIAL_SHARE,
@@ -502,7 +546,7 @@ def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--dry-run", action="store_true", help="price it and stop")
     p.add_argument("--read", metavar="SIM_ID", help="re-read a finished run")
-    p.add_argument("--run", choices=("one", "two"), default="one",
+    p.add_argument("--run", choices=("one", "two", "three"), default="one",
                    help="one = the original pitch; two = the deck and the suite question")
     args = p.parse_args()
 
@@ -512,7 +556,7 @@ def main() -> None:
     spec = RUNS[args.run]
     print(f"\n  run         {spec.key} — {spec.product}")
     print(f"  asking      {spec.goal}")
-    price()
+    price(spec)
     if args.dry_run:
         print("  --dry-run: nothing created, nothing spent.\n")
         return
