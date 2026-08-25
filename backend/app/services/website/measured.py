@@ -138,14 +138,30 @@ def _rows(census: dict, *path: str) -> list[dict]:
 def _distinct(
     rows: list[dict], *, ignore: set[str] | None = None
 ) -> tuple[int, bool, list[str]]:
-    """(count, whether the census cap was hit, the values themselves)."""
-    values = [
-        str(row.get("value", "")).strip()
-        for row in rows
-        if isinstance(row, dict) and str(row.get("value", "")).strip()
-    ]
-    if ignore:
-        values = [value for value in values if value not in ignore]
+    """(count, whether the census cap was hit, the values themselves).
+
+    **Deduplicated, and that is not redundant.** Most census histograms are
+    already keyed by value, so this is a no-op on them. Font families are not:
+    `_font_families` splits a family name out of each font *stack*, and a page
+    that declares `Manrope, sans-serif` in one place and `Manrope, system-ui` in
+    another yields two rows naming one typeface.
+
+    Counting rows instead of values reported Saibyl's own landing page as using
+    "7 distinct font families: Manrope, DM Mono, Manrope, DM Mono, Playfair
+    Display, Playfair Display, Manrope" — three faces, listed seven times, on a
+    page whose pairing is deliberate and correct. Found by the first live
+    capture; no synthetic fixture had a repeated value in it.
+    """
+    seen: set[str] = set()
+    values: list[str] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        value = str(row.get("value", "")).strip()
+        if not value or (ignore and value in ignore) or value in seen:
+            continue
+        seen.add(value)
+        values.append(value)
     return len(values), len(rows) >= _CENSUS_ROW_CAP, values
 
 
@@ -283,9 +299,13 @@ def _label_finding(census: dict) -> CriticFinding | None:
     return CriticFinding(
         severity="major" if above >= sections else "minor",
         region="section headings",
+        # Not "N of M sections": a card title is a heading too, so labels above
+        # headings routinely outnumber sections and "14 of 9" is nonsense. The
+        # section count is the yardstick for how much labelling a page of this
+        # length can carry, not a denominator.
         quote=(
-            f"{above} of {sections} sections carry a small upper-case label "
-            f"above the heading."
+            f"{above} small upper-case labels sit above a heading, on a page "
+            f"with {sections} sections."
         ),
         why=(
             "One of these tells the reader what kind of thing is coming. One "

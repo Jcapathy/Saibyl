@@ -247,6 +247,41 @@ def test_a_deliberate_type_pairing_is_a_strength_and_a_pile_is_a_finding():
     assert "Roboto" in finding.quote or "Georgia" in finding.quote
 
 
+def test_one_typeface_declared_in_several_stacks_is_still_one_typeface():
+    """The bug the first live capture found, and no fixture here could have.
+
+    `_font_families` splits a family out of each font *stack*, so a page that
+    writes `Manrope, sans-serif` in one rule and `Manrope, system-ui` in another
+    produces two rows naming one typeface. Counting rows reported Saibyl's own
+    landing page as using "7 distinct font families: Manrope, DM Mono, Manrope,
+    DM Mono, Playfair Display, Playfair Display, Manrope" — three faces, listed
+    seven times, on a page whose pairing is deliberate and correct.
+
+    Every synthetic fixture in this file had unique values in it, which is
+    exactly why the defect survived to a live run.
+    """
+    dimension = measure_page(
+        _capture(
+            census={
+                "fonts": {
+                    "families": [
+                        {"family": "Manrope", "stack": "Manrope, sans-serif", "count": 30},
+                        {"family": "DM Mono", "stack": "DM Mono, monospace", "count": 12},
+                        {"family": "Manrope", "stack": "Manrope, system-ui", "count": 9},
+                        {"family": "Playfair Display", "stack": "Playfair Display, serif", "count": 6},
+                        {"family": "DM Mono", "stack": '"DM Mono", ui-monospace', "count": 4},
+                        {"family": "Playfair Display", "stack": "Playfair Display", "count": 2},
+                        {"family": "Manrope", "stack": '"Manrope", Arial', "count": 1},
+                    ]
+                }
+            }
+        )
+    )
+
+    assert not any("font families" in f.quote for f in dimension.findings)
+    assert any("3 typefaces" in s for s in dimension.strengths)
+
+
 def test_shadows_ignore_none_which_is_most_elements_on_any_page():
     values = ["none"] * 8 + ["0 1px 2px rgba(0,0,0,.06)"]
     dimension = measure_page(

@@ -45,9 +45,21 @@ def test_a_label_above_every_section_is_a_finding():
     dimension = measure_page(_capture(_labelled(above=9, sections=9)))
 
     finding = next(f for f in dimension.findings if f.region == "section headings")
-    assert "9 of 9 sections" in finding.quote
+    assert "9 small upper-case labels" in finding.quote
+    assert "9 sections" in finding.quote
     assert finding.severity == "major"
     assert finding.fix
+
+
+def test_more_labels_than_sections_reads_as_a_sentence():
+    """A card title is a heading too, so labels above headings routinely
+    outnumber sections. The first live capture of Saibyl's own page reported
+    "14 of 9 sections", which is not a thing anyone can say out loud."""
+    dimension = measure_page(_capture(_labelled(above=14, sections=9)))
+
+    finding = next(f for f in dimension.findings if f.region == "section headings")
+    assert "14 small upper-case labels sit above a heading" in finding.quote
+    assert "of 9 sections" not in finding.quote
 
 
 def test_using_the_label_sparingly_is_not_a_finding():
