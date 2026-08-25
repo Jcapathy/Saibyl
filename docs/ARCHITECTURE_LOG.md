@@ -8,6 +8,56 @@ running delta record.
 
 ---
 
+## 2026-08-25 — The website check gets a counted half
+
+`services/website/measured.py`, wired into `run_critic_gauntlet` as a seventh
+dimension keyed `measured` and labelled **counted** to the founder.
+
+**The shape that changed.** The gauntlet was six vision reviewers and nothing
+else, so every finding it produced was an opinion. Some of what makes a page
+read as assembled rather than designed is not an opinion — it is arithmetic:
+how many corner radii, how many typefaces, whether there is exactly one `<h1>`,
+how dense the copy is with em-dashes. Arithmetic run by a vision model can be
+wrong, cannot be reproduced and costs money each time it is asked.
+
+Everything in the new module is computed from what the capture already
+measured, `dom_text` and `style_census`, with no model call, no network and no
+randomness. It is also the only part of the website check with **zero
+correlation exposure** — the objection that has dominated every dogfood run is
+fair against a reaction and irrelevant against a count, which makes this the
+website check's equivalent of the prior-art search.
+
+**Live-checked, not just unit-tested.** Run against Saibyl's own landing page it
+returns 33 em-dashes in 2,109 words, 15.6 per 1,000 against a limit of 6.
+
+**Two design decisions worth inheriting:**
+
+- **It returns `None` when nothing could be measured.** An empty census on a
+  page with almost no text used to score 100 and lift the gauntlet's mean, which
+  rewards a page for having defeated the census. This codebase already names the
+  inverse — a zero meaning "we did not look" — as the defect it produces most
+  often; a hundred meaning the same thing is that bug with the sign flipped.
+  Caught by two existing gauntlet tests rather than by review.
+- **Counts that hit the census cap are reported as "at least N".** `_top()` in
+  `capture` keeps ten rows, so forty radii and ten radii are indistinguishable
+  downstream. Stating the exact number would be reporting a figure the capture
+  never established.
+
+**⚠ Overall scores from before this date are not comparable with scores after
+it.** `overall_score` is a mean across dimensions and there are now seven, so a
+stored 77 from a six-dimension run is a different quantity. The
+`CRITICS_LOG` 2026-08-22 figures (77 → 77, credibility 78 → 72) are
+six-dimension numbers. **Deltas inside one revision run are unaffected** — the
+before and after are both measured the same way, and the delta is what
+`revise.py` reads.
+
+**Named as not-yet-measurable rather than approximated:** how many small
+wide-tracked labels sit above section headings, whether one action wears several
+different labels, whether one layout repeats down the page, and whether
+navigation wraps at desktop. Each needs a field the census does not collect. A
+measured check that estimates has given up the only property that makes it worth
+having.
+
 ## 2026-08-24 — Validate runs retrieval-first: the stage registry re-cut and the page reordered
 
 Implements PRD_V3 §12c. The shape that moved is which instrument answers the

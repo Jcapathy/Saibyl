@@ -105,6 +105,12 @@ CriticError = critics.CriticError
 CritiqueResult = critics.CritiqueResult
 run_critic_gauntlet = critics.run_critic_gauntlet
 
+# The counted dimension's key, spelled here rather than imported: this module
+# loads `critics` through `_bootstrap()` to stub the browser import chain, and
+# importing `measured` at module scope would pull an unstubbed second copy of
+# `critics` behind it. Kept in step by `measured.MEASURED_KEY`.
+MEASURED_KEY = "measured"
+
 
 # ---------------------------------------------------------------------------
 # Fixtures: a captured page and a scriptable vision stand-in
@@ -313,16 +319,32 @@ async def test_valid_answers_become_one_result_with_the_rounded_mean(monkeypatch
     result = await run_critic_gauntlet(_capture())
 
     assert isinstance(result, CritiqueResult)
-    assert [d.key for d in result.dimensions] == list(SCORES)
-    assert {d.key: d.score for d in result.dimensions} == SCORES
-    assert result.overall_score == round(sum(SCORES.values()) / 6) == 77
+
+    # The six reviewers, in presentation order and unchanged. The counted
+    # dimension is appended after them (2026-08-25) and is not a reviewer: it
+    # makes no model call, so it is excluded from anything asserting about what
+    # the vision critics returned.
+    opinions = [d for d in result.dimensions if d.key != MEASURED_KEY]
+    assert [d.key for d in opinions] == list(SCORES)
+    assert {d.key: d.score for d in opinions} == SCORES
+
+    counted = [d for d in result.dimensions if d.key == MEASURED_KEY]
+    assert len(counted) == 1, "the census in this fixture is measurable"
+    assert result.dimensions[-1].key == MEASURED_KEY, "receipts sit under the opinions"
+
+    # The mean is over every dimension present, which is now seven. A stored
+    # score from a six-dimension run is a different quantity and must not be
+    # compared with one of these.
+    assert result.overall_score == round(
+        sum(d.score for d in result.dimensions) / len(result.dimensions)
+    )
     assert result.page_takeaway == TAKEAWAY, "the takeaway is the copy reviewer's sentence"
 
     finding = result.dimensions[0].findings[0]
     assert finding.severity == "major"
     assert finding.quote == "Build faster"
     assert finding.fix.startswith("Replace the hero headline")
-    assert all(d.strengths for d in result.dimensions), "a redesign needs to know what to keep"
+    assert all(d.strengths for d in opinions), "a redesign needs to know what to keep"
 
 
 # ---------------------------------------------------------------------------
@@ -425,7 +447,9 @@ async def test_a_reference_turns_the_design_review_into_measured_gaps_with_both_
         assert "Suisse Intl" not in call.prompt, f"the reference leaked into {call.dimension}"
 
     # And the verdict is still one rounded mean over all six dimensions.
-    assert result.overall_score == 77
+    assert result.overall_score == round(
+        sum(d.score for d in result.dimensions) / len(result.dimensions)
+    )
 
 
 async def test_an_oversized_reference_screenshot_fails_the_design_review_before_any_call(

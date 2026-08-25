@@ -901,6 +901,31 @@ async def run_critic_gauntlet(
         if isinstance(response, _CopyResponse):
             page_takeaway = response.page_takeaway.strip()
 
+    # The counted dimension, added 2026-08-25.
+    #
+    # Imported here rather than at module scope because `measured` imports the
+    # finding models from this module; a top-level import back would be a cycle.
+    #
+    # **It is not a seventh reviewer and is not subject to the six-or-nothing
+    # rule.** It makes no model call and no network call, so it has nothing to
+    # fail at: where a reviewer raising means the page has no verdict, this
+    # either finds something or does not. It is appended after the six because
+    # it reads as the receipts under the opinions.
+    from app.services.website.measured import measure_page
+
+    # None when nothing could be measured — an empty census on a page with
+    # almost no text. Appending a 100 there would score a page for having
+    # defeated the census, so the dimension is simply absent and the mean stays
+    # over the six opinions.
+    counted = measure_page(capture)
+    if counted is not None:
+        dimensions.append(counted)
+
+    # **Scores from before this date are not comparable with scores after it.**
+    # The overall is a mean across dimensions and there are now seven, so a
+    # stored 77 from a six-dimension run is a different quantity. Deltas within
+    # one revision run are unaffected: before and after are both measured the
+    # same way, and the delta is what `revise` reads.
     overall = round(sum(d.score for d in dimensions) / len(dimensions))
     logger.info(
         "website_critic_gauntlet_complete",
