@@ -8,6 +8,75 @@ choices.
 
 ---
 
+## 2026-08-24 — The evaluation logic was inverted: retrieval answers the world, the room answers the reader
+
+Founder-directed, from his own account of building ParryAI. Written up as
+`PRD_V3.md` §12, which governs where it conflicts with §2, §3 or §11.
+
+**What prompted it.** Three dogfood runs of Saibyl against Saibyl kept returning
+the same finding — buyers believed idea validation and positioning, then stopped
+believing at go-to-market — and two sessions treated that as a pitch problem.
+It is not. The founder named it as a system-design problem and gave the
+counter-example: ParryAI began with a failure he hit inside his own business,
+which he fixed for himself, and only *afterwards* did he ask whether Fortune 500
+companies had it too and whether anyone had already patented it.
+
+Saibyl's Validate stage asks *"Does this pain exist, who feels it most, and
+would they pay?"* — and answers it with a synthetic room. A founder who built
+their product out of a pain they personally hit has already answered that from
+life. The questions they cannot answer — does this generalise, has someone
+built it — are served today by a card at the bottom of the page.
+
+**Decided:**
+
+1. **Two instruments, two classes of question.** Empirical questions (does the
+   pain exist beyond me, who else has it, has it been built, who funds it) are
+   answered by **retrieval** — real records, cited. Reaction questions (how does
+   the pitch read, which objection kills it) are answered by **the room**. The
+   room cannot answer an empirical question; that is a category error, not a
+   data gap, and no correlation study would close it.
+
+2. **This retires the dominant objection rather than answering it.** *"Synthetic
+   feedback doesn't correlate with real buyer behavior"* scored 6.56 load-bearing
+   on run three and went unanswered across three rounds. It is correct against
+   empirical claims and irrelevant against reaction claims. Narrowing the room to
+   reaction is the fix; a validation study we cannot yet run is not.
+
+3. **Validate is re-specified retrieval-first**, and its question becomes *"Is it
+   just me — and has anyone already built it?"* Clearance opens the stage,
+   prevalence evidence follows, competitor discovery follows that, and the room
+   is last and optional. **This supersedes 2026-08-23 item 3** — clearance folds
+   into Validate as the *opening move*, not as a card. It is the only capability
+   in the product with zero correlation exposure, so it front-loads the
+   credibility the room's later claims depend on.
+
+4. **`concept_validation`'s report questions come out where they are empirical.**
+   *"Do agents recognise this pain unprompted"* and *"Is there stated willingness
+   to pay"* both put a world-question to the room — and the second contradicts
+   the stage's own `cannot_conclude`, which already concedes pricing is direction
+   and not a number. A stage may not list as a question the thing it declares it
+   cannot conclude.
+
+5. **Raise gates on declared recurring revenue.** The founder's sequence is
+   explicit: raise comes after MRR. `capital/matching.py` already filters firms
+   that do not invest pre-revenue, but nothing gates the founder, so today the
+   platform will run a fundraise for an account with no customers. Per the
+   standing rule this is not a `disabled` control — the stage either runs and
+   states what its answer is missing, or it is blocked with the control that
+   unblocks it and the reason beside it.
+
+6. **The five stages, their order, and the tagline are unchanged.** *"The
+   platform that grows with you"* becomes literal rather than aspirational: each
+   stage deposits real evidence into the founder's record and later stages
+   consume it — which `capital/matching.py` already claims as its own defensible
+   edge over a bought list. The platform grows by accumulating the founder's
+   record, not by escalating its claims.
+
+**Not yet decided / next session's work.** §12 is the specification; no code has
+been changed against it. The re-cut of `founder_stages.py`, the Validate stage
+rebuild, the prevalence-evidence surface (which does not exist today), and the
+Raise gate are all unbuilt.
+
 ## 2026-08-23 — The app behind the login mirrors the journey the landing sells
 
 Founder's decisions, taken on his first end-to-end read of the live site.

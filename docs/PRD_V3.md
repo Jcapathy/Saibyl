@@ -48,6 +48,12 @@ One engine, three founder-language jobs:
 | **Perfect my website** | Why doesn't my site convert, and what exactly do I change? | Page rendering → critic gauntlet → audience reaction → revised page → re-sim proof *(to build)* |
 | **Check it's clear to build** | Has someone already patented or trademarked this? | USPTO clearance: trademarks, prior art, pending landscape → tiered risk report *(to build — §11)* |
 
+> **Amended 2026-08-24 by §12.** The "Evaluate my idea" row asks *"Does this
+> pain exist?"* of the swarm, and lists clearance as a sibling job. Both are
+> corrected in **§12**: existence-of-pain is an empirical question that only
+> retrieval can answer, and clearance opens the Validate stage rather than
+> sitting beside it. Read §12 before building against this table.
+
 What Saibyl is **not**, for now: a crisis-PR product, a billing exercise, or an
 enterprise intelligence platform. The oracle heritage stays in the DNA, not the
 pitch. The report reader is a founder, and the people they forward it to.
@@ -330,3 +336,152 @@ NOT_SEARCHED, never "clear".
 status, quote/credits), `clearance_findings` (per-reference: number, title,
 owner, dates, status, risk tier, claim elements, differences), the JSON
 artifact on the run row. RLS `org_isolation` as always.
+
+## 12. The founder's journey — corrected evaluation logic (added 2026-08-24, founder-directed)
+
+**This section governs where it conflicts with §2, §3 or §11.** The five stages,
+their order, and the tagline *"The platform that grows with you"* are unchanged
+and are not in question. What changes is **which instrument answers which
+question** — and today the product has it backwards.
+
+### 12a. What prompted it
+
+The founder's own product, ParryAI, in the order it actually happened:
+
+1. He ran his business on AI agents.
+2. He hit the failure himself — agents holding access to sensitive information,
+   and agents recommending changes to the software stack that would be
+   catastrophic if a human applied them unreviewed.
+3. He built the fix for himself: prompt-injection defense, a harness to see what
+   the agents were actually doing, and a human-approval backstop on any
+   recommendation that could cause a catastrophic event.
+4. **Only then** did he realise Fortune 500 companies had the same problem.
+5. **Only then** did he run a patent search — and find that nobody had done it.
+
+Saibyl's Validate stage asks *"Does this pain exist, who feels it most, and
+would they pay?"* and answers it with a synthetic room. That is a question this
+founder had already answered from his own operations before he wrote a line of
+code — and every founder who builds a product out of a pain they personally hit
+is in the same position. **They have ground truth. We are offering them
+synthetic opinion about a fact they lived.**
+
+The two questions he genuinely could not answer — *does my own experience
+generalise beyond me?* and *has someone already built this?* — are answered
+today by `ClearanceCard`, one card sitting below that headline.
+
+This is the whole defect, and it is upstream of every messaging problem the
+dogfood runs surfaced.
+
+### 12b. The rule: two instruments, two classes of question
+
+| Class | Question is about | Instrument | Output |
+|---|---|---|---|
+| **Empirical** | the world — does this pain exist beyond me, who else has it, has it been built, is it defensible, who funds it | **Retrieval** | real records, cited, checkable |
+| **Reaction** | response — how does my pitch read, which objection kills it, where do I lose them, what do they push back on | **The room** | ranked objections, sentiment, verbatims |
+
+**The room cannot answer an empirical question, and no amount of validation data
+would fix that** — it is a category error, not a data gap. Existence of a market
+is not establishable by synthetic opinion at any sample size.
+
+This also retires the objection that has dominated every dogfood run to date —
+*"synthetic feedback doesn't correlate with real buyer behavior"* (load-bearing
+6.56 on run three, present in 6 of 8 groups, unanswered across three rounds).
+That objection is **correct** as applied to empirical claims and **irrelevant**
+as applied to reaction claims. We have been arguing it on the wrong ground.
+Narrowing the room to reaction questions retires it without needing the
+correlation study we cannot yet run.
+
+### 12c. Validate, re-specified retrieval-first
+
+**The stage question changes** from *"Does this pain exist, who feels it most,
+and would they pay?"* to:
+
+> **"Is it just me — and has anyone already built it?"**
+
+Retrieval leads; the room is optional and secondary. The stage's deliverable is
+**facts with citations**, not a sentiment score.
+
+Order of the stage, and the order is the argument:
+
+1. **Prior art and trademark clearance (§11) opens the stage.** Promoted from a
+   card to Validate's first move. This is the only capability in the product
+   with **zero correlation exposure** — it cites the patent office — and it is
+   the sharpest fear an AI-builder founder carries, because shipping in a
+   weekend means fifty other people plausibly shipped it that same weekend.
+   Front-loading a claim nobody can call a mirror is what earns the credibility
+   the room's claims need later.
+2. **Who else has this problem** — real evidence of the pain in the wild, so the
+   founder learns whether their n=1 generalises. This is the step the founder
+   took at ParryAI stage 4, and **no surface returns it today.** The nearest
+   existing machinery is `gtm/discovery` — real-company search, already bounded,
+   billed and reconciled — but it is aimed at *who do I sell to*, not at
+   *who else has this pain*. Build this by re-pointing that query compiler, not
+   from scratch.
+3. **Who has already shipped it** — competitor discovery, real companies.
+4. **Then, optionally, the room** — and only on reaction questions.
+
+**`founder_stages.py` must be re-cut accordingly.** Two of
+`concept_validation`'s five `report_questions` are empirical questions put to
+the wrong instrument and come out:
+
+- *"Do agents recognise this pain unprompted, or only when named?"* — a proxy
+  for real-world prevalence, measured synthetically.
+- *"Is there stated willingness to pay, and at what shape of price?"* — the
+  stage's own `cannot_conclude` already says pricing "indicates direction, not
+  a number." **A stage that declares it cannot conclude a thing must not list
+  that thing as a question it answers.** That contradiction ships today.
+
+*"What would disqualify a solution before they tried it?"* is a genuine reaction
+question and stays.
+
+### 12d. Raise gates on real recurring revenue
+
+Founder's sequence, verbatim: *"After they've done all of those things and they
+have monthly recurring revenue, raise money from prospective investors."*
+
+`capital/matching.py` already handles the *firm* side of this well — it will
+report *"these four state they do not invest pre-revenue"* rather than pad a
+list. **Nothing gates the founder.** Today Saibyl will run a fundraise for an
+account with zero customers and hand back a polished report, which makes the
+platform complicit in precisely the self-delusion it exists to prevent.
+
+**Decided:** Raise requires declared recurring revenue.
+
+Per the standing rule, this is **not** a `disabled` control. A stage either runs
+and states plainly what its answer will be missing, or it is blocked with the
+control that unblocks it and the reason beside it. There is no third rendering.
+
+The gate is also the strongest retention mechanism in the product: the founder
+comes back when the revenue is real. That is a better subscription argument than
+five purchase occasions, and it is honest.
+
+### 12e. What this makes true of the tagline
+
+*"The platform that grows with you"* stops being a slogan on top of the
+architecture and becomes a description of it. Each stage deposits **real
+evidence** into the founder's record — prior art, companies with the pain,
+ranked objections, which fixes actually moved the number, real prospects — and
+each later stage consumes what the earlier ones deposited. `capital/matching.py`
+already states this as its own defensible claim: *"Saibyl knows things about
+this founder no list vendor does — the objections real buyers actually raised."*
+
+The platform grows with the founder because it **accumulates their record**, not
+because its claims escalate. That distinction is the difference between a
+product the room believes and the one it stopped believing at stage three.
+
+### 12f. Consequent amendments
+
+- **§2**, "Evaluate my idea" row: the founder question and the engine are both
+  restated by §12c. Clearance is no longer a sibling job — it opens Validate.
+- **§3**, tiered intake: "Just an idea" must route to retrieval first. The
+  guided form stays (it teaches the five questions), but the first thing the
+  founder receives back is a clearance and prevalence read, not a room.
+- **DECISIONS_LOG 2026-08-23 item 3** — "the USPTO clearance check folds into
+  Validate, **as a card**" — is superseded. It folds into Validate as the
+  **opening move**.
+- **§9** Phase IP's rationale ("it monetizes the Validate stage the idea-brief
+  intake just opened") is strengthened, not changed: Phase IP now *is* Validate's
+  front door, so its ordering ahead of Phase B stands on firmer ground.
+- `founder_stages.py`'s docstring cites "PRD §5" for the stage registry; §5 of
+  this document is the wow standard. The reference is stale — it should cite
+  §12.
