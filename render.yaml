@@ -111,6 +111,30 @@ services:
     buildCommand: cd frontend && npm ci && npm run build
     staticPublishPath: frontend/dist
     routes:
+      # The prerendered public pages, before the catch-all.
+      #
+      # `npm run build` writes `dist/privacy/index.html` and
+      # `dist/terms/index.html` with the real markup in them, so an answer
+      # engine that does not run JavaScript has something to read. Routes are
+      # evaluated in order, and the `/*` rewrite below would otherwise hand
+      # every one of those requests the empty SPA shell instead, which is the
+      # state that made every word on this site invisible to ChatGPT, Claude
+      # and Perplexity in the first place.
+      #
+      # Whether Render would have served the matching file anyway is not
+      # something to rely on. Stated explicitly, this is correct either way.
+      #
+      # **Keep in step with `PRERENDERED_ROUTES` in
+      # `frontend/src/entry-server.tsx`.** A route prerendered but not listed
+      # here is a file that is never served; a route listed here but not
+      # prerendered is a 404. `frontend/src/test/prerender.test.ts` fails on
+      # either.
+      - type: rewrite
+        source: /privacy
+        destination: /privacy/index.html
+      - type: rewrite
+        source: /terms
+        destination: /terms/index.html
       - type: rewrite
         source: /*
         destination: /index.html

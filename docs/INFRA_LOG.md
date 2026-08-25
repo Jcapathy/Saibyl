@@ -11,6 +11,45 @@ to GitHub `master`. **Render's own GitHub integration watches the branch and
 deploys it** — that is the whole mechanism and it is what it is meant to be.
 Nothing here calls Render, holds a Render credential, or needs one.
 
+## 2026-08-25 — `npm run build` now prerenders the public pages, and Render routes them
+
+**Two coupled changes, and neither works alone.**
+
+`frontend/package.json`'s build gained a third step: `node scripts/prerender.mjs`
+after `vite build`. It renders `/`, `/privacy` and `/terms` to static HTML and
+writes `dist/<route>/index.html`. Render's build command is unchanged — it runs
+`npm run build`, so it picks this up with no dashboard action.
+
+`render.yaml` gained two explicit rewrites **before** the `/*` catch-all. Routes
+are evaluated in order, and without them every request for `/privacy` would be
+handed the empty SPA shell no matter what file exists. Whether Render would have
+matched the real file first is not something worth relying on; stated
+explicitly, it is correct either way.
+
+**Why:** no major AI crawler executes JavaScript, so until now ChatGPT, Claude
+and Perplexity fetched this site and received `<div id="root"></div>`.
+`SEO_AEO.md` names this the single biggest AEO unlock. Measured after the
+change: the landing page ships **2,082 extractable words** where it previously
+had none, with the pricing figures and the new question-shaped FAQ answers all
+present in the raw HTML.
+
+**Ordering constraint that still stands:** this changes nothing until DNS moves.
+`saibyl.com` still serves a GoDaddy parking page while every canonical and
+`og:url` points at it, so the prerendered pages are being crawled at
+`saibyl-frontend.onrender.com` under identity signals that point somewhere else.
+The Search Console generative-AI toggle has to be set to *include* the same day.
+
+**Build risk, assessed rather than assumed.** The script imports `vite`, which
+is already required for `vite build` in the same command, so it cannot be
+present for one and absent for the other. It fails the build loudly rather than
+warning: a prerender that quietly skips deploys green with the files missing and
+nobody finds out until someone asks why the site is not cited anywhere.
+
+`frontend/src/test/prerender.test.ts` fails if the two halves drift, in either
+direction. Verified by removing a rewrite and watching it fail with the reason.
+
+---
+
 This header previously said deploys ran "from GitHub master via CI
 (`deploy.yml`, gated on the test job)". That was **wrong**, and `deploy.yml`
 was **deleted on 2026-08-22** (founder's call) rather than left to keep
