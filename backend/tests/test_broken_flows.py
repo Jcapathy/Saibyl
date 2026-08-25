@@ -22,7 +22,7 @@ from fastapi import HTTPException
 from structlog.testing import capture_logs
 
 from app.api import simulations as simulations_api
-from app.services.billing import agent_pricing, stripe_service
+from app.services.billing import agent_pricing
 from app.services.intelligence import report_chat
 
 ORG = "11111111-1111-4111-8111-111111111111"
@@ -155,11 +155,6 @@ def billing(monkeypatch):
         ),
     )
 
-    async def _quota_ok(_org_id):
-        return True
-
-    monkeypatch.setattr(stripe_service, "check_simulation_quota", _quota_ok)
-
     async def _run(_sim_id):
         return None
 
@@ -290,7 +285,7 @@ async def test_two_starts_in_one_window_charge_once_and_run_one_engine(
     protection and the database status not written until `run_simulation` ran
     inside the spawned task. Two POSTs landing in the same window (a
     double-click, or a client retry on a slow response — this handler awaits
-    `check_simulation_quota` over the network before deducting) each deducted and
+    the quota over the network before deducting) each deducted and
     each spawned an engine on the same run. Two engines writing into one
     `simulation_events` doubles every count and draws `mean_interval`'s bands
     from duplicated observations.
@@ -299,28 +294,24 @@ async def test_two_starts_in_one_window_charge_once_and_run_one_engine(
     409 on a run with a `parent_simulation_id`, which is the inoculation loop and
     the website-room "prove" leg.
 
-    The quota stub here holds both requests until both have read `status='ready'`
-    — the window a double-click actually lands in, which a read-then-write guard
-    cannot see.
+    **The interleave is no longer forced, and that is a real weakening.** This
+    test used to hold both requests inside a stubbed `check_simulation_quota`
+    until both had read `status='ready'`, which is the window a double-click
+    actually lands in. That quota was removed with the subscription tiers on
+    2026-08-25 (credits are the only ration now), and with it went the only
+    `await` between the status read and the compare-and-set — so two coroutines
+    can no longer be made to interleave there in-process.
+
+    What still holds, and what this now pins: two starts charge once and run one
+    engine, with the second refused 409. The guard itself is unchanged and is
+    still a compare-and-set, which is what makes that true against genuinely
+    concurrent *processes*; this test can only demonstrate it sequentially.
     """
     admin = _AdminStub({
         "simulations": ([_simulation()], None),
         "simulation_variants": ([], None),
     })
     monkeypatch.setattr(simulations_api, "get_supabase_admin", lambda: admin)
-
-    both_arrived = asyncio.Event()
-    arrivals: list[int] = []
-
-    async def _quota_after_both_read(_org_id):
-        arrivals.append(1)
-        if len(arrivals) < 2:
-            await both_arrived.wait()
-        else:
-            both_arrived.set()
-        return True
-
-    monkeypatch.setattr(stripe_service, "check_simulation_quota", _quota_after_both_read)
 
     outcomes = await asyncio.gather(
         simulations_api.start_simulation(SIM, None, auth=AUTH),
@@ -334,7 +325,16 @@ async def test_two_starts_in_one_window_charge_once_and_run_one_engine(
     assert len(started) == 1, outcomes
     assert len(refused) == 1, outcomes
     assert refused[0].status_code == 409
-    assert "already been started" in refused[0].detail
+    # Either guard is a pass *here*, and that is the weakening described above:
+    # sequentially the plain read at the top of the handler catches it first
+    # ("already running"), where an interleaved pair reaches the compare-and-set
+    # ("already been started"). The compare-and-set is what protects money
+    # against genuinely concurrent processes and it is no longer exercised
+    # in-process — see `docs/CRITICS_LOG.md`, 2026-08-25.
+    assert any(
+        phrase in refused[0].detail
+        for phrase in ("already been started", "already running")
+    ), refused[0].detail
     assert len(billing.calls) == 1, (
         f"one run, charged {len(billing.calls)} times: {billing.calls}"
     )

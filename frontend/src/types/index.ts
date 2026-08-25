@@ -166,19 +166,11 @@ export interface OrgPersonaPack {
   created_at?: string | null;
 }
 
-/** `GET /billing/status`. */
-export interface BillingStatus {
-  plan: string;
-  status: string;
-  simulations_used: number;
-  simulations_limit: number;
-  agents_used: number;
-  agents_limit: number;
-  team_members: number;
-  team_members_limit: number;
-  /** Declared by the backend but never populated — always null. */
-  current_period_end: string | null;
-}
+/* `BillingStatus` was here, typing `GET /billing/status` — a plan, a
+ * subscription state, a monthly run allowance and a seat count. The endpoint
+ * and every field on it went with the subscription tiers on 2026-08-25
+ * (PRD_V3 §6). What a founder needs is their balance and what a given run
+ * costs: `GET /billing/credits` and `GET /billing/prices`. */
 
 /* `ApiKey` and `CreatedApiKey` were here. Removed with the API-keys tab:
  * `verify_api_key` had zero callers, so a key issued from that screen

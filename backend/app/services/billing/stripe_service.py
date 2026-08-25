@@ -1,10 +1,8 @@
 # PUBLIC INTERFACE
 # ─────────────────────────────────────────────────────────
-# create_checkout_session(org_id, plan) -> str
-# create_customer_portal_session(org_id) -> str
+# create_topup_checkout(org_id, amount_cents, created_by) -> str
+# create_flash_report_checkout(org_id, report_type) -> str
 # handle_webhook(payload, signature) -> None
-# get_subscription_status(org_id) -> SubscriptionStatus
-# check_simulation_quota(org_id) -> bool
 # ─────────────────────────────────────────────────────────
 from __future__ import annotations
 
@@ -13,7 +11,6 @@ from uuid import UUID
 
 import stripe
 import structlog
-from pydantic import BaseModel
 
 from app.core.config import settings
 from app.core.database import get_supabase_admin
@@ -22,103 +19,29 @@ logger = structlog.get_logger()
 
 stripe.api_key = settings.stripe_secret_key
 
-PLAN_PRICE_MAP = {
-    "starter": "price_1TLd4VIqFuuRAGd4tWbna0Dd",   # Analyst $149/mo
-    "pro": "price_1TLd5yIqFuuRAGd4k7ZSTPuq",        # Strategist $499/mo
-    "enterprise": "price_1TLd6nIqFuuRAGd4Z6amqUOR",  # War Room $1,499/mo
-}
-
 FLASH_REPORT_PRICE_MAP = {
     "quick_read": "price_1TLd7YIqFuuRAGd4jIMH2J07",      # $197 one-time
     "deep_dive": "price_1TLd8GIqFuuRAGd4xkisiqPJ",       # $497 one-time
     "war_room_brief": "price_1TLd9RIqFuuRAGd4M0l0eGhF",  # $997 one-time
 }
 
-# ── Limits under pay-as-you-go ──────────────────────────────────────────────
+# No plan limits, no subscription status, no subscription checkout.
 #
-# There are no tiers (founder decision, 2026-08-24), so there is no per-plan
-# allowance to derive. **Credits are the only ration**, which is what `RunCaps`
-# has always said and what a top-up model makes literally true: a founder can
-# run whatever they have paid for, and nothing else may quietly forbid them to
-# spend credits they bought.
+# Removed 2026-08-25 with the tiers they served (PRD_V3 §6). What stood here
+# was `PLAN_LIMITS` — a per-plan monthly run allowance and seat count — plus the
+# `SubscriptionStatus` model and `create_checkout_session`, which opened Stripe
+# in `mode="subscription"` against `PLAN_PRICE_MAP`.
 #
-# That rules out the previous derivation outright. It computed a monthly run
-# allowance from the tier's grant, and under one grant it would resolve to
-# roughly ten runs a month — which would bind on the first founder to top up
-# fifty thousand credits, the precise failure its own comment was written to
-# prevent ("they would have paid for credits the monthly cap forbids them to
-# spend").
+# **Credits are the only ration now.** A founder runs what they have paid for,
+# and nothing else may quietly forbid them to spend credits they bought. The
+# monthly allowance was derived from the tier grant, so under a single grant it
+# would have resolved to roughly ten runs a month and bound on the first
+# founder to top up — the precise failure its own comment was written against.
 #
-# What survives is the part that was never about pricing: a backstop against
-# automation gone wrong. It is flat, plan-free, and set far above any honest
-# month's use, so it can catch a runaway loop without ever being reachable by a
-# founder working normally.
-#
-# `check_simulation_quota` still reads this and still gates run creation. The
-# quota concept goes when the Stripe subscription paths do; keeping it here
-# for now leaves the run path untouched by this change.
-_RUNAWAY_BACKSTOP_RUNS_PER_MONTH = 1_000
-
-# One seat allowance, for the same reason: seats were a thing subscriptions
-# sold, and nothing sells them now.
-_TEAM_SEATS_DEFAULT = 25
-
-_PAYG_LIMITS = {
-    "max_team_members": _TEAM_SEATS_DEFAULT,
-    "max_simulations_per_month": _RUNAWAY_BACKSTOP_RUNS_PER_MONTH,
-}
-
-
-class _PlanLimits(dict):
-    """Every plan resolves to the same limits, including plans that no longer
-    exist. Legacy rows still carry `starter`, `founder`, `enterprise` and the
-    rest in `organizations.plan`; a lookup that raised on those would turn a
-    dead column into an outage."""
-
-    def __missing__(self, _key: str) -> dict[str, int]:
-        return _PAYG_LIMITS
-
-
-PLAN_LIMITS = _PlanLimits({"free": _PAYG_LIMITS})
-
-
-class SubscriptionStatus(BaseModel):
-    plan: str
-    status: str
-    simulations_used: int
-    simulations_limit: int
-    agents_used: int = 0
-    agents_limit: int = 0
-    team_members: int
-    team_members_limit: int
-    current_period_end: str | None = None
-
-
-async def create_checkout_session(org_id: UUID, plan: str) -> str:
-    """Create a Stripe Checkout session and return the URL."""
-    admin = get_supabase_admin()
-    org = admin.table("organizations").select("*").eq("id", str(org_id)).single().execute().data
-
-    # Get or create Stripe customer
-    customer_id = org.get("stripe_customer_id")
-    if not customer_id:
-        customer = stripe.Customer.create(
-            metadata={"org_id": str(org_id), "org_name": org["name"]},
-        )
-        customer_id = customer.id
-        admin.table("organizations").update({
-            "stripe_customer_id": customer_id,
-        }).eq("id", str(org_id)).execute()
-
-    session = stripe.checkout.Session.create(
-        customer=customer_id,
-        mode="subscription",
-        line_items=[{"price": PLAN_PRICE_MAP.get(plan, "price_starter"), "quantity": 1}],
-        success_url=f"{settings.frontend_url}/settings?success=true",
-        cancel_url=f"{settings.frontend_url}/settings?canceled=true",
-        metadata={"org_id": str(org_id), "plan": plan},
-    )
-    return session.url
+# Stripe itself stays, in `mode="payment"`: `create_topup_checkout` below is how
+# founders buy credits, and `create_flash_report_checkout` is the one-off
+# report. Neither needs a Price ID, which is why both could ship while the tier
+# migration never did.
 
 
 async def create_flash_report_checkout(org_id: UUID, report_type: str) -> str:
@@ -240,23 +163,6 @@ async def create_topup_checkout(
     return session.url
 
 
-async def create_customer_portal_session(org_id: UUID) -> str:
-    """Create a Stripe Customer Portal session."""
-    admin = get_supabase_admin()
-    org = admin.table("organizations").select(
-        "stripe_customer_id"
-    ).eq("id", str(org_id)).single().execute().data
-
-    if not org.get("stripe_customer_id"):
-        raise ValueError("No billing account found")
-
-    session = stripe.billing_portal.Session.create(
-        customer=org["stripe_customer_id"],
-        return_url=f"{settings.frontend_url}/settings",
-    )
-    return session.url
-
-
 async def handle_webhook(payload: bytes, signature: str) -> None:
     """Process Stripe webhook events."""
     import json
@@ -280,7 +186,6 @@ async def handle_webhook(payload: bytes, signature: str) -> None:
     if event_type == "checkout.session.completed":
         metadata = data.get("metadata") or {}
         org_id = metadata.get("org_id")
-        plan = metadata.get("plan")
 
         if not org_id:
             # Ack'd 200 by the caller, so Stripe never retries. A payment that
@@ -292,15 +197,6 @@ async def handle_webhook(payload: bytes, signature: str) -> None:
                 detail="checkout completed with no org_id in metadata; "
                        "the purchase was not applied to any organisation",
             )
-        elif plan:
-            limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["starter"])
-            admin.table("organizations").update({
-                "plan": plan,
-                "stripe_subscription_id": data.get("subscription"),
-                "subscription_status": "active",
-                **limits,
-            }).eq("id", org_id).execute()
-            logger.info("subscription_activated", org_id=org_id, plan=plan)
         elif metadata.get("kind") == "credit_topup":
             # Credited by the database, not here. `apply_credit_topup` claims
             # the row on `credited_at IS NULL` and moves the balance in one
@@ -390,64 +286,3 @@ async def handle_webhook(payload: bytes, signature: str) -> None:
     elif event_type == "invoice.payment_failed":
         customer_id = data.get("customer")
         logger.warning("payment_failed", customer_id=customer_id)
-
-    elif event_type == "customer.subscription.deleted":
-        customer_id = data.get("customer")
-        orgs = admin.table("organizations").select("id").eq(
-            "stripe_customer_id", customer_id
-        ).execute().data
-        if orgs:
-            admin.table("organizations").update({
-                "plan": "starter",
-                "subscription_status": "canceled",
-                **PLAN_LIMITS["starter"],
-            }).eq("id", orgs[0]["id"]).execute()
-            logger.info("subscription_canceled", org_id=orgs[0]["id"])
-
-
-async def get_subscription_status(org_id: UUID) -> SubscriptionStatus:
-    """Get current subscription status and usage from actual data."""
-    admin = get_supabase_admin()
-    org = admin.table("organizations").select("*").eq("id", str(org_id)).single().execute().data
-
-    # Count actual simulations run this month (any status except draft)
-    month_start = datetime.now().strftime("%Y-%m-01T00:00:00")
-    sims = admin.table("simulations").select(
-        "id", count="exact"
-    ).eq("organization_id", str(org_id)).neq(
-        "status", "draft"
-    ).gte("created_at", month_start).execute()
-    sims_used = sims.count or 0
-
-    # Count total agents created this month
-    agents = admin.table("simulation_agents").select(
-        "id", count="exact"
-    ).eq("organization_id", str(org_id)).gte(
-        "created_at", month_start
-    ).execute()
-    agents_used = agents.count or 0
-
-    members = admin.table("organization_members").select(
-        "id", count="exact"
-    ).eq("organization_id", str(org_id)).execute()
-
-    plan = org.get("plan", "starter")
-    limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["starter"])
-    agent_limits = {"starter": 150_000, "pro": 7_500_000, "enterprise": 50_000_000}
-
-    return SubscriptionStatus(
-        plan=plan,
-        status=org.get("subscription_status", "trialing"),
-        simulations_used=sims_used,
-        simulations_limit=limits["max_simulations_per_month"],
-        agents_used=agents_used,
-        agents_limit=agent_limits.get(plan, 50_000),
-        team_members=members.count or 0,
-        team_members_limit=limits["max_team_members"],
-    )
-
-
-async def check_simulation_quota(org_id: UUID) -> bool:
-    """Returns True if org has simulation quota remaining this month."""
-    status = await get_subscription_status(org_id)
-    return status.simulations_used < status.simulations_limit

@@ -6,10 +6,15 @@ import { BENCHMARKS } from '@/lib/benchmarks';
 /**
  * Why this is worth paying for, argued rather than asserted.
  *
- * A founder looking at $99 a month compares it to their other subscriptions.
  * The right comparison is not to a SaaS bill — it is to the campaign they are
  * about to run, and to the quarter they are about to spend positioned wrongly.
  * This block makes that comparison explicit.
+ *
+ * That framing got sharper on 2026-08-25 rather than weaker. This used to open
+ * "a founder looking at $99 a month compares it to their other subscriptions",
+ * and subscriptions are gone — a founder now compares a **single run's price**
+ * to a campaign budget, which is the comparison this block was always trying to
+ * force and no longer has a monthly bill arguing against it.
  *
  * The three outside figures live in `lib/benchmarks.ts`, with the sourcing rule
  * they are held to and the two figures that were researched and rejected. The

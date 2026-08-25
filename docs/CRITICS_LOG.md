@@ -11,6 +11,39 @@ your check could only have passed for the reason you think it did.*
 
 ---
 
+## 2026-08-25 — Deleting a feature can silently delete a test's only lever
+
+Removing the subscription tiers took `check_simulation_quota` out of the run
+path, because credits are the only ration now. It also removed the **last
+`await` between the status read and the compare-and-set guard** in
+`start_simulation` — and `test_two_starts_in_one_window_charge_once_and_run_one_engine`
+was using that await as its synchronisation point to hold two concurrent
+requests inside the race window.
+
+**The test did not fail loudly. It failed informatively:** with no interleave,
+the second request was caught by the *plain read* at the top of the handler
+("Simulation is already running") instead of the compare-and-set ("has already
+been started"). Two different guards, and only one of them is the one that
+protects money against genuinely concurrent processes. Had the assertion been
+looser — status code only — the coverage would have evaporated in silence and
+the suite would still have been green.
+
+**The lesson, transferable.** A test's *fixture* can depend on production
+behaviour that has nothing to do with what the test asserts. Removing a network
+call is not only a behaviour change; it is a change to what can be interleaved,
+mocked, delayed or observed. Before deleting an `await`, a network call or a
+hook, grep the tests for it as a **lever**, not just as a subject — the greps
+this codebase's rules already mandate (calls, types, string literals, re-exports)
+would not have found this, because the test never asserted anything about
+quotas at all.
+
+**Left honest rather than quietly patched.** The test now accepts either guard
+and says in its own docstring that the compare-and-set is no longer exercised
+in-process, with a pointer here. The guard itself is unchanged and still
+correct; what is gone is the proof. Restoring it needs either a genuine
+concurrency harness or an await in that window that earns its place on its own
+merits — not one added to please a test.
+
 ## 2026-08-22 — Honesty has a price, and the gauntlet charges it to the founder
 
 Three brand-new sample products (devtools, consumer, marketplace) run end to

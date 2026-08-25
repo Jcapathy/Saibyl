@@ -28,11 +28,8 @@ from app.services.billing.agent_pricing import (
 )
 from app.services.billing.run_quote import QuoteError, issue_quote
 from app.services.billing.stripe_service import (
-    create_checkout_session,
-    create_customer_portal_session,
     create_flash_report_checkout,
     create_topup_checkout,
-    get_subscription_status,
     handle_webhook,
 )
 from app.services.billing.topups import (
@@ -47,10 +44,6 @@ from app.services.billing.topups import (
 log = structlog.get_logger()
 
 router = APIRouter(tags=["billing"])
-
-
-class CheckoutRequest(BaseModel):
-    plan: str  # starter | pro | enterprise
 
 
 class FlashReportCheckoutRequest(BaseModel):
@@ -101,13 +94,10 @@ class RunShape(BaseModel):
     simulation_id: str | None = None
 
 
-@router.post("/checkout")
-async def checkout(body: CheckoutRequest, auth: dict = Depends(get_current_org)):
-    """Create Stripe Checkout session."""
-    if auth["role"] not in ("owner", "admin"):
-        raise HTTPException(403, "Only owners/admins can manage billing")
-    url = await create_checkout_session(auth["org_id"], body.plan)
-    return {"checkout_url": url}
+# `POST /checkout` (subscription) and `POST /portal` stood here until
+# 2026-08-25. Both served subscription tiers, which no longer exist — see
+# PRD_V3 §6. Stripe is still how founders pay: `POST /flash-report` and
+# `POST /topup` both open Checkout in `mode="payment"`.
 
 
 @router.post("/flash-report")
@@ -192,15 +182,6 @@ async def topup(body: TopupRequest, auth: dict = Depends(require_can_spend)):
     return {"checkout_url": url}
 
 
-@router.post("/portal")
-async def portal(auth: dict = Depends(get_current_org)):
-    """Create Stripe Customer Portal session."""
-    if auth["role"] not in ("owner", "admin"):
-        raise HTTPException(403, "Only owners/admins can manage billing")
-    url = await create_customer_portal_session(auth["org_id"])
-    return {"portal_url": url}
-
-
 @router.post("/webhook")
 async def stripe_webhook(request: Request):
     """Stripe webhook handler (no auth — verified via HMAC signature)."""
@@ -213,11 +194,9 @@ async def stripe_webhook(request: Request):
     return {"received": True}
 
 
-@router.get("/status")
-async def billing_status(auth: dict = Depends(get_current_org)):
-    """Get current subscription status and usage."""
-    status = await get_subscription_status(auth["org_id"])
-    return status.model_dump()
+# `GET /status` returned a `SubscriptionStatus` — plan, subscription state, and
+# a monthly run allowance. Removed with the tiers. What a founder needs is their
+# balance and what a given run costs: `GET /credits` and `GET /prices`.
 
 
 @router.get("/agent-pricing")

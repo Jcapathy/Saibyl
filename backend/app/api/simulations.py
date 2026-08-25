@@ -836,10 +836,10 @@ async def start_simulation(
                 ),
             )
 
-    # Enforce billing quota
-    from app.services.billing.stripe_service import check_simulation_quota
-    if not await check_simulation_quota(auth["org_id"]):
-        raise HTTPException(status_code=402, detail="Simulation quota exceeded for this billing period")
+    # No monthly quota check. It was derived from the subscription tier's
+    # grant, and tiers were removed on 2026-08-25 (PRD_V3 §6) — credits are the
+    # only ration. `check_credit_budget` immediately below is the gate, and it
+    # answers with the actual shape of this run rather than a monthly count.
 
     from app.services.billing.agent_pricing import check_credit_budget, deduct_credits
     from app.services.billing.run_quote import QuoteError, consume_quote

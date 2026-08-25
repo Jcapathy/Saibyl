@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 
 import api from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
 import { useAuthStore } from '@/store/auth';
 import CreditTopUp from '@/components/billing/CreditTopUp';
 import ValueCase from '@/components/billing/ValueCase';
-import type { BillingStatus } from '@/types';
 import {
   Action,
   Card,
@@ -108,62 +107,21 @@ const TABS: { id: SettingsTab; label: string }[] = [
   keyed on the V1 names, so there is no enforced number to print, and printing
   one anyway is how this block went wrong the first time.
 */
-const PLAN_PRICE: Record<string, string> = {
-  free: 'Free',
-  founder: '$99',
-  growth: '$299',
-  agency: '$999',
-  enterprise: 'Custom',
-};
-
-const PLAN_AGENT_CAP: Record<string, string> = {
-  free: '25',
-  founder: '100',
-  growth: '150',
-  agency: '250',
-  enterprise: '1,000',
-};
-
-const PLAN_ORDER = ['founder', 'growth', 'agency', 'enterprise'];
-
 /**
- * V1 plan names still in the database, mapped to what they became.
+ * No plan tables live here any more.
  *
- * `free` and `trial` are **deliberately not here.** They aliased to `founder`,
- * so an account that had paid nothing was shown "Your plan: Founder · $99/mo"
- * — a fabricated billing fact, one panel away from the sidebar rendering the
- * same account's plan as "FREE". Every signup lands on `free`
- * (`DEFAULT_SIGNUP_PLAN`), so this was the default reading of the page that
- * asks for money.
+ * `PLAN_PRICE`, `PLAN_AGENT_CAP`, `PLAN_ORDER`, `LEGACY_PLAN_ALIAS` and the two
+ * functions that resolved between them were removed on 2026-08-25 with the
+ * subscription tiers themselves (PRD_V3 §6). Founders top up as they go, so
+ * there is no plan to name, no ladder to climb, and no `/mo` to print.
+ *
+ * The alias table in particular was a standing hazard: it mapped `starter` to
+ * `founder`, so an account that had paid nothing could be shown
+ * "Your plan: Founder · $99/mo" — a fabricated billing fact on the page
+ * that asks for money, one panel away from the sidebar calling the same account
+ * FREE. Deleting the tiers deletes that whole class of defect rather than
+ * guarding against it.
  */
-const LEGACY_PLAN_ALIAS: Record<string, string> = {
-  starter: 'founder',
-  analyst: 'founder',
-  pro: 'growth',
-  strategist: 'growth',
-  war_room: 'agency',
-};
-
-/** The free tier is a real state, not a missing paid one. */
-const FREE_PLANS = ['free', 'trial'];
-
-function resolvePlan(plan: string | undefined | null): string {
-  const key = (plan ?? '').toLowerCase();
-  if (PLAN_ORDER.includes(key)) return key;
-  if (FREE_PLANS.includes(key)) return 'free';
-  return LEGACY_PLAN_ALIAS[key] ?? 'free';
-}
-
-function getNextPlan(current: string): string | null {
-  const key = resolvePlan(current);
-  // A free account's next step is the first paid tier. `free` is not in
-  // PLAN_ORDER (it is not a rung on the paid ladder), so without this the
-  // upgrade CTA disappeared for exactly the account it is meant for.
-  if (key === 'free') return PLAN_ORDER[0];
-  const idx = PLAN_ORDER.indexOf(key);
-  if (idx === -1 || idx >= PLAN_ORDER.length - 1) return null;
-  return PLAN_ORDER[idx + 1];
-}
 
 /**
  * What the account has, and what it started with.
@@ -175,6 +133,8 @@ function getNextPlan(current: string): string | null {
 interface Credits {
   balance: number;
   grant: number;
+  /** The run ceiling, for the "up to N people" line. Null when absent. */
+  maxAgents: number | null;
 }
 
 /** Below a quarter of the original grant, the page says so rather than waits. */
@@ -185,151 +145,102 @@ const LOW_CREDIT_FRACTION = 0.25;
 /* ------------------------------------------------------------------ */
 
 function BillingTab() {
-  const [billing, setBilling] = useState<BillingStatus | null>(null);
   // The balance the top-up panel adds to. Absent renders as no balance rather
   // than as zero, which would read as "you have none".
   const [credits, setCredits] = useState<Credits | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [leaving, setLeaving] = useState(false);
 
   const load = useCallback(() => {
-    api
-      .get<BillingStatus>('/billing/status')
-      .then((res) => {
-        setBilling(res.data);
-        setError('');
-      })
-      .catch((err) => setError(getErrorMessage(err, 'Could not load your plan.')))
-      .finally(() => setLoading(false));
+    // One request. There is no `/billing/status` any more — it returned a plan,
+    // a subscription state and a monthly run allowance, none of which exist.
     api
       .get('/billing/credits')
-      .then((res) =>
+      .then((res) => {
         setCredits(
           typeof res.data?.balance === 'number'
-            ? { balance: res.data.balance, grant: res.data.grant ?? 0 }
+            ? {
+                balance: res.data.balance,
+                grant: res.data.grant ?? 0,
+                maxAgents: res.data.caps?.max_agents ?? null,
+              }
             : null,
-        ),
+        );
+        setError('');
+      })
+      .catch((err) =>
+        setError(getErrorMessage(err, 'Could not load your credits.')),
       )
-      .catch(() => setCredits(null));
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  /**
-   * Everything about a subscription — upgrading, changing card, cancelling —
-   * happens in Stripe's own portal.
-   *
-   * One button rather than five screens we would have to build, keep correct,
-   * and keep in step with what Stripe already believes. The cancel button this
-   * replaces called nothing at all: it opened a `window.confirm` and then ran a
-   * TODO comment, so a founder could confirm a cancellation that never happened.
-   */
-  const openPortal = async () => {
-    setLeaving(true);
-    setError('');
-    try {
-      const { data } = await api.post<{ portal_url: string }>('/billing/portal');
-      window.location.href = data.portal_url;
-    } catch (err) {
-      setError(
-        getErrorMessage(
-          err,
-          'We could not open the billing portal. If you have never paid, there is nothing there yet.',
-        ),
-      );
-      setLeaving(false);
-    }
-  };
+  if (loading) return <p className="text-saibyl-muted py-8">Loading&hellip;</p>;
 
-  if (loading) return <p className="text-saibyl-muted py-8">Loading…</p>;
-
-  const planKey = resolvePlan(billing?.plan);
-  const price = PLAN_PRICE[planKey] ?? 'Custom';
-  const agentCap = PLAN_AGENT_CAP[planKey];
-  const nextPlan = getNextPlan(planKey);
-
+  /* The meter's denominator is the signup grant, so it only means anything
+     while the founder is still spending that grant. Once they have topped up
+     the balance can exceed it, and a bar pinned at 100% would be telling them
+     nothing — so past that point the number stands on its own. */
+  const onGrant =
+    credits !== null && credits.grant > 0 && credits.balance <= credits.grant;
   const meterPct =
-    credits && credits.grant > 0
-      ? Math.min((credits.balance / credits.grant) * 100, 100)
-      : null;
+    onGrant && credits ? Math.min((credits.balance / credits.grant) * 100, 100) : null;
   const runningLow =
-    credits !== null &&
-    credits.grant > 0 &&
-    credits.balance / credits.grant < LOW_CREDIT_FRACTION;
+    onGrant && credits !== null && credits.balance / credits.grant < LOW_CREDIT_FRACTION;
 
   return (
     <div className="space-y-6">
-      {/* `stage` — the one panel this screen is about, and the only one on it
-          with the deepest shadow. It used to be a blue-tinted rectangle with
-          no depth at all; the glass and the shadow are the artboard's own way
-          of saying "this is the subject", which frees the blue to mean
-          "action" everywhere else on the page. */}
       <Deal index={0}>
         <Card carries="stage" className="p-6">
           <div className="flex items-start justify-between flex-wrap gap-4">
             <div>
-              <Eyebrow>Your plan</Eyebrow>
-              <h2 className="font-semibold text-[26px] text-saibyl-ink capitalize mt-1">
-                {planKey}
+              <Eyebrow>Your credits</Eyebrow>
+              <h2 className="font-semibold text-[26px] text-saibyl-ink mt-1 tabular-nums">
+                {credits ? credits.balance.toLocaleString() : '—'}
               </h2>
-              <p className="font-mono tabular-nums text-[15px] text-saibyl-silver mt-1">
-                {price}
-                {price !== 'Custom' && price !== 'Free' && (
-                  <span className="text-[13px]">/mo</span>
-                )}
+              <p className="text-[13px] text-saibyl-muted mt-1 max-w-md leading-relaxed">
+                Nothing renews and nothing expires. You buy credits when you want
+                them and spend them when you run.
               </p>
-              {agentCap && (
-                <p className="text-[13px] text-saibyl-muted mt-2">
-                  Up to {agentCap} people in the room per run
+              {credits?.maxAgents ? (
+                <p className="text-[13px] text-saibyl-muted mt-2 max-w-md leading-relaxed">
+                  A run can put up to {credits.maxAgents.toLocaleString()} people
+                  in the room. What you can actually run is whatever your balance
+                  covers — every run is priced before you start it.
                 </p>
-              )}
+              ) : null}
 
-              {/* The rail footer's meter, on the page a founder opens because
-                  they are thinking about credits. Same violet→blue gradient,
-                  same 6px bar, same denominator — one treatment, so the number
-                  in the sidebar and the number here are visibly the same fact. */}
-              {credits && (
+              {meterPct !== null && credits ? (
                 <div className="mt-5 max-w-[15rem]">
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-saibyl-muted">Credits left</span>
+                    <span className="text-saibyl-muted">Of your free credits</span>
                     <span className="font-mono tabular-nums text-saibyl-silver">
-                      {credits.balance.toLocaleString()}
+                      {credits.balance.toLocaleString()} /{' '}
+                      {credits.grant.toLocaleString()}
                     </span>
                   </div>
-                  {meterPct !== null && (
-                    <div className="h-1.5 mt-1.5 rounded-full bg-[#14294a]/[0.08] overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-[#8b73ee] to-[#286cf0] transition-all"
-                        style={{ width: `${meterPct}%` }}
-                      />
-                    </div>
-                  )}
+                  <div className="h-1.5 mt-1.5 rounded-full bg-[#14294a]/[0.08] overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-[#8b73ee] to-[#286cf0] transition-all"
+                      style={{ width: `${meterPct}%` }}
+                    />
+                  </div>
                 </div>
-              )}
+              ) : null}
             </div>
 
-            <div className="flex flex-wrap gap-3 items-start">
-              {/* No `disabled` while the portal opens — it says what it is
-                  doing instead. */}
-              <Action kind="quiet" onClick={openPortal}>
-                {leaving ? 'Opening…' : 'Manage billing'}
-              </Action>
-              {nextPlan && (
-                /* The one gradient on this screen. There is exactly one thing
-                   here the page recommends, and the artboard never draws that
-                   as a flat fill. */
-                <Action as={Link} to="/#pricing">
-                  See the {nextPlan} plan
-                </Action>
-              )}
-            </div>
+            {/* The one gradient on this screen, and the only thing the page
+                recommends: put more credits on the account. There is no plan to
+                upgrade to and no portal to open. */}
+            <Action as="a" href="#add-credits">
+              Add credits
+            </Action>
           </div>
           <p className="text-[11px] text-saibyl-muted mt-4 leading-relaxed">
-            Payments, cards, receipts and cancellation are all handled in Stripe.
-            We never see your card.
+            Payments and receipts are handled by Stripe. We never see your card.
           </p>
         </Card>
       </Deal>
