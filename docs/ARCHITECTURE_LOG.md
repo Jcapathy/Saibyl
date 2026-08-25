@@ -8,6 +8,55 @@ running delta record.
 
 ---
 
+## 2026-08-24 — Validate runs retrieval-first: the stage registry re-cut and the page reordered
+
+Implements PRD_V3 §12c. The shape that moved is which instrument answers the
+first question a founder asks.
+
+**`engine/founder_stages.py`.** `concept_validation`'s question changes from
+*"Does this pain exist, who feels it most, and would they pay?"* to **"Is it
+just me — and has anyone already built it?"** Two of its five
+`report_questions` came out because they were empirical questions put to a
+room: *"Do agents recognise this pain unprompted?"* (a synthetic proxy for
+real-world prevalence) and *"Is there stated willingness to pay?"* (contradicted
+by this stage's own `cannot_conclude` in the same object). Three limits were
+added and they are the point of the change — the report now states out loud
+that a run cannot establish whether the pain is real, how many people have it,
+or whether somebody already built it.
+
+The module docstring carries the rule the registry is now governed by:
+**empirical questions go to retrieval, reaction questions go to the room**, and
+a room cannot answer an empirical one at any sample size. Its old rationale —
+"five stages are five purchase occasions" — was replaced per §12e; retention
+comes from the record accumulating, not from the stage count.
+
+**Blast radius was small because the frontend does not copy the registry.**
+`lib/founder.ts` fetches `/api/simulations/founder-stages`, so there was no
+second copy to drift. Backend: 2020 passed, ruff clean.
+
+**`pages/ValidatePage.tsx`.** The clearance chapter moved from last to first and
+the room chapter follows it; the hero's one gradient action is now the check
+rather than the room, which also makes it the first thing on the page that works
+with no product created. `ValidateSteps`'s three cards were titled with the
+three questions the stage was sold on — all three asserted facts about the
+market — and are now titled with what each step does.
+
+**Deliberately not stubbed:** §12c's middle step (real evidence that other
+people have this pain) has no surface, so the page has no chapter for it. A
+chapter promising something unbuilt is a dead end, and a dead end is a defect.
+`gtm/discovery` is the nearest machinery when it gets built — re-point its query
+compiler rather than starting over.
+
+**Ratchets added** (`test_icp_synthesis.py`): `concept_validation`'s report
+questions are checked against a list of empirical markers, its three new limits
+are pinned, and a registry-wide test fails any stage that asks what a buyer
+would pay while also declaring it cannot conclude a price.
+
+**Known divergence, not fixed here.** `LandingPage.tsx` still sells Validate with
+the old question. Public marketing copy is the founder's call, and the app and
+the landing are now telling two different stories — which the 2026-08-23
+decision names as the defect to avoid.
+
 ## 2026-08-23 — The longform shape goes to all eleven nav pages
 
 Four agents, disjoint file sets, hero copy written centrally so eleven pages

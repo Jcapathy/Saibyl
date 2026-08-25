@@ -506,6 +506,74 @@ def test_concept_validation_defaults_to_no_adversarial_cohort():
     assert FOUNDER_STAGES["concept_validation"].default_adversarial_share == 0.0
 
 
+# Phrases that mark a question about the world rather than about a reaction.
+# A room cannot answer any of them at any sample size (PRD_V3 §12b).
+_EMPIRICAL_MARKERS = (
+    "willingness to pay",
+    "would they pay",
+    "how many",
+    "unprompted",
+    "market size",
+    "already built",
+    "prior art",
+    "how common",
+)
+
+
+def test_concept_validation_asks_only_reaction_questions():
+    """PRD_V3 §12b — the rule this stage was re-cut under on 2026-08-24.
+
+    Two of the five questions this stage used to ask were empirical questions
+    put to the wrong instrument: *"Do agents recognise this pain unprompted?"*
+    is a proxy for real-world prevalence, and *"Is there stated willingness to
+    pay?"* was contradicted by this stage's own `cannot_conclude` in the same
+    object. Existence and prevalence belong to clearance and retrieval; the room
+    is asked how the idea reads.
+
+    This is the ratchet. Re-adding an empirical question here is the specific
+    regression that produced three dogfood runs' worth of the objection
+    "synthetic feedback doesn't correlate with real buyer behavior" — an
+    objection that is correct against empirical claims and irrelevant against
+    reaction ones.
+    """
+    for question in FOUNDER_STAGES["concept_validation"].report_questions:
+        lowered = question.lower()
+        for marker in _EMPIRICAL_MARKERS:
+            assert marker not in lowered, (
+                f"concept_validation asks {question!r}, which is a question "
+                f"about the world ({marker!r}). Only retrieval answers those."
+            )
+
+
+def test_concept_validation_names_the_empirical_limits_in_its_report():
+    """The limits have to reach the reader, so they live where the report reads
+    them. A stage that quietly stops asking a question it cannot answer, without
+    saying so, still lets the founder believe the run answered it."""
+    limits = " ".join(FOUNDER_STAGES["concept_validation"].cannot_conclude).lower()
+    assert "whether the pain is real" in limits
+    assert "how many people have it" in limits
+    assert "already built it" in limits
+
+
+def test_no_stage_asks_for_something_it_says_it_cannot_conclude():
+    """The contradiction that shipped until 2026-08-24: `concept_validation`
+    listed "Is there stated willingness to pay, and at what shape of price?" as
+    a question its report answers, while its own `cannot_conclude` conceded
+    pricing "indicates direction, not a number"."""
+    for spec in FOUNDER_STAGES.values():
+        asks_price = any(
+            "willingness to pay" in q.lower() or "what would they pay" in q.lower()
+            for q in spec.report_questions
+        )
+        disclaims_price = any(
+            "pricing level" in limit.lower() for limit in spec.cannot_conclude
+        )
+        assert not (asks_price and disclaims_price), (
+            f"{spec.id} asks what they would pay and also states it cannot "
+            f"conclude a price. One of the two has to go."
+        )
+
+
 def test_growth_carries_the_highest_adversarial_default():
     """At growth the buyer already has something that works."""
     shares = {s.id: s.default_adversarial_share for s in FOUNDER_STAGES.values()}

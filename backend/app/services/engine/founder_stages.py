@@ -5,14 +5,16 @@
 # FOUNDER_STAGES          — dict[FounderStage, StageSpec]
 # stage_spec(stage)       -> StageSpec | None
 # ─────────────────────────────────────────────────────────
-"""The five Founder-lens entry points (PRD §5, DECISIONS §8).
+"""The five Founder-lens entry points (PRD_V3 §12, DECISIONS §8).
 
-**This is the retention mechanism, not a UX nicety.** A validation tool is a
-one-time purchase; a positioning system is a subscription. One general
-"validate my product" flow gets used once and churns. Five stages are five
-purchase occasions for the same account, and the answer legitimately changes
-every time the founder ships a feature, changes pricing, rewrites the landing
-page, or hears a new objection in a sales call.
+**Retention comes from the record, not from the number of stages.** An earlier
+version of this docstring argued that five stages are "five purchase occasions
+for the same account". That is the wrong reason for them to exist, and PRD §12e
+replaced it: each stage deposits real evidence into the founder's record —
+prior art, who else has the pain, the objections that actually cost deals,
+which fixes moved the number — and every later stage consumes what the earlier
+ones deposited. The platform grows with the founder because it accumulates
+their record, not because its claims escalate.
 
 A stage is data, not code. It declares what the founder is asked for, what the
 audience defaults to, which questions the report must answer, and what a
@@ -23,9 +25,24 @@ entry rather than a search for every `if stage ==` in the codebase.
 
 **`cannot_conclude` is the load-bearing field.** A concept-validation run has
 no product to react to, so it cannot measure adoption intent; a fundraise run
-simulates how investors read a story, not whether they would invest. Stating
+models how investors read a story, not whether they would invest. Stating
 those limits in the same object that drives the report is the only way they
 reliably reach the reader — a caveat that lives in a doc reaches nobody.
+
+**The rule that decides what a stage may ask (PRD §12b).** Two instruments,
+two classes of question:
+
+* **Empirical** — about the world. *Does this pain exist beyond me? Who else
+  has it? Has it been built? Who funds this?* Only **retrieval** answers these:
+  real records, cited and checkable.
+* **Reaction** — about response. *How does this read? Which objection kills it?
+  Where do I lose them?* This is what a room is for, and it is good at it.
+
+A room cannot answer an empirical question. That is a category error rather
+than a data gap, and no sample size closes it. Every `report_questions` entry
+below must therefore be a reaction question; anything empirical belongs to
+clearance, prevalence and competitor retrieval, and is named in
+`cannot_conclude` so the report says so out loud.
 """
 from __future__ import annotations
 
@@ -85,26 +102,46 @@ FOUNDER_STAGES: dict[str, StageSpec] = {
     "concept_validation": StageSpec(
         id="concept_validation",
         label="Concept validation",
-        question="Does this pain exist, who feels it most, and would they pay?",
+        # Re-aimed 2026-08-24 (PRD §12c). The stage used to ask "Does this pain
+        # exist, who feels it most, and would they pay?" — and answer it with a
+        # room. A founder who built their product out of a pain they personally
+        # hit has already answered that from life; what they cannot answer is
+        # whether it generalises and whether somebody already shipped it. The
+        # stage now leads with clearance and prevalence retrieval, and the room
+        # is what runs after them.
+        question="Is it just me — and has anyone already built it?",
         expected_inputs=[
             "Problem statement",
             "Target segment description",
             "Any early customer conversations",
         ],
-        # No product exists to switch away from. An incumbent cohort here would
+        # No product exists to switch away from. An incumbent group here would
         # be arguing against a problem statement, which is not the objection a
-        # founder needs at this stage — they need to know whether the pain is
-        # real, and a swarm of defenders drowns that signal.
+        # founder needs at this stage.
         default_adversarial_share=0.0,
         default_rounds=4,
+        # Reaction questions only, per the rule in the module docstring. The two
+        # that came out on 2026-08-24 were both empirical put to the wrong
+        # instrument: "Do agents recognise this pain unprompted?" is a proxy for
+        # real-world prevalence, and "Is there stated willingness to pay?"
+        # contradicted this stage's own `cannot_conclude` in the same object.
         report_questions=[
-            "Do agents recognise this pain unprompted, or only when named?",
-            "Which cohort feels it most acutely, and how does that split?",
-            "What do they do about it today, and what does that cost them?",
+            "Which parts of the idea land as written, and which have to be "
+            "explained before they make sense?",
             "What would disqualify a solution before they tried it?",
-            "Is there stated willingness to pay, and at what shape of price?",
+            "What do they say they do about it today, and what do they say it costs them?",
+            "Which of the people you described reacts most strongly, and on what grounds?",
         ],
         cannot_conclude=[
+            "Whether the pain is real. The room is built out of your own "
+            "description of it, so a room agreeing that it matters is not "
+            "evidence that anyone outside this run has the problem. That is a "
+            "question about the world, and only real records answer it.",
+            "How many people have it. The size of the room is a setting you "
+            "chose, not a sample of a population — no share or percentage here "
+            "estimates a market.",
+            "Whether anyone has already built it. The prior-art and trademark "
+            "check answers that; a room has never read a patent.",
             "Adoption intent — there is no product for an agent to adopt.",
             "Pricing level. Stated willingness to pay from a synthetic audience "
             "with no product in front of it indicates direction, not a number.",

@@ -8,11 +8,18 @@ import { findStage, stageHref, type ProductState } from '@/lib/stages';
 /**
  * Three doors onto machinery that already exists.
  *
- * The founder's own words for this stage are the three questions: *"Does the
- * pain exist, who feels it most, and what would they pay?"* Each one is already
- * answered somewhere in the app — the idea brief and the audience on step 1,
- * the room on step 2 — and until now the only way in was to know that a rail
- * lived under a product you had already created.
+ * **Re-titled 2026-08-24 (PRD_V3 §12b).** The three cards used to be titled
+ * with the three questions the stage was sold on — *"Does the pain exist?"*,
+ * *"Who feels it most?"*, *"What would they pay?"* — and all three promise
+ * something a room cannot deliver. Existence and prevalence are questions about
+ * the world, answered by records and not by reactions; what the founder would
+ * pay is disclaimed by `concept_validation.cannot_conclude` in the same breath
+ * the old title asked for it.
+ *
+ * The machinery behind the doors did not change and did not need to. Only the
+ * promise on the front of each one did: each card is now titled with what that
+ * step actually does. If you find yourself restoring a title that asserts a
+ * fact about the market, read §12b first.
  *
  * So these cards create nothing. They name the question, say what the founder
  * has to write to get it answered, and hand off. The line at the foot of each
@@ -29,7 +36,7 @@ interface Door {
   icon: LucideIcon;
   /** The mono label. Which piece of machinery this is. */
   eyebrow: string;
-  /** The founder's question, verbatim from the journey. */
+  /** What this step does. Never a claim about the market — see the note above. */
   title: string;
   body: string;
   /** What the founder clicks through to do. */
@@ -58,8 +65,8 @@ function doors(product: ProductState): Door[] {
       id: 'brief',
       icon: PenLine,
       eyebrow: 'The brief',
-      title: 'Does the pain exist?',
-      body: 'Five short questions — what hurts, who it hurts, and what they do about it today. Your answers are written up and become the first thing the room reads. A deck, a pricing page or your live site work just as well if you already have one.',
+      title: 'Write down what hurts',
+      body: 'Five short questions — what hurts, who it hurts, and what they do about it today. You already know the answers; you hit this problem yourself. Writing them down is what gives the room something to react to. A deck, a pricing page or your live site work just as well if you already have one.',
       cta: 'Answer the five questions',
       href: `${step1}#idea-brief`,
       produced: null,
@@ -70,8 +77,8 @@ function doors(product: ProductState): Door[] {
       id: 'audience',
       icon: Users,
       eyebrow: 'The audience',
-      title: 'Who feels it most?',
-      body: 'One pass reads what you wrote and proposes the groups of people most likely to buy this — what they do, what they already use, and what would make them doubt you. You confirm it, or correct the parts that look wrong.',
+      title: 'Say who it is for',
+      body: 'One pass reads what you wrote and proposes the groups of people most likely to buy this — what they do, what they already use, and what would make them doubt you. You confirm it, or correct the parts that look wrong. It is a description you are agreeing to, not a finding about the market.',
       cta: 'See who buys this',
       href: step1,
       produced: audience?.produced ?? null,
@@ -81,8 +88,8 @@ function doors(product: ProductState): Door[] {
       id: 'room',
       icon: MessageSquare,
       eyebrow: 'The room',
-      title: 'What would they pay?',
-      body: 'Those buyers read your material and argue about it. You get back what they said, and the things they pushed back on ranked by how much of the room actually carried each one — price among them, and rarely at the top.',
+      title: 'See how it reads',
+      body: 'Those buyers read your material and argue about it. You get back what they said, and the things they pushed back on ranked by how much of the room actually carried each one — which parts land as written, and which have to be explained before they make sense.',
       cta: 'Put it in front of them',
       href: stageHref(product.id, 'reactions'),
       produced: reactions?.produced ?? null,

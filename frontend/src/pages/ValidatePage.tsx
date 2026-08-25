@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 
 import api, { unwrapList } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
-import { findStage, stageHref, type ProductState } from '@/lib/stages';
+import { findStage, type ProductState } from '@/lib/stages';
 import {
   Action,
   Chapter,
@@ -17,35 +17,46 @@ import ClearanceCard from '@/components/validate/ClearanceCard';
 import ValidateSteps from '@/components/validate/ValidateSteps';
 
 /**
- * Validate — the idea stage, as the landing page sells it.
+ * Validate — the idea stage.
  *
- * The public site promises five stages of a company and names the first one:
+ * ── Re-aimed 2026-08-24. Read this before reordering anything ───────────────
  *
- *   > **Validate** — IDEA STAGE — *"Does the pain exist, who feels it most, and
- *   > what would they pay? Five answers are enough to build your first room."*
+ * This page used to open with *"Does the pain exist, who feels it most, and
+ * what would they pay?"* and answer it with a room, with the prior-art check
+ * as the last chapter. **That order was backwards**, and PRD_V3 §12 reverses
+ * it.
  *
- * Behind the login that promise had no door. The machinery all existed — the
- * idea brief and the audience on step 1, the room on step 2 — but it was
- * reachable only by first creating a product and then finding the rail
- * underneath it, which is the same defect that hid the site check from the home
- * page and the message comparison until it got a page of its own. A capability
- * a founder cannot find is a capability nobody bought.
+ * The founder's own account of building ParryAI is the reason: he hit the
+ * problem inside his own business, built the fix for himself, and only
+ * *afterwards* asked whether other companies had it too and whether anyone had
+ * already patented it. A founder who built their product out of a pain they
+ * personally hit **already knows the pain is real** — they lived it. Offering
+ * them a synthetic room's opinion on it is offering the weakest available
+ * evidence about the one thing they have ground truth on.
  *
- * So this page builds nothing new. It is a door, and everything behind it is
- * composed:
+ * What they genuinely cannot answer is *does this generalise* and *has someone
+ * already built it*. So:
  *
- *   · `ValidateSteps` links to `AudienceStagePage` and `ReactionsStagePage`,
- *     and reports what they have produced using the server's own sentences.
- *   · `ClearanceCard` embeds the USPTO check — `components/clearance/`,
- *     unchanged — because "is this even mine to build?" is an idea-stage
- *     question. It was a top-level module only because it had nowhere else to
- *     live.
+ *   1. **Clearance opens the stage.** `ClearanceCard` embeds the USPTO check.
+ *      It is the only thing on this page whose answer comes from a public
+ *      record rather than from a model's reaction, which is exactly why it goes
+ *      first — it earns the credibility the room's claims spend later.
+ *   2. **The room comes second**, and is asked only what a room can answer:
+ *      how the idea reads. `ValidateSteps` links to `AudienceStagePage` and
+ *      `ReactionsStagePage` and reports what they produced in the server's own
+ *      sentences.
  *
- * The product picker is the `CapitalPage` pattern: a global page that has to be
- * told which one thing it is about. The clearance card sits in a chapter of its
- * own, **outside** the picker on purpose — the check needs no product to run,
- * and a founder with nothing created yet is exactly the founder who should be
- * asking whether the name is already taken.
+ * **The missing middle, named rather than faked.** PRD §12c specifies a step
+ * between the two — real evidence that other people have this pain, so the
+ * founder learns whether their n=1 generalises. No surface returns that today;
+ * `gtm/discovery` is the nearest machinery but is aimed at *who do I sell to*.
+ * It is deliberately **not** stubbed here: a chapter promising something
+ * unbuilt is a dead end, and a dead end is a defect.
+ *
+ * The clearance chapter sits **outside** the product picker on purpose — the
+ * check needs no product to run, and a founder with nothing created yet is
+ * exactly the founder who should be asking whether the name is already taken.
+ * The picker belongs to the room chapter, which does need one.
  *
  * ── The frame, 2026-08-23: this page opens like the landing page ────────────
  *
@@ -125,22 +136,16 @@ export default function ValidatePage() {
       <Longform>
         <Hero
           eyebrow="Idea stage"
-          title="Find out if anyone"
-          serif="actually wants it."
+          title="Find out who"
+          serif="already built it."
           actions={
-            /* One gradient on the screen, and it is the thing this stage is
-               for. Before there is anything to put in a room the only honest
-               next step is naming what you are building. */
+            /* One gradient on the screen, and it is now the check rather than
+               the room. The clearance card needs no product, so this is the one
+               action on the page that works on a founder's first minute here. */
             <>
-              {selected ? (
-                <Action as={Link} to={stageHref(selected.id, 'reactions')}>
-                  Put it in front of a room
-                </Action>
-              ) : (
-                <Action as={Link} to="/app/products/new">
-                  Add what you are building
-                </Action>
-              )}
+              <Action as="a" href="#clearance">
+                Check the record first
+              </Action>
               <Action as={Link} to="/app/guide" kind="quiet">
                 How this works
               </Action>
@@ -148,15 +153,16 @@ export default function ValidatePage() {
           }
         >
           <p>
-            Founders everywhere are turning ideas into products, and most find
-            out far too late that nobody felt the problem badly enough to pay
-            for it. This is where you find out first. Describe what you are
-            building and Saibyl assembles the room of buyers you think you have
-            &mdash; then you read what they actually say: whether the pain is
-            real, which of them feels it hardest, and what being rid of it would
-            be worth. Five answers are enough to build that first room.{' '}
+            You built this because you ran into the problem yourself &mdash;
+            that part you already know, and no room of strangers is going to
+            tell you otherwise. What you cannot know yet is whether anybody
+            filed a patent on it two years ago, and whether the pain you felt is
+            felt by enough other people to be a business. So Saibyl checks the
+            public record first: trademarks, granted patents, and the
+            applications nobody reads. Then it builds the room, and you find out
+            how the idea actually lands.{' '}
             <b className="text-saibyl-ink font-semibold">
-              Does the pain exist? Who feels it most? What would they pay?
+              Is it just you &mdash; and has anyone already built it?
             </b>
           </p>
           {/* The artboard's line beside the title, kept: how far along this
@@ -168,19 +174,39 @@ export default function ValidatePage() {
           )}
         </Hero>
 
-        {/* ── Getting the idea into a room ──
+        {/* ── The check that opens the stage ──
+            First on the page since 2026-08-24 (PRD §12c). Outside the picker,
+            because it needs no product to run — which also makes it the one
+            thing here a founder can use in their first minute. */}
+        <div id="clearance" className="scroll-mt-24">
+          <Chapter
+            kicker="Start here"
+            title={
+              <>
+                Somebody may have <em>already filed it</em>
+              </>
+            }
+            lead="This is the one question you can answer today with no product, no buyers and nothing spent — and the only one on this page whose answer comes out of a public record instead of somebody's opinion. Being late here is expensive in a way no room can warn you about."
+          >
+            <Reveal>
+              <ClearanceCard products={productOptions} />
+            </Reveal>
+          </Chapter>
+        </div>
+
+        {/* ── Then the room ──
             One chapter, and every branch of the load renders inside it — the
             hero above is rendered once and only the body changes, so a founder
             who is loading, errored or has nothing yet still lands on the same
             page as everybody else. */}
         <Chapter
-          kicker="Step by step"
+          kicker="Then, the room"
           title={
             <>
-              Three things, <em>in the order they matter</em>
+              How the idea <em>actually lands</em>
             </>
           }
-          lead="None of it asks for a finished product. You write the idea down, you agree on who it is for, and then a room of those buyers argues about it while being wrong is still cheap."
+          lead="Once you know the ground is clear, you find out how it reads. This is what a room is genuinely good for — not telling you the problem is real, which you already know, but showing you which parts of the idea land as written and which have to be explained first."
         >
           <div className="space-y-6">
             {productsError && (
@@ -239,22 +265,6 @@ export default function ValidatePage() {
               </>
             )}
           </div>
-        </Chapter>
-
-        {/* ── The question that comes before any of it ──
-            Outside the picker, as it was: the check needs no product to run. */}
-        <Chapter
-          kicker="Before you build it"
-          title={
-            <>
-              The name might <em>already be taken</em>
-            </>
-          }
-          lead="This is the one question you can answer today with no product, no buyers and nothing spent — and the only one where being late is expensive in a way no room can warn you about."
-        >
-          <Reveal>
-            <ClearanceCard products={productOptions} />
-          </Reveal>
         </Chapter>
       </Longform>
     </Ground>

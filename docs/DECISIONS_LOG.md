@@ -72,10 +72,19 @@ built it — are served today by a card at the bottom of the page.
    edge over a bought list. The platform grows by accumulating the founder's
    record, not by escalating its claims.
 
-**Not yet decided / next session's work.** §12 is the specification; no code has
-been changed against it. The re-cut of `founder_stages.py`, the Validate stage
-rebuild, the prevalence-evidence surface (which does not exist today), and the
-Raise gate are all unbuilt.
+**Built the same day.** The re-cut of `founder_stages.py` and the Validate stage
+rebuild landed against this decision — see `ARCHITECTURE_LOG.md` 2026-08-24.
+
+**Still unbuilt.** The prevalence-evidence surface (§12c step 2 — no surface
+returns it today; `gtm/discovery` is the nearest machinery, aimed at sales
+prospects) and the Raise revenue gate (§12d). Neither was stubbed: a screen that
+promises something unbuilt is a dead end.
+
+**Open for the founder.** `LandingPage.tsx` still sells Validate as *"Does the
+pain exist, who feels it most, and what would they pay?"* The app no longer says
+that, so the public site and the product now diverge — the exact defect the
+2026-08-23 decision was taken to prevent. Changing public marketing copy is the
+founder's call, so it was left alone and flagged rather than rewritten.
 
 ## 2026-08-23 — The app behind the login mirrors the journey the landing sells
 
