@@ -2,7 +2,7 @@
 # ─────────────────────────────────────────────────────────
 # TOPUP_MARGIN_PCT     — the margin a one-off top-up is priced at
 # MIN_TOPUP_CENTS      — the smallest top-up we will take
-# MAX_TOPUP_CENTS      — the largest, before it should be a subscription
+# MAX_TOPUP_CENTS      — the largest single top-up we will take
 # SUGGESTED_TOPUP_USD  — the amounts shown as buttons
 # TopupQuote           — what a given amount buys, and how it compares
 # TopupRefusedError    — the amount is outside what we will take
@@ -38,7 +38,6 @@ from pydantic import BaseModel
 
 from app.services.billing.agent_pricing import (
     CREDITS_PER_USD,
-    TARGET_MARGIN_PCT,
     standard_run_credits,
 )
 
@@ -75,10 +74,6 @@ class TopupQuote(BaseModel):
     # answer at $10 and rounding it to "0 runs" or "1 run" would both be lies.
     standard_runs: float
 
-    # How much better the same money is on a subscription, as a percentage.
-    # Stated so the founder can check the claim that subscribing is cheaper
-    # rather than being asked to believe it.
-    subscription_is_cheaper_by_pct: int
 
 
 def credits_for_topup(amount_cents: int) -> int:
@@ -98,21 +93,19 @@ def credits_for_topup(amount_cents: int) -> int:
     return int(credits.to_integral_value(rounding=ROUND_FLOOR))
 
 
-def _subscription_advantage_pct() -> int:
-    """How much further the same dollar goes on a subscription, in percent.
-
-    Derived from the two margins so it cannot disagree with them. At 80% and
-    85% a subscribed dollar buys 0.20/0.15 = 1.333… times as many credits, so
-    the answer is 33%.
-    """
-    sub_share = Decimal("100") - TARGET_MARGIN_PCT
-    topup_share = Decimal("100") - TOPUP_MARGIN_PCT
-    if topup_share <= 0:
-        # Unreachable while TOPUP_MARGIN_PCT < 100, and a division by zero if it
-        # ever is not. Loud rather than silently zero.
-        raise ValueError("TOPUP_MARGIN_PCT must be below 100")
-    ratio = (sub_share / topup_share) - Decimal(1)
-    return int((ratio * Decimal(100)).to_integral_value())
+# `_subscription_advantage_pct()` stood here. It derived how much further a
+# dollar went on a subscription — 33%, from the 80%/85% margins — so the top-up
+# screen could tell a founder, checkably, that subscribing was the better deal.
+#
+# Subscriptions were removed on 2026-08-25 (PRD_V3 §6), so there is nothing left
+# to be better than and the field it fed is gone from `TopupQuote`.
+#
+# **`TOPUP_MARGIN_PCT` is still 85% and that is now a live question rather than
+# a settled one.** The five points above `TARGET_MARGIN_PCT` existed only to
+# make subscribing look good; with no subscription they make credits 33% dearer
+# than they need to be, for no remaining reason. Lowering it to
+# `TARGET_MARGIN_PCT` is a pricing decision for the founder, not a cleanup, so
+# it is flagged here rather than taken.
 
 
 class TopupRefusedError(ValueError):
@@ -159,5 +152,4 @@ def quote_topup(amount_cents: int) -> TopupQuote:
         amount_usd=amount_cents / 100,
         credits=credits,
         standard_runs=_runs_display(credits, per_run),
-        subscription_is_cheaper_by_pct=_subscription_advantage_pct(),
     )

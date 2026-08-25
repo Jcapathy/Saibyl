@@ -60,20 +60,6 @@ def test_a_topup_credit_is_never_cheaper_than_a_subscription_credit():
     assert topup < subscription
 
 
-def test_the_advertised_subscription_advantage_matches_the_rates():
-    """The percentage on screen is derived, so it cannot drift from the rates."""
-    quote = quote_topup(10_000)
-    topup = credits_for_topup(10_000)
-    subscription = int(
-        Decimal(100)
-        * Decimal(CREDITS_PER_USD)
-        * (Decimal("100") - TARGET_MARGIN_PCT)
-        / Decimal("100")
-    )
-    actual_pct = round((subscription / topup - 1) * 100)
-    assert quote.subscription_is_cheaper_by_pct == actual_pct
-
-
 @pytest.mark.parametrize(
     ("usd", "expected_credits"),
     [(10, 1_500), (20, 3_000), (50, 7_500), (100, 15_000)],

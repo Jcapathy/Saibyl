@@ -53,12 +53,29 @@ the decision: thirteen orgs, twelve `trialing`, one `canceled`, and exactly one
 Stripe subscription id in the whole system — on the cancelled row. Queried, not
 assumed.
 
-**Still to do.** The Stripe subscription paths themselves (`/checkout`,
-`/portal`, `get_subscription_status`, the webhook's subscription branch), the
-$99/month argument in `ValueCase.tsx`, and `SettingsPage.tsx`'s plan panel —
-which today aliases free accounts up to `founder` and has shown people *"Your
-plan: Founder · $99/mo"*, a fabricated billing fact on the page that asks for
-money. Also outstanding: GEO optimisation of the landing page copy.
+**Done the same day.** The Stripe subscription paths (`/checkout`, `/portal`,
+`get_subscription_status`, the webhook's subscription branches), `PLAN_LIMITS`,
+`SubscriptionStatus` and `SettingsPage`'s plan panel are all removed —
+including the alias that could print *"Your plan: Founder · $99/mo"* to an
+account that had paid nothing. **Stripe stays** in `mode="payment"`: top-ups
+and the one-off report are how founders pay, and neither needs a Price ID.
+
+**Open, and worth real money: `TOPUP_MARGIN_PCT` is still 85%.**
+`topups.py` prices a top-up five points above `TARGET_MARGIN_PCT` (80%)
+*deliberately* — the docstring says so — so that subscribing would be
+"visibly and arithmetically the better deal". It even published the gap to the
+founder as `subscription_is_cheaper_by_pct`, which came out to **33%**.
+
+With no subscription to steer anyone toward, that surcharge has no remaining
+justification, and it is the difference between credits costing what they cost
+and costing a third more. Lowering it to `TARGET_MARGIN_PCT` would make every
+price on the new landing page ~25% cheaper. **Left at 85% and flagged rather
+than changed**, because it is a pricing decision and revenue, not a cleanup.
+The dead comparison field itself is gone.
+
+**Still to do.** Prerendering the marketing routes — `SEO_AEO.md` names it as
+"the single biggest AEO unlock" and it is still not done, which means no answer
+engine can read any of the copy written today.
 
 ## 2026-08-24 — The evaluation logic was inverted: retrieval answers the world, the room answers the reader
 

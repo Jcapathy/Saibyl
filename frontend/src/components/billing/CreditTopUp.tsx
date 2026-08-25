@@ -4,12 +4,12 @@ import api from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
 
 /**
- * Put $10 on, without committing to $99 a month.
+ * Put $10 on. This is the only way to pay for Saibyl.
  *
- * This is a standalone purchase, not a plan. A founder deciding whether the
- * product is worth a subscription should be able to spend a little and find
- * out — asking for the monthly commitment is asking for the big decision at
- * the exact moment they have the least evidence.
+ * It used to be the alternative to a $99/month plan, and the quote carried a
+ * `subscription_is_cheaper_by_pct` field arguing that subscribing was the
+ * better deal. Subscription tiers were removed on 2026-08-25 (PRD_V3 §6), so
+ * the comparison had nothing left to compare against and is gone.
  *
  * **Every number here comes from the server.** The amounts, the credits, the
  * runs, and the fact that subscribing is better value are all priced by
@@ -26,7 +26,6 @@ interface TopupQuote {
   amount_cents: number;
   amount_usd: number;
   credits: number;
-  subscription_is_cheaper_by_pct: number;
 }
 
 interface TopupOptions {

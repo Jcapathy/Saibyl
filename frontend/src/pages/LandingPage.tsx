@@ -130,8 +130,8 @@ export default function LandingPage() {
           <section className="stats container" aria-label="Saibyl at a glance">
             <div className="stats-grid reveal">
               <div className="stat-intro"><span className="eyebrow">How far the room scales</span><p>Every number Saibyl reports opens into the sentences it came from. The room argues in written threads — nothing is ever posted anywhere real.</p></div>
-              <div className="stat"><div className="stat-number"><span>1,000</span></div><p>AI buyers in the largest rooms<br />25 in your first free run</p></div>
-              <div className="stat"><div className="stat-number"><span>12</span></div><p>places where the room argues<br />up to 6 self-serve, all 12 enterprise</p></div>
+              <div className="stat"><div className="stat-number"><span>250</span></div><p>AI buyers in the largest rooms<br />30 in your first free run</p></div>
+              <div className="stat"><div className="stat-number"><span>12</span></div><p>places where the room argues<br />up to 6 in a single run</p></div>
               <div className="stat"><div className="stat-number"><span>5</span></div><p>stages of the company<br />idea to raise, one platform</p></div>
             </div>
           </section>
@@ -145,7 +145,7 @@ export default function LandingPage() {
                 <Link className="button primary" to="/signup">Start at your stage <span className="arrow">→</span></Link>
               </div>
               <div className="journey-list reveal delay-1">
-                <article className="journey-item"><span className="journey-mark">◎</span><div><h3 className="journey-title">Validate <small>IDEA STAGE</small></h3><p>Does the pain exist, who feels it most, and what would they pay? Five answers are enough to build your first room.</p></div></article>
+                <article className="journey-item"><span className="journey-mark">◎</span><div><h3 className="journey-title">Validate <small>IDEA STAGE</small></h3><p>Is it just you &mdash; and has anyone already built it? Saibyl checks the trademark and patent record first, then puts the idea in front of a room.</p></div></article>
                 <article className="journey-item"><span className="journey-mark">✦</span><div><h3 className="journey-title">Position <small>PRE-LAUNCH</small></h3><p>Which objections kill the pitch — and which answers actually move them. Test the fix on the same room, and watch the delta.</p></div></article>
                 <article className="journey-item"><span className="journey-mark">⌁</span><div><h3 className="journey-title">Launch <small>GO-TO-MARKET</small></h3><p>Up to eight versions of the message, head to head, in front of the same room — the winner earns your budget.</p></div></article>
                 <article className="journey-item"><span className="journey-mark">↗</span><div><h3 className="journey-title">Grow <small>TRACTION</small></h3><p>Pricing moves, feature drops, expansion pitches — rehearsed before the market grades them.</p></div></article>
@@ -197,80 +197,80 @@ export default function LandingPage() {
           <section className="ladder container" id="ladder" aria-labelledby="ladder-heading">
             <div className="ladder-top reveal">
               <div><span className="eyebrow section-kicker">What you unlock</span><h2 className="section-title" id="ladder-heading">Your first run is the beginning.</h2></div>
-              <p className="section-copy">The free run answers the first two questions. Each one after that turns the last answer into the next advantage.</p>
+              <p className="section-copy">The free run answers the first two questions. Each one after that turns the last answer into the next advantage &mdash; and each is priced on its own, so you only buy the ones you want.</p>
             </div>
             <div className="ladder-grid">
               <article className="cap-card reveal delay-1"><span className="cap-tag free">In your free run</span><h3>Audience</h3><p className="q">Who reacts to this?</p><p>Built from your material, not picked from a list. You approve it before anything runs.</p><span className="cap-arc" /></article>
               <article className="cap-card reveal delay-1"><span className="cap-tag free">In your free run</span><h3>Reactions</h3><p className="q">What do they object to?</p><p>The room argues with your pitch — and with each other. The pushback arrives ranked, with receipts.</p><span className="cap-arc" /></article>
-              <article className="cap-card reveal delay-2"><span className="cap-tag next">Unlocks with any plan — from $99/mo</span><h3>Answers</h3><p className="q">Did my reply work?</p><p>Saibyl drafts a reply to each objection worth answering, runs the same room again, and shows whether it moved.</p><span className="cap-arc" /></article>
-              <article className="cap-card reveal delay-2"><span className="cap-tag next">Unlocks with any plan — from $99/mo</span><h3>Buyers</h3><p className="q">Which real companies match?</p><p>The audience you approved becomes a list of real companies that fit it — each with the source shown.</p><span className="cap-arc" /></article>
-              <article className="cap-card wide reveal delay-3"><span className="cap-tag next">Unlocks with any plan — 3 versions on Founder, 8 on Agency</span><h3>Messages</h3><p className="q">Which version wins?</p><p>Up to eight versions of the same message in front of the same room at the same moment — so what differs is the wording, never the crowd. The winner earns the budget; the rest never cost you a campaign.</p><span className="cap-arc" /></article>
+              <article className="cap-card reveal delay-2"><span className="cap-tag next">$1.50 a time</span><h3>Answers</h3><p className="q">Did my reply work?</p><p>Saibyl drafts a reply to each objection worth answering, runs the same room again, and shows whether it moved.</p><span className="cap-arc" /></article>
+              <article className="cap-card reveal delay-2"><span className="cap-tag next">$3 a list</span><h3>Buyers</h3><p className="q">Which real companies match?</p><p>The audience you approved becomes a list of real companies that fit it — each with the source shown.</p><span className="cap-arc" /></article>
+              <article className="cap-card wide reveal delay-3"><span className="cap-tag next">Up to 8 versions, priced per run</span><h3>Messages</h3><p className="q">Which version wins?</p><p>Up to eight versions of the same message in front of the same room at the same moment — so what differs is the wording, never the crowd. The winner earns the budget; the rest never cost you a campaign.</p><span className="cap-arc" /></article>
             </div>
           </section>
 
           <section className="pricing" id="pricing" aria-labelledby="pricing-heading">
             <div className="container">
               <div className="pricing-top reveal">
-                <div><span className="eyebrow section-kicker">Pricing</span><h2 className="section-title" id="pricing-heading">Start free.<br /><em>Scale on evidence.</em></h2></div>
-                <p className="section-copy">A plan buys a bigger room, more rounds, more places, and more versions head to head. A standard run is 100 buyers over 5 rounds — and every run shows its exact price before it starts.</p>
+                <div><span className="eyebrow section-kicker">Pricing</span><h2 className="section-title" id="pricing-heading">How much does<br /><em>Saibyl cost?</em></h2></div>
+                <p className="section-copy">Your first run is free, and after that a full run costs about $3. There is no subscription: you buy credits when you want them, they never expire, and every run shows its exact price before it starts.</p>
               </div>
               <div className="tier-grid">
                 <div className="tier free reveal">
                   <span className="flag">Start here</span>
-                  <h3>Free</h3>
+                  <h3>Your first run</h3>
                   <p className="who">One complete run — every step, to see what the room finds.</p>
                   <p className="price">$0</p>
-                  <p className="runs">1 COMPLETE RUN · 25-PERSON ROOM</p>
+                  <p className="runs">1 COMPLETE RUN · 30-PERSON ROOM</p>
                   <ul>
-                    <li><b>25</b> buyers in the room</li>
+                    <li><b>30</b> buyers in the room</li>
                     <li><b>3</b> rounds of back-and-forth</li>
                     <li><b>2</b> places at once</li>
-                    <li>One message per run</li>
+                    <li>No card at signup</li>
                   </ul>
                   <Link className="button primary" to="/signup">Start your first run <span className="arrow">→</span></Link>
                 </div>
                 <div className="tier popular reveal delay-1">
-                  <span className="flag">Most popular</span>
-                  <h3>Founder</h3>
-                  <p className="who">For the founder proving the thing sells.</p>
-                  <p className="price">$99<small>/mo</small></p>
-                  <p className="runs">≈ 6 STANDARD RUNS A MONTH</p>
+                  <span className="flag">Most run</span>
+                  <h3>A full run</h3>
+                  <p className="who">The standard room, once you want more than the free one.</p>
+                  <p className="price">$3<small>.01</small></p>
+                  <p className="runs">100 BUYERS · 5 ROUNDS</p>
                   <ul>
-                    <li>Up to <b>100</b> buyers</li>
-                    <li>Up to <b>8</b> rounds</li>
-                    <li>Up to <b>3</b> places</li>
-                    <li><b>3</b> versions, head to head</li>
+                    <li><b>100</b> buyers in the room</li>
+                    <li><b>5</b> rounds of back-and-forth</li>
+                    <li>Objections ranked, with receipts</li>
+                    <li>Rooms run to <b>250</b> buyers</li>
                   </ul>
-                  <Link className="button ghost" to="/signup">Prove it sells <span className="arrow">→</span></Link>
+                  <Link className="button ghost" to="/signup">Run one <span className="arrow">→</span></Link>
                 </div>
                 <div className="tier reveal delay-2">
-                  <h3>Growth</h3>
-                  <p className="who">For the team testing messages before spending on them.</p>
-                  <p className="price">$299<small>/mo</small></p>
-                  <p className="runs">≈ 19 STANDARD RUNS A MONTH</p>
+                  <h3>A page check</h3>
+                  <p className="who">Your live site, read the way a buyer reads it.</p>
+                  <p className="price">$1<small>.75</small></p>
+                  <p className="runs">ONE PAGE · SIX REVIEWERS</p>
                   <ul>
-                    <li>Up to <b>150</b> buyers</li>
-                    <li>Up to <b>10</b> rounds</li>
-                    <li>Up to <b>4</b> places</li>
-                    <li><b>5</b> versions, head to head</li>
+                    <li>Six critics score the page</li>
+                    <li>Every claim checked against the copy</li>
+                    <li>Rewrite and re-score: <b>$5</b></li>
+                    <li>What to say back: <b>$1.50</b></li>
                   </ul>
-                  <Link className="button ghost" to="/signup">Test before you spend <span className="arrow">→</span></Link>
+                  <Link className="button ghost" to="/signup">Check a page <span className="arrow">→</span></Link>
                 </div>
                 <div className="tier reveal delay-3">
-                  <h3>Agency</h3>
-                  <p className="who">For the shop running this across clients.</p>
-                  <p className="price">$999<small>/mo</small></p>
-                  <p className="runs">≈ 66 STANDARD RUNS A MONTH</p>
+                  <h3>Prior art</h3>
+                  <p className="who">Whether the thing you are building is already someone else&rsquo;s.</p>
+                  <p className="price">$2</p>
+                  <p className="runs">TRADEMARKS · PATENTS · PENDING</p>
                   <ul>
-                    <li>Up to <b>250</b> buyers</li>
-                    <li>Up to <b>12</b> rounds</li>
-                    <li>Up to <b>6</b> places</li>
-                    <li><b>8</b> versions, head to head</li>
+                    <li>Name check: <b>free</b></li>
+                    <li>Claim deep-reads on the closest patents</li>
+                    <li>Every result cited to its record</li>
+                    <li>Full landscape: <b>$6</b></li>
                   </ul>
-                  <Link className="button ghost" to="/signup">Run it across clients <span className="arrow">→</span></Link>
+                  <Link className="button ghost" to="/signup">Check it&rsquo;s clear <span className="arrow">→</span></Link>
                 </div>
               </div>
-              <p className="pricing-note">Bigger rooms and more rounds draw down runs proportionally — you see the exact price before you press go, and top-ups are there for the weeks momentum spikes. Bigger than Agency? Rooms run to 1,000 buyers over 20 rounds, across all 12 places at once — <a href="mailto:info@saidolabs.com" style={{ color: 'var(--blue)', fontWeight: 700 }}>talk to us</a>.</p>
+              <p className="pricing-note"><b>1,000 credits costs $1.</b> Top up between $10 and $500 whenever you want, in one payment — nothing renews, nothing expires, and no card is taken at signup. A bigger room or more rounds costs proportionally more, and you always see the exact price before you press go. Running this across a lot of clients? <a href="mailto:info@saidolabs.com" style={{ color: 'var(--blue)', fontWeight: 700 }}>Talk to us</a>.</p>
             </div>
           </section>
 
@@ -295,7 +295,19 @@ export default function LandingPage() {
                 </details>
                 <details>
                   <summary>What happens after my free run?</summary>
-                  <p>You'll have your audience and your objection list — and a specific, quantified question the next stage answers. Pick the plan that matches your pace, or top up for the week you need more room. No card is ever taken at signup, so nothing charges you until you decide.</p>
+                  <p>You'll have your audience and your objection list — and a specific, quantified question the next stage answers. After that you buy credits when you want them: 1,000 credits costs $1, a full 100-buyer run is about $3, and top-ups run from $10 to $500. No card is ever taken at signup, so nothing charges you until you decide.</p>
+                </details>
+                <details>
+                  <summary>Is Saibyl a subscription?</summary>
+                  <p>No. There are no plans and no monthly fee — you top up credits as you go and they never expire. Nothing renews, so there is nothing to cancel. Every run is priced before it starts, and you spend against a balance you chose to buy.</p>
+                </details>
+                <details>
+                  <summary>Do the synthetic buyers just agree with you?</summary>
+                  <p>No — the room is built to argue. A share of every audience is constructed specifically to push back before it has seen your pitch, with its lean set by what those buyers already use and would have to rip out, not by anything you wrote. Every run reports how many of those people were in the room and what the score was with and without them. In Saibyl's own test of itself, the harshest room returned zero support for the pitch.</p>
+                </details>
+                <details>
+                  <summary>How is this different from asking ChatGPT what buyers think?</summary>
+                  <p>One model answering as "a buyer" gives you one voice, agreeable by default, with nothing behind it. Saibyl builds a room of buyers from your own material, gives each one a role, an incumbent tool and a reason to doubt you, and lets them argue over several rounds — then ranks the objections by how much of the room actually carried each one and opens every number into the sentences it came from.</p>
                 </details>
               </div>
             </div>
