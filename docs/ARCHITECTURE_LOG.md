@@ -51,12 +51,37 @@ six-dimension numbers. **Deltas inside one revision run are unaffected** — the
 before and after are both measured the same way, and the delta is what
 `revise.py` reads.
 
-**Named as not-yet-measurable rather than approximated:** how many small
-wide-tracked labels sit above section headings, whether one action wears several
-different labels, whether one layout repeats down the page, and whether
-navigation wraps at desktop. Each needs a field the census does not collect. A
-measured check that estimates has given up the only property that makes it worth
-having.
+**The census was then extended, same day, to make two of those measurable.**
+`_STYLE_CENSUS_JS` now also reports `structure.sections`, a `labels` tally
+(small, wide-tracked, upper-case, leaf-level text, and the subset of it sitting
+immediately before a heading), and `actions` — the label and destination *path*
+of every button and every anchor painted like one. Both additions reuse the
+computed style and rect already read for each element, so they add no layout
+work to what the file itself calls the most expensive step in a capture.
+
+Two decisions inside that:
+
+- **Actions group by destination, never by apparent intent.** Two buttons
+  pointing at one path with different words are demonstrably the same ask.
+  Deciding that "Get started" and "Try free" mean the same thing would be a
+  measurement guessing, which is the vision reviewers' job.
+- **Path only, never the full URL.** A query string can carry a token or an
+  email, and the census rides inside prompts.
+
+**Verified by execution, not only by fixtures.** Playwright is not installed
+locally and the capture tests use a fake runtime, so the new script had never
+run. It was extracted and executed under Node against a stub DOM: it returns the
+section count, detects an eyebrow *and* that it sits above a heading, captures
+the painted calls to action with their paths, and correctly excludes an
+unpainted body link. Feeding that output through `_normalize_census` into
+`measure_page` reproduces, unprompted, the same three defects a manual audit of
+the landing page had found by hand. This matters because `capture` swallows a
+census failure by design — a syntax error in that script would have made the
+counted dimension disappear in production in silence.
+
+**Still named as not-yet-measurable:** whether one layout repeats down the page
+(no honest DOM signature for "this section looks like the last one") and whether
+navigation wraps at desktop (the census records no per-element geometry).
 
 ## 2026-08-24 — Validate runs retrieval-first: the stage registry re-cut and the page reordered
 

@@ -245,8 +245,19 @@ _STYLE_CENSUS_JS = ("""() => {
       buttons: document.querySelectorAll('button, [role="button"], input[type="submit"], input[type="button"]').length,
       links: document.querySelectorAll('a[href]').length,
       images: document.querySelectorAll('img').length,
+      sections: document.querySelectorAll('section, [role="region"]').length,
     },
+    // Small, wide-tracked, upper-case text: the signature of a section label.
+    // `above_heading` is the subset sitting immediately before a heading, which
+    // is the pattern worth counting — a page that puts one of these over every
+    // section has a rhythm a reader recognises without being able to name.
+    labels: { total: 0, above_heading: 0 },
+    // What the page's actions say, and where they go. Collected so a reader can
+    // be told when one destination wears several different labels, which is a
+    // fact about the page rather than an inference about intent.
+    actions: [],
   };
+  const ACTION_CAP = 40;
   const elements = document.body ? document.body.querySelectorAll('*') : [];
   for (const el of elements) {
     if (out.sampled >= CAP) break;
@@ -271,6 +282,50 @@ _STYLE_CENSUS_JS = ("""() => {
     const box = [cs.marginTop, cs.marginRight, cs.marginBottom, cs.marginLeft,
                  cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft];
     for (const v of box) { if (v && v !== '0px' && v !== 'auto') tally(out.spacing, v); }
+
+    // Both of the following reuse `cs` and the rect already read above, so they
+    // add no layout work to the most expensive step in a capture.
+
+    // A section label: small, tracked wide, upper-case, short, and a leaf so a
+    // wrapper cannot be counted as its own label.
+    const px = parseFloat(cs.fontSize) || 0;
+    const track = parseFloat(cs.letterSpacing) || 0;
+    if (!isHeading && px > 0 && px <= 14 && track / px >= 0.05 && el.children.length === 0) {
+      const text = (el.textContent || '').trim();
+      if (text && text.length <= 48 &&
+          (cs.textTransform === 'uppercase' || text === text.toUpperCase())) {
+        out.labels.total += 1;
+        let next = el.nextElementSibling;
+        if (!next && el.parentElement) next = el.parentElement.nextElementSibling;
+        if (next && /^H[1-6]$/.test(next.tagName)) out.labels.above_heading += 1;
+      }
+    }
+
+    // An action: a button, or an anchor painted like one. A page's body links
+    // are not calls to action and would drown the signal, so an anchor counts
+    // only when it carries a background or a border of its own.
+    if (out.actions.length < ACTION_CAP) {
+      const tag = el.tagName;
+      const painted = (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent')
+        || (cs.borderTopStyle !== 'none' && cs.borderTopWidth !== '0px');
+      const isAction = tag === 'BUTTON'
+        || el.getAttribute('role') === 'button'
+        || (tag === 'INPUT' && /^(submit|button)$/i.test(el.type || ''))
+        || (tag === 'A' && el.getAttribute('href') && painted);
+      if (isAction) {
+        const label = ((el.innerText || el.value || '').trim()).replace(/\\s+/g, ' ');
+        if (label && label.length <= 60) {
+          let where = null;
+          if (tag === 'A') {
+            // Path only. A full URL can carry a token or an email in its query,
+            // and the census rides inside prompts.
+            try { where = new URL(el.getAttribute('href'), location.href).pathname; }
+            catch (e) { where = null; }
+          }
+          out.actions.push({ label: label, where: where });
+        }
+      }
+    }
   }
   return out;
 }""")
@@ -954,6 +1009,8 @@ def _normalize_census(raw: object) -> dict:
             "base_unit_px": _base_unit_guess(spacing_rows),
         },
         "structure": _structure(raw.get("structure")),
+        "labels": _labels(raw.get("labels")),
+        "actions": _actions(raw.get("actions")),
     }
 
 
@@ -1061,9 +1118,54 @@ def _structure(raw: object) -> dict:
             else {}
         )
     }
-    for key in ("buttons", "links", "images"):
+    for key in ("buttons", "links", "images", "sections"):
         out[key] = _as_count(raw.get(key))
     return out
+
+
+# How many action labels the census keeps. Matches `ACTION_CAP` in the script;
+# a page with more actions than this has a different problem.
+_CENSUS_ACTION_CAP = 40
+
+
+def _labels(raw: object) -> dict:
+    """The section-label tally, or zeroes. Never None, so readers can do maths."""
+    if not isinstance(raw, dict):
+        return {"total": 0, "above_heading": 0}
+    return {
+        "total": _as_count(raw.get("total")),
+        "above_heading": _as_count(raw.get("above_heading")),
+    }
+
+
+def _actions(raw: object) -> list[dict]:
+    """Action labels and their destinations, trimmed, capped and deduplicated.
+
+    Deduplicated on the exact (label, destination) pair rather than on the label
+    alone: the same words pointing at two different places is an ordinary page,
+    and two different labels pointing at one place is the thing worth reporting.
+    Collapsing either would delete the signal.
+    """
+    if not isinstance(raw, list):
+        return []
+    seen: set[tuple[str, str | None]] = set()
+    rows: list[dict] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("label") or "").strip()
+        if not label:
+            continue
+        where_raw = item.get("where")
+        where = str(where_raw).strip() if isinstance(where_raw, str) and where_raw.strip() else None
+        key = (label, where)
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append({"label": label[:60], "where": where})
+        if len(rows) >= _CENSUS_ACTION_CAP:
+            break
+    return rows
 
 
 def _failure_reason(exc: Exception) -> str:

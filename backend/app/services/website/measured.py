@@ -31,20 +31,22 @@ than a law of design, and each is a module constant with its reasoning beside it
 so a later reader can disagree with the number instead of reverse-engineering it
 out of a conditional.
 
-**What this module deliberately does NOT check.** Several defects worth counting
-cannot be counted from what the capture returns today, and estimating them would
-throw away the only property that makes a measured check worth having:
+**Grouped by what is provable, never by what is inferred.** The action check
+groups by where an action *goes*, not by what it appears to mean: two buttons
+pointing at the same path with different words are demonstrably one ask, and
+anything softer than that would be this module guessing at intent, which is what
+the six reviewers are for.
 
-  · **How many small wide-tracked labels sit above section headings.** The
-    census records letter-spacing split into headings and body, which is that
-    label's *signature*, but not how many exist or what they sit above.
-  · **Whether one action wears several different labels.** Button text is not
-    captured, only a count of buttons.
-  · **Whether one layout repeats down the page**, and whether navigation wraps
-    to a second line at desktop.
+**What this module deliberately does NOT check.** These are worth counting and
+cannot be counted from what the capture returns, and estimating them would throw
+away the only property that makes a measured check worth having:
 
-Each needs a field the census does not collect yet. They are named here rather
-than approximated.
+  · **Whether one layout repeats down the page.** There is no honest DOM
+    signature for "this section looks like the last one".
+  · **Whether navigation wraps to a second line at desktop.** The census
+    records no per-element geometry, only computed styles.
+
+Both are named here rather than approximated.
 """
 from __future__ import annotations
 
@@ -97,6 +99,15 @@ TEXT_COLOR_LIMIT = 6
 # Shadow encodes how far off the page a surface sits, and elevation has levels.
 # Four levels is already a lot of depth for a marketing page.
 SHADOW_LIMIT = 4
+
+# How many sections may carry a small upper-case label above their heading,
+# as a share of the sections on the page.
+#
+# One of these is a device: it tells the reader what kind of thing is coming.
+# One above every section is a rhythm, and it is the rhythm of a template — the
+# reader stops reading them and the page loses the device entirely. A third of
+# the sections is enough to use it where it earns its place.
+LABELLED_SECTION_SHARE = 1 / 3
 
 # Subtracted from 100 to score the dimension.
 _SEVERITY_COST = {"critical": 25, "major": 12, "minor": 5}
@@ -251,6 +262,96 @@ def _heading_findings(structure: dict) -> list[CriticFinding]:
     return found
 
 
+def _label_finding(census: dict) -> CriticFinding | None:
+    """A label above nearly every section is a template's rhythm, not a device."""
+    labels = census.get("labels")
+    structure = census.get("structure")
+    if not isinstance(labels, dict) or not isinstance(structure, dict):
+        return None
+    above = labels.get("above_heading")
+    sections = structure.get("sections")
+    if not isinstance(above, int) or not isinstance(sections, int):
+        return None
+    if sections < 4 or above < 2:
+        # Too few sections for a rhythm to exist, or too few labels to be one.
+        return None
+
+    allowed = max(1, int(sections * LABELLED_SECTION_SHARE))
+    if above <= allowed:
+        return None
+
+    return CriticFinding(
+        severity="major" if above >= sections else "minor",
+        region="section headings",
+        quote=(
+            f"{above} of {sections} sections carry a small upper-case label "
+            f"above the heading."
+        ),
+        why=(
+            "One of these tells the reader what kind of thing is coming. One "
+            "above every section is a rhythm rather than a signal: the reader "
+            "stops seeing them, and the page loses the device it was using."
+        ),
+        fix=(
+            "Delete most of them. A section's place on the page already says "
+            "what it is, and the headline can carry the rest. Keep the two or "
+            "three where the label genuinely tells the reader something the "
+            "heading does not."
+        ),
+    )
+
+
+def _action_finding(census: dict) -> CriticFinding | None:
+    """One destination wearing several different labels.
+
+    Grouped by where the action *goes*, not by what it appears to mean. Two
+    buttons pointing at the same path with different words are provably the
+    same ask; anything softer than that would be this module guessing at intent,
+    which is the vision reviewers' job.
+    """
+    actions = census.get("actions")
+    if not isinstance(actions, list) or not actions:
+        return None
+
+    by_destination: dict[str, list[str]] = {}
+    for row in actions:
+        if not isinstance(row, dict):
+            continue
+        where = row.get("where")
+        label = str(row.get("label") or "").strip()
+        if not isinstance(where, str) or not where or not label:
+            continue
+        seen = by_destination.setdefault(where, [])
+        if label.casefold() not in {existing.casefold() for existing in seen}:
+            seen.append(label)
+
+    worst = max(
+        (pair for pair in by_destination.items() if len(pair[1]) > 1),
+        key=lambda pair: len(pair[1]),
+        default=None,
+    )
+    if worst is None:
+        return None
+
+    where, labels = worst
+    quoted = ", ".join(f'"{label}"' for label in labels[:6])
+    return CriticFinding(
+        severity="major" if len(labels) >= 4 else "minor",
+        region="calls to action",
+        quote=f"{len(labels)} different labels all go to {where}: {quoted}",
+        why=(
+            "Repeating the ask down a long page is right — a reader who has "
+            "scrolled should not have to scroll back. Renaming it each time is "
+            "not. The reader cannot tell whether these are one action or "
+            "several, so the page reads as offering choices it does not have."
+        ),
+        fix=(
+            "Pick the clearest of these and use that exact wording every time "
+            "the page asks. The repetition is the point; the variation is not."
+        ),
+    )
+
+
 def _sprawl_finding(
     rows: list[dict],
     *,
@@ -312,6 +413,14 @@ def measure_page(capture: object) -> CriticDimension | None:
     raw_structure = census.get("structure")
     structure: dict = raw_structure if isinstance(raw_structure, dict) else {}
     findings.extend(_heading_findings(structure))
+
+    labels = _label_finding(census)
+    if labels:
+        findings.append(labels)
+
+    actions = _action_finding(census)
+    if actions:
+        findings.append(actions)
 
     radius = _sprawl_finding(
         _rows(census, "shape", "border_radius"),

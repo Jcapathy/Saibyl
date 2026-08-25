@@ -741,7 +741,18 @@ async def test_the_census_is_wired_into_the_desktop_pass_and_normalized(monkeypa
         "buttons": 3,
         "links": 12,
         "images": 6,
+        # Added 2026-08-25 with the counted dimension. A raw census that never
+        # reported it normalizes to 0 rather than to a missing key, so a reader
+        # doing arithmetic on it cannot trip over None — and `measured` is
+        # careful to treat an absent `labels` block, not a zero here, as the
+        # signal that this capture predates the check.
+        "sections": 0,
     }
+
+    # The two blocks the counted dimension reads. A raw census without them
+    # normalizes to an empty tally and an empty list, never to None.
+    assert census["labels"] == {"total": 0, "above_heading": 0}
+    assert census["actions"] == []
 
 
 async def test_a_census_failure_never_fails_the_capture(monkeypatch):
