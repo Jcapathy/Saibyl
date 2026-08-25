@@ -13,10 +13,10 @@ from app.services.billing.agent_pricing import (
     STANDARD_RUN,
     answer_pack_credits,
     capital_shortlist_credits,
-    capped_run_credits,
     check_credit_budget,
     clearance_credits,
     estimate_simulation_cost,
+    free_run_credits,
     get_credit_balance,
     largest_affordable_run,
     messaging_doc_credits,
@@ -250,27 +250,29 @@ async def agent_pricing():
 
 @router.get("/credits")
 async def credit_balance(auth: dict = Depends(get_current_org)):
-    """Current credit balance, grant, and the run caps for this tier."""
+    """Current credit balance, the grant, and the largest run anyone can shape."""
     balance, granted, plan = get_credit_balance(auth["org_id"])
-    caps = tier_caps(plan)
-    per_run = standard_run_credits()
+    caps = tier_caps()
     return {
         "plan": plan,
         "credits_balance": balance,
         "credits_granted": granted,
         "balance_pct": round(balance * 100 / granted, 1) if granted else 0.0,
         "caps": caps.model_dump(),
-        # What a run of the reference shape costs, so a client can say "about
-        # four more runs" instead of printing a five-digit number at someone
-        # deciding whether they can afford to click. Sent rather than computed
-        # client-side: the run price is a pricing fact and belongs on one side.
-        "standard_run_credits": per_run,
-        # And what a run costs at THIS tier's ceiling. The client must divide
-        # by this one to say "about N more runs": dividing a free balance by
-        # the 100-agent reference price answers a question a capped account
-        # cannot ask, and printed "About 0 more runs" to every new signup
-        # holding a grant that covers a full capped run.
-        "capped_run_credits": capped_run_credits(plan),
+        # What the reference run and the free run cost. Sent rather than
+        # computed client-side, because a price is a pricing fact and belongs
+        # on one side of the wire.
+        #
+        # **No runs-remaining number is served here, deliberately.** There used
+        # to be a `capped_run_credits` field whose only job was to be the
+        # divisor in "about N more runs", and it had to know which tier the
+        # reader was on to avoid lying. The founder deleted the sentence
+        # instead (2026-08-25): what a founder is shown is what a *specific*
+        # run costs — this module, this size, quoted before they commit — which
+        # is a number that cannot be wrong in the way a division by an assumed
+        # shape always could be. `/billing/prices` is that surface.
+        "standard_run_credits": standard_run_credits(),
+        "free_run_credits": free_run_credits(),
         # Aliases. The two readers of this endpoint were both written against
         # `balance`/`grant` and would have rendered silent zeros - a balance of
         # 0 is the one number that stops a founder clicking. Kept as aliases
@@ -313,8 +315,8 @@ async def paid_feature_prices(auth: dict = Depends(get_current_org)):
         "balance": balance,
         "plan": plan,
         "idea_evaluation": entry(
-            capped_run_credits(plan),
-            "A room of buyers reacts to your idea",
+            free_run_credits(),
+            "A room of 30 buyers reacts to your idea",
             "Your free credits cover one of these.",
         ),
         "website_check": entry(

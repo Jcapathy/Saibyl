@@ -41,10 +41,21 @@ from app.services.billing import agent_pricing
 # the alarm working — the exclusion is a decision recorded, not a silencing.
 _NOT_ARTIFACTS = {
     "standard_run_credits",
-    "capped_run_credits",
     "deduct_credits",
     "refund_credits",
 }
+
+# Artifacts published under a different key from their function name.
+#
+# `free_run_credits` prices the run the signup grant buys — a 30-person room
+# reacting to an idea. `/billing/prices` publishes it as `idea_evaluation`,
+# which is what a founder calls it, and renaming either half to satisfy the
+# convention would make one of them worse: the function names the *thing being
+# priced*, the key names the *thing being bought*.
+#
+# Recorded here rather than excluded, because the price still has to appear on
+# the prices screen and this test still has to prove it does.
+_PUBLISHED_AS = {"free_run": "idea_evaluation"}
 
 # `clearance` is published as a nested object keyed by tier rather than as a
 # flat entry, because one USPTO search has three prices. Its key in the
@@ -82,7 +93,7 @@ def test_every_priced_artifact_is_published_on_the_prices_screen():
     source = inspect.getsource(billing.paid_feature_prices)
     missing = sorted(
         artifact for artifact in _priced_artifacts()
-        if f'"{artifact}"' not in source
+        if f'"{_PUBLISHED_AS.get(artifact, artifact)}"' not in source
     )
 
     assert not missing, (

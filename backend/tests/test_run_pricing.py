@@ -131,26 +131,57 @@ def test_invalid_depth_is_rejected():
         estimate_simulation_cost(100, 5, depth="exhaustive")
 
 
-# ── Tiers ────────────────────────────────────────────────
+# ── No tiers ─────────────────────────────────────────────
+#
+# Subscription tiers were removed on 2026-08-24; founders top up as they go.
+# The three tests that stood here asserted the ladder — grants rising with
+# tier, V1 names resolving to their V3 equivalents, an unknown plan falling
+# back to the entry tier — and every one of those premises is gone. What
+# replaces them is the property that matters now: the answer does not depend
+# on the plan string at all.
 
-def test_grants_rise_with_tier():
-    assert tier_grant("free") < tier_grant("founder") < tier_grant("growth") < tier_grant("agency")
+def test_the_plan_string_no_longer_changes_anything():
+    """A tier that survives anywhere is a tier that will be sold by accident."""
+    plans = ("free", "trial", "founder", "starter", "growth", "pro", "agency",
+             "enterprise", "something-nobody-has-heard-of", None)
+
+    assert len({tier_grant(p) for p in plans}) == 1
+    assert len({tier_caps(p).max_agents for p in plans}) == 1
 
 
-def test_v1_plan_names_still_resolve():
-    """The Stripe tier migration is separate work; the code must not break
-    for orgs still carrying starter/pro/enterprise."""
-    assert tier_grant("starter") == tier_grant("founder")
-    assert tier_caps("pro").max_agents == tier_caps("growth").max_agents
+def test_the_free_run_is_a_thirty_person_room():
+    """The shape the signup grant buys, and a public promise on the landing
+    page. Raised from 25 to 30 by founder decision, 2026-08-25."""
+    from app.services.billing.agent_pricing import FREE_RUN_SHAPE
+
+    assert (
+        FREE_RUN_SHAPE.max_agents,
+        FREE_RUN_SHAPE.max_rounds,
+        FREE_RUN_SHAPE.max_platforms,
+    ) == (30, 3, 2)
 
 
-def test_unknown_plan_falls_back_to_the_entry_tier():
-    assert tier_grant("something-else") == tier_grant("starter")
+def test_the_grant_covers_the_free_run_with_room_to_spare():
+    """The relationship the grant was sized for, restated without tiers: it has
+    to buy the whole advertised run, and leave too little to buy a second
+    service — a balance that can do nothing argues for topping up better than a
+    balance of zero, which just reads as the trial being over."""
+    from app.services.billing.agent_pricing import FREE_RUN_GRANT, free_run_credits
+
+    leftover = FREE_RUN_GRANT - free_run_credits()
+
+    assert leftover > 0, "the grant does not cover the run the landing page sells"
+    assert leftover < free_run_credits(), "the grant buys a second run"
 
 
-def test_free_tier_caps_match_the_free_run_definition():
-    caps = tier_caps("free")
-    assert (caps.max_agents, caps.max_rounds, caps.max_platforms) == (25, 3, 2)
+def test_the_ceiling_is_larger_than_the_free_run():
+    """Two different things (PRD §6): the free run is a product, the ceiling is
+    an accident-stopper. Collapsing them is what broke the first attempt at
+    removing tiers."""
+    from app.services.billing.agent_pricing import FREE_RUN_SHAPE, RUN_CAPS
+
+    assert RUN_CAPS.max_agents > FREE_RUN_SHAPE.max_agents
+    assert RUN_CAPS.max_rounds > FREE_RUN_SHAPE.max_rounds
 
 
 # ── Quote signing ────────────────────────────────────────
@@ -306,17 +337,11 @@ def test_each_arena_gets_its_own_adapter_instance():
     assert first is not second
 
 
-def test_no_tier_can_configure_more_variants_than_the_engine_runs():
+def test_nobody_can_configure_more_variants_than_the_engine_runs():
     from app.services.billing.agent_pricing import MAX_RUNNABLE_VARIANTS
 
     for plan in ("free", "founder", "starter", "growth", "pro", "agency", "enterprise"):
         assert tier_caps(plan).max_variants <= MAX_RUNNABLE_VARIANTS
-
-
-def test_tier_caps_still_differ_on_the_dimensions_that_do_work():
-    """The clamp must not flatten the tier ladder everywhere."""
-    assert tier_caps("free").max_agents < tier_caps("founder").max_agents
-    assert tier_caps("founder").max_rounds < tier_caps("growth").max_rounds
 
 
 def test_a_runnable_variant_count_is_quotable_and_more_is_refused():

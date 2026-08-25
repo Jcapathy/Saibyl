@@ -130,16 +130,25 @@ STANDARD_RUN = (100, 5, 2, 1)  # agents, rounds, platforms, variants
 # between 0 and 727 credits — visible, and too small to buy anything else. A
 # balance that can do nothing is a better argument for topping up than a
 # balance of zero, which just reads as the trial being over.
-TIER_CREDIT_GRANTS = {
-    "free": 2_000,
-    "trial": 2_000,
-    "founder": 19_800,
-    "starter": 19_800,
-    "growth": 59_800,
-    "pro": 59_800,
-    "agency": 199_800,
-    "enterprise": 199_800,
-}
+# ── One grant, because there are no tiers ───────────────────────────────────
+#
+# Founder decision, 2026-08-24: **no subscription tiers — founders top up as
+# they go.** The eight-entry table this replaces handed a different monthly
+# allowance to `free`/`founder`/`growth`/`agency` and their aliases, and every
+# one of those allowances was reachable only through a subscription nobody was
+# ever sold. Production on the day this changed held thirteen orgs — twelve
+# `trialing`, one `canceled` — and exactly one Stripe subscription id in the
+# entire system, on the cancelled row.
+#
+# So the only credits Saibyl gives away are the ones that buy the first run.
+# Everything after that is bought. `DEFAULT_SIGNUP_PLAN` was already `free`, so
+# this changes nothing about what a new founder receives.
+FREE_RUN_GRANT = 2_000
+
+# Kept as a name because `stripe_service` and several docs refer to the grant
+# table by it. One entry states that the dimension collapsed; a deleted symbol
+# would read as somebody having forgotten the other rows.
+TIER_CREDIT_GRANTS = {"free": FREE_RUN_GRANT}
 
 
 class RunCaps(BaseModel):
@@ -156,18 +165,36 @@ class RunCaps(BaseModel):
     max_variants: int
 
 
-# Intended caps once N-way matched swarms exist. Not what a customer can
-# configure today — see MAX_RUNNABLE_VARIANTS.
-TIER_CAPS = {
-    "free": RunCaps(max_agents=25, max_rounds=3, max_platforms=2, max_variants=1),
-    "trial": RunCaps(max_agents=25, max_rounds=3, max_platforms=2, max_variants=1),
-    "founder": RunCaps(max_agents=100, max_rounds=8, max_platforms=3, max_variants=3),
-    "starter": RunCaps(max_agents=100, max_rounds=8, max_platforms=3, max_variants=3),
-    "growth": RunCaps(max_agents=150, max_rounds=10, max_platforms=4, max_variants=5),
-    "pro": RunCaps(max_agents=150, max_rounds=10, max_platforms=4, max_variants=5),
-    "agency": RunCaps(max_agents=250, max_rounds=12, max_platforms=6, max_variants=8),
-    "enterprise": RunCaps(max_agents=1_000, max_rounds=20, max_platforms=12, max_variants=8),
-}
+# ── The free run, and the ceiling. Two things, not one ──────────────────────
+#
+# The eight-tier table these replace was quietly doing two unrelated jobs, and
+# collapsing it without separating them is how the first attempt at this change
+# broke eleven tests including a public promise.
+#
+#   FREE_RUN_SHAPE is a **product**: the run the grant buys, advertised on the
+#   landing page. It is not a tier and nothing about it is conditional on who
+#   paid what. Raised from 25 to 30 people by founder decision, 2026-08-25 —
+#   1,335 credits with a subject brief, against a 2,000 grant, so it is covered
+#   with 665 spare, which keeps the deliberate "leftover too small to buy a
+#   second service" property the grant was sized for.
+#
+#   RUN_CAPS is a **safety limit**: the largest shape anyone may configure at
+#   all. `RunCaps`' own docstring has always said caps "exist to stop accidents,
+#   not to ration — the credit balance rations", and under pay-as-you-go that
+#   stops being an aspiration and becomes the entire mechanism. A founder
+#   configures whatever they can afford; this only refuses a shape that is a
+#   typo rather than an intention.
+#
+# 250/12/6/8 is the former `agency` shape rather than `enterprise`'s 1,000,
+# because `MAX_AGENTS_ANY_TIER` derives from this and bounds the batch-interview
+# route. Tightening that from 1,000 to 250 is the safe direction, and the
+# largest room any real run has used is 48.
+FREE_RUN_SHAPE = RunCaps(max_agents=30, max_rounds=3, max_platforms=2, max_variants=1)
+
+RUN_CAPS = RunCaps(max_agents=250, max_rounds=12, max_platforms=6, max_variants=8)
+
+# Kept as a name for the same reason `TIER_CREDIT_GRANTS` is.
+TIER_CAPS = {"free": RUN_CAPS}
 
 # The largest swarm any plan can configure, derived rather than written down.
 #
@@ -202,21 +229,49 @@ MAX_AGENTS_ANY_TIER = max(caps.max_agents for caps in TIER_CAPS.values())
 # guardrail, not a technical limit.
 MAX_RUNNABLE_VARIANTS = 8
 
-_DEFAULT_PLAN = "starter"
+_DEFAULT_PLAN = "free"
 
 
-def tier_caps(plan: str | None) -> RunCaps:
-    """The run shape a tier may configure, clamped to what the engine can run."""
-    caps = TIER_CAPS.get((plan or _DEFAULT_PLAN).lower(), TIER_CAPS[_DEFAULT_PLAN])
-    if caps.max_variants <= MAX_RUNNABLE_VARIANTS:
-        return caps
-    return caps.model_copy(update={"max_variants": MAX_RUNNABLE_VARIANTS})
+def tier_caps(plan: str | None = None) -> RunCaps:
+    """The run shape anyone may configure, clamped to what the engine can run.
+
+    **`plan` is accepted and ignored**, deliberately and temporarily. There are
+    no tiers, so there is nothing left for it to select. It stays in the
+    signature only so this change lands without touching the four callers that
+    still pass one (`api/billing`, `api/simulations`, `api/variants`,
+    `run_quote`); dropping it and renaming this to `run_caps()` is the next
+    move, not a convention to copy.
+
+    Returning the same answer for every caller is the point rather than a bug:
+    what limits a founder's run now is their balance.
+    """
+    if RUN_CAPS.max_variants <= MAX_RUNNABLE_VARIANTS:
+        return RUN_CAPS
+    return RUN_CAPS.model_copy(update={"max_variants": MAX_RUNNABLE_VARIANTS})
 
 
-def tier_grant(plan: str | None) -> int:
-    return TIER_CREDIT_GRANTS.get(
-        (plan or _DEFAULT_PLAN).lower(), TIER_CREDIT_GRANTS[_DEFAULT_PLAN]
+def tier_grant(plan: str | None = None) -> int:
+    """The one grant: what buys the first run. See `tier_caps` on the argument."""
+    return FREE_RUN_GRANT
+
+
+def free_run_credits() -> int:
+    """What the first run actually costs, priced from `FREE_RUN_SHAPE`.
+
+    Derived rather than written down, for the reason every other price in this
+    module is: a second copy of a number is a copy that stops moving when the
+    first one does. Priced *with* a subject brief because the free run is sold
+    on uploaded material, and the brief-free figure would advertise a run the
+    founder who uploads cannot actually get.
+    """
+    breakdown, *_ = _stage_costs(
+        FREE_RUN_SHAPE.max_agents,
+        FREE_RUN_SHAPE.max_rounds,
+        1,
+        "standard",
+        subject_brief=True,
     )
+    return credits_for(sum(breakdown.values(), Decimal("0")))
 
 
 def credits_for(cost_usd: Decimal | float) -> int:
@@ -1005,40 +1060,22 @@ def standard_run_credits() -> int:
     return _standard_run_credits()
 
 
-@lru_cache(maxsize=8)
-def capped_run_credits(plan: str) -> int:
-    """The run price to divide a balance by when saying "about N more runs".
-
-    **The reference run, or this tier's ceiling when the tier cannot reach
-    the reference.** Both halves matter and each fixes a different lie:
-
-    - *Free.* `standard_run_credits()` prices the 100-agent reference, a shape
-      the free tier is capped out of configuring (25 agents, 3 rounds). The
-      sidebar divided by it anyway, so `floor(1500 / 3014)` printed "About 0
-      more runs" to every new signup — while the grant is deliberately sized
-      to cover one full capped run with 227 credits spare, and both the
-      landing page ("1 COMPLETE RUN · 25-PERSON ROOM") and `PRICING_GUIDE`
-      ("1 capped") promise exactly that run.
-    - *Paid.* A paid tier's *ceiling* run is dearer than the reference
-      (Founder's is 3,793 against 3,014), so pricing every tier at its ceiling
-      would understate Founder/Growth/Agency as 5/9/19 where the guide
-      advertises 6/19/66. A paid founder can configure the reference shape, so
-      the reference is their honest unit.
-
-    Priced with a subject brief for the same reason the reference is: the lens
-    is sold on uploaded material, and the brief-free figure advertises a run
-    count an uploading founder cannot achieve.
-    """
-    caps = tier_caps(plan)
-    breakdown, *_ = _stage_costs(
-        caps.max_agents,
-        caps.max_rounds,
-        1,
-        "standard",
-        subject_brief=True,
-    )
-    ceiling = credits_for(sum(breakdown.values(), Decimal("0")))
-    return min(ceiling, _standard_run_credits())
+# `capped_run_credits(plan)` stood here until 2026-08-25. It existed for one
+# caller — the sidebar's "about N more runs" — and it was a two-branch function
+# because that sentence could only be told honestly by knowing which tier the
+# reader was on: divide a free balance by the 100-agent reference run and every
+# new signup reads "About 0 more runs" while holding a grant deliberately sized
+# to cover a full one.
+#
+# The founder removed the sentence instead (2026-08-25): **no runs-remaining
+# count anywhere.** What a founder is shown now is what a specific run costs —
+# this module, this size — quoted before they commit, which is a number that
+# cannot be wrong in the way a division by an assumed shape always could be.
+# Deleting the reader deleted the reason for the branch, and with tiers gone
+# there was nothing left for it to branch on either.
+#
+# `standard_run_credits()` and `free_run_credits()` are what remain: one prices
+# the reference run, the other prices the run the grant buys.
 
 
 def get_credit_balance(org_id: UUID) -> tuple[int, int, str]:

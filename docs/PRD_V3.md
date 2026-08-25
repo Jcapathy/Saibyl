@@ -208,14 +208,40 @@ keep the evidence discipline.
 
 ## 6. Monetization posture
 
-- **Free first run** per verified email (guardrails per §3) is the only
-  promoted motion at launch.
-- The **credit top-up stays live but unpromoted** (it needs no Price ID).
-- **Stripe tier migration ($99/$299/$999) is deferred to Phase E.** The pricing
-  math in `PRICING_GUIDE.md` and PRD V2 §8 remains valid and preserved — do not
-  delete it, do not build it yet. `stripe_service.py`'s stale V1 prices are
-  quarantined behind the deferral, not fixed in place.
-- Regional pricing, enterprise quoting: unchanged from V2, also deferred.
+**Amended 2026-08-24/25, founder-directed. Subscription tiers are removed, not
+deferred.** The previous version of this section deferred a $99/$299/$999 tier
+migration to Phase E and told future sessions to preserve the pricing maths.
+That deferral is now a deletion, and the reasoning is in §12e and
+`DECISIONS_LOG` 2026-08-24: the ladder existed to justify a recurring charge,
+and `founder_stages.py` said so outright — *"five stages are five purchase
+occasions for the same account."* Pricing was shaping the product.
+
+- **Founders top up as they go.** Credits are the only ration. There is one
+  balance, one price list, and no plan that changes what anybody may do.
+- **The free first run** per verified email (guardrails per §3) is the only
+  thing Saibyl gives away, and it is **a 30-person room** — raised from 25 on
+  2026-08-25. It costs 1,335 credits against a 2,000-credit grant, so the
+  founder is left with 665: visibly some, and deliberately too few to buy a
+  second service.
+- **Two concepts, never one object.** `FREE_RUN_SHAPE` is a *product* — the run
+  the grant buys, advertised publicly. `RUN_CAPS` is a *safety limit* — the
+  largest shape anyone may configure, which exists to stop a typo rather than
+  to ration. Collapsing them is what broke the first attempt at this change.
+- **No runs-remaining count, anywhere.** What a founder is shown is what a
+  *specific* run costs — this module, this size — quoted before they commit.
+  `GET /billing/prices` is that surface. A remaining-runs number has to divide
+  by an assumed shape, and every version of that assumption has been wrong.
+- **What is gone:** `PLAN_PRICE_MAP`, the per-tier grant and cap tables, and
+  the per-plan run allowance. `PLAN_LIMITS` survives only as a flat
+  runaway-automation backstop, far above any honest month's use, because a
+  monthly cap derived from the grant would bind on the first founder to top up.
+- **Still to remove** (next commit): the Stripe subscription paths themselves —
+  `/checkout`, `/portal`, `get_subscription_status`, the subscription branch of
+  the webhook — and the $99/month argument in `ValueCase.tsx` and
+  `SettingsPage.tsx`. Nobody is on a subscription: on the day this was decided
+  production held thirteen orgs, twelve `trialing` and one `canceled`, with a
+  single Stripe subscription id in the entire system, on the cancelled row.
+- Regional pricing and enterprise quoting: gone with the tiers.
 
 ## 7. Crisis lens: shelved
 

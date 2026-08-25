@@ -159,15 +159,15 @@ def test_the_free_grant_buys_any_one_entry_service():
     from app.services.billing.agent_pricing import (
         TIER_CREDIT_GRANTS,
         answer_pack_credits,
-        capped_run_credits,
         clearance_credits,
+        free_run_credits,
         messaging_doc_credits,
         website_check_credits,
     )
 
     grant = TIER_CREDIT_GRANTS["free"]
     entry_services = {
-        "idea evaluation (capped)": capped_run_credits("free"),
+        "idea evaluation": free_run_credits(),
         "answer pack": answer_pack_credits(),
         "messaging doc": messaging_doc_credits(),
         "website check": website_check_credits(),
@@ -195,17 +195,17 @@ def test_the_leftover_is_too_small_to_buy_a_second_service():
     from app.services.billing.agent_pricing import (
         TIER_CREDIT_GRANTS,
         answer_pack_credits,
-        capped_run_credits,
+        free_run_credits,
         website_check_credits,
     )
 
     grant = TIER_CREDIT_GRANTS["free"]
     cheapest_paid = min(
-        capped_run_credits("free"), answer_pack_credits(), website_check_credits()
+        free_run_credits(), answer_pack_credits(), website_check_credits()
     )
 
     for name, price in (
-        ("idea evaluation", capped_run_credits("free")),
+        ("idea evaluation", free_run_credits()),
         ("website check", website_check_credits()),
         ("answer pack", answer_pack_credits()),
     ):
@@ -264,12 +264,20 @@ def test_the_free_grant_covers_one_free_run():
     a cap cannot quietly invalidate it.
     """
     from app.services.billing.agent_pricing import (
+        FREE_RUN_SHAPE,
         TIER_CREDIT_GRANTS,
         estimate_simulation_cost,
-        tier_caps,
     )
 
-    caps = tier_caps("free")
+    # Priced from `FREE_RUN_SHAPE`, **not** from `tier_caps()`.
+    #
+    # It used to read the free tier's caps, which were the same object as the
+    # free run's shape. Removing tiers separated them — the free run is a
+    # product, the caps are an accident-stopper — and the first attempt at that
+    # change left this test reading the ceiling, which priced the "free run" at
+    # 65,107 credits against a 2,000 grant. The two concepts must never be read
+    # through one name again.
+    caps = FREE_RUN_SHAPE
     free_run = estimate_simulation_cost(
         caps.max_agents, caps.max_rounds, caps.max_platforms, caps.max_variants,
         subject_brief=True,
@@ -286,79 +294,54 @@ def test_the_free_grant_covers_one_free_run():
         f"the tier cap costs {free_run.credits} — the free tier cannot complete "
         f"its one run. Headroom was {headroom} credits."
     )
-    assert TIER_CREDIT_GRANTS["trial"] == TIER_CREDIT_GRANTS["free"]
 
+def test_a_new_account_is_shown_the_free_run_as_affordable():
+    """The customer-visible half of the grant being sized.
 
-def test_a_new_free_account_is_told_it_has_a_run():
-    """The number the sidebar prints must agree with the grant that was sized.
+    The test above proves the grant covers the free run. It does not prove the
+    *app says so*, and the app used to say the opposite: the sidebar divided
+    the balance by the 100-agent reference price, so every new signup read
+    "About 0 more runs — add more" while holding a grant sized for exactly one.
 
-    The test above proves the grant covers one capped run. It did **not**
-    prove the app says so — and the app said the opposite. The sidebar divided
-    the balance by `standard_run_credits()` (the 100-agent reference, a shape
-    the free tier is capped out of configuring), so `floor(1500 / 3014)` = 0
-    and every new signup read "About 0 more runs — add more" while holding a
-    grant deliberately sized for exactly one run.
-
-    This is the customer-visible half of the same fact, which is the half no
-    test asserted: the pricing model was self-consistent and the product
-    still lied. `capped_run_credits` is what a client must divide by.
+    That sentence no longer exists. The founder removed runs-remaining entirely
+    on 2026-08-25 in favour of showing what a *specific* run costs, so the
+    customer-visible fact to pin moved with it: `/billing/prices` must publish
+    the free run at a price the grant covers, and must say it is covered.
     """
-    from app.services.billing.agent_pricing import (
-        TIER_CREDIT_GRANTS,
-        capped_run_credits,
-        standard_run_credits,
+    from app.services.billing.agent_pricing import FREE_RUN_GRANT, free_run_credits
+
+    per_run = free_run_credits()
+
+    assert per_run <= FREE_RUN_GRANT, (
+        f"the free run costs {per_run:,} against a {FREE_RUN_GRANT:,} grant, so "
+        f"the prices screen would show a founder a shortfall on the one thing "
+        f"they were promised for nothing"
     )
 
-    grant = TIER_CREDIT_GRANTS["free"]
-    per_run = capped_run_credits("free")
 
-    assert grant // per_run >= 1, (
-        f"a new free account holds {grant} credits and a run it can configure "
-        f"costs {per_run} — the app would tell them they have "
-        f"{grant // per_run} runs on the tier whose whole promise is one."
-    )
-    # And the reference price is the wrong unit for this tier — the mistake
-    # this test exists to keep out. If these ever coincide the free caps have
-    # been raised to the reference shape, and that is a decision, not a drift.
-    assert per_run < standard_run_credits(), (
-        "the free tier's capped run now costs the reference price; the caps or "
-        "the reference moved, and the 'runs left' unit needs re-deciding"
-    )
+def test_no_runs_remaining_number_is_served_anywhere():
+    """The sentence, and the two-branch function that fed it, are both gone.
 
-    # A paid tier can configure the reference shape, so its unit stays the
-    # reference — otherwise pricing every tier at its own ceiling would
-    # understate the run counts PRICING_GUIDE advertises.
-    for plan in ("founder", "growth", "agency"):
-        assert capped_run_credits(plan) == standard_run_credits(), (
-            f"{plan} should count runs at the reference price it can actually "
-            f"configure, not at its ceiling"
-        )
-
-
-def test_paid_tier_run_counts_are_whole_runs():
-    """A tier advertising N runs must actually afford N.
-
-    Through `standard_run_credits()`, not a local re-derivation from
-    `STANDARD_RUN`. The shape tuple does not carry `subject_brief`, and the
-    reference run does — so rebuilding the reference from the tuple alone
-    computes a figure ~10% below the one every quote is compared against, and
-    this test would then certify run counts nobody can achieve. That is the
-    two-sources-of-truth class with an advertised number on the end of it.
-
-    6 / 19 / 66 as of 2026-08-04, down from 7 / 21 / 73: the subject
-    distillation took the standard run from $2.74 to $3.01. DECISIONS §15c's
-    precedent is to pass a corrected cost base straight through to the published
-    run count rather than bank it, and this is that precedent applied again.
+    `capped_run_credits` existed for exactly one reader — "about N more runs" —
+    and could only be honest by knowing the reader's tier. Tiers went, the
+    sentence went, and this keeps them from coming back together: a divisor
+    like it can only be reintroduced alongside an assumption about the run
+    shape, which is the thing that was wrong every previous time.
     """
-    from app.services.billing.agent_pricing import (
-        TIER_CREDIT_GRANTS,
-        standard_run_credits,
+    import inspect
+
+    from app.api import billing
+    from app.services.billing import agent_pricing
+
+    assert not hasattr(agent_pricing, "capped_run_credits"), (
+        "capped_run_credits is back; it prices an assumed shape, and a quote "
+        "against the founder's real configuration is what replaced it"
     )
 
-    standard = standard_run_credits()
-    for tier, advertised in (("founder", 6), ("growth", 19), ("agency", 66)):
-        affordable = TIER_CREDIT_GRANTS[tier] // standard
-        assert affordable == advertised, (
-            f"{tier} affords {affordable} standard runs; PRICING_GUIDE §1.6 and "
-            f"PRD §8 advertise {advertised}. Regenerate the tables."
-        )
+    # The *served key*, not any mention of it. `/billing/credits` carries a
+    # comment explaining why the field was removed, and that comment is worth
+    # more than a grep that trips over it.
+    served = inspect.getsource(billing.credit_balance)
+    assert '"capped_run_credits"' not in served, (
+        "the runs-remaining divisor is being served again"
+    )

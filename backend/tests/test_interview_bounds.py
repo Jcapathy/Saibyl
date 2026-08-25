@@ -110,8 +110,10 @@ def test_the_cap_is_derived_from_the_tier_caps_not_written_down():
     """
     assert MAX_AGENTS_ANY_TIER == max(c.max_agents for c in TIER_CAPS.values())
     assert sims_api.MAX_INTERVIEW_BATCH == MAX_AGENTS_ANY_TIER
-    # The value today, so a silent change to TIER_CAPS is visible in a diff.
-    assert sims_api.MAX_INTERVIEW_BATCH == 1_000
+    # The value today, so a silent change to the ceiling is visible in a diff.
+    # Was 1,000 while `enterprise` existed; 250 since tiers were removed on
+    # 2026-08-25 and one ceiling replaced the eight-tier table.
+    assert sims_api.MAX_INTERVIEW_BATCH == 250
 
 
 # ---------------------------------------------------------------------------
@@ -147,7 +149,7 @@ def test_the_refusal_tells_the_founder_the_limit_and_what_to_do(
 
     assert response.status_code == 422, response.text
     message = " ".join(str(e.get("msg", "")) for e in response.json()["detail"])
-    assert "1,000" in message, message
+    assert "250" in message, message
     assert "1,001" in message, "the founder is not told how far over they are"
     assert "persona group" in message, "the message offers no way forward"
 
@@ -161,11 +163,11 @@ def test_a_batch_at_the_cap_is_allowed(authed_client, admin, interviewed):
     """
     response = authed_client.post(
         f"/api/simulations/{SIM}/interview/batch",
-        json={"agent_ids": _ids(1_000), "prompt": "Why not?"},
+        json={"agent_ids": _ids(250), "prompt": "Why not?"},
     )
 
     assert response.status_code == 200, response.text
-    assert len(interviewed[0]) == 1_000
+    assert len(interviewed[0]) == 250
 
 
 def test_repeated_ids_are_not_counted_against_the_cap(

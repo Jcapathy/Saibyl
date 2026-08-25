@@ -8,6 +8,58 @@ choices.
 
 ---
 
+## 2026-08-25 — No subscription tiers. Founders top up as they go
+
+Founder decision, taken while the journey rework was in progress and directly
+connected to it.
+
+**What prompted it.** `founder_stages.py` justified the five-stage journey in
+its own docstring as *"five purchase occasions for the same account"* — a
+recurring charge deciding the shape of the product. Three dogfood runs then
+kept returning the same objection: buyers wanted proof that run two beats run
+one before committing to $99/month. Removing the subscription removes the
+question, and removes the pressure that bent the journey.
+
+**Decided:**
+
+1. **Credits are the only ration.** One balance, one price list, no plan that
+   changes what anybody may do. The eight-tier grant and cap tables are gone.
+
+2. **The free run is a 30-person room**, up from 25. It costs 1,335 credits
+   against the 2,000-credit grant, leaving 665 — visibly some, and deliberately
+   too little to buy a second service, which is the property the grant was
+   sized for and which survives the change intact.
+
+3. **The free run and the ceiling are two different things.** `FREE_RUN_SHAPE`
+   is a product and a public promise; `RUN_CAPS` is an accident-stopper. The
+   first attempt at this change collapsed them into one number and priced the
+   "free run" at 65,107 credits against a 2,000 grant — caught by the tests,
+   which is the whole reason the relationship was written down as one.
+
+4. **No runs-remaining number anywhere.** `capped_run_credits` existed for that
+   one sentence and needed to know the reader's tier to avoid lying. Founders
+   are now shown what a *specific* run costs — this module, this size — quoted
+   before they commit. `GET /billing/prices` already did this; it simply
+   becomes the only pricing surface.
+
+5. **The monthly run allowance goes.** It was derived from the tier grant, and
+   under one grant it would have resolved to about ten runs a month — binding
+   on the first founder to top up fifty thousand credits, which is exactly the
+   failure its own comment was written to prevent. What remains is a flat,
+   plan-free backstop against automation gone wrong.
+
+**Safe to do because nobody is on a subscription.** Production on the day of
+the decision: thirteen orgs, twelve `trialing`, one `canceled`, and exactly one
+Stripe subscription id in the whole system — on the cancelled row. Queried, not
+assumed.
+
+**Still to do.** The Stripe subscription paths themselves (`/checkout`,
+`/portal`, `get_subscription_status`, the webhook's subscription branch), the
+$99/month argument in `ValueCase.tsx`, and `SettingsPage.tsx`'s plan panel —
+which today aliases free accounts up to `founder` and has shown people *"Your
+plan: Founder · $99/mo"*, a fabricated billing fact on the page that asks for
+money. Also outstanding: GEO optimisation of the landing page copy.
+
 ## 2026-08-24 — The evaluation logic was inverted: retrieval answers the world, the room answers the reader
 
 Founder-directed, from his own account of building ParryAI. Written up as

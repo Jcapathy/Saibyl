@@ -34,64 +34,52 @@ FLASH_REPORT_PRICE_MAP = {
     "war_room_brief": "price_1TLd9RIqFuuRAGd4M0l0eGhF",  # $997 one-time
 }
 
-# How many runs a tier's grant actually buys, and how large a team may be.
+# ── Limits under pay-as-you-go ──────────────────────────────────────────────
 #
-# **The run allowance is derived, not declared.** It was declared, and the
-# declaration went stale the moment V3 renamed the tiers: this table held only
-# `starter`/`pro`/`enterprise`, so `founder`, `growth` and `agency` all fell
-# through to `PLAN_LIMITS["starter"]` and every paying customer on a V3 tier
-# was enforced at 15 runs a month. An Agency customer at $999 lost the large
-# majority of the capacity they had paid for, and nothing failed — the
-# fallback made it look deliberate.
+# There are no tiers (founder decision, 2026-08-24), so there is no per-plan
+# allowance to derive. **Credits are the only ration**, which is what `RunCaps`
+# has always said and what a top-up model makes literally true: a founder can
+# run whatever they have paid for, and nothing else may quietly forbid them to
+# spend credits they bought.
 #
-# Deriving it from the tier's own credit grant makes that impossible to repeat.
-# `TIER_CREDIT_GRANTS` is the single place a tier is defined, so a tier that
-# exists there cannot be missing here, and a limit can never contradict what
-# the founder was actually sold. The credit balance is still the real ration —
-# `RunCaps` says so — and this stays a backstop against runaway automation
-# rather than a second, quieter pricing scheme.
-_TEAM_SEATS = {
-    "free": 1,
-    "trial": 1,
-    "founder": 3,
-    "starter": 3,
-    "growth": 10,
-    "pro": 10,
-    "agency": 999_999,
-    "enterprise": 999_999,
+# That rules out the previous derivation outright. It computed a monthly run
+# allowance from the tier's grant, and under one grant it would resolve to
+# roughly ten runs a month — which would bind on the first founder to top up
+# fifty thousand credits, the precise failure its own comment was written to
+# prevent ("they would have paid for credits the monthly cap forbids them to
+# spend").
+#
+# What survives is the part that was never about pricing: a backstop against
+# automation gone wrong. It is flat, plan-free, and set far above any honest
+# month's use, so it can catch a runaway loop without ever being reachable by a
+# founder working normally.
+#
+# `check_simulation_quota` still reads this and still gates run creation. The
+# quota concept goes when the Stripe subscription paths do; keeping it here
+# for now leaves the run path untouched by this change.
+_RUNAWAY_BACKSTOP_RUNS_PER_MONTH = 1_000
+
+# One seat allowance, for the same reason: seats were a thing subscriptions
+# sold, and nothing sells them now.
+_TEAM_SEATS_DEFAULT = 25
+
+_PAYG_LIMITS = {
+    "max_team_members": _TEAM_SEATS_DEFAULT,
+    "max_simulations_per_month": _RUNAWAY_BACKSTOP_RUNS_PER_MONTH,
 }
 
 
-# The cap must sit ABOVE what the grant buys, never level with it.
-#
-# Set equal to the grant's worth of runs, this table would silently become the
-# binding constraint the moment a founder bought top-up credits: they would
-# have paid for credits the monthly cap forbids them to spend. Credits ration;
-# this stops a runaway loop. Ten times the grant is far beyond any honest
-# month's use and still catches automation gone wrong.
-_BACKSTOP_MULTIPLE = 10
+class _PlanLimits(dict):
+    """Every plan resolves to the same limits, including plans that no longer
+    exist. Legacy rows still carry `starter`, `founder`, `enterprise` and the
+    rest in `organizations.plan`; a lookup that raised on those would turn a
+    dead column into an outage."""
+
+    def __missing__(self, _key: str) -> dict[str, int]:
+        return _PAYG_LIMITS
 
 
-def _plan_limits() -> dict[str, dict[str, int]]:
-    from app.services.billing.agent_pricing import (
-        TIER_CREDIT_GRANTS,
-        capped_run_credits,
-    )
-
-    limits: dict[str, dict[str, int]] = {}
-    for plan, grant in TIER_CREDIT_GRANTS.items():
-        per_run = max(capped_run_credits(plan), 1)
-        buys = max(grant // per_run, 1)
-        limits[plan] = {
-            # A tier whose seats nobody set gets the most conservative real
-            # answer rather than an invented generous one.
-            "max_team_members": _TEAM_SEATS.get(plan, 1),
-            "max_simulations_per_month": buys * _BACKSTOP_MULTIPLE,
-        }
-    return limits
-
-
-PLAN_LIMITS = _plan_limits()
+PLAN_LIMITS = _PlanLimits({"free": _PAYG_LIMITS})
 
 
 class SubscriptionStatus(BaseModel):
