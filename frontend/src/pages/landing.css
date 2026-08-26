@@ -315,6 +315,17 @@
 .v3land .legal-card h1 { margin: 16px 0 0; color: var(--ink); font-size: clamp(2rem, 4vw, 2.8rem); line-height: 1; letter-spacing: -.06em; }
 .v3land .legal-card p { max-width: 620px; margin: 16px 0 0; color: var(--muted); font-size: 13.5px; line-height: 1.75; }
 .v3land .legal-card p b { color: var(--ink); }
+/* The legal pages grew from four paragraphs to a real policy on 2026-08-25,
+   which needed section headings, a list and a dated line. Same tokens as the
+   rest of the site: a legal page that looks like it came from somewhere else
+   reads as boilerplate before a word of it is judged. */
+.v3land .legal-card h2 { margin: 34px 0 0; color: var(--ink); font-size: 15.5px; letter-spacing: -.02em; }
+.v3land .legal-card h2 + p { margin-top: 10px; }
+.v3land .legal-card .legal-updated { margin-top: 10px; color: var(--muted); font: 500 11px "DM Mono", ui-monospace, monospace; letter-spacing: .04em; text-transform: uppercase; }
+.v3land .legal-card .legal-list { max-width: 620px; margin: 14px 0 0; padding: 0; list-style: none; }
+.v3land .legal-card .legal-list li { padding: 9px 0; border-bottom: 1px solid rgba(45,83,139,.10); color: var(--muted); font-size: 13.5px; line-height: 1.6; }
+.v3land .legal-card .legal-list li:last-child { border-bottom: 0; }
+.v3land .legal-card .legal-list b { color: var(--ink); }
 /* `p a`, not `a` — a bare `a` here outranks `.button`'s white text and turns
    the back button blue-on-blue. Only prose links get the blue treatment. */
 .v3land .legal-card p a { color: var(--blue); font-weight: 700; }
