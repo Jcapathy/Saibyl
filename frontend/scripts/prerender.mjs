@@ -78,6 +78,26 @@ async function main() {
       const outDir = route === '/' ? DIST : join(DIST, route);
       await mkdir(outDir, { recursive: true });
       await writeFile(join(outDir, 'index.html'), page, 'utf8');
+
+      // **And a sibling `<route>.html`, which is what makes this work without
+      // a rewrite rule.**
+      //
+      // `dist/privacy/index.html` alone serves `/privacy/` but not `/privacy`:
+      // the extensionless form falls through to the SPA catch-all and receives
+      // the homepage. A human never notices, because React boots and routes
+      // client-side. An AI crawler does not run JavaScript, so it asks for
+      // `/privacy` and is handed homepage markup — which is the whole thing
+      // prerendering exists to prevent, quietly not working.
+      //
+      // The rewrite that fixes it lives in `render.yaml` and was committed
+      // before the domain went live, and it did not apply: Render deploys code
+      // on push but Blueprint config needs a separate sync. So the file is
+      // written here instead, in the build, on the path that demonstrably runs.
+      // Static hosts resolve `/privacy` to `privacy.html` by convention.
+      if (route !== '/') {
+        await writeFile(join(DIST, `${route.replace(/^\//, '')}.html`), page, 'utf8');
+      }
+
       console.log(
         `prerendered ${route.padEnd(10)} ${String(html.length).padStart(7)} chars`,
       );

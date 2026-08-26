@@ -44,6 +44,28 @@ function rewrites(): { source: string; destination: string }[] {
 }
 
 describe('prerendered routes and Render rewrites', () => {
+  it('writes a sibling <route>.html so the extensionless URL needs no rewrite', () => {
+    /*
+      `dist/privacy/index.html` alone serves `/privacy/` but not `/privacy`. The
+      extensionless form fell through to the SPA catch-all and was answered with
+      the homepage, byte for byte, on the live site. A human never noticed
+      because React boots and routes client-side; an AI crawler does not run
+      JavaScript, so it asked for `/privacy` and received homepage markup, which
+      is precisely what prerendering exists to prevent.
+
+      The `render.yaml` rewrite that fixes it was committed before the domain
+      went live and never applied, because Render deploys code on push while
+      Blueprint config needs a separate sync. So the build writes the file
+      instead, on the path that demonstrably runs.
+    */
+    const script = readFileSync(resolve(ROOT, 'scripts/prerender.mjs'), 'utf8');
+
+    expect(
+      script,
+      'the prerender no longer writes a sibling .html, so /privacy will serve the homepage again',
+    ).toMatch(/\$\{route\.replace\([^)]*\)\}\.html/);
+  });
+
   it('finds the routes the build writes files for', () => {
     const routes = prerenderedRoutes();
 

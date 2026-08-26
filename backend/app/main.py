@@ -40,6 +40,11 @@ from app.api import (
 from app.core.config import settings
 from app.core.logging import setup_logging
 
+# The product's own domains. Module scope so they read as a constant of the
+# deployment rather than a local of one function. See create_app for why they
+# are in code at all.
+PRODUCTION_ORIGINS = ("https://saibyl.com", "https://www.saibyl.com")
+
 # Maximum accepted request body (50 MB) — enforced by LimitRequestBodyMiddleware.
 MAX_BODY_SIZE = 50 * 1024 * 1024
 
@@ -108,7 +113,24 @@ def create_app() -> FastAPI:
     app.add_middleware(LimitRequestBodyMiddleware)
 
     # CORS configuration
-    cors_origins = [o.strip() for o in settings.cors_origins.split(",")]
+    #
+    # **The product's own domains are allowed in code, not only in config, and
+    # that is deliberate (2026-08-25).**
+    #
+    # `render.yaml` carried `saibyl.com` in `CORS_ORIGINS` and was committed and
+    # merged before DNS moved. It had no effect: Render's GitHub integration
+    # deploys *code* on push, while Blueprint *configuration* needs a separate
+    # sync. So the domain went live pointing at a backend that refused it, every
+    # API call failed, and the file that was supposed to prevent exactly that
+    # was sitting in the repo, correct and inert.
+    #
+    # Config still governs everything else, including staging and preview hosts.
+    # These two entries just cannot be lost to a config path that does not run
+    # on deploy, because losing them takes the whole product down while the
+    # marketing site keeps working, which is the failure that looks fine from
+    # outside.
+    configured = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+    cors_origins = list(dict.fromkeys([*configured, *PRODUCTION_ORIGINS]))
     allow_credentials = True
     if "*" in cors_origins and allow_credentials:
         logger.warning(
