@@ -11,6 +11,50 @@ your check could only have passed for the reason you think it did.*
 
 ---
 
+## 2026-08-26 — The website check reports a point where it has a band
+
+An accidental duplicate run gave us test-retest data on the gauntlet: five
+competitor sites, scored twice, five minutes apart, same code, unchanged pages.
+
+| Site | Overall | Counted | Conversion |
+|---|---|---|---|
+| AskReplicas | 69 → 69 | 78 → 78 | 62 → 62 |
+| Outset | 67 → 67 | 83 → 83 | 62 → 62 |
+| Aaru | 66 → 66 | 73 → 73 | 52 → 52 |
+| Qualtrics | 72 → 71 | 100 → 100 | **62 → 52** |
+| Prolific | 66 → 69 | 85 → 85 | **42 → 52** |
+
+**The counted dimension returned identical scores on all five.** Zero variance,
+which is what a check with no model call in it should do and now demonstrably
+does. That is worth knowing as a fact rather than as a design intention.
+
+**Overall moved a point or less on four of five.** Also reassuring.
+
+**Individual vision dimensions moved up to ten points on pages that did not
+change.** Conversion swung ten twice, in both directions. Copy moved six twice.
+Mobile moved six.
+
+**The defect is not the variance. It is reporting a point.** A founder who runs a
+check, edits nothing, and runs it again can watch conversion fall from 62 to 52
+and reasonably conclude they broke something. Nothing on the screen tells them
+the number has a width.
+
+This codebase already knows how to say this. Every room-based report carries
+intervals, `analysis_schema` refuses a proportion without one, and
+`formatReach` prints "0% (up to N% at this swarm size)" rather than a bare zero.
+The website check is the one surface that states a model's opinion as a scalar.
+
+**The fix is not to suppress the variance**, which is real and is information: a
+dimension that moves ten points between identical runs is telling you its rubric
+is underdetermined for that page. It is to report what the room reports — a
+band, or a score averaged across runs with the spread shown — and to say plainly
+that the counted dimension is the one that will not move.
+
+**And the transferable lesson.** We shipped seven dimensions on one screen with
+identical visual weight, six of which are opinions with a width and one of which
+is arithmetic. Presenting them the same way is a claim that they are the same
+kind of thing, and they are not.
+
 ## 2026-08-25 — The critics think the present is the future
 
 Six sample pages, run through the full gauntlet. The credibility reviewer
