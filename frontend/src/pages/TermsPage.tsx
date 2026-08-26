@@ -18,6 +18,11 @@ import './landing.css';
  * "monthly", it is describing a product that was deliberately removed on
  * 2026-08-24 and it is wrong.
  *
+ * **Governing law is California, and that is the founder's answer rather than a
+ * default.** The first draft said Delaware because that is where a US company
+ * is most often incorporated, which was a guess dressed as a fact in a legal
+ * document. It was corrected on 2026-08-25. Do not "tidy" it back.
+ *
  * Not legal advice and not drafted by a lawyer.
  */
 export default function TermsPage() {
@@ -127,7 +132,7 @@ export default function TermsPage() {
 
             <h2>Governing law</h2>
             <p>
-              These terms are governed by the laws of the State of Delaware, United States.
+              These terms are governed by the laws of the State of California, United States.
             </p>
 
             <h2>Changes</h2>
