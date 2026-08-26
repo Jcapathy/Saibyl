@@ -10,20 +10,29 @@ import './landing.css';
  * prepared". That was the right call for a product with no customers. It stops
  * being the right call the day the site takes money at its own domain.
  *
- * **What is load-bearing here is the subprocessor list.** Every name in it is
- * read off `render.yaml` rather than assembled from a template: Supabase,
- * Anthropic, Stripe, Resend, Sentry, Render, and the USPTO's public APIs. A
- * policy that lists processors a product does not use, or omits ones it does,
- * is worse than no policy, because it is a specific claim that happens to be
- * false. If a service is added to `render.yaml`, it belongs on this page in the
- * same change.
+ * **Processors are disclosed by category, not by name (founder decision,
+ * 2026-08-25).** An earlier version named all six. The reasoning for changing
+ * it was that publishing the stack helps anyone looking for a way in, and GDPR
+ * permits describing *categories* of recipients, so the categorical form is a
+ * real option rather than a shortcut.
  *
- * **Declared in `render.yaml` is not the same as used.** The first draft of this
- * list named Resend, because `RESEND_API_KEY` is declared there. Nothing sends
- * email through Resend: the only match for the word in the backend is the
- * English verb, in a comment. Account email goes through Supabase Auth. Every
- * other name here was checked the same way, in code rather than in config, and
- * the next person to edit this list owes it the same check.
+ * Two things a future editor should know before touching this section:
+ *
+ * · **Most of the stack is public anyway.** The site is served from a
+ *   `*.onrender.com` address, the CSP in `render.yaml` names `*.supabase.co`,
+ *   and the payment processor appears at checkout. The concealment is partial
+ *   by nature, so do not let this section become the reason a security control
+ *   is skipped somewhere it would actually matter.
+ * · **Enterprise buyers will ask for the names.** That is why the page says the
+ *   list is available on request. If that sentence is ever removed, the page
+ *   stops being usable in a security review.
+ *
+ * **The categories are still checked against code, not config.** An earlier
+ * draft named Resend because `RESEND_API_KEY` is declared in `render.yaml`.
+ * Nothing sends email through it: the only match for the word in the backend is
+ * the English verb, in a comment. Account email goes through the storage and
+ * sign-in provider. A category listed here must correspond to something the
+ * code actually calls.
  *
  * Not legal advice and not drafted by a lawyer. It describes what the system
  * actually does, accurately, which is the part counsel cannot supply and the
@@ -68,9 +77,9 @@ export default function PrivacyPage() {
               reports, and the record of which runs you have made.
             </p>
             <p>
-              <b>Payment.</b> When you buy credits, Stripe handles the payment. Card numbers are
-              entered on Stripe&rsquo;s systems and <b>never reach ours</b>. We keep a record of
-              what you bought, when, and how many credits it was worth.
+              <b>Payment.</b> When you buy credits, a payment processor handles the transaction.
+              Card numbers are entered on their systems and <b>never reach ours</b>. We keep a
+              record of what you bought, when, and how many credits it was worth.
             </p>
             <p>
               <b>Ordinary technical data.</b> Log entries and error reports produced while the
@@ -89,17 +98,29 @@ export default function PrivacyPage() {
 
             <h2>Who else processes it</h2>
             <p>
-              Running this product means other companies touch some of your data. This is the
-              complete list, and each one only receives what its job requires:
+              Running this product means established third-party providers process some of your
+              data on our behalf. Each receives only what its job requires, and each is bound to
+              use it for that job and nothing else. They fall into these categories:
             </p>
             <ul className="legal-list">
-              <li><b>Supabase</b> (United States) &mdash; the database, file storage, sign-in, and the account emails that go with it.</li>
-              <li><b>Anthropic</b> (United States) &mdash; the models that read your material and produce your results.</li>
-              <li><b>Render</b> (United States, Oregon) &mdash; hosting for the application.</li>
-              <li><b>Stripe</b> &mdash; payments. They hold the card details; we hold the receipt.</li>
-              <li><b>Sentry</b> &mdash; error reports, so a failure is something we can find.</li>
-              <li><b>The USPTO</b> &mdash; when you run a prior-art or trademark check, the search terms are sent to the United States Patent and Trademark Office&rsquo;s public APIs.</li>
+              <li><b>Hosting and infrastructure</b> &mdash; running the application itself.</li>
+              <li><b>Database and file storage</b> &mdash; where your account, uploads and results are kept, and the sign-in that protects them.</li>
+              <li><b>AI model providers</b> &mdash; the models that read your material and produce your results. <b>They do not train on it.</b></li>
+              <li><b>Payment processing</b> &mdash; card details are entered on the processor&rsquo;s systems and never reach ours.</li>
+              <li><b>Error monitoring</b> &mdash; so a failure is something we can find and fix.</li>
             </ul>
+            <p>
+              <b>We do not name these providers here, and that is a deliberate choice rather
+              than an omission.</b> If you are evaluating Saibyl and need the current list, ask
+              and we will send it. Security reviews get a straight answer.
+            </p>
+            <p>
+              <b>One exception, because it is your data leaving rather than a vendor of ours.</b>{' '}
+              When you run a prior-art or trademark check, your search terms are sent to the
+              United States Patent and Trademark Office&rsquo;s public search systems. That is a
+              government database, not a company we chose, and there is no way to search it
+              without querying it.
+            </p>
             <p>
               We are a United States company and your data is processed in the United States.
               If you are outside the US, using Saibyl means your data is transferred there.
@@ -110,7 +131,8 @@ export default function PrivacyPage() {
               Your uploads, runs and reports stay until you delete them or close your account.
               Delete a document and it goes from storage. Close the account and we remove the
               content associated with it, keeping only what we have to keep for tax and payment
-              records, which Stripe and our accounting obligations govern rather than us.
+              records, which our accounting obligations and the payment processor&rsquo;s own
+              retention rules govern rather than us.
             </p>
 
             <h2>Your choices</h2>
