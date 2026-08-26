@@ -11,6 +11,40 @@ your check could only have passed for the reason you think it did.*
 
 ---
 
+## 2026-08-25 — The critics think the present is the future
+
+Six sample pages, run through the full gauntlet. The credibility reviewer
+flagged this on every one of them:
+
+> **"© 2026 Basecrate"** — *the copyright year is 2026, which is in the future.
+> This signals either a template placeholder or carelessness, both of which
+> undermine trust.*
+
+It is not in the future. It is this year. The reviewer is a vision model
+reasoning from a training cutoff, and it will make the same accusation against
+every correctly-dated footer on every real customer's page, in confident
+language, under the heading "credibility".
+
+**Why this is worse than an ordinary wrong finding.** It is unfalsifiable to the
+reader in the moment: a founder who sees "your copyright year is in the future"
+has no way to know the reviewer is the one holding a stale calendar, and the
+obvious fix is to *back-date their own footer*. A critique that talks a founder
+into making their page worse is the failure mode this whole module is built to
+avoid.
+
+**The transferable lesson.** A model does not know what day it is, and any
+rubric that invites it to reason about "current", "recent", "outdated",
+"upcoming" or "still supported" is asking a question its weights cannot answer.
+Anything time-relative in a prompt needs the date supplied as an input, exactly
+as `clearance/tracks.py` already does with `search_date` rather than reading
+`datetime.now()` deep in the logic. That precedent existed and this rubric did
+not follow it.
+
+**Not yet fixed.** The date is not currently passed to the critics. Doing so is
+the fix; suppressing the finding is not, because the same blindness will surface
+as "this framework is outdated" or "this integration is deprecated" wherever a
+page happens to mention a version.
+
 ## 2026-08-25 — Deleting a feature can silently delete a test's only lever
 
 Removing the subscription tiers took `check_simulation_quota` out of the run

@@ -37,6 +37,16 @@ pointing at the same path with different words are demonstrably one ask, and
 anything softer than that would be this module guessing at intent, which is what
 the six reviewers are for.
 
+**The action check is silent on pasted HTML, and that is not a clean pass.**
+`capture_html` sets the document directly, so the page's address is
+`about:blank` and `new URL('/signup', location.href)` throws for every relative
+link. Destinations come back null, nothing groups, and no finding is produced no
+matter how many differently-worded buttons point at one place. A URL capture is
+unaffected. Found on the first run of the sample pages, where a page with two
+labels on one destination reported nothing. Fixing it means giving the census a
+base to resolve against; until then a review of pasted HTML is missing this
+check rather than passing it.
+
 **What this module deliberately does NOT check.** These are worth counting and
 cannot be counted from what the capture returns, and estimating them would throw
 away the only property that makes a measured check worth having:
