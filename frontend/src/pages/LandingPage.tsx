@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 
+import { BENCHMARKS } from '@/lib/benchmarks';
 import { useReveal } from '@/components/design/useReveal';
 
 import './landing.css';
@@ -157,7 +158,7 @@ export default function LandingPage() {
           <section className="rehearsal" id="rehearsal" aria-labelledby="rehearsal-heading">
             <div className="container">
               <div className="rehearsal-header reveal">
-                <div><span className="eyebrow section-kicker">See a run</span><h2 className="section-title" id="rehearsal-heading">A launch,<br /><em>rehearsed.</em></h2></div>
+                <div><h2 className="section-title" id="rehearsal-heading">What does a run<br /><em>actually find?</em></h2></div>
                 <p className="section-copy">We built a sample product — Tallyhook, invoice chasing for freelancers — and put it through a full run, so you can inspect real output before you upload a word.</p>
               </div>
               <div className="rehearsal-card reveal delay-1">
@@ -183,8 +184,7 @@ export default function LandingPage() {
           </section>
 
           <section className="steps-band container" aria-labelledby="steps-heading">
-            <span className="eyebrow section-kicker reveal">How it works</span>
-            <h2 className="section-title reveal" id="steps-heading">Five steps. About an hour.</h2>
+            <h2 className="section-title reveal" id="steps-heading">How does Saibyl work? <em>Five steps, about an hour.</em></h2>
             <div className="steps-strip reveal delay-1">
               <div className="step"><b>Start a product</b><p>Name the thing you're selling — one line is enough. Every room, run, and result attaches to it.</p></div>
               <div className="step"><b>Give it material</b><p>Your deck, your site, a rival's pricing page — or just answer five short questions.</p><span className="step-chip"><i />DECK · SITE · 5 ANSWERS</span></div>
@@ -196,7 +196,7 @@ export default function LandingPage() {
 
           <section className="ladder container" id="ladder" aria-labelledby="ladder-heading">
             <div className="ladder-top reveal">
-              <div><span className="eyebrow section-kicker">What you unlock</span><h2 className="section-title" id="ladder-heading">Your first run is the beginning.</h2></div>
+              <div><h2 className="section-title" id="ladder-heading">What do you get <em>in the free run?</em></h2></div>
               <p className="section-copy">The free run answers the first two questions. Each one after that turns the last answer into the next advantage &mdash; and each is priced on its own, so you only buy the ones you want.</p>
             </div>
             <div className="ladder-grid">
@@ -208,67 +208,84 @@ export default function LandingPage() {
             </div>
           </section>
 
+          {/* ── What it costs to skip this ──
+              **Three outside numbers, each with its primary source linked.**
+              They lived in `lib/benchmarks.ts` and rendered only on the billing
+              page behind the login, where no crawler will ever read them. The
+              KDD 2024 GEO study measured citing sources at +30%, and up to
+              +115% for lower-ranked sites, which `docs/SEO_AEO.md` says is
+              exactly this site's position. The citations existed and were
+              pointed at the one audience that could not use them. */}
+          <section className="evidence container" aria-labelledby="evidence-heading">
+            <div className="evidence-head reveal">
+              <h2 className="section-title" id="evidence-heading">What does it cost to <em>find out late?</em></h2>
+              <p className="section-copy">Not our figures. Three published ones, each linked to the study it came from, because a number on a marketing page that you cannot check is not evidence.</p>
+            </div>
+            <div className="evidence-grid reveal delay-1">
+              {BENCHMARKS.map((b) => (
+                <article className="evidence-card" key={b.href + b.stat}>
+                  <p className="evidence-stat">{b.stat}</p>
+                  <p className="evidence-short">{b.short}</p>
+                  <p className="evidence-claim">{b.claim}</p>
+                  <a className="evidence-src" href={b.href} target="_blank" rel="noreferrer noopener">
+                    {b.provenance} ↗
+                  </a>
+                </article>
+              ))}
+            </div>
+          </section>
+
           <section className="pricing" id="pricing" aria-labelledby="pricing-heading">
             <div className="container">
               <div className="pricing-top reveal">
-                <div><span className="eyebrow section-kicker">Pricing</span><h2 className="section-title" id="pricing-heading">How much does<br /><em>Saibyl cost?</em></h2></div>
+                <div><h2 className="section-title" id="pricing-heading">How much does<br /><em>Saibyl cost?</em></h2></div>
                 <p className="section-copy">Your first run is free, and after that a full run costs about $15. There is no subscription: you buy credits when you want them, they never expire, and every run shows its exact price before it starts.</p>
               </div>
-              <div className="tier-grid">
-                <div className="tier free reveal">
-                  <span className="flag">Start here</span>
-                  <h3>Your first run</h3>
-                  <p className="who">One complete run — every step, to see what the room finds.</p>
-                  <p className="price">$0</p>
-                  <p className="runs">1 COMPLETE RUN · 30-PERSON ROOM</p>
-                  <ul>
-                    <li><b>30</b> buyers in the room</li>
-                    <li><b>3</b> rounds of back-and-forth</li>
-                    <li><b>2</b> places at once</li>
-                    <li>No card at signup</li>
-                  </ul>
-                  <Link className="button primary" to="/signup">Start your first run <span className="arrow">→</span></Link>
-                </div>
-                <div className="tier popular reveal delay-1">
-                  <span className="flag">Most run</span>
-                  <h3>A full run</h3>
-                  <p className="who">The standard room, once you want more than the free one.</p>
-                  <p className="price">$15<small>.07</small></p>
-                  <p className="runs">100 BUYERS · 5 ROUNDS</p>
-                  <ul>
-                    <li><b>100</b> buyers in the room</li>
-                    <li><b>5</b> rounds of back-and-forth</li>
-                    <li>Objections ranked, with receipts</li>
-                    <li>Rooms run to <b>250</b> buyers</li>
-                  </ul>
-                  <Link className="button ghost" to="/signup">Run one <span className="arrow">→</span></Link>
-                </div>
-                <div className="tier reveal delay-2">
-                  <h3>A page check</h3>
-                  <p className="who">Your live site, read the way a buyer reads it.</p>
-                  <p className="price">$8<small>.75</small></p>
-                  <p className="runs">ONE PAGE · SIX REVIEWERS</p>
-                  <ul>
-                    <li>Six critics score the page</li>
-                    <li>Every claim checked against the copy</li>
-                    <li>Rewrite and re-score: <b>$25</b></li>
-                    <li>What to say back: <b>$7.50</b></li>
-                  </ul>
-                  <Link className="button ghost" to="/signup">Check a page <span className="arrow">→</span></Link>
-                </div>
-                <div className="tier reveal delay-3">
-                  <h3>Prior art</h3>
-                  <p className="who">Whether the thing you are building is already someone else&rsquo;s.</p>
-                  <p className="price">$10</p>
-                  <p className="runs">TRADEMARKS · PATENTS · PENDING</p>
-                  <ul>
-                    <li>Name check: <b>free</b></li>
-                    <li>Claim deep-reads on the closest patents</li>
-                    <li>Every result cited to its record</li>
-                    <li>Full landscape: <b>$30</b></li>
-                  </ul>
-                  <Link className="button ghost" to="/signup">Check it&rsquo;s clear <span className="arrow">→</span></Link>
-                </div>
+              <div className="price-table-wrap reveal delay-1">
+                <table className="price-table">
+                  <caption>Every price in credits and in dollars. $1 buys 200 credits.</caption>
+                  <thead>
+                    <tr><th scope="col">What you run</th><th scope="col">Credits</th><th scope="col">Cost</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr className="is-free">
+                      <th scope="row">Your first run <small>30 buyers, 3 rounds, 2 places</small></th>
+                      <td>1,335</td><td><b>Free</b></td>
+                    </tr>
+                    <tr>
+                      <th scope="row">A full run <small>100 buyers, 5 rounds</small></th>
+                      <td>3,014</td><td>$15.07</td>
+                    </tr>
+                    <tr>
+                      <th scope="row">Website check <small>six reviewers read your page</small></th>
+                      <td>1,750</td><td>$8.75</td>
+                    </tr>
+                    <tr>
+                      <th scope="row">Rewrite and re-score <small>the page, tested on the same room</small></th>
+                      <td>5,000</td><td>$25.00</td>
+                    </tr>
+                    <tr>
+                      <th scope="row">What to say back <small>an answer to each objection</small></th>
+                      <td>1,500</td><td>$7.50</td>
+                    </tr>
+                    <tr className="is-free">
+                      <th scope="row">Name check <small>is the trademark taken</small></th>
+                      <td>0</td><td><b>Free</b></td>
+                    </tr>
+                    <tr>
+                      <th scope="row">Prior-art search <small>patents, with claim deep-reads</small></th>
+                      <td>2,000</td><td>$10.00</td>
+                    </tr>
+                    <tr>
+                      <th scope="row">Full patent landscape <small>assignees, continuity, examiners</small></th>
+                      <td>6,000</td><td>$30.00</td>
+                    </tr>
+                    <tr>
+                      <th scope="row">Real companies that match <small>with the evidence they match</small></th>
+                      <td>3,000</td><td>$15.00</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
               <p className="pricing-note"><b>$1 buys 200 credits, and a credit never expires.</b> Top up between $10 and $500 whenever you want, in one payment — nothing renews, nothing expires, and no card is taken at signup. A bigger room or more rounds costs proportionally more, and you always see the exact price before you press go. Running this across a lot of clients? <a href="mailto:info@saidolabs.com" style={{ color: 'var(--blue)', fontWeight: 700 }}>Talk to us</a>.</p>
             </div>

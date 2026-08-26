@@ -314,6 +314,38 @@
 .v3land .legal-card { max-width: 720px; padding: clamp(26px, 4.5vw, 44px); border: 1px solid rgba(45,83,139,.12); border-radius: var(--radius-lg); background: linear-gradient(145deg, #fff 8%, #f4f7ff 92%); box-shadow: 0 14px 30px rgba(55,90,145,.05); }
 .v3land .legal-card h1 { margin: 16px 0 0; color: var(--ink); font-size: clamp(2rem, 4vw, 2.8rem); line-height: 1; letter-spacing: -.06em; }
 .v3land .legal-card p { max-width: 620px; margin: 16px 0 0; color: var(--muted); font-size: 13.5px; line-height: 1.75; }
+/* ── The price table and the cited benchmarks (2026-08-25) ─────────────────
+   Both exist for the same reason. `docs/SEO_AEO.md` reports the KDD 2024
+   measurements: adding statistics +39.8%, citing sources +30% and up to +115%
+   for lower-ranked sites, and one data table per page. The page had numbers
+   and no citations, and the citations it owned rendered only behind the login.
+   Same tokens as everything else, so neither reads as bolted on. */
+.v3land .price-table-wrap { position: relative; z-index: 1; margin-top: 40px; overflow-x: auto; border: 1px solid rgba(45,83,139,.13); border-radius: var(--radius-md); background: rgba(255,255,255,.86); box-shadow: 0 14px 30px rgba(55,90,145,.05); }
+.v3land .price-table { width: 100%; min-width: 520px; border-collapse: collapse; }
+.v3land .price-table caption { caption-side: top; padding: 18px 22px 0; color: var(--muted); font: 500 11px "DM Mono", ui-monospace, monospace; letter-spacing: .05em; text-transform: uppercase; text-align: left; }
+.v3land .price-table thead th { padding: 16px 22px 10px; color: var(--muted); font: 700 10.5px "DM Mono", ui-monospace, monospace; letter-spacing: .1em; text-transform: uppercase; text-align: right; }
+.v3land .price-table thead th:first-child { text-align: left; }
+.v3land .price-table tbody th { padding: 13px 22px; color: var(--ink); font-size: 13.5px; font-weight: 600; text-align: left; border-top: 1px solid rgba(38,79,139,.09); }
+.v3land .price-table tbody th small { display: block; margin-top: 3px; color: var(--muted); font-size: 11.5px; font-weight: 500; }
+.v3land .price-table tbody td { padding: 13px 22px; color: #52667f; font-size: 13.5px; text-align: right; border-top: 1px solid rgba(38,79,139,.09); font-variant-numeric: tabular-nums; }
+.v3land .price-table tbody td b { color: var(--blue); }
+.v3land .price-table tbody tr.is-free th, .v3land .price-table tbody tr.is-free td { background: rgba(40,108,240,.04); }
+
+.v3land .evidence { padding: 74px 0 8px; }
+/* `balance` because this heading otherwise drops "late?" onto a line of its
+   own at common widths. An orphaned word is the same defect the sample-page
+   audit flagged, and it is not worth shipping in the section whose whole job
+   is to look like evidence. */
+.v3land .evidence-head { max-width: 640px; }
+.v3land .evidence-head .section-title { text-wrap: balance; }
+.v3land .evidence-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(238px, 1fr)); gap: 15px; margin-top: 34px; }
+.v3land .evidence-card { padding: 22px 22px 18px; border: 1px solid rgba(45,83,139,.13); border-radius: var(--radius-md); background: rgba(255,255,255,.86); box-shadow: 0 10px 24px rgba(55,90,145,.05); }
+.v3land .evidence-stat { margin: 0; color: var(--blue); font-size: 30px; font-weight: 800; letter-spacing: -.05em; line-height: 1; font-variant-numeric: tabular-nums; }
+.v3land .evidence-short { margin: 7px 0 0; color: var(--ink); font-size: 13px; font-weight: 700; }
+.v3land .evidence-claim { margin: 10px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.65; }
+.v3land .evidence-src { display: block; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(38,79,139,.09); color: var(--muted); font-size: 10.5px; line-height: 1.5; transition: color .22s ease; }
+.v3land .evidence-src:hover { color: var(--blue); }
+
 .v3land .legal-card p b { color: var(--ink); }
 /* The legal pages grew from four paragraphs to a real policy on 2026-08-25,
    which needed section headings, a list and a dated line. Same tokens as the
