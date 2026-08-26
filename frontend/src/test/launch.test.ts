@@ -502,8 +502,24 @@ describe('6. The house rules apply here too', () => {
        conversion look like a regression, so the check moved to the thing the
        rule was always about: this page must say, in its own words, which moment
        of a company it is for. */
-    expect(page.code).toContain('eyebrow="Go to market"');
+    /* **The eyebrow now names the founder's moment, not the stage** (founder
+       direction, 2026-08-25): `AFTER NINE UPVOTES` rather than `GO TO MARKET`.
+
+       That is this rule being followed rather than broken. The comment above
+       says the nav label "What to say" was wrong because "it names a sentence,
+       not a moment in a company's life" — and "after nine upvotes" is a moment
+       in a company's life in a way "go to market" is a category name. Pinning
+       the literal string pinned one implementation of the rule and would have
+       made the closer reading of it fail.
+
+       So: the eyebrow must exist and say something, and the stage still has to
+       be named in the page's own prose. Both halves matter. An eyebrow alone
+       could drift into a mood with no product behind it, and prose alone loses
+       the label the public site puts beside every hero. */
+    expect(page.code, 'the hero lost its eyebrow').toMatch(/eyebrow="[^"]{3,}"/);
     expect(page.code, 'the hero lost its accent').toMatch(/serif="/);
-    expect(page.code).toMatch(/take it to market/i);
+    expect(page.code, 'the page no longer says which stage it is').toMatch(
+      /take it to market/i,
+    );
   });
 });

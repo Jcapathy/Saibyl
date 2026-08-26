@@ -38,34 +38,45 @@ from app.services.billing.topups import (
 # The rate
 # ---------------------------------------------------------------------------
 
-def test_a_topup_credit_is_never_cheaper_than_a_subscription_credit():
-    """Pay-as-you-go must cost more per credit than committing.
+def test_a_topup_credit_is_never_priced_below_the_margin_floor():
+    """**Restated 2026-08-25. The old premise no longer exists.**
 
-    If this inverts, the product is paying people not to subscribe: a founder
-    who does the division finds the monthly plan is the worse deal, and the
-    recurring revenue the tiers exist to produce stops being the rational
-    choice. It is one comparison between two constants and either can be edited
-    alone, which is exactly why it is asserted rather than assumed.
+    This used to assert `TOPUP_MARGIN_PCT > TARGET_MARGIN_PCT`, because a
+    top-up was deliberately worse value per credit than a subscription so that
+    subscribing was the rational choice. Subscriptions were removed on
+    2026-08-24, and with nothing to steer anyone toward, the surcharge was a
+    third off the value of every credit for no stated reason. The founder
+    levelled it.
+
+    What survives is the half that was always about solvency rather than about
+    steering: a credit may never be sold below the margin the cost model is
+    built on. Equal is the floor. Below it, every run bought with those credits
+    is served at a loss.
     """
-    assert TOPUP_MARGIN_PCT > TARGET_MARGIN_PCT
+    assert TOPUP_MARGIN_PCT >= TARGET_MARGIN_PCT
 
+    # And in credits rather than only in percentages, since that is the number
+    # a founder actually receives: a dollar may never buy more than the margin
+    # floor allows.
     dollars = 100
-    topup = credits_for_topup(dollars * 100)
-    subscription = int(
+    at_the_floor = int(
         Decimal(dollars)
         * Decimal(CREDITS_PER_USD)
         * (Decimal("100") - TARGET_MARGIN_PCT)
         / Decimal("100")
     )
-    assert topup < subscription
+    assert credits_for_topup(dollars * 100) <= at_the_floor
 
 
 @pytest.mark.parametrize(
     ("usd", "expected_credits"),
-    [(10, 1_500), (20, 3_000), (50, 7_500), (100, 15_000)],
+    [(10, 2_000), (20, 4_000), (50, 10_000), (100, 20_000)],
 )
 def test_the_suggested_amounts_buy_what_the_design_said(usd, expected_credits):
-    """At 85% margin a dollar buys 150 credits. Pinned as published numbers."""
+    """At 80% margin a dollar buys 200 credits. Pinned as published numbers.
+
+    Was 150 a dollar at the old 85%. Every figure here rose by a third when the
+    subscription surcharge was removed."""
     assert credits_for_topup(usd * 100) == expected_credits
 
 
@@ -75,10 +86,22 @@ def test_credits_round_down_so_a_fraction_is_never_given_away():
     `credits_for` converts our cost into what we must charge, so it rounds up to
     protect the floor. This converts a payment into what we owe, so it rounds
     down. Both round in the direction that cannot serve a run at a loss.
+
+    **At the current rate no fraction actually arises**: an 80% margin makes
+    credits exactly `cents * 2`, so there is nothing to round. The direction is
+    asserted against the exact quotient anyway, because the rate is a constant
+    and the next person to move it should not have to rediscover which way this
+    is supposed to fall.
     """
-    # $10.001 would be 1500.15 credits at the current rate.
-    assert credits_for_topup(1_001) == 1_501
-    assert credits_for_topup(1_000) == 1_500
+    for cents in (1_000, 1_001, 2_345, 49_999):
+        exact = (
+            Decimal(cents)
+            / Decimal(100)
+            * Decimal(CREDITS_PER_USD)
+            * (Decimal("100") - TOPUP_MARGIN_PCT)
+            / Decimal("100")
+        )
+        assert credits_for_topup(cents) <= exact, cents
 
 
 def test_a_nonsense_amount_buys_nothing_rather_than_raising():
@@ -100,12 +123,16 @@ def test_below_the_floor_is_refused_with_a_reason_a_founder_can_act_on():
     assert "card fee" in message
 
 
-def test_above_the_ceiling_points_at_the_thing_that_is_better_value():
+def test_above_the_ceiling_says_what_to_do_instead():
     with pytest.raises(TopupRefusedError) as exc:
         quote_topup(MAX_TOPUP_CENTS + 1)
     message = str(exc.value)
-    assert "monthly plan" in message
-    assert "more credits for the same money" in message
+    # It used to point at a monthly plan. That plan was removed the day before
+    # this assertion was, so the refusal was sending a founder to look for
+    # something that no longer existed. A ceiling has to say what to do next.
+    assert "add more" in message
+    assert "never expire" in message
+    assert "plan" not in message.lower()
 
 
 def test_the_bounds_are_the_right_way_round():
@@ -155,17 +182,27 @@ def test_a_larger_payment_always_buys_more_credits():
 
 
 def test_a_near_miss_is_never_rounded_up_into_a_whole_run():
-    """$20 buys 3,000 credits against a 3,014-credit run. That is not 1 run.
+    """The defect: a balance that nearly buys a run displaying as one.
 
-    Rounded to nearest it displays as 1.0, and the page then tells a founder
-    that $20 buys a full-size run. It does not, and they find out when the run
-    will not start. Caught by reading the deployed endpoint's own output, not
-    by this file - the original test only covered the $10 case.
+    $20 used to buy 3,000 credits against a 3,014-credit run. Rounded to
+    nearest that displays as 1.0, and the page then tells a founder $20 buys a
+    full-size run. It does not, and they find out when the run will not start.
+
+    **$20 now genuinely buys more than a run** (4,000 credits at the levelled
+    margin), so the old example stopped being an example. The property is what
+    matters and it is asserted directly: whatever amount lands just short of a
+    run must never display as a whole one.
     """
     per_run = standard_run_credits()
-    quote = quote_topup(2_000)
-    assert quote.credits < per_run
-    assert quote.standard_runs < 1.0
+
+    # The largest whole-dollar amount that still buys less than one run.
+    cents = 100
+    while credits_for_topup(cents + 100) < per_run:
+        cents += 100
+    just_short = quote_topup(cents)
+
+    assert just_short.credits < per_run
+    assert just_short.standard_runs < 1.0
 
 
 def test_the_runs_figure_never_overstates_what_was_bought():

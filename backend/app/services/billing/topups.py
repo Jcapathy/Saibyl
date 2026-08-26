@@ -8,23 +8,22 @@
 # TopupRefusedError    — the amount is outside what we will take
 # quote_topup(cents)   — price one top-up
 # ─────────────────────────────────────────────────────────
-"""One-off credit top-ups, priced above the subscription rate.
+"""One-off credit top-ups. The only way anyone pays for Saibyl.
 
-**Why a top-up exists.** A founder deciding whether this is worth $99 a month
-should be able to spend $10 and find out. The alternative — a free tier that
-runs out and a monthly commitment as the only next step — asks for the big
-decision at the exact moment they have the least evidence.
+**This module used to describe a different business.** It opened "priced above
+the subscription rate", explained that a top-up deliberately cost more per
+credit so that committing to $99 a month was "visibly and arithmetically the
+better deal", and published the 33% gap to the founder. Subscription tiers were
+removed on 2026-08-24 (PRD_V3 §6) and the surcharge with them on 2026-08-25, so
+none of that is true any more and all of it has gone.
 
-**Why it costs more per credit than a subscription.** Pay-as-you-go is priced
-at a higher margin so that subscribing is visibly and arithmetically the better
-deal, and the page says so in those words rather than hoping nobody divides.
-Concretely: a subscription buys credits at 80% margin, a top-up at 85%, so a
-subscribed credit is **33% cheaper**. That number is derived here rather than
-written down anywhere, so it cannot drift from the rates it describes.
+**What a top-up is now.** A founder buys credits when they want them, at the
+same margin the cost model is built on. Nothing renews, nothing expires, and
+the first run is free. `TOPUP_MARGIN_PCT` below is the whole of the pricing.
 
 **No Stripe Price ID is involved.** A top-up is an ad-hoc `unit_amount` on a
-`mode="payment"` Checkout session, which is why this could ship while the tier
-migration is still blocked on Stripe Products.
+`mode="payment"` Checkout session, which is why it could ship when the tier
+migration never did.
 
 The rate lives in this module and nowhere else. Two places that both convert
 dollars to credits is the "two sources of truth" class, and the symptom is a
@@ -38,15 +37,28 @@ from pydantic import BaseModel
 
 from app.services.billing.agent_pricing import (
     CREDITS_PER_USD,
+    TARGET_MARGIN_PCT,
     standard_run_credits,
 )
 
-# A top-up is priced at a higher margin than a subscription, deliberately.
-# Raising this makes top-ups worse value and pushes harder toward subscribing;
-# lowering it toward TARGET_MARGIN_PCT makes them equivalent. It must never go
-# below TARGET_MARGIN_PCT — that would make the pay-as-you-go option cheaper
-# than the commitment, which is backwards, and the test suite asserts it.
-TOPUP_MARGIN_PCT = Decimal("85")
+# **Equal to `TARGET_MARGIN_PCT` since 2026-08-25. Founder decision.**
+#
+# This was 85% against a target of 80%, and the five-point gap was deliberate:
+# it made a top-up worse value per credit than a subscription, so that
+# subscribing was "visibly and arithmetically the better deal". The page even
+# published the difference, as `subscription_is_cheaper_by_pct`, which came out
+# at 33%.
+#
+# There is no subscription. It was removed on 2026-08-24, and the moment it went
+# the surcharge stopped steering anyone anywhere and became a third off the
+# value of every credit for no reason anybody could state. Levelling it is the
+# whole of the "make it affordable" instruction: it takes about 25% off every
+# price published on the landing page.
+#
+# It must still never go BELOW `TARGET_MARGIN_PCT`, which is the margin floor
+# the cost model is built on, and the test suite asserts that. Equal is the
+# floor, not a step past it.
+TOPUP_MARGIN_PCT = TARGET_MARGIN_PCT
 
 # $10 is the floor because it is the smallest amount that buys a run a founder
 # would recognise as a result. Below it, Stripe's own per-transaction fee is a
@@ -54,8 +66,9 @@ TOPUP_MARGIN_PCT = Decimal("85")
 # run — an experience that argues against the product.
 MIN_TOPUP_CENTS = 1_000
 
-# $500 is the ceiling. Past it a subscription is cheaper on the same credits and
-# refusing is the honest answer; the message says so and points at the plans.
+# $500 is the ceiling on a SINGLE top-up, not on what anyone may hold. It is a
+# guard against a mistyped amount rather than a commercial limit: nothing stops
+# a founder adding more immediately afterwards, and the refusal says so.
 MAX_TOPUP_CENTS = 50_000
 
 # What the buttons offer. Any amount in range is accepted — these are shortcuts,
@@ -94,18 +107,10 @@ def credits_for_topup(amount_cents: int) -> int:
 
 
 # `_subscription_advantage_pct()` stood here. It derived how much further a
-# dollar went on a subscription — 33%, from the 80%/85% margins — so the top-up
-# screen could tell a founder, checkably, that subscribing was the better deal.
-#
-# Subscriptions were removed on 2026-08-25 (PRD_V3 §6), so there is nothing left
-# to be better than and the field it fed is gone from `TopupQuote`.
-#
-# **`TOPUP_MARGIN_PCT` is still 85% and that is now a live question rather than
-# a settled one.** The five points above `TARGET_MARGIN_PCT` existed only to
-# make subscribing look good; with no subscription they make credits 33% dearer
-# than they need to be, for no remaining reason. Lowering it to
-# `TARGET_MARGIN_PCT` is a pricing decision for the founder, not a cleanup, so
-# it is flagged here rather than taken.
+# dollar went on a subscription, 33% from the 80%/85% margins, so the top-up
+# screen could tell a founder checkably that subscribing was the better deal.
+# Subscriptions went on 2026-08-24 and the surcharge it measured went on
+# 2026-08-25. Nothing replaced it, because there is nothing left to compare.
 
 
 class TopupRefusedError(ValueError):
@@ -115,11 +120,13 @@ class TopupRefusedError(ValueError):
 def _runs_display(credits: int, per_run: int) -> float:
     """How many runs this buys, rounded **down** to one decimal place.
 
-    Down, not to nearest, and this is not fussiness. At the current rate $20
-    buys 3,000 credits against a 3,014-credit run — 0.995 of one. Rounded to
-    nearest that displays as **1.0**, so the page tells a founder $20 buys a
-    full-size run and it does not. They find out when the run they paid for
-    will not start.
+    Down, not to nearest, and this is not fussiness. At the old rate $20 bought
+    3,000 credits against a 3,014-credit run, 0.995 of one. Rounded to nearest
+    that displays as **1.0**, so the page told a founder $20 buys a full-size
+    run when it did not, and they found out when the run would not start. The
+    levelled margin moved that particular example past the line, which is
+    exactly why the rounding rule is asserted as a property rather than pinned
+    to $20.
 
     Rounding down can only ever understate what they get, which is the safe
     direction for a number on a screen that is asking for money.
@@ -140,9 +147,13 @@ def quote_topup(amount_cents: int) -> TopupQuote:
         )
     if amount_cents > MAX_TOPUP_CENTS:
         raise TopupRefusedError(
-            f"The largest top-up is ${MAX_TOPUP_CENTS // 100:,}. Above that a "
-            f"monthly plan gives you more credits for the same money — have a "
-            f"look at those instead."
+            # Said "a monthly plan gives you more credits for the same money"
+            # until 2026-08-25, which sent a founder looking for a plan that had
+            # been removed the day before. A refusal that points at nothing is
+            # worse than a bare limit.
+            f"The largest single top-up is ${MAX_TOPUP_CENTS // 100:,}. You can "
+            f"add more straight after, as many times as you like, and credits "
+            f"never expire. If you want to put on a lot at once, email us."
         )
 
     credits = credits_for_topup(amount_cents)

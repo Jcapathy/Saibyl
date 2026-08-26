@@ -202,8 +202,8 @@ export default function LandingPage() {
             <div className="ladder-grid">
               <article className="cap-card reveal delay-1"><span className="cap-tag free">In your free run</span><h3>Audience</h3><p className="q">Who reacts to this?</p><p>Built from your material, not picked from a list. You approve it before anything runs.</p><span className="cap-arc" /></article>
               <article className="cap-card reveal delay-1"><span className="cap-tag free">In your free run</span><h3>Reactions</h3><p className="q">What do they object to?</p><p>The room argues with your pitch — and with each other. The pushback arrives ranked, with receipts.</p><span className="cap-arc" /></article>
-              <article className="cap-card reveal delay-2"><span className="cap-tag next">$1.50 a time</span><h3>Answers</h3><p className="q">Did my reply work?</p><p>Saibyl drafts a reply to each objection worth answering, runs the same room again, and shows whether it moved.</p><span className="cap-arc" /></article>
-              <article className="cap-card reveal delay-2"><span className="cap-tag next">$3 a list</span><h3>Buyers</h3><p className="q">Which real companies match?</p><p>The audience you approved becomes a list of real companies that fit it — each with the source shown.</p><span className="cap-arc" /></article>
+              <article className="cap-card reveal delay-2"><span className="cap-tag next">$7.50 a time</span><h3>Answers</h3><p className="q">Did my reply work?</p><p>Saibyl drafts a reply to each objection worth answering, runs the same room again, and shows whether it moved.</p><span className="cap-arc" /></article>
+              <article className="cap-card reveal delay-2"><span className="cap-tag next">$15 a list</span><h3>Buyers</h3><p className="q">Which real companies match?</p><p>The audience you approved becomes a list of real companies that fit it — each with the source shown.</p><span className="cap-arc" /></article>
               <article className="cap-card wide reveal delay-3"><span className="cap-tag next">Up to 8 versions, priced per run</span><h3>Messages</h3><p className="q">Which version wins?</p><p>Up to eight versions of the same message in front of the same room at the same moment — so what differs is the wording, never the crowd. The winner earns the budget; the rest never cost you a campaign.</p><span className="cap-arc" /></article>
             </div>
           </section>
@@ -212,7 +212,7 @@ export default function LandingPage() {
             <div className="container">
               <div className="pricing-top reveal">
                 <div><span className="eyebrow section-kicker">Pricing</span><h2 className="section-title" id="pricing-heading">How much does<br /><em>Saibyl cost?</em></h2></div>
-                <p className="section-copy">Your first run is free, and after that a full run costs about $3. There is no subscription: you buy credits when you want them, they never expire, and every run shows its exact price before it starts.</p>
+                <p className="section-copy">Your first run is free, and after that a full run costs about $15. There is no subscription: you buy credits when you want them, they never expire, and every run shows its exact price before it starts.</p>
               </div>
               <div className="tier-grid">
                 <div className="tier free reveal">
@@ -233,7 +233,7 @@ export default function LandingPage() {
                   <span className="flag">Most run</span>
                   <h3>A full run</h3>
                   <p className="who">The standard room, once you want more than the free one.</p>
-                  <p className="price">$3<small>.01</small></p>
+                  <p className="price">$15<small>.07</small></p>
                   <p className="runs">100 BUYERS · 5 ROUNDS</p>
                   <ul>
                     <li><b>100</b> buyers in the room</li>
@@ -246,31 +246,31 @@ export default function LandingPage() {
                 <div className="tier reveal delay-2">
                   <h3>A page check</h3>
                   <p className="who">Your live site, read the way a buyer reads it.</p>
-                  <p className="price">$1<small>.75</small></p>
+                  <p className="price">$8<small>.75</small></p>
                   <p className="runs">ONE PAGE · SIX REVIEWERS</p>
                   <ul>
                     <li>Six critics score the page</li>
                     <li>Every claim checked against the copy</li>
-                    <li>Rewrite and re-score: <b>$5</b></li>
-                    <li>What to say back: <b>$1.50</b></li>
+                    <li>Rewrite and re-score: <b>$25</b></li>
+                    <li>What to say back: <b>$7.50</b></li>
                   </ul>
                   <Link className="button ghost" to="/signup">Check a page <span className="arrow">→</span></Link>
                 </div>
                 <div className="tier reveal delay-3">
                   <h3>Prior art</h3>
                   <p className="who">Whether the thing you are building is already someone else&rsquo;s.</p>
-                  <p className="price">$2</p>
+                  <p className="price">$10</p>
                   <p className="runs">TRADEMARKS · PATENTS · PENDING</p>
                   <ul>
                     <li>Name check: <b>free</b></li>
                     <li>Claim deep-reads on the closest patents</li>
                     <li>Every result cited to its record</li>
-                    <li>Full landscape: <b>$6</b></li>
+                    <li>Full landscape: <b>$30</b></li>
                   </ul>
                   <Link className="button ghost" to="/signup">Check it&rsquo;s clear <span className="arrow">→</span></Link>
                 </div>
               </div>
-              <p className="pricing-note"><b>1,000 credits costs $1.</b> Top up between $10 and $500 whenever you want, in one payment — nothing renews, nothing expires, and no card is taken at signup. A bigger room or more rounds costs proportionally more, and you always see the exact price before you press go. Running this across a lot of clients? <a href="mailto:info@saidolabs.com" style={{ color: 'var(--blue)', fontWeight: 700 }}>Talk to us</a>.</p>
+              <p className="pricing-note"><b>$1 buys 200 credits, and a credit never expires.</b> Top up between $10 and $500 whenever you want, in one payment — nothing renews, nothing expires, and no card is taken at signup. A bigger room or more rounds costs proportionally more, and you always see the exact price before you press go. Running this across a lot of clients? <a href="mailto:info@saidolabs.com" style={{ color: 'var(--blue)', fontWeight: 700 }}>Talk to us</a>.</p>
             </div>
           </section>
 
@@ -295,7 +295,7 @@ export default function LandingPage() {
                 </details>
                 <details>
                   <summary>What happens after my free run?</summary>
-                  <p>You'll have your audience and your objection list — and a specific, quantified question the next stage answers. After that you buy credits when you want them: 1,000 credits costs $1, a full 100-buyer run is about $3, and top-ups run from $10 to $500. No card is ever taken at signup, so nothing charges you until you decide.</p>
+                  <p>You'll have your audience and your objection list — and a specific, quantified question the next stage answers. After that you buy credits when you want them: $1 buys 200 credits, a full 100-buyer run is about $15, and top-ups run from $10 to $500. No card is ever taken at signup, so nothing charges you until you decide.</p>
                 </details>
                 <details>
                   <summary>Is Saibyl a subscription?</summary>

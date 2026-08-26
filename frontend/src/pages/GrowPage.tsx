@@ -182,7 +182,7 @@ export default function GrowPage() {
     <Ground className="min-h-full pb-24">
       <Longform>
         <Hero
-          eyebrow="Traction"
+          eyebrow="Twelve users in"
           title="Rehearse the move"
           serif="before it costs you."
           actions={
@@ -205,10 +205,11 @@ export default function GrowPage() {
           }
         >
           <p>
-            You have shipped and you have customers, and now you want to move
-            &mdash; put the price up, add something, take something away, go
-            after a buyer who is not today&rsquo;s buyer. Each of those is a
-            change to what you sell, and each is normally made first and
+            You have twelve users. Is that good? Nobody will tell you, and the
+            people who could have all forgotten what twelve felt like. So you
+            decide to move: put the price up, add something, take something
+            away, go after a buyer who is not today&rsquo;s buyer. Each of those
+            is a change to what you sell, and each is normally made first and
             understood three months later, from churn, with no way to tell which
             part of it did the damage.
           </p>

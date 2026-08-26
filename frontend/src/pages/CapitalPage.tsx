@@ -162,19 +162,21 @@ export default function CapitalPage() {
         {/* The hero is never wrapped in `Reveal`: it is the first screen, and a
             page whose opening fades in looks broken for 700ms. */}
         <Hero
-          eyebrow="Fundraise"
+          eyebrow="Come back with traction"
           title="Know the questions"
           serif="before the meeting."
         >
           <p>
-            Investors ask the questions your buyers already asked, in a harder
-            register and with far less patience. This is where you see both
-            halves before the meeting: which firms actually fit what you are
-            building &mdash; matched on your sector, your stage and the
-            objections real buyers raised &mdash; and how your story reads to
-            them. A firm whose published position rules you out is reported
-            saying so, because a short list you can trust is worth more than a
-            long one you cannot.{' '}
+            Somebody told you to come back when you have traction, and you did
+            not ask what they meant. Nobody does. Investors ask the questions
+            your buyers already asked, in a harder register and with far less
+            patience, which is the one useful thing about them: you have heard
+            these before. This is where you see both halves before the meeting.
+            Which firms actually fit what you are building, matched on your
+            sector, your stage and the objections real buyers raised. And how
+            your story reads to them. A firm whose published position rules you
+            out is reported saying so, because a short list you can trust is
+            worth more than a long one you cannot.{' '}
             <b className="text-saibyl-ink font-semibold">
               How does the story read? Who would fund it? What will they ask?
             </b>

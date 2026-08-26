@@ -135,7 +135,7 @@ export default function ValidatePage() {
     <Ground className="min-h-full pb-24">
       <Longform>
         <Hero
-          eyebrow="Idea stage"
+          eyebrow="The 2am question"
           title="Find out who"
           serif="already built it."
           actions={
@@ -153,11 +153,15 @@ export default function ValidatePage() {
           }
         >
           <p>
-            You built this because you ran into the problem yourself &mdash;
-            that part you already know, and no room of strangers is going to
-            tell you otherwise. What you cannot know yet is whether anybody
+            It is 2am, three days in, and the thought arrives anyway: has
+            someone already built this? You search. You find something that
+            looks close and your stomach drops, or you find nothing and cannot
+            tell whether that is open ground or an empty market. Either way you
+            cannot tell, and you keep building. You know the problem is real
+            because you ran into it yourself, and no room of strangers is going
+            to tell you otherwise. What you cannot know is whether somebody
             filed a patent on it two years ago, and whether the pain you felt is
-            felt by enough other people to be a business. So Saibyl checks the
+            felt by enough other people to be a business. So Saibyl reads the
             public record first: trademarks, granted patents, and the
             applications nobody reads. Then it builds the room, and you find out
             how the idea actually lands.{' '}

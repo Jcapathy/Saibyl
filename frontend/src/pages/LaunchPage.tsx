@@ -184,7 +184,7 @@ export default function LaunchPage() {
     <Ground className="min-h-full pb-24">
       <Longform>
         <Hero
-          eyebrow="Go to market"
+          eyebrow="After nine upvotes"
           title="Eight ways to say it,"
           serif="one room decides."
           actions={
@@ -207,10 +207,14 @@ export default function LaunchPage() {
           }
         >
           <p>
-            This is the stage where you take it to market, and it answers the
-            three questions that decide how that goes: which way of saying it
-            wins, what your messaging actually is once you have decided, and
-            what goes out on Monday morning.
+            You posted it. Nine upvotes, two comments, and nothing after that.
+            The worst part is not the silence, it is that the silence does not
+            tell you which thing was wrong: the product, the words, or the room
+            you posted it to. This is the stage where you take it to market, and
+            it separates those three. It answers the questions that decide how a
+            launch goes: which way of saying it wins, what your messaging
+            actually is once you have decided, and what goes out on Monday
+            morning.
           </p>
           <p className="mt-4">
             None of it is written from memory. The wording is picked by a room

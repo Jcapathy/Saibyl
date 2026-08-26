@@ -118,7 +118,7 @@ export default function PositionPage() {
     <Ground className="min-h-full pb-24">
       <Longform>
         <Hero
-          eyebrow="Pre-launch"
+          eyebrow="After the call that died"
           title="Find the objection"
           serif="that kills the pitch."
           actions={
@@ -142,13 +142,16 @@ export default function PositionPage() {
           }
         >
           <p>
-            A good product still loses to the one objection nobody rehearsed.
-            Your page has a few seconds to answer it, and you are the last
-            person alive who can read that page fresh. So the room reads it for
-            you and says what stopped them, in their own words, ranked by how
-            many it stopped. Then Saibyl rewrites the page to answer the worst
-            of it and puts the new version in front of that same room &mdash; so
-            what you get is a measured difference rather than a hope.{' '}
+            The call ended politely and you still do not know what killed it.
+            Was it price? Was it trust? Was it the wrong person on the call at
+            all? You will replay it for a week and land nowhere, because the one
+            person who cannot read your pitch fresh is you. A good product loses
+            to the objection nobody rehearsed, and your page gets a few seconds
+            to answer it. So the room reads it instead and says what stopped
+            them, in their own words, ranked by how many it stopped. Then Saibyl
+            rewrites the page to answer the worst of it and puts the new version
+            in front of that same room, so what comes back is a measured
+            difference rather than a hope.{' '}
             <b className="text-saibyl-ink font-semibold">
               Which objection kills the pitch? What answer moves them? Did the
               fix actually work?
