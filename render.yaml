@@ -92,12 +92,24 @@ services:
         value: "10"
       - key: SIMULATION_WORKER_CONCURRENCY
         value: "4"
+      # The apex domain, not the Render subdomain. This is where Stripe returns
+      # a founder after a top-up, so leaving it on `onrender.com` would bounce
+      # them off the branded site the moment they had paid.
       - key: FRONTEND_URL
-        value: https://saibyl-frontend.onrender.com
+        value: https://saibyl.com
       - key: BACKEND_URL
         value: https://saibyl-backend.onrender.com
+      # **All three, and the Render subdomain stays.** The browser sends the
+      # origin it was served from, so the moment the site answers on
+      # `saibyl.com` every API call carries that origin and a backend allowing
+      # only `onrender.com` refuses all of them. The page would load perfectly
+      # and do nothing: no login, no runs, no billing.
+      #
+      # The `onrender.com` entry is kept rather than replaced because that
+      # address stays live and is what a rollback or a direct check would use.
+      # `www` is listed because Render serves it as its own hostname.
       - key: CORS_ORIGINS
-        value: https://saibyl-frontend.onrender.com
+        value: https://saibyl.com,https://www.saibyl.com,https://saibyl-frontend.onrender.com
       - key: REDIS_URL
         fromService:
           name: saibyl-redis

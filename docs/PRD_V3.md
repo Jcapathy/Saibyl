@@ -218,6 +218,23 @@ occasions for the same account."* Pricing was shaping the product.
 
 - **Founders top up as they go.** Credits are the only ration. There is one
   balance, one price list, and no plan that changes what anybody may do.
+- **The price is the measured cost plus 80%, and that is the whole model.**
+  `estimate_simulation_cost` prices a run from a per-stage token profile against
+  real model rates; `TARGET_MARGIN_PCT = 80` sits on top; `credits_for` converts
+  that to credits rounding up so the floor cannot be crossed. A standard run
+  (100 buyers, 5 rounds, 2 places, with a subject brief) measures **$3.01 of
+  cost** and is sold for **$15.07**. Nothing about this is a judgement call and
+  it is not reopened: a founder pays cost plus the margin, on every run.
+  - **`TOPUP_MARGIN_PCT` equals `TARGET_MARGIN_PCT` as of 2026-08-25.** It was
+    five points higher, purely so that subscribing looked better than paying as
+    you go. With no subscription that surcharge was a third off the value of
+    every credit for no reason, so it went. **$1 buys 200 credits.**
+  - **`CREDITS_PER_USD` is a cost basis, not a retail rate.** It converts our
+    COGS into credits. Dividing a credit price by it yields what a run costs
+    *us*, and the landing page briefly published those figures as the customer
+    price, understating everything fivefold. The retail rate is what
+    `credits_for_topup` returns. This is the one arithmetic trap in the pricing
+    code and it has now been fallen into once.
 - **The free first run** per verified email (guardrails per §3) is the only
   thing Saibyl gives away, and it is **a 30-person room** — raised from 25 on
   2026-08-25. It costs 1,335 credits against a 2,000-credit grant, so the
@@ -511,3 +528,31 @@ product the room believes and the one it stopped believing at stage three.
 - `founder_stages.py`'s docstring cites "PRD §5" for the stage registry; §5 of
   this document is the wow standard. The reference is stale — it should cite
   §12.
+
+## 13. Release state, 2026-08-25
+
+What shipped on `v3-prd` between 2026-08-24 and 2026-08-25, in the order it
+happened. Everything here is merged to `master` and deployed by Render on push.
+
+| Area | State |
+|---|---|
+| **Pricing** | Subscription tiers removed. Credits only, cost plus 80%, `$1` buys 200 credits. Free first run is a **30-person room**. |
+| **Stripe** | Subscription endpoints, `PLAN_LIMITS` and the webhook's subscription branches all removed. `mode="payment"` top-ups and the one-off report remain. |
+| **Validate** | Retrieval-first per §12c: clearance opens the stage, the room follows. |
+| **Website check** | A seventh, **counted** dimension: em-dash density, heading structure, radius/typeface/colour/shadow sprawl, section-label rhythm, and one destination wearing several labels. No model call, so it cannot hallucinate and costs nothing to re-run. |
+| **Module copy** | Every stage hero opens on the founder's moment rather than a category label. |
+| **Public pages** | `/`, `/privacy` and `/terms` prerendered to static HTML at build, with `render.yaml` routing the last two ahead of the SPA catch-all. A real privacy policy and terms of use. An OG image that exists. |
+| **Domain** | `render.yaml` carries `saibyl.com` in `CORS_ORIGINS` and `FRONTEND_URL`, ready for DNS. |
+
+**Known and deliberate.** The prevalence-evidence surface (§12c step 2) and the
+Raise revenue gate (§12d) are specified and unbuilt. The credibility critic
+still calls a correct 2026 copyright year "in the future", because the date is
+not passed to it — `CRITICS_LOG` 2026-08-25 has the reasoning and the fix. The
+counted dimension's action check is silent rather than passing on pasted HTML,
+because `about:blank` gives relative links no base to resolve against.
+
+**Six sample landing pages exist** (`scripts/build_sample_pages*.py`), owned by
+us, replacing website checks that previously pointed at Stripe, Duolingo,
+Supabase, Gumroad and SimplePractice. Run through the gauntlet they moved
+**68 → 73 mean**, driven by credibility **+29** from deleting a fabricated
+testimonial in favour of stating what a pre-launch product cannot prove.
