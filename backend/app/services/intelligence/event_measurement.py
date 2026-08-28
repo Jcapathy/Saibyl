@@ -187,7 +187,6 @@ async def _measure_batch(
                     {"role": "system", "content": _SYSTEM},
                     {"role": "user", "content": _build_batch_prompt(goal, batch)},
                 ],
-                temperature=0.0,
                 max_tokens=200 * len(batch) + 200,
             )
             parsed = json.loads(_extract_json(raw))

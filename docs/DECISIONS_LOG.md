@@ -8,6 +8,49 @@ choices.
 
 ---
 
+## 2026-08-28 — Opus 5, and why it could not be an environment-variable change
+
+Founder decision: *"migrate to Opus 5 for the LLM model."*
+
+**The migration was code, not config, and the reason is a 400.** `temperature`,
+`top_p` and `top_k` are **rejected on Opus 4.7 and later**. `llm_client` passed
+`temperature` on every call and twelve call sites across eight files passed their
+own value. Changing `LLM_MODEL` to `claude-opus-5` without removing them first
+would have failed *every LLM call in the product* — runs, critics, reports,
+extraction — not degraded them.
+
+**A latent bug found on the way.** `config.py` defaulted `llm_model` to
+`claude-opus-4-7`, a model that rejects `temperature`. Production only worked
+because the Render env var overrode it to `4.6`. **If `LLM_MODEL` had ever been
+unset, every LLM call would have 400'd immediately** — the fallback was the
+broken path. Default and deployment now agree.
+
+**`max_tokens` went 4096 → 8192, and that is part of the migration rather than a
+tuning choice.** On Opus 5 thinking is ON by default and `max_tokens` caps
+thinking *plus* the answer. The old ceiling was sized around the answer alone on
+a model that did not think, so the same request could now truncate mid-sentence —
+which surfaces as a JSON parse failure in `llm_structured`, on work already paid
+for. 8192 is also the largest value that keeps `llm_vision` on its existing
+non-streaming path.
+
+**The fast model stays on Haiku 4.5**, against the suggestion to move it to
+Sonnet or Opus. `llm_fast` carries agent actions and per-event measurement — the
+dominant cost line, and the reason a large run is affordable at all. Sonnet 5 is
+3× Haiku's rate and Opus 5 is 5×, and the run price was set deliberately at
+$15-ish so that "why wouldn't I run it?" is the reaction. Tripling the dominant
+line to chase quality nobody has measured is the wrong order. **The right way to
+decide it is Saibyl itself**: run one product through the room on each model and
+compare the objections. Its id was also corrected from
+`claude-haiku-4-5-20251001` to `claude-haiku-4-5` — the dated form is a
+training-data habit and only priced correctly by prefix luck.
+
+**Open, and it needs a measurement rather than an opinion:** the tokenizer
+changed at 4.7. The same eight-word prompt measured **16 tokens on 4.6 and 22 on
+Opus 5** in a live check. Credits are derived from measured cost plus 80%, so
+run economics move. Re-measure a full run before trusting the price table.
+
+---
+
 ## 2026-08-28 — Grounding, not training; and an accepted finding on the trust card
 
 Founder decisions, taken after the second website check on saibyl.com.

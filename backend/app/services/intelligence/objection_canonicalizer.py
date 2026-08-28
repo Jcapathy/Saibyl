@@ -249,7 +249,6 @@ async def _cluster(
                     ),
                 }
             ],
-            temperature=0.0,
             max_tokens=CLUSTER_MAX_TOKENS,
         )
         # A stage that quietly survives at its own ceiling is a stage that fails

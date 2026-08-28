@@ -1,10 +1,9 @@
 # PUBLIC INTERFACE
 # ─────────────────────────────────────────────────────────
-# llm_complete(messages, model=None, temperature=0.7, max_tokens=4096,
-#              response_format=None) -> str
-# llm_fast(messages, temperature=0.7, max_tokens=4096) -> str
+# llm_complete(messages, model=None, max_tokens=8192) -> str
+# llm_fast(messages, max_tokens=4096) -> str
 # llm_vision(prompt, images, *, media_type="image/png", system=None,
-#            temperature=0.3, max_tokens=4096) -> str
+#            max_tokens=8192) -> str
 # llm_structured(messages, schema: Type[BaseModel], model=None) -> BaseModel
 # llm_stream(messages, model=None) -> AsyncGenerator[str, None]
 # ─────────────────────────────────────────────────────────
@@ -23,6 +22,25 @@ from app.core.config import settings
 from app.services.billing.usage_ledger import record_llm_call
 
 logger = structlog.get_logger()
+
+# **Sampling parameters are gone, and that is not a style choice.**
+# `temperature`, `top_p` and `top_k` are rejected with a 400 on Opus 4.7 and
+# later. Every function here used to pass `temperature`, and twelve call sites
+# passed their own value; on 2026-08-28 all of it was removed so the model could
+# move to `claude-opus-5`. Adding any of them back breaks every LLM call in the
+# product, not just the one that was edited. Determinism is now `effort`.
+#
+# **Why the ceiling went up.** On Opus 5 thinking is ON by default, and
+# `max_tokens` is a hard cap on thinking PLUS the response text. The old 4096
+# was sized around the answer alone on a model that did not think, so the same
+# request can now truncate mid-sentence — which lands here as a JSON parse
+# failure in `llm_structured`, having already been paid for. 8192 restores the
+# old headroom for the answer and leaves room for the reasoning.
+#
+# It is deliberately not higher: `llm_vision` streams above 8192 (the SDK
+# refuses long non-streaming requests), so this is the largest value that keeps
+# both paths on their current behaviour.
+_OPUS_MAX_TOKENS = 8192
 
 
 def _record(resolved: str, usage: Any) -> None:
@@ -81,8 +99,7 @@ def _api_key() -> str:
 async def llm_complete(
     messages: list[dict[str, str]],
     model: str | None = None,
-    temperature: float = 0.7,
-    max_tokens: int = 4096,
+    max_tokens: int = _OPUS_MAX_TOKENS,
     **kwargs: Any,
 ) -> str:
     """Send messages to LLM and return text response."""
@@ -90,7 +107,6 @@ async def llm_complete(
     response = await acompletion(
         model=resolved,
         messages=messages,
-        temperature=temperature,
         max_tokens=max_tokens,
         api_key=_api_key(),
         **kwargs,
@@ -108,7 +124,6 @@ async def llm_complete(
 
 async def llm_fast(
     messages: list[dict[str, str]],
-    temperature: float = 0.7,
     max_tokens: int = 4096,
     **kwargs: Any,
 ) -> str:
@@ -127,7 +142,6 @@ async def llm_fast(
     response = await acompletion(
         model=resolved,
         messages=messages,
-        temperature=temperature,
         max_tokens=max_tokens,
         api_key=_api_key(),
         **kwargs,
@@ -157,8 +171,7 @@ async def llm_vision(
     *,
     media_type: str = "image/png",
     system: str | None = None,
-    temperature: float = 0.3,
-    max_tokens: int = 4096,
+    max_tokens: int = _OPUS_MAX_TOKENS,
 ) -> str:
     """Send images plus a text prompt to the vision-capable main model.
 
@@ -218,7 +231,6 @@ async def llm_vision(
         async with client.messages.stream(
             model=settings.llm_model,
             messages=[{"role": "user", "content": content}],
-            temperature=temperature,
             max_tokens=max_tokens,
             **extra,
         ) as stream:
@@ -227,7 +239,6 @@ async def llm_vision(
         response = await client.messages.create(
             model=settings.llm_model,
             messages=[{"role": "user", "content": content}],
-            temperature=temperature,
             max_tokens=max_tokens,
             **extra,
         )

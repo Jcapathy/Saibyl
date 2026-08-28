@@ -641,7 +641,6 @@ async def _run_synthesis(
     raw = await llm_complete(
         messages=[{"role": "user", "content": prompt}],
         max_tokens=_SYNTHESIS_MAX_TOKENS,
-        temperature=0.4,
     )
     return json.loads(_extract_json(raw))
 

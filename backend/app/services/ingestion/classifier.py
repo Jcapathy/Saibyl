@@ -156,7 +156,6 @@ async def suggest_material_kind(
         raw = await llm_fast(
             messages=[{"role": "user", "content": _prompt(text, filename, media_type)}],
             max_tokens=_MAX_TOKENS,
-            temperature=0.0,
         )
         data = json.loads(_extract_json(raw))
     except Exception as exc:

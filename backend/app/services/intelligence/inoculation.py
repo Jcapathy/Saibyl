@@ -521,7 +521,6 @@ async def draft_assets(
                 "content": _draft_prompt(sim, objections, named, product_name),
             }],
             max_tokens=_DRAFT_MAX_TOKENS,
-            temperature=0.5,
         )
 
     try:

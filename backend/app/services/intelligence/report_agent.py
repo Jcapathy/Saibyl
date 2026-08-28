@@ -190,7 +190,9 @@ DEPTH_PRESETS = {
 class ReACTConfig(BaseModel):
     max_tool_calls_per_section: int = 5
     max_reflection_rounds: int = 2
-    temperature: float = 0.5
+    # `temperature` was removed on 2026-08-28: Opus 4.7+ reject it with a
+    # 400. Kept out of this config rather than kept-and-ignored, so nothing
+    # reads like a knob that still turns.
     evidence_depth: Literal["shallow", "standard", "deep", "exhaustive"] = "standard"
     section_count: int | None = None
     include_agent_interviews: bool = True
@@ -1019,7 +1021,6 @@ async def _figure_checked(
                         complaint=figure_complaint(figures),
                     )},
                 ],
-                temperature=config.temperature,
             ),
             timeout=_CLOSING_CALL_TIMEOUT_S,
         )
@@ -1162,7 +1163,6 @@ async def _run_react_loop(
                 {"role": "system", "content": REPORT_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
-            temperature=config.temperature,
         )
 
         stripped = response.strip()
@@ -1227,7 +1227,6 @@ async def _run_react_loop(
             {"role": "system", "content": REPORT_SYSTEM_PROMPT},
             {"role": "user", "content": final_prompt},
         ],
-        temperature=config.temperature,
     )
     forced = (
         result.split("ANSWER:", 1)[1].strip()

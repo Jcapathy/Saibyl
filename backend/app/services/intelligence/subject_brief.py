@@ -435,7 +435,6 @@ async def _distil(
             max_tokens=_DISTIL_MAX_TOKENS,
             # Low, not zero. This is transcription with judgment about what to
             # keep, and the creative range of the model is the last thing wanted.
-            temperature=0.2,
         )
 
     fields = json.loads(_extract_json(raw))

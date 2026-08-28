@@ -160,7 +160,7 @@ async def chat_with_report(
 
     # Mini ReACT loop
     for _step in range(max_context_tools):
-        response_text = await llm_complete(messages=messages, temperature=0.3)
+        response_text = await llm_complete(messages=messages)
 
         # Check if the model wants to call a tool
         try:
@@ -197,7 +197,7 @@ async def chat_with_report(
         })
     else:
         # Exhausted tool budget — generate final answer
-        response_text = await llm_complete(messages=messages, temperature=0.3)
+        response_text = await llm_complete(messages=messages)
 
     # Persist conversation
     history.append({"role": "user", "content": message})

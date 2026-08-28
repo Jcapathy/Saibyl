@@ -877,8 +877,22 @@ async def test_llm_vision_builds_anthropic_image_blocks_ahead_of_the_text(monkey
     assert content[1]["source"]["data"] == base64.b64encode(b"mobile-png").decode()
     assert content[2]["text"] == "What is weak about this page?"
     assert call["system"] == "You are a critic."
-    assert call["temperature"] == 0.3
-    assert call["max_tokens"] == 4096
+
+    # **Inverted on 2026-08-28, and this is now the assertion that matters.**
+    # It used to read `call["temperature"] == 0.3`. `temperature`, `top_p` and
+    # `top_k` are rejected with a 400 on Opus 4.7 and later, so sending one does
+    # not degrade the call — it kills every LLM request in the product. This
+    # fails if anybody adds a sampling parameter back.
+    for banned in ("temperature", "top_p", "top_k"):
+        assert banned not in call, (
+            f"{banned} is rejected with a 400 on Opus 4.7+; sending it breaks "
+            "every LLM call, not just this one"
+        )
+
+    # Raised from 4096 with the move to Opus 5: thinking is on by default there
+    # and `max_tokens` caps thinking PLUS the answer, so the old ceiling could
+    # truncate a response that used to fit.
+    assert call["max_tokens"] == llm_client._OPUS_MAX_TOKENS == 8192
 
 
 async def test_llm_vision_records_usage_through_the_same_ledger(monkeypatch):

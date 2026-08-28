@@ -25,8 +25,14 @@ class Settings(BaseSettings):
     backend_url: str = "http://localhost:8000"
     cors_origins: str = "http://localhost:3000"
     llm_provider: str = "anthropic"
-    llm_model: str = "claude-opus-4-7"
-    llm_fast_model: str = "claude-haiku-4-5-20251001"
+    # Opus 5. The migration from 4.6 is NOT a variable change: 4.7+ reject
+    # `temperature`/`top_p`/`top_k` with a 400, so `llm_client` had to stop
+    # sending them first. See DECISIONS_LOG 2026-08-28.
+    llm_model: str = "claude-opus-5"
+    # No date suffix. `claude-haiku-4-5` is the complete id; the dated form
+    # was a training-data habit, and `model_pricing` only matched it by
+    # prefix luck.
+    llm_fast_model: str = "claude-haiku-4-5"
     llm_base_url: str = ""
     supabase_storage_bucket: str = "saibyl-uploads"
     simulation_max_rounds: int = 10
