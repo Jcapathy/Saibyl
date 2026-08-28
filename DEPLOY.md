@@ -22,13 +22,38 @@ These are marked `sync: false` in render.yaml — you must set them in the Rende
 | `SECRET_KEY` | Bitwarden Secrets Manager (min 32 chars, required in production) |
 | `STRIPE_SECRET_KEY` | Bitwarden Secrets Manager |
 | `STRIPE_WEBHOOK_SECRET` | Bitwarden Secrets Manager |
-| `STRIPE_PRICE_ID_STARTER` | Bitwarden Secrets Manager |
-| `STRIPE_PRICE_ID_PRO` | Bitwarden Secrets Manager |
-| `STRIPE_PRICE_ID_ENTERPRISE` | Bitwarden Secrets Manager |
 | `RESEND_API_KEY` | Bitwarden Secrets Manager |
 | `SENTRY_DSN` | Bitwarden Secrets Manager |
 
 > `REDIS_URL` is auto-injected by Render from the `saibyl-redis` service. Do NOT set it manually.
+
+### Taking credit payments (the only Stripe setup there is)
+
+There is **no Stripe product or price to create**. A top-up is any amount from
+$10 to $500, so `create_topup_checkout` builds the price inline with
+`price_data`; a product id has nowhere to go. `STRIPE_PRICE_ID_STARTER/_PRO/
+_ENTERPRISE` were removed on 2026-08-27 — leftovers from the subscription tiers
+deleted on 2026-08-25, never read by any Python.
+
+To go from "cannot take money" to "can", in Stripe **live mode**:
+
+1. **Live secret key.** `STRIPE_SECRET_KEY` on `saibyl-backend` must start
+   `sk_live_`. A `sk_test_` key produces a working-looking Checkout page that
+   only accepts test cards, so no real customer can ever pay.
+2. **Register the webhook.** Stripe → Developers → Webhooks → add endpoint
+   `https://saibyl-backend.onrender.com/api/billing/webhook`, event
+   `checkout.session.completed`. Without it Stripe takes the money and the
+   balance never moves — the worst failure mode here, because the customer is
+   charged.
+3. **Matching webhook secret.** Copy that endpoint's signing secret to
+   `STRIPE_WEBHOOK_SECRET`. **It must be from the same mode as the key.** A
+   live key with a test signing secret means every real payment is rejected at
+   signature verification and silently credited to nobody.
+
+Verify with a real card for $10, then check the org's `credits_balance`
+moved and `credit_topups.status` is `paid`. A green Checkout page is not proof:
+the money and the credit are two separate events, and only the second one is
+the product working.
 
 ## Architecture on Render
 

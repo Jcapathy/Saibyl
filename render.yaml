@@ -41,12 +41,14 @@ services:
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
-      - key: STRIPE_PRICE_ID_STARTER
-        sync: false
-      - key: STRIPE_PRICE_ID_PRO
-        sync: false
-      - key: STRIPE_PRICE_ID_ENTERPRISE
-        sync: false
+      # STRIPE_PRICE_ID_STARTER / _PRO / _ENTERPRISE were removed on
+      # 2026-08-27. They are leftovers from the subscription tiers deleted on
+      # 2026-08-25, and no Python has read them since — there is no such field
+      # on `Settings`. They were worse than dead: a top-up builds its price
+      # INLINE (`price_data` in `create_topup_checkout`), because a top-up is
+      # any amount from $10 to $500 rather than a fixed SKU. So a Stripe price
+      # id has nowhere to go, and three empty slots named PRICE_ID invite
+      # somebody to paste one in and wonder why nothing changes.
       - key: RESEND_API_KEY
         sync: false
       - key: SENTRY_DSN
