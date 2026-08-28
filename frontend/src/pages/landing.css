@@ -74,13 +74,13 @@
 .v3land .nav {
   display: flex; align-items: center; justify-content: space-between; gap: 24px;
   min-height: 64px; padding: 0 17px 0 20px;
-  border: 1px solid rgba(34, 81, 148, .12); border-radius: 18px;
+  border: 1px solid rgba(34, 81, 148, .12); border-radius: var(--radius-md);
   background: rgba(251, 253, 255, .78);
   box-shadow: 0 8px 30px rgba(64, 108, 170, .07);
   backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
 }
 .v3land .brand { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 800; letter-spacing: -.04em; white-space: nowrap; }
-.v3land .brand-mark { position: relative; display: grid; place-items: center; width: 29px; height: 29px; overflow: hidden; border-radius: 9px; color: white; background: linear-gradient(135deg, #2f75ef 5%, #705ee3 95%); box-shadow: inset 0 1px rgba(255,255,255,.4), 0 5px 14px rgba(75, 98, 221, .28); font: 700 17px/1 "Playfair Display", serif; }
+.v3land .brand-mark { position: relative; display: grid; place-items: center; width: 29px; height: 29px; overflow: hidden; border-radius: 12px; color: white; background: linear-gradient(135deg, #2f75ef 5%, #705ee3 95%); box-shadow: inset 0 1px rgba(255,255,255,.4), 0 5px 14px rgba(75, 98, 221, .28); font: 700 17px/1 "Playfair Display", serif; }
 .v3land .brand-mark::after { content: ""; position: absolute; width: 12px; height: 12px; top: -5px; right: -4px; border-radius: 50%; background: rgba(255,255,255,.7); }
 .v3land .brand small { color: #74849e; font: 500 8px "DM Mono", monospace; letter-spacing: .07em; }
 .v3land .nav-links { display: flex; align-items: center; gap: clamp(12px, 2.2vw, 30px); color: #526988; font-size: 12px; font-weight: 700; }
@@ -123,12 +123,12 @@
 .v3land .orbit.one i { top: -4px; left: 19%; }
 .v3land .orbit.two i { bottom: -4px; right: 19%; background: #9679ef; box-shadow: 0 0 0 6px rgba(150,121,239,.12), 0 0 15px #9679ef; }
 .v3land .core-card { position: absolute; z-index: 2; top: 128px; left: 50%; display: grid; place-items: center; width: 168px; height: 168px; border: 1px solid rgba(255,255,255,.9); border-radius: 36px; transform: translateX(-50%) rotate(-9deg); color: white; text-align: center; background: linear-gradient(145deg, #306fe9, #725ce1 72%); box-shadow: inset 0 1px 1px rgba(255,255,255,.42), 0 24px 52px rgba(61, 90, 185, .28); animation: v3land-core-float 6s ease-in-out infinite; }
-.v3land .core-card::before { content: ""; position: absolute; inset: 11px; border: 1px solid rgba(255,255,255,.25); border-radius: 27px; }
+.v3land .core-card::before { content: ""; position: absolute; inset: 11px; border: 1px solid rgba(255,255,255,.25); border-radius: 28px; }
 .v3land .core-card .small { position: relative; z-index: 1; margin-bottom: 7px; opacity: .78; font: 500 9px "DM Mono", monospace; letter-spacing: .12em; text-transform: uppercase; }
 .v3land .core-card strong { position: relative; z-index: 1; display: block; font-size: 22px; letter-spacing: -.05em; }
 .v3land .core-card b { position: relative; z-index: 1; display: block; margin-top: 3px; font: 500 9px "DM Mono", monospace; letter-spacing: .08em; opacity: .85; }
-.v3land .buyer { position: absolute; z-index: 3; display: flex; align-items: center; gap: 9px; min-width: 148px; padding: 10px 12px 10px 10px; border: 1px solid rgba(255,255,255,.9); border-radius: 14px; background: rgba(255,255,255,.86); box-shadow: 0 13px 30px rgba(48, 84, 143, .12); backdrop-filter: blur(10px); animation: v3land-buyer-float 5s ease-in-out infinite; }
-.v3land .buyer .avatar { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 9px; font-size: 12px; font-weight: 800; }
+.v3land .buyer { position: absolute; z-index: 3; display: flex; align-items: center; gap: 9px; min-width: 148px; padding: 10px 12px 10px 10px; border: 1px solid rgba(255,255,255,.9); border-radius: 12px; background: rgba(255,255,255,.86); box-shadow: 0 13px 30px rgba(48, 84, 143, .12); backdrop-filter: blur(10px); animation: v3land-buyer-float 5s ease-in-out infinite; }
+.v3land .buyer .avatar { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 12px; font-size: 12px; font-weight: 800; }
 .v3land .buyer b { display: block; font-size: 11px; letter-spacing: -.025em; }
 .v3land .buyer small { display: block; margin-top: 2px; color: #7483a0; font: 9px "DM Mono", monospace; }
 .v3land .buyer-a { top: 44px; left: 2px; transform: rotate(-5deg); }
@@ -139,7 +139,7 @@
 .v3land .buyer-c .avatar { color: #d94f5d; background: #ffe9ec; }
 .v3land .buyer-d { top: 228px; left: -10px; transform: rotate(5deg); animation-delay: -2.3s; }
 .v3land .buyer-d .avatar { color: #167f93; background: #dff9fa; }
-.v3land .objection-console { position: absolute; z-index: 4; left: 50%; bottom: 22px; width: min(96%, 400px); padding: 14px 15px; transform: translateX(-50%) rotate(-2deg); border: 1px solid rgba(91,126,188,.18); border-radius: 16px; background: rgba(249,252,255,.86); box-shadow: 0 18px 38px rgba(72, 104, 157, .14); backdrop-filter: blur(10px); transition: transform .45s ease; }
+.v3land .objection-console { position: absolute; z-index: 4; left: 50%; bottom: 22px; width: min(96%, 400px); padding: 14px 15px; transform: translateX(-50%) rotate(-2deg); border: 1px solid rgba(91,126,188,.18); border-radius: var(--radius-md); background: rgba(249,252,255,.86); box-shadow: 0 18px 38px rgba(72, 104, 157, .14); backdrop-filter: blur(10px); transition: transform .45s ease; }
 .v3land .room-stage:hover .objection-console { transform: translateX(-50%) rotate(0deg) translateY(-4px); }
 .v3land .console-top { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid rgba(72,108,164,.13); color: #637895; font: 9px "DM Mono", monospace; }
 .v3land .console-live { display: inline-flex; align-items: center; gap: 5px; color: #2da871; }
@@ -177,7 +177,7 @@
 .v3land .journey-list { border-top: 1px solid var(--line); }
 .v3land .journey-item { display: grid; grid-template-columns: 62px 1fr; gap: 16px; align-items: center; padding: 24px 0; border-bottom: 1px solid var(--line); transition: padding .25s ease; }
 .v3land .journey-item:hover { padding-left: 8px; }
-.v3land .journey-mark { display: grid; place-items: center; width: 47px; height: 47px; border-radius: 14px; background: #e8efff; color: #416ce4; font-size: 19px; }
+.v3land .journey-mark { display: grid; place-items: center; width: 47px; height: 47px; border-radius: 12px; background: #e8efff; color: #416ce4; font-size: 19px; }
 .v3land .journey-item:nth-child(2) .journey-mark { color: #7259cb; background: #f0ecff; }
 .v3land .journey-item:nth-child(3) .journey-mark { color: #138997; background: #e4fbfc; }
 .v3land .journey-item:nth-child(4) .journey-mark { color: #d94f5d; background: #ffe9ec; }
@@ -220,7 +220,7 @@
 .v3land .step::before { content: "0" counter(step); color: #9aa9c0; font: 10px "DM Mono", monospace; letter-spacing: .08em; }
 .v3land .step b { display: block; margin: 9px 0 5px; font-size: 14px; letter-spacing: -.035em; }
 .v3land .step p { margin: 0; color: var(--muted); font-size: 11.5px; line-height: 1.6; }
-.v3land .step-chip { display: inline-flex; align-items: center; gap: 6px; margin-top: 11px; padding: 5px 9px; border: 1px solid rgba(64,105,169,.15); border-radius: 8px; background: rgba(255,255,255,.85); color: #52667f; font: 500 8.5px "DM Mono", monospace; letter-spacing: .04em; }
+.v3land .step-chip { display: inline-flex; align-items: center; gap: 6px; margin-top: 11px; padding: 5px 9px; border: 1px solid rgba(64,105,169,.15); border-radius: 12px; background: rgba(255,255,255,.85); color: #52667f; font: 500 8.5px "DM Mono", monospace; letter-spacing: .04em; }
 .v3land .step-chip i { width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
 
 /* ── Growth ladder ────────────────────────────── */
@@ -281,7 +281,7 @@
 
 /* ── Closing ──────────────────────────────────── */
 .v3land .closing { padding: 60px 0 25px; }
-.v3land .closing-panel { position: relative; overflow: hidden; padding: clamp(39px, 7vw, 79px) clamp(25px, 6vw, 75px); border-radius: 29px; color: white; background: linear-gradient(115deg, #286be8, #5762dd 55%, #8266df); box-shadow: 0 22px 52px rgba(70,88,193,.24); }
+.v3land .closing-panel { position: relative; overflow: hidden; padding: clamp(39px, 7vw, 79px) clamp(25px, 6vw, 75px); border-radius: 28px; color: white; background: linear-gradient(115deg, #286be8, #5762dd 55%, #8266df); box-shadow: 0 22px 52px rgba(70,88,193,.24); }
 .v3land .closing-panel::before { content: ""; position: absolute; width: 400px; height: 400px; top: -230px; right: -78px; border: 1px solid rgba(255,255,255,.26); border-radius: 50%; box-shadow: 0 0 0 50px rgba(255,255,255,.065), 0 0 0 100px rgba(255,255,255,.045); }
 .v3land .closing-panel::after { content: ""; position: absolute; width: 200px; height: 200px; bottom: -130px; left: 38%; border: 1px solid rgba(255,255,255,.25); border-radius: 50%; }
 .v3land .closing-content { position: relative; z-index: 2; max-width: 680px; }
@@ -330,6 +330,36 @@
 .v3land .price-table tbody td { padding: 13px 22px; color: #52667f; font-size: 13.5px; text-align: right; border-top: 1px solid rgba(38,79,139,.09); font-variant-numeric: tabular-nums; }
 .v3land .price-table tbody td b { color: var(--blue); }
 .v3land .price-table tbody tr.is-free th, .v3land .price-table tbody tr.is-free td { background: rgba(40,108,240,.04); }
+
+/* The page had no `img` element at all, which our own counted check reports and
+   the taste audit flagged before it. A diagram rather than a screenshot on
+   purpose: it explains the run without claiming traction a pre-launch product
+   does not have, and it is a real file rather than divs pretending to be one. */
+.v3land .run-diagram { margin: 34px 0 0; }
+.v3land .run-diagram img { display: block; width: 100%; height: auto; border-radius: var(--radius-lg); box-shadow: 0 14px 30px rgba(55,90,145,.06); }
+
+/* The answer to the correlation objection. Same card vocabulary as `.evidence`
+   so the two read as one argument: outside numbers, then our own, then the
+   limits. The `is-ours` card is tinted because it is the only one of the three
+   that is a claim about this product rather than about the method. */
+.v3land .predict { padding: 74px 0 8px; }
+.v3land .predict-head { max-width: 680px; }
+.v3land .predict-head .section-title { text-wrap: balance; }
+.v3land .predict-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(238px, 1fr)); gap: 15px; margin-top: 34px; }
+.v3land .predict-card { padding: 22px 22px 18px; border: 1px solid rgba(45,83,139,.13); border-radius: var(--radius-md); background: rgba(255,255,255,.86); box-shadow: 0 10px 24px rgba(55,90,145,.05); }
+.v3land .predict-card.is-ours { border-color: rgba(40,108,240,.26); background: linear-gradient(160deg, rgba(40,108,240,.05), rgba(255,255,255,.9)); }
+.v3land .predict-stat { margin: 0; color: var(--blue); font-size: 30px; font-weight: 800; letter-spacing: -.05em; line-height: 1; font-variant-numeric: tabular-nums; }
+.v3land .predict-short { margin: 7px 0 0; color: var(--ink); font-size: 13px; font-weight: 700; }
+.v3land .predict-claim { margin: 10px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.65; }
+.v3land .predict-src { display: block; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(38,79,139,.09); color: var(--muted); font: 500 10.5px "DM Mono", ui-monospace, monospace; letter-spacing: .03em; line-height: 1.5; transition: color .22s ease; }
+a.predict-src:hover { color: var(--blue); }
+.v3land .predict-limits { margin-top: 18px; padding: 24px 26px; border: 1px solid rgba(45,83,139,.13); border-radius: var(--radius-md); background: rgba(255,255,255,.7); }
+.v3land .predict-limits-head { margin: 0 0 4px; color: var(--ink); font-size: 13.5px; font-weight: 700; }
+.v3land .predict-limits ul { margin: 0; padding: 0; list-style: none; }
+.v3land .predict-limits li { padding: 10px 0; border-bottom: 1px solid rgba(38,79,139,.09); color: var(--muted); font-size: 12.5px; line-height: 1.65; max-width: 78ch; }
+.v3land .predict-limits li:last-of-type { border-bottom: 0; }
+.v3land .predict-limits li b { color: var(--ink); }
+.v3land .predict-note { margin: 12px 0 0; color: var(--muted); font-size: 11.5px; line-height: 1.6; max-width: 70ch; }
 
 .v3land .evidence { padding: 74px 0 8px; }
 /* `balance` because this heading otherwise drops "late?" onto a line of its
@@ -392,7 +422,7 @@
 @media (max-width: 660px) {
   .v3land .container { width: min(100% - 32px, 1180px); }
   .v3land .nav-wrap { padding: 8px 0; }
-  .v3land .nav { min-height: 55px; padding: 0 10px 0 13px; border-radius: 15px; gap: 10px; }
+  .v3land .nav { min-height: 55px; padding: 0 10px 0 13px; border-radius: 12px; gap: 10px; }
   .v3land .nav-links { display: none; }
   .v3land .nav-cta { min-height: 36px; padding-inline: 12px; font-size: 10px; }
   .v3land .brand small { display: none; }
@@ -403,7 +433,7 @@
   .v3land .stage-halo { width: 330px; height: 330px; top: 36px; }
   .v3land .orbit.one { width: 300px; height: 126px; }
   .v3land .orbit.two { width: 392px; height: 188px; }
-  .v3land .core-card { top: 112px; width: 144px; height: 144px; border-radius: 30px; }
+  .v3land .core-card { top: 112px; width: 144px; height: 144px; border-radius: 28px; }
   .v3land .buyer { min-width: 126px; padding: 8px; gap: 7px; }
   .v3land .buyer-a { top: 27px; left: -5px; }
   .v3land .buyer-b { top: 16px; right: -8px; }

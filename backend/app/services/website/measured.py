@@ -457,8 +457,13 @@ def measure_page(capture: object) -> CriticDimension | None:
         limit=RADIUS_SCALE_LIMIT,
         region="components",
         noun="corner radii",
-        # Square corners are a choice, not a rung on a radius scale.
-        ignore={"0px", "0", "0%"},
+        # Square corners are a choice, not a rung on a radius scale. So is
+        # fully-round: `50%` is a circle (an avatar, a dot) and `999px` is a
+        # pill (a tag, a toggle). Neither is a step on a px scale, and counting
+        # them made a page with avatars and pills look like it had no system
+        # even when its actual scale was three values. Found running this
+        # against Saibyl's own landing page on 2026-08-26.
+        ignore={"0px", "0", "0%", "50%", "100%", "999px", "9999px"},
         why=(
             "A reader will not name this, and it is a large part of why a page "
             "feels assembled rather than designed."

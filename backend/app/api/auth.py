@@ -55,6 +55,19 @@ async def signup(body: SignupRequest, request: Request):
     admin = get_supabase_admin()
 
     # Create user via Supabase Admin Auth (auto-confirms email)
+    #
+    # **This used to answer every failure with "Signup failed" and discard the
+    # reason.** Not log it — discard it: a bare `except Exception` that raised a
+    # fixed string. So a founder whose email already had an account was told
+    # nothing usable, and nobody could find out why from the server either,
+    # because the original error never reached a log.
+    #
+    # Found on 2026-08-27 when the founder could not create an account with his
+    # own address. The address had a confirmed account from 2026-03-28. The
+    # refusal was correct; the sentence was useless.
+    #
+    # The already-exists case is separated because it is the only one the person
+    # reading it can act on, and the action is not "try again".
     try:
         auth_result = admin.auth.admin.create_user({
             "email": body.email,
@@ -66,8 +79,35 @@ async def signup(body: SignupRequest, request: Request):
             raise HTTPException(400, "Signup failed")
     except HTTPException:
         raise
-    except Exception:
-        raise HTTPException(400, "Signup failed")
+    except Exception as exc:
+        detail = str(exc).lower()
+        already = (
+            "already" in detail
+            or "registered" in detail
+            or "duplicate" in detail
+            or "exists" in detail
+        )
+        # The address is the founder's own and is echoed back to them, so it
+        # discloses nothing they did not type. The *reason* goes to the log with
+        # the exception attached, which is where a diagnosis has to be possible.
+        log.warning(
+            "signup_rejected",
+            email=body.email,
+            already_registered=already,
+            error=str(exc)[:300],
+            error_type=type(exc).__name__,
+        )
+        if already:
+            raise HTTPException(
+                409,
+                "An account already exists for this email. Sign in instead, or "
+                "email info@saidolabs.com if you need the password reset.",
+            ) from exc
+        raise HTTPException(
+            400,
+            "We could not create the account. If this keeps happening, email "
+            "info@saidolabs.com and we will sort it out.",
+        ) from exc
 
     # Create organization
     import secrets

@@ -42,6 +42,7 @@ import asyncio
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import date
 from typing import Literal
 
 import structlog
@@ -170,9 +171,33 @@ HOW TO REVIEW — these rules are the review:
   drag on it; "minor" is polish.
 - "score" is 0-100, anchored: 90+ exceptional, ship it as it is; 70s solid
   with real gaps; 50s significant problems; below 40 broken for its purpose.
+- TODAY IS {today}. You do not otherwise know what day it is, and your sense
+  of "current" is older than this page. Never call a date on the page future,
+  stale, or expired by reasoning from your own sense of now; compare it to the
+  date above or say nothing about it. The same applies to versions, frameworks
+  and integrations: you cannot tell from your training whether one is still
+  supported.
 {vocabulary_rule}"""
 
-_REVIEW_RULES = _SHARED_RULES.format(vocabulary_rule=VOCABULARY_RULE)
+
+def _review_rules(today: str) -> str:
+    """The shared rules, with the date supplied rather than assumed.
+
+    **The critics did not know what year it was.** The credibility reviewer
+    flagged "© 2026" as *"the copyright year is 2026, which is in the future"*
+    on six sample pages in a row, on 2026-08-26. It is not in the future; the
+    model was reasoning from a training cutoff.
+
+    That is worse than an ordinary wrong finding, because the founder reading it
+    cannot tell which of them holds the stale calendar, and the obvious fix is
+    to back-date their own footer. A critique that talks somebody into making
+    their page worse is the failure this module exists to prevent.
+
+    `clearance/tracks.py` had already established the pattern, taking
+    `search_date` as an argument rather than reading `datetime.now()` deep in
+    the logic. This is that precedent applied where it was missed.
+    """
+    return _SHARED_RULES.format(vocabulary_rule=VOCABULARY_RULE, today=today)
 
 # The answer shapes are appended verbatim (never `.format`-ed), so the JSON
 # braces stay literal.
@@ -763,7 +788,9 @@ def _fill(template: str, **fields: object) -> str:
             "the review rules and the vocabulary rule. Add {review_rules} to "
             "the template."
         )
-    return template.format(review_rules=_REVIEW_RULES, **fields)
+    return template.format(
+        review_rules=_review_rules(date.today().isoformat()), **fields
+    )
 
 
 def _encoded_size(raw: bytes) -> int:

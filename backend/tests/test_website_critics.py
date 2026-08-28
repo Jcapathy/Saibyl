@@ -628,7 +628,10 @@ def test_every_reviewer_prompt_carries_the_vocabulary_rule():
     ):
         assert "{review_rules}" in template, f"{name} does not carry the rule"
 
-    assert critics.VOCABULARY_RULE in critics._REVIEW_RULES
+    # `_REVIEW_RULES` became `_review_rules(today)` on 2026-08-27, because the
+    # reviewers were reasoning about dates from a training cutoff and calling
+    # a correct 2026 copyright year "in the future".
+    assert critics.VOCABULARY_RULE in critics._review_rules("2026-08-27")
 
     # The rule and the scan are two spellings of one list; a word in one and
     # not the other is a word the reviewer is free to use.
@@ -641,7 +644,32 @@ def test_every_reviewer_prompt_carries_the_vocabulary_rule():
 
 
 def test_the_shared_rules_pin_the_evidence_and_scoring_anchors():
-    rules = critics._REVIEW_RULES
+    rules = critics._review_rules("2026-08-27")
     assert "Never invent" in rules, "the quote-only-what-you-see rule went missing"
     for anchor in ("90+", "70s", "50s", "below 40"):
         assert anchor in rules, f"the {anchor} scoring anchor went missing"
+
+
+def test_the_reviewers_are_told_what_day_it_is():
+    """They were not, and it produced a confident, wrong, actionable finding.
+
+    The credibility reviewer flagged "© 2026" as a future date on six sample
+    pages in a row. A founder cannot tell which party holds the stale calendar,
+    and the obvious response is to back-date their own footer, so the critique
+    talks them into making the page worse. `clearance/tracks.py` already took
+    `search_date` as an argument for the same reason.
+    """
+    rules = critics._review_rules("2026-08-27")
+
+    assert "2026-08-27" in rules
+    assert "TODAY IS" in rules
+
+    # And it reaches an actual reviewer prompt, not just the rules string.
+    prompt = critics._fill(
+        critics._CREDIBILITY_TEMPLATE,
+        title="t",
+        census_digest="c",
+        meta_lines="m",
+        dom_excerpt="d",
+    )
+    assert "TODAY IS" in prompt
