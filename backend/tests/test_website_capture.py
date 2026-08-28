@@ -894,6 +894,14 @@ async def test_llm_vision_builds_anthropic_image_blocks_ahead_of_the_text(monkey
     # truncate a response that used to fit.
     assert call["max_tokens"] == llm_client._OPUS_MAX_TOKENS == 8192
 
+    # Effort must ride inside `output_config`. A top-level `effort=` is accepted
+    # by the SDK and silently ignored by the API, which looks exactly like the
+    # knob not working — and the knob is the cost lever on a model that thinks
+    # by default. Verified live on 2026-08-28: low returned 187 output tokens
+    # against high's 232 on identical input.
+    assert call["output_config"] == {"effort": llm_client.settings.llm_effort}
+    assert "effort" not in call, "effort must be nested, not top-level"
+
 
 async def test_llm_vision_records_usage_through_the_same_ledger(monkeypatch):
     _fake_anthropic(monkeypatch)

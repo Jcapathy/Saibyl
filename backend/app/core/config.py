@@ -33,6 +33,14 @@ class Settings(BaseSettings):
     # was a training-data habit, and `model_pricing` only matched it by
     # prefix luck.
     llm_fast_model: str = "claude-haiku-4-5"
+    # How hard the model thinks, and the main cost lever on Opus 5.
+    # `high` is the API default, so this ships as a no-op knob; measured on
+    # 2026-08-28, moving 4.6 -> Opus 5 took one website check from $0.65 to
+    # $1.22, and +114% of that was output tokens (thinking is on by default
+    # and billed as output). `medium` is the one-variable experiment: the
+    # migration guide calls Opus 5 unusually strong at low/medium.
+    # Env var: LLM_EFFORT. One of low | medium | high | xhigh | max.
+    llm_effort: str = "high"
     llm_base_url: str = ""
     supabase_storage_bucket: str = "saibyl-uploads"
     simulation_max_rounds: int = 10

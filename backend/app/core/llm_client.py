@@ -222,6 +222,13 @@ async def llm_vision(
     if system is not None:
         extra["system"] = system
 
+    # `effort` is the cost lever on Opus 5, where thinking is on by default and
+    # billed as output. Sent as `output_config` because that is where the API
+    # takes it — a top-level `effort=` is silently ignored, which would look
+    # exactly like the knob not working. `high` is the API's own default, so the
+    # shipped value changes nothing until somebody sets LLM_EFFORT.
+    extra["output_config"] = {"effort": settings.llm_effort}
+
     client = AsyncAnthropic(api_key=_api_key())
     # The SDK refuses non-streaming requests whose max_tokens could exceed a
     # ten-minute operation (raised live by the 32K revision ceiling) — large

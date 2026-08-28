@@ -1326,6 +1326,36 @@ def clearance_credits(tier: str) -> int:
 #   one composition pass over the five verdicts                      ≈ $0.05
 WEBSITE_CHECK_COGS_USD = Decimal("0.35")
 
+# ── MEASURED 2026-08-28. The estimate above is 3.5x low, and the price is
+#    still fine. Read both halves before changing anything. ──
+#
+# Two full checks of saibyl.com, same URL, same 8 calls, from `llm_usage`:
+#
+#     Opus 4.6   40,139 in / 17,943 out   $0.6493
+#     Opus 5     51,767 in / 38,356 out   $1.2177
+#
+# Input +29% is the tokenizer change at 4.7. Output +114% is thinking, which is
+# on by default on Opus 5 and billed as output — it is 79% of the bill.
+#
+# **The price does not need to move.** A founder buys credits at 200 per dollar
+# (`credits_for_topup`), so 1,750 credits is $8.75 of revenue against $1.2177 of
+# COGS — a realised margin of **86%**, still above the 80% floor. It was 96%
+# under the old estimate.
+#
+# **The constant is deliberately NOT updated to the measured figure**, because
+# `_clearance_price_credits` would take the price to ~6,100 credits ($30.44) —
+# a 3.5x rise on a module nobody has complained is cheap.
+#
+# **The asymmetry a future session should decide, not discover.** A run is
+# priced `credits_for(cogs)`, which realises exactly 80%. A module is priced
+# `credits_for(cogs / 0.2)`, which realises **96%** — the margin is taken once
+# when credits are sold and again here. The docstring on
+# `_clearance_price_credits` says "at the target margin", so the second
+# application looks unintended. Priced at true parity with a run, this check
+# would be `credits_for(1.2177)` = 1,218 credits. That is a pricing decision
+# with revenue attached, so it is written down rather than quietly applied.
+MEASURED_WEBSITE_CHECK_COGS_USD = Decimal("1.2177")
+
 
 def website_check_credits() -> int:
     """Credits one website check charges: COGS at the target margin — 1,750."""
