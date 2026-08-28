@@ -18,8 +18,10 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from app.services.website.taste import (
+    TASTE_KEY,
     TASTE_RULES,
     check_taste,
+    taste_dimension,
     taste_prompt_section,
     taste_score,
 )
@@ -210,6 +212,46 @@ def test_the_prompt_section_is_rendered_from_the_same_rules():
         assert rule.fix[:40] in section, f"{rule.id} missing from the prompt"
     assert "not against any other site" in section
     assert "Do not reward a page for being empty" in section
+
+
+def test_the_dimension_key_is_pinned():
+    """`test_website_critics.py` spells this literal rather than importing it,
+    because importing `taste` at its module scope would pull an unstubbed second
+    copy of `critics`. This is the assertion that keeps the two in step."""
+    assert TASTE_KEY == "standard"
+
+
+# ── the dimension the report renders ─────────────────────────────────────────
+
+def test_the_dimension_carries_findings_and_a_score():
+    census = _healthy_census(
+        structure={
+            "headings": {"h1": 0, "h2": 4},
+            "buttons": 2, "links": 9, "images": 0, "sections": 6,
+        },
+    )
+    dimension = taste_dimension(_capture(census))
+
+    assert dimension is not None
+    assert dimension.key == TASTE_KEY
+    assert 0 <= dimension.score <= 100
+    regions = {f.region for f in dimension.findings}
+    assert "page" in regions, "a missing image and a missing h1 both live on the page"
+    # Every rendered finding must carry the measurement it is complaining about.
+    assert all(f.quote for f in dimension.findings)
+    assert all(f.why and f.fix for f in dimension.findings)
+
+
+def test_the_dimension_names_what_the_page_got_right():
+    """A report that lists only failures reads as a verdict on the founder."""
+    dimension = taste_dimension(_capture(_healthy_census()))
+    assert dimension is not None
+    assert dimension.strengths, "a sound page was given no credit for anything"
+
+
+def test_an_unmeasurable_page_yields_no_dimension():
+    """Rather than a 100. The mean then runs over the opinions alone."""
+    assert taste_dimension(_capture({})) is None
 
 
 def test_the_standard_never_names_another_site_as_the_yardstick():

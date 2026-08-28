@@ -1,7 +1,8 @@
 # PUBLIC INTERFACE
 # ─────────────────────────────────────────────────────────
-# TASTE_RULES, TasteRule, TasteVerdict
+# TASTE_RULES, TasteRule, TasteVerdict, TASTE_KEY
 # check_taste(capture) -> list[TasteVerdict]
+# taste_dimension(capture) -> CriticDimension | None
 # taste_prompt_section() -> str        # the prose, for a vision reviewer
 # taste_score(verdicts) -> int | None
 # ─────────────────────────────────────────────────────────
@@ -50,7 +51,13 @@ from dataclasses import dataclass, field
 
 import structlog
 
+from app.services.website.critics import CriticDimension, CriticFinding
+
 logger = structlog.get_logger()
+
+#: What the founder sees this dimension called. `measured` is the arithmetic of
+#: the page's own consistency; this is the standard it is held to.
+TASTE_KEY = "standard"
 
 
 # ── the shapes ───────────────────────────────────────────────────────────────
@@ -386,6 +393,59 @@ def taste_score(verdicts: list[TasteVerdict]) -> int | None:
             cost = int(cost * 1.5)
         score -= cost
     return max(0, min(100, score))
+
+
+def taste_dimension(capture: object) -> CriticDimension | None:
+    """The standard as a dimension the report already knows how to render.
+
+    `None` when nothing could be judged, for the same reason `measure_page`
+    returns `None` on an empty census: appending a 100 would score a page for
+    having defeated the measurement, and this codebase's most-repeated defect is
+    a number that means "we did not look" being read as "there is nothing wrong".
+
+    Not subject to the six-or-nothing rule. There is no model call and no
+    network call here, so there is nothing to fail at — it either has verdicts
+    or it does not.
+    """
+    verdicts = check_taste(capture)
+    score = taste_score(verdicts)
+    if score is None:
+        return None
+
+    findings = [
+        CriticFinding(
+            severity=v.rule.severity,
+            region=v.rule.region,
+            quote=v.quote or "",
+            why=v.rule.why,
+            fix=v.rule.fix,
+        )
+        for v in verdicts
+        if not v.passed and v.quote is not None
+    ]
+
+    # What the page got right, named. A report that only lists failures reads as
+    # a verdict on the founder rather than on the page, and the passes here are
+    # the cheapest honest praise available: each one is a rule that was actually
+    # checked, not an encouraging sentence.
+    strengths = [
+        f"{v.rule.region}: {v.rule.fix.rstrip('.')} — already true"
+        for v in verdicts
+        if v.passed and v.rule.kind == "requirement"
+    ][:4]
+
+    logger.info(
+        "taste_dimension",
+        score=score,
+        failing=[v.rule.id for v in verdicts if not v.passed],
+        checked=len(verdicts),
+    )
+    return CriticDimension(
+        key=TASTE_KEY,
+        score=score,
+        findings=findings,
+        strengths=strengths,
+    )
 
 
 def taste_prompt_section() -> str:

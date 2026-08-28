@@ -8,6 +8,64 @@ running delta record.
 
 ---
 
+## 2026-08-28 — The website check gets a standard, and stops using other people's sites as the bar
+
+`services/website/taste.py`, wired into `run_critic_gauntlet` as an eighth
+dimension keyed `standard`, and rendered into both design-reviewer prompts.
+
+**The shape that changed.** The check could grade a page two ways, and neither
+was "is this good, by a standard we hold": it either asked a vision model for an
+impression, or — when the founder named a site — scored *"how close this page's
+visual discipline comes to the reference's"*. There was no rubric.
+
+**What that cost, twice, on the same day.**
+
+1. **The founder ran the check on saibyl.com and filled the second field with
+   saibyl.com.** The form said "A site you admire (optional)" over "We'll
+   measure yours against theirs", which reads as a step. His objection was not
+   the mistake but the premise: *"Why would we be putting in our website then
+   somebody else's and comparing the two? We're trying to give founders an
+   honest evaluation on their site."*
+2. **The revision loop gamed the counted dimension.** Every rule in
+   `measured.py` is a variety penalty — too many radii, colours, shadows,
+   em-dashes — so the rubric's maximum sits at the empty page. On his own site
+   the loop went `measured` 35 → 73 while `design` fell 95 → 72, netted +5
+   overall, declared a win, and returned a page he described as having "not
+   really much to it".
+
+Both are the same missing thing.
+
+**What `taste.py` is.** The founder's own design-taste standard as data. Each
+rule carries an id, a `kind`, a severity, a predicate over the census, and the
+two sentences the founder reads. The `kind` is the load-bearing part:
+
+- a **violation** is something the page does and should not, and
+- a **requirement** is something the page must *have*.
+
+Requirements are the half deletion cannot satisfy. A page stripped to bare type
+scores **0** here where `measured` would give it near-100.
+
+**One row, two renderings, and that is the point.** `taste_prompt_section()` is
+generated *from* `TASTE_RULES`, so the sentences the vision reviewer is held to
+and the arithmetic that grades the page cannot drift. A test asserts every
+rule's `fix` text appears in the rendered prompt. The founder asked for both —
+prose he can act on, data we can score with — and refusing one for the other
+was the wrong instinct.
+
+**The reference field survives as direction.** "Make it feel more like Linear"
+is real input; it now informs the rewrite and is explicitly *not* the bar. The
+score anchor is identical in both modes, so a founder's design score cannot move
+because they mentioned somewhere they admire.
+
+**Not yet implemented, deliberately named rather than faked:** several rules in
+the standard need measurements `capture.py` does not collect — button and form
+contrast ratios, CTA wrap at desktop, hero top padding, a
+`prefers-reduced-motion` block, scroll-listener bans, zigzag and marquee counts.
+Those want a capture extension. A rule that silently cannot run is worse than
+one that is absent.
+
+---
+
 ## 2026-08-27 — Account recovery exists
 
 `POST /auth/forgot-password` and `POST /auth/reset-password` in

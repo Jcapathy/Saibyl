@@ -11,6 +11,56 @@ your check could only have passed for the reason you think it did.*
 
 ---
 
+## 2026-08-28 — A rubric of penalties has its maximum at the empty page
+
+**The defect.** The founder ran the revision loop on his own landing page. It
+reported a win — overall 70 → 75 — and handed back a page he described as
+having "not really much to it". The dimension scores say exactly what happened:
+
+| | before | after |
+|---|---|---|
+| `design` (a model looking at the page) | **95** | **72** |
+| `measured` (arithmetic) | **35** | **73** |
+
+The loop raised the counted score by *removing* things: fewer radii, fewer
+colours, fewer shadows, fewer em-dashes. Every rule in `measured.py` is a
+variety penalty, and **a penalty is satisfied by deletion**. So the rubric's
+maximum sits at a blank page, and the optimiser found that gradient the first
+time it was pointed at anything.
+
+**The lesson, and it generalises past this codebase.** A scoring function
+assembled entirely from "too much of X" has its optimum at nothing at all. If
+anything optimises against it — a loop, a model, a person paid on the number —
+it will discover that, and it will look like progress the whole way down. The
+counted half of a rubric needs **requirements** as well as **violations**:
+things that must be *present*, which removal cannot satisfy.
+
+`taste.py` is that fix, and the regression test is the honest one:
+`test_a_stripped_page_scores_badly` builds a page with no images, no buttons, no
+headings, one font and two colours — every variety penalty satisfied because
+there is nothing left to vary — and asserts it scores below 50. Measured: it
+scores **0**, against **100** for a sound page.
+
+**The second lesson, from the same day.** Where a rubric has no absolute
+standard, it borrows one. This check's fallback was another company's website:
+with a reference named, the design reviewer scored *"how close this page's
+visual discipline comes to the reference's"*. Nobody designed that as a
+philosophy; it was what remained once "is this good?" turned out to be
+unanswerable. The founder's objection — *"we're trying to improve upon what a
+founder has already done, not try and make theirs like Linear's"* — is the
+product argument, but the engineering one is the same: **a missing standard
+does not leave a hole, it gets filled by whatever is nearest.**
+
+**On keeping prose and data married.** The instinct was to move the standard
+from prompt text to data for testability. The founder pushed back and was right:
+the prose is the deliverable to the founder, the data is how it scores, and both
+are needed. The resolution is one row carrying both, with the prompt section
+*generated* from the rules table — because two copies of a rule are two rules,
+and they drift. A founder told to fix something the score does not measure has
+been given a worse report than no report.
+
+---
+
 ## 2026-08-27 — A stored id is a hint, not a fact
 
 **The defect.** Saibyl took its first real payment today. The attempt before it

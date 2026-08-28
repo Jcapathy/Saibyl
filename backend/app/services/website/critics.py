@@ -470,6 +470,8 @@ PAGE TITLE: {title}
 STYLE MEASUREMENTS (counted from the page's own styles):
 {census}
 
+{standard}
+
 {review_rules}"""
 )
 
@@ -477,47 +479,51 @@ _DESIGN_TEMPLATE_REFERENCE = (
     """\
 REVIEW DIMENSION: design
 
-You are reviewing this page's look against a reference site the founder
-wants to stand beside. TWO images are attached: the FIRST is a full-page
-desktop screenshot of the founder's page; the SECOND is a full-page desktop
-screenshot of the reference site. Below are style measurements for both
-pages — the fonts, colors, corner radii, shadows, and spacing values each
-page actually computes, with how often each occurs. Be ruthless: do not ask
-whether the page looks good — measure how it differs from the reference, in
-values.
+You are reviewing whether this page's look is a designed system or an
+accident, judged against THE STANDARD below. TWO images are attached: the
+FIRST is a full-page desktop screenshot of the founder's page; the SECOND is
+a site whose feel the founder said they are aiming for. Below are style
+measurements for both pages — the fonts, colors, corner radii, shadows, and
+spacing values each page actually computes, with how often each occurs.
+
+**The second site is direction, not the bar.** The founder is not being
+ranked against it, and a page is not worse for looking unlike it. Use it only
+to understand the feel they are reaching for; judge the page itself against
+the standard and against whether its own system holds together. Never write a
+finding whose argument is that the other site does something differently.
 
 Judge six things about the founder's page:
 """
     + _DESIGN_SIGNALS
     + """
 
-Then measure the gaps. For every property where the two measurement tables
-differ in a way a visitor can see — typeface, weights, sizes, letter
-spacing, line height, color counts, radii, shadows, spacing rhythm — write a
-finding whose "quote" carries BOTH values, the page's and the reference's,
-in this form: "Your body letter-spacing: 0em. Theirs: -0.011em." A gap
-finding that shows only one of the two numbers is a failed finding. Order
-the findings by visual impact: the gap a visitor notices first comes first.
+Where the direction site does something the standard also asks for and this
+page does not, you may write that as a finding — but the argument must be the
+standard's, not "theirs is different". Quote this page's measured value; cite
+theirs only as an illustration of what the founder said they wanted.
 
-In "strengths", also name what the founder's page already does that the
-reference site would keep — the reference is a bar to clear, not a page to
-copy, and a redesign must not flatten what already works.
+In "strengths", name what this page already does well and must not lose. A
+rewrite that flattens what works is a worse page, whatever it scores.
 
 """
     + _DESIGN_EVIDENCE_RULE
     + """
-"score" here measures how close this page's visual discipline comes to the
-reference's: 90+ means the same discipline, below 40 a different league.
+"score" here measures how much of a coherent visual system exists at all:
+90+ is a disciplined system, below 40 means no system is present. It is the
+same scale as a review with no direction site, because the founder's score
+must not move just because they named somewhere they admire.
 
 PAGE TITLE: {title}
 
 STYLE MEASUREMENTS OF THIS PAGE (counted from the page's own styles):
 {census}
 
-REFERENCE SITE: {reference_title}
+THE DIRECTION THE FOUNDER NAMED: {reference_title}
 
-STYLE MEASUREMENTS OF THE REFERENCE SITE:
+STYLE MEASUREMENTS OF THAT SITE (context only, never the bar):
 {reference_census}
+
+{standard}
 
 {review_rules}"""
 )
@@ -728,12 +734,21 @@ _CRITICS: tuple[_Critic, ...] = (
 
 
 def _design_context(capture: WebsiteCapture, reference: WebsiteCapture | None) -> dict[str, str]:
+    # The standard is rendered from `TASTE_RULES`, the same table the counted
+    # `standard` dimension scores against — so the sentences this reviewer is
+    # held to and the arithmetic that grades the page cannot drift apart.
+    # Imported here rather than at module scope: `taste` imports `CriticDimension`
+    # from this module, and the cycle only stays broken because both directions
+    # are lazy.
+    from app.services.website.taste import taste_prompt_section
+
     context = {
         "title": capture.title or "(the page has no title)",
         "census": _census_text(_style_census(capture)),
+        "standard": taste_prompt_section(),
     }
     if reference is not None:
-        context["reference_title"] = reference.title or "(the reference site has no title)"
+        context["reference_title"] = reference.title or "(the site has no title)"
         context["reference_census"] = _census_text(_style_census(reference))
     return context
 
@@ -948,11 +963,36 @@ async def run_critic_gauntlet(
     if counted is not None:
         dimensions.append(counted)
 
+    # The standard, appended for the same reasons and with the same contract.
+    #
+    # **`measured` and `standard` are not the same question, and the difference
+    # is why this exists.** `measured` asks whether the page is internally
+    # consistent, and every one of its rules is a variety penalty — too many
+    # radii, too many colours, too many shadows. Penalties are satisfied by
+    # deletion, so that rubric's maximum sits at the empty page. On 2026-08-27
+    # the revision loop found exactly that gradient on saibyl.com: `measured`
+    # 35 -> 73 while `design` fell 95 -> 72, and the founder was handed a page
+    # with, in his words, "not really much to it".
+    #
+    # `standard` asks whether the page does the things a good page does, and
+    # half its rules are requirements rather than violations. A stripped page
+    # scores 0 here where `measured` would give it near-100.
+    from app.services.website.taste import taste_dimension
+
+    standard = taste_dimension(capture)
+    if standard is not None:
+        dimensions.append(standard)
+
     # **Scores from before this date are not comparable with scores after it.**
-    # The overall is a mean across dimensions and there are now seven, so a
-    # stored 77 from a six-dimension run is a different quantity. Deltas within
-    # one revision run are unaffected: before and after are both measured the
-    # same way, and the delta is what `revise` reads.
+    # The overall is a mean across dimensions and there are now up to eight, so
+    # a stored 77 from a six- or seven-dimension run is a different quantity.
+    # Deltas within one revision run are unaffected: before and after are both
+    # measured the same way, and the delta is what `revise` reads.
+    #
+    # The count is "up to" rather than fixed on purpose. `measured` and
+    # `standard` each return None when the census could not answer, so a page
+    # that defeats measurement is scored on the opinions alone rather than
+    # being handed a 100 for having been unmeasurable.
     overall = round(sum(d.score for d in dimensions) / len(dimensions))
     logger.info(
         "website_critic_gauntlet_complete",

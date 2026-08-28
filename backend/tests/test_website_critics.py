@@ -105,11 +105,14 @@ CriticError = critics.CriticError
 CritiqueResult = critics.CritiqueResult
 run_critic_gauntlet = critics.run_critic_gauntlet
 
-# The counted dimension's key, spelled here rather than imported: this module
-# loads `critics` through `_bootstrap()` to stub the browser import chain, and
-# importing `measured` at module scope would pull an unstubbed second copy of
-# `critics` behind it. Kept in step by `measured.MEASURED_KEY`.
+# The two counted dimensions' keys, spelled here rather than imported: this
+# module loads `critics` through `_bootstrap()` to stub the browser import
+# chain, and importing `measured` or `taste` at module scope would pull an
+# unstubbed second copy of `critics` behind it. Kept in step by
+# `measured.MEASURED_KEY` and `taste.TASTE_KEY` — `test_taste.py` asserts the
+# latter's value so a rename cannot pass silently here.
 MEASURED_KEY = "measured"
+TASTE_KEY = "standard"
 
 
 # ---------------------------------------------------------------------------
@@ -320,21 +323,28 @@ async def test_valid_answers_become_one_result_with_the_rounded_mean(monkeypatch
 
     assert isinstance(result, CritiqueResult)
 
-    # The six reviewers, in presentation order and unchanged. The counted
-    # dimension is appended after them (2026-08-25) and is not a reviewer: it
-    # makes no model call, so it is excluded from anything asserting about what
-    # the vision critics returned.
-    opinions = [d for d in result.dimensions if d.key != MEASURED_KEY]
+    # The six reviewers, in presentation order and unchanged. Two counted
+    # dimensions are appended after them — `measured` (2026-08-25) and
+    # `standard` (2026-08-28) — and neither is a reviewer: they make no model
+    # call, so both are excluded from anything asserting about what the vision
+    # critics returned.
+    counted_keys = {MEASURED_KEY, TASTE_KEY}
+    opinions = [d for d in result.dimensions if d.key not in counted_keys]
     assert [d.key for d in opinions] == list(SCORES)
     assert {d.key: d.score for d in opinions} == SCORES
 
     counted = [d for d in result.dimensions if d.key == MEASURED_KEY]
     assert len(counted) == 1, "the census in this fixture is measurable"
-    assert result.dimensions[-1].key == MEASURED_KEY, "receipts sit under the opinions"
 
-    # The mean is over every dimension present, which is now seven. A stored
-    # score from a six-dimension run is a different quantity and must not be
-    # compared with one of these.
+    standard = [d for d in result.dimensions if d.key == TASTE_KEY]
+    assert len(standard) == 1, "the census in this fixture can be judged"
+
+    # Receipts sit under the opinions, both of them.
+    assert {d.key for d in result.dimensions[-2:]} == counted_keys
+
+    # The mean is over every dimension present, which is now up to eight. A
+    # stored score from a six- or seven-dimension run is a different quantity
+    # and must not be compared with one of these.
     assert result.overall_score == round(
         sum(d.score for d in result.dimensions) / len(result.dimensions)
     )
@@ -407,7 +417,7 @@ async def test_without_a_reference_the_design_reviewer_judges_the_page_alone(mon
     )
 
 
-async def test_a_reference_turns_the_design_review_into_measured_gaps_with_both_values(
+async def test_a_named_site_is_direction_for_the_review_never_the_yardstick(
     monkeypatch,
 ):
     fake = _install_vision(monkeypatch)
@@ -419,24 +429,46 @@ async def test_a_reference_turns_the_design_review_into_measured_gaps_with_both_
         "reference mode sends both desktops in one call, the founder's page first"
     )
 
-    # Both pages' measurement tables ride in the one prompt, and the
-    # reference site is named.
+    # Both pages' measurement tables ride in the one prompt, and the named site
+    # is identified.
     assert '"Inter": 118' in design.prompt, "the page's measurements went missing"
-    assert "Suisse Intl" in design.prompt, "the reference measurements went missing"
-    assert "Benchmark — the bar" in design.prompt, "the reference site is never named"
+    assert "Suisse Intl" in design.prompt, "the other site's measurements went missing"
+    assert "Benchmark — the bar" in design.prompt, "the named site is never identified"
 
-    # The gap rubric demands both numbers per finding, ranked by what a
-    # visitor notices, and strengths that say what the reference would keep.
-    assert "BOTH values" in design.prompt, "the both-values instruction went missing"
-    assert "Your body letter-spacing: 0em. Theirs: -0.011em." in design.prompt, (
-        "the both-values form has no worked example"
+    # **Rewritten 2026-08-28.** This used to assert the opposite: that naming a
+    # site turned the review into a gap report scoring "how close this page's
+    # visual discipline comes to the reference's", with every finding quoting
+    # both pages' numbers.
+    #
+    # The founder's objection killed that rubric. He ran the check on his own
+    # site, and the second field — labelled "a site you admire" over "we'll
+    # measure yours against theirs" — invited him to fill it in, which he did,
+    # with his own url. His words: *"Why would we be putting in our website then
+    # somebody else's and comparing the two? We're trying to give founders an
+    # honest evaluation on their site."*
+    #
+    # So the named site is direction, never the bar, and the score anchor is now
+    # the SAME in both modes — a founder's design score must not move because
+    # they mentioned somewhere they admire.
+    assert "direction, not the bar" in design.prompt, (
+        "the named site is being treated as a yardstick again"
     )
-    assert "visual impact" in design.prompt, "findings are not ordered by what a visitor sees"
-    assert "reference site would keep" in design.prompt, (
-        "strengths must say what the reference would keep"
+    assert "a page is not worse for looking unlike it" in design.prompt
+    assert "never the bar" in design.prompt, "the census block lost its framing"
+    assert "how much of a coherent visual system exists at all" in design.prompt, (
+        "reference mode must use the same score anchor as alone mode"
     )
-    assert "how close this page's visual discipline comes" in design.prompt, (
-        "the reference-mode score anchor went missing"
+    assert "how close this page's visual discipline comes" not in design.prompt, (
+        "the page is being scored against somebody else's site again"
+    )
+
+    # The standard is the yardstick in both modes.
+    assert "THE STANDARD" in design.prompt, "the standard went missing from reference mode"
+    assert "not against any other site" in design.prompt
+
+    # Strengths still protect what already works.
+    assert "must not lose" in design.prompt, (
+        "a rewrite may flatten what the page already does well"
     )
 
     # The other five reviewers never see the reference site.
