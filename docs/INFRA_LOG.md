@@ -11,6 +11,30 @@ to GitHub `master`. **Render's own GitHub integration watches the branch and
 deploys it** — that is the whole mechanism and it is what it is meant to be.
 Nothing here calls Render, holds a Render credential, or needs one.
 
+## 2026-08-28 — `objection_outcomes`, and the number that is not on the site yet
+
+Migration `objection_outcomes_close_the_loop` on `txmvwuekkiedgxwovorp`,
+recorded in the repo as `044_objection_outcomes.sql`.
+
+One row per predicted objection per run, holding a founder's verdict on whether
+a real buyer raised it. `occurred` is nullable and NULL means asked-not-answered;
+`outcomes.py` filters `IS NOT NULL` before counting, so an ignored follow-up
+email cannot show up as a failed prediction. RLS is the same `*_org_isolation`
+policy every other table uses, which is now the thirty-seventh caller of
+`user_organization_ids()` — see migration 043 for why that function keeps its
+EXECUTE grant.
+
+**Nothing goes on the landing page yet, deliberately.** `MIN_ANSWERS_TO_REPORT`
+is 30, and `accuracy_for()` returns `None` below it rather than a rate. The
+table is empty today, so the honest public claim is still none. When it has
+thirty answered predictions, the sentence it produces —
+*"N of M predicted objections were raised by real buyers"* — is the one that
+answers the credibility critical both evaluators put first.
+
+**Operational note for whoever wires the asking:** the follow-up has to reach
+founders 4-8 weeks after a run, which is a scheduled job that does not exist
+yet. Until it does, rows only arrive if somebody asks by hand.
+
 ## 2026-08-27 — Saibyl takes its first real payment
 
 **Live Stripe is on.** `saibyl-backend` now carries a live `STRIPE_SECRET_KEY`

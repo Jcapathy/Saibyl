@@ -8,6 +8,61 @@ choices.
 
 ---
 
+## 2026-08-28 — Grounding, not training; and an accepted finding on the trust card
+
+Founder decisions, taken after the second website check on saibyl.com.
+
+**1. The team-information critical is accepted, not fixed.** The check reports
+as critical: *"No team information exists anywhere — no founders' names, no
+LinkedIn links, no 'About' or 'Team' page."* The founder's answer:
+
+> *"I agree we don't need any LinkedIn links about our team page. We don't need
+> any of that stuff. I don't want any personal name to appear on it. If it
+> becomes an issue we'll work on it later on."*
+
+This is consistent with the standing rule in `CLAUDE.md` — *"No personal name
+ever appears on it"* — and it is a **deliberate trade-off, not an oversight**.
+A future session reading a critical on the trust card must not helpfully add an
+About page. If it is ever revisited, the shape that satisfies both is a company
+page about Saido Labs, not a personal byline.
+
+**2. Grounding rather than training, and the reasoning behind the change.**
+The founder's proposal was to train the buyers on scraped real-world data and
+say so on the landing page. The objection to that, which he accepted:
+
+The trust critical asks *"do synthetic objections predict real ones?"* — a
+question about **outputs**. Training changes **inputs**. "Trained on real-world
+data" is a process claim standing in for an outcome claim, and our own check
+already flags two of those on the same page: an internal capacity number *"with
+no external benchmark or outcome attached"*, and a privacy claim that *"has no
+backing"*. A third would have been caught by our own product, correctly.
+
+**What shipped instead** — and note that it serves both of the founder's stated
+goals, *"improve the output quality as well as close the loop on the question
+about the outputs"*:
+
+- `engine/grounding.py` reads recurring objections out of **our own completed
+  runs** (1,081 objections across 38 runs at the time of writing). Provenance is
+  a database query — *"raised in 7 of your own runs"* — rather than a boast. No
+  terms-of-service or GDPR exposure, and it compounds with every run.
+- `engine/outcomes.py` and migration 044 record whether a predicted objection
+  actually happened, which is the only thing that answers the critical.
+
+**3. Cross-organisation grounding is off, and turning it on is a policy
+decision.** `/privacy` tells founders their uploads are never visible outside
+their account. Aggregate objection labels are derived data, but a founder would
+reasonably read one org's runs informing another's as a breach of that sentence.
+So `GroundingScope.OWN` is the default; `SHARED` carries a three-organisation
+k-anonymity floor, never carries a quote or an org id, and **must not be enabled
+in production until the privacy policy describes it.**
+
+**4. No accuracy number until thirty answers.** `MIN_ANSWERS_TO_REPORT = 30`,
+and below it `accuracy_for` returns `None` rather than `0`. A rate computed from
+four answers is noise with a decimal point, and putting it on the landing page
+would be the exact defect the whole exercise is meant to close.
+
+---
+
 ## 2026-08-27 — Four decisions inside password recovery
 
 Taken while building `/auth/forgot-password` and `/auth/reset-password`. None of
