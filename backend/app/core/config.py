@@ -34,13 +34,24 @@ class Settings(BaseSettings):
     # prefix luck.
     llm_fast_model: str = "claude-haiku-4-5"
     # How hard the model thinks, and the main cost lever on Opus 5.
-    # `high` is the API default, so this ships as a no-op knob; measured on
-    # 2026-08-28, moving 4.6 -> Opus 5 took one website check from $0.65 to
-    # $1.22, and +114% of that was output tokens (thinking is on by default
-    # and billed as output). `medium` is the one-variable experiment: the
-    # migration guide calls Opus 5 unusually strong at low/medium.
+    #
+    # **`medium`, set by the founder on 2026-08-28**, not the API's `high`
+    # default. Measured that day: moving 4.6 -> Opus 5 took one website check
+    # from $0.65 to $1.22, and output tokens were 79% of that bill — thinking is
+    # on by default on Opus 5 and billed as output. Input rose 29% on the
+    # tokenizer change and cannot be tuned; output can.
+    #
+    # The migration guide calls Opus 5 unusually strong at low/medium and names
+    # effort the primary cost lever. This is the experiment running in
+    # production: if report quality holds, the biggest cost line is cut.
+    #
+    # **How to tell if it was wrong.** `measured` and `standard` are arithmetic
+    # and must not move at all; they returned 66 and 93 across a model change.
+    # If those hold and only the vision dimensions drift a few points, that is
+    # the +/-10 noise already measured on identical inputs, not degradation.
+    #
     # Env var: LLM_EFFORT. One of low | medium | high | xhigh | max.
-    llm_effort: str = "high"
+    llm_effort: str = "medium"
     llm_base_url: str = ""
     supabase_storage_bucket: str = "saibyl-uploads"
     simulation_max_rounds: int = 10

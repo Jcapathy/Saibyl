@@ -8,6 +8,43 @@ choices.
 
 ---
 
+## 2026-08-28 — Three pricing and cost decisions, two of them "leave it"
+
+Founder decisions, taken against measured numbers rather than estimates. Two of
+the three are deliberate non-changes, written down so a future session finds a
+decision rather than what looks like an oversight.
+
+**1. `LLM_EFFORT=medium`, in production.** Two full checks of saibyl.com from
+`llm_usage`: Opus 4.6 cost $0.6493, Opus 5 cost $1.2177 for the same eight
+calls. Input rose 29% (the tokenizer change at 4.7, untunable); **output rose
+114% and is 79% of the bill** — thinking is on by default on Opus 5 and billed
+as output. Effort is the lever, so it is set rather than left at the API's
+`high`.
+
+This is an experiment running in production, and the way to judge it is
+specific: **`measured` and `standard` are arithmetic and must not move at all**
+(they returned 66 and 93 across a model change). If they hold and only the
+vision dimensions drift a few points, that is the ±10 noise already measured on
+identical inputs — not degradation.
+
+**2. LEAVE the 80% / 96% margin asymmetry. Do not "fix" it.** A run is priced
+`credits_for(cogs)` and realises exactly 80%. A module is priced
+`credits_for(cogs / 0.2)` and realises **96%**, because the margin is taken once
+when credits are sold at 200 per dollar and again in the module formula. The
+docstring on `_clearance_price_credits` says "at the target margin", so the
+second application reads as unintended — **and the founder has decided to keep
+it.** Priced at parity with a run, the website check would be 1,218 credits
+instead of 1,750. This is revenue, and it is a decision, not a bug to tidy.
+
+**3. LEAVE the website check at 1,750 credits.** Measured COGS is $1.2177
+against the $0.35 the constant still holds — 3.5x low. At 200 credits per
+dollar the founder pays $8.75, so the realised margin is **86%**, above the 80%
+floor. Updating `WEBSITE_CHECK_COGS_USD` to the measured value would take the
+price to ~6,100 credits ($30.44) through the formula above, which is why the
+measurement is recorded next to the constant rather than replacing it.
+
+---
+
 ## 2026-08-28 — Opus 5, and why it could not be an environment-variable change
 
 Founder decision: *"migrate to Opus 5 for the LLM model."*
