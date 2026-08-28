@@ -23,10 +23,23 @@ import type { SiteCheck } from './types';
  * the clearance form follows. A malformed address arrives as a 400/422 with
  * plain language in `detail`, rendered as given.
  *
- * The second box is optional and stays optional: a founder who names a site
- * they admire gets their page measured against it — type, color, spacing, as
- * numbers — and one who leaves it blank gets the same check as before. Left
- * empty it sends nothing, so the backend never sees an empty-string address.
+ * The second box is optional, and on 2026-08-28 it stopped being *invited*.
+ *
+ * It read "A site you admire (optional)" over "We'll measure yours against
+ * theirs — type, color, spacing, the exact numbers", and the founder who found
+ * this had duly filled it in — with his own url. The comparison half of the
+ * check then measured saibyl.com against saibyl.com and told him nothing.
+ *
+ * His objection was not about that mistake. It was that the workflow asks the
+ * wrong question: **a founder wants their own page made better, not a ranking
+ * against somebody else's.** Optional is not enough when the copy reads as a
+ * step. So the label no longer flatters the idea, and the help text says
+ * plainly that the page is graded on its own merits either way.
+ *
+ * The field survives because "make it feel more like Linear" is real direction
+ * — but it is direction for the rewrite, never the yardstick for the score.
+ * Left empty it sends nothing, so the backend never sees an empty-string
+ * address.
  */
 
 const inputBase =
@@ -127,16 +140,30 @@ export default function SiteCheckForm({
         className={inputBase}
       />
 
+      {/* The second field used to read "A site you admire (optional)" over
+          "We'll measure yours against theirs — type, color, spacing, the exact
+          numbers", and that framing was the defect.
+
+          A founder does not want to be told how somebody else's page is better
+          than theirs; they want their own page made better. Marking the field
+          optional was never enough, because the copy invited it as a step — the
+          founder who found this had filled it in with his OWN url, and the
+          comparison half of the check then told him nothing.
+
+          It stays, because "make it feel more like Linear" is real direction.
+          But it is direction for the rewrite, not the yardstick for the score:
+          the check is graded against a standard, not against a competitor. */}
       <div>
         <label
           htmlFor="site-check-reference"
           className="block text-[12.5px] text-saibyl-silver"
         >
-          A site you admire <span className="text-saibyl-muted">(optional)</span>
+          A site whose feel you want{' '}
+          <span className="text-saibyl-muted">(optional, rarely needed)</span>
         </label>
         <p className="text-[11.5px] text-saibyl-muted mt-0.5 mb-1.5 leading-relaxed">
-          We&rsquo;ll measure yours against theirs &mdash; type, color, spacing,
-          the exact numbers.
+          Your page is graded on its own merits either way. Name one only if you
+          want the rewrite to lean somewhere specific.
         </p>
         <input
           id="site-check-reference"
