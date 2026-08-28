@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 
 import api from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
@@ -307,16 +307,33 @@ function AccountTab() {
         </Card>
       </Deal>
 
-      {/* Said plainly rather than shown as a "coming soon" tab. A founder who
-          needs their password changed can do it; a nav item that promises it
-          and does nothing is what this replaces. */}
+      {/* These two used to be one card, because the answer to both was the same
+          mailbox. On 2026-08-27 the password half stopped being true — there is
+          a reset flow now — so they are two cards, and only the half that is
+          still handled by a human says so. */}
       <Deal index={1}>
         <Card carries="meaning" className="p-6">
-          <h3 className="text-[15px] font-medium text-saibyl-ink">
-            Password and account deletion
-          </h3>
+          <h3 className="text-[15px] font-medium text-saibyl-ink">Password</h3>
           <p className="text-[13px] text-saibyl-silver mt-1.5 leading-relaxed max-w-xl">
-            Both are handled by email rather than in the app. Write to{' '}
+            Changing it sends a link to your email, and setting the new one signs
+            out every other session on the account.
+          </p>
+          <Action
+            as={Link}
+            to="/forgot-password"
+            kind="quiet"
+            className="mt-4 text-[12px]"
+          >
+            Change password
+          </Action>
+        </Card>
+      </Deal>
+
+      <Deal index={2}>
+        <Card carries="meaning" className="p-6">
+          <h3 className="text-[15px] font-medium text-saibyl-ink">Account deletion</h3>
+          <p className="text-[13px] text-saibyl-silver mt-1.5 leading-relaxed max-w-xl">
+            Handled by email rather than in the app. Write to{' '}
             <a
               href="mailto:info@saidolabs.com"
               className="text-saibyl-blue hover:underline"
@@ -365,7 +382,7 @@ export default function SettingsPage() {
               Who is <em>signed in</em>
             </>
           ),
-          lead: 'The email these runs belong to, and the workspace they sit in. A password change or a deletion is handled by email rather than in the app, because neither is a button we would trust ourselves to build once and never look at again.',
+          lead: 'The email these runs belong to, and the workspace they sit in. Changing your password sends a link to that address; deleting the account is still handled by a person, because it is the one action nobody should be able to take by mis-clicking.',
         };
 
   return (

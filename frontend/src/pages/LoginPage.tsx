@@ -32,9 +32,14 @@ import { Action, Card, Eyebrow, Ground, PageHeader, Rise } from '@/components/de
  *    heading at all. The form renders at every width, so the heading now does.
  * 4. **"Forgot password?" was a button with a TODO and no handler.** A control
  *    that does nothing is worse than the grey button the founder's rule bans,
- *    because it looks like it worked. Settings already states that password
- *    changes are handled by email, so this now does the thing that surface
- *    promises rather than pretending to a flow that does not exist.
+ *    because it looks like it worked. It became a `mailto:`, which was honest
+ *    while recovery really did mean a human reading a mailbox.
+ *
+ * **That last one changed again on 2026-08-27.** There is a real flow now —
+ * `/forgot-password` and `/reset-password`, over `POST /auth/forgot-password`
+ * and `POST /auth/reset-password` — so the link goes to it. The founder could
+ * not get into his own account and the only route back was an inbox; that is
+ * the defect this closed.
  */
 
 /* ── Brand mark — gradient square, Playfair "S" ──
@@ -252,16 +257,20 @@ export default function LoginPage() {
                   >
                     Password
                   </label>
-                  {/* Was a `<button type="button">` with a TODO and no handler
-                      — a control that silently did nothing. Password changes
-                      really are handled by email today (Settings → Account says
-                      so), so this says the same thing and works. */}
-                  <a
-                    href="mailto:info@saidolabs.com?subject=Password%20reset"
+                  {/* This has now been three things. It began as a
+                      `<button type="button">` with a TODO and no handler — a
+                      control that silently did nothing. It became a `mailto:`,
+                      which was honest about the fact that recovery meant a
+                      human reading a mailbox, and was the best available answer
+                      while that was true. On 2026-08-27 it stopped being true:
+                      `/forgot-password` and `/reset-password` exist, and this
+                      goes to the flow instead of to an inbox. */}
+                  <Link
+                    to="/forgot-password"
                     className="text-[11px] font-semibold text-saibyl-blue hover:underline transition-colors"
                   >
                     Forgot password?
-                  </a>
+                  </Link>
                 </div>
                 <div className="relative">
                   <input

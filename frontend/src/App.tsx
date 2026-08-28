@@ -16,6 +16,8 @@ import ProductHomePage from '@/pages/product/ProductHomePage';
 import ReactionsStagePage from '@/pages/product/ReactionsStagePage';
 import CapitalPage from '@/pages/CapitalPage';
 import ComparisonPage from '@/pages/ComparisonPage';
+import ForgotPasswordPage from '@/pages/ForgotPasswordPage';
+import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import LandingPage from '@/pages/LandingPage';
 import DashboardPage from '@/pages/DashboardPage';
 import GuidePage from '@/pages/GuidePage';
@@ -71,6 +73,10 @@ function AnimatedRoutes() {
         {/* Public routes */}
         <Route path="/login" element={<PageTransition><LoginPage /></PageTransition>} />
         <Route path="/signup" element={<PageTransition><SignupPage /></PageTransition>} />
+        {/* The way back into a locked account. Both public: somebody who cannot
+            sign in cannot be behind `ProtectedRoute` to reach them. */}
+        <Route path="/forgot-password" element={<PageTransition><ForgotPasswordPage /></PageTransition>} />
+        <Route path="/reset-password" element={<PageTransition><ResetPasswordPage /></PageTransition>} />
         <Route path="/privacy" element={<PageTransition><PrivacyPage /></PageTransition>} />
         <Route path="/terms" element={<PageTransition><TermsPage /></PageTransition>} />
 

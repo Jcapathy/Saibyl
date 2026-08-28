@@ -6,6 +6,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel
 
 from app.core.auth import get_current_org, get_current_user, security
+from app.core.config import settings
 from app.core.database import get_supabase_admin, new_auth_client
 from app.core.rate_limit import check_rate_limit
 from app.services.billing.agent_pricing import tier_grant
@@ -30,6 +31,39 @@ class SignupRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    """The recovery JWT from the emailed link, plus the new password.
+
+    `access_token` is the token GoTrue puts in the link's URL fragment. It is a
+    real, short-lived, single-purpose JWT — so it is *verified* here by asking
+    GoTrue who it belongs to, never decoded and trusted locally.
+    """
+
+    access_token: str
+    password: str
+
+
+# Supabase's own floor is 6. Eight is ours, and it is checked here so the
+# refusal comes back in a sentence a founder can act on rather than as a
+# GoTrue error string surfaced through a generic 400.
+MIN_PASSWORD_LENGTH = 8
+
+# The same answer for an address that has an account and one that does not.
+#
+# This route is otherwise a free account-existence oracle: anyone could type
+# addresses in and read which ones come back "sent". The cost of closing that is
+# that a founder who typos their own address is told the mail is on its way, so
+# the sentence says which address it went to — they can read it and see the typo.
+RESET_SENT_MESSAGE = (
+    "If an account exists for that address, a reset link is on its way. "
+    "The link is good for one hour."
+)
 
 
 class RefreshRequest(BaseModel):
@@ -101,7 +135,7 @@ async def signup(body: SignupRequest, request: Request):
             raise HTTPException(
                 409,
                 "An account already exists for this email. Sign in instead, or "
-                "email info@saidolabs.com if you need the password reset.",
+                'use "Forgot password?" on the sign-in page to reset it.',
             ) from exc
         raise HTTPException(
             400,
@@ -190,6 +224,112 @@ async def login(body: LoginRequest, request: Request):
         }
     except Exception:
         raise HTTPException(401, "Invalid email or password")
+
+
+@router.post("/forgot-password")
+async def forgot_password(body: ForgotPasswordRequest, request: Request):
+    """Send a password reset link.
+
+    **There was no way to recover an account.** Not a broken one — none: no
+    route, no email, no token. `LoginPage` offered "Forgot password?" as a
+    `mailto:info@saidolabs.com`, and Settings → Account said password changes
+    were handled by email, meaning a founder locked out of Saibyl waited on a
+    human reading a mailbox. That is the same class of defect as the grey
+    button the founder's rule bans: it looks like a flow and it is not one.
+
+    GoTrue already mints and mails the recovery token; all this does is ask it
+    to, and point the link at our own `/reset-password` page instead of
+    Supabase's default. The link's token is what `reset_password` verifies.
+
+    The answer never varies with whether the address has an account — see
+    `RESET_SENT_MESSAGE`. That includes the failure path: if GoTrue itself is
+    down, the caller still gets the same sentence and the reason goes to the
+    log, because a 500 here that only fires for real addresses would leak the
+    same fact the neutral message exists to hide.
+    """
+    await check_rate_limit(
+        request, "forgot_password", max_attempts=5, window_seconds=900, fail_open=False
+    )
+    # A per-request client, for the same reason login uses one: anything that
+    # touches auth on the shared singleton writes into a session the whole
+    # process reads. See `new_auth_client`.
+    try:
+        new_auth_client().auth.reset_password_email(
+            body.email,
+            {"redirect_to": f"{settings.frontend_url}/reset-password"},
+        )
+        log.info("password_reset_requested", email=body.email)
+    except Exception:
+        log.warning("password_reset_send_failed", email=body.email, exc_info=True)
+
+    return {"message": RESET_SENT_MESSAGE}
+
+
+@router.post("/reset-password")
+async def reset_password(body: ResetPasswordRequest, request: Request):
+    """Set a new password using the token from the emailed link.
+
+    Three things happen, and the third is the one that is easy to leave out:
+
+    1. The recovery token is **verified by GoTrue**, not parsed here.
+       `auth.get_user(jwt)` is a round trip that fails on a forged, expired or
+       already-spent token, and it is what tells us which account to act on.
+       Nothing in the request body names the user — a body-supplied `user_id`
+       would let anyone with any valid token reset anyone's password.
+    2. The password is changed with the service-role client.
+    3. **Every other session for that user is revoked.** Somebody resetting a
+       password is often doing it because they think somebody else has it. If
+       the attacker's existing refresh token survived, the reset would achieve
+       nothing; `sign_out(..., "global")` is what makes it mean something.
+    """
+    await check_rate_limit(
+        request, "reset_password", max_attempts=10, window_seconds=900, fail_open=False
+    )
+
+    if len(body.password) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(
+            400, f"Choose a password of at least {MIN_PASSWORD_LENGTH} characters."
+        )
+
+    auth_client = new_auth_client()
+    try:
+        result = auth_client.auth.get_user(body.access_token)
+        user = result.user if result else None
+    except Exception as exc:
+        log.warning("password_reset_token_rejected", error=str(exc)[:200])
+        user = None
+
+    if not user:
+        # Deliberately the same sentence for expired, forged and already-used:
+        # the reader's next action is identical in all three cases, and naming
+        # which one it was tells an attacker whether they guessed a real token.
+        raise HTTPException(
+            400,
+            "This reset link has expired or has already been used. "
+            "Request a new one and it will work.",
+        )
+
+    admin = get_supabase_admin()
+    try:
+        admin.auth.admin.update_user_by_id(user.id, {"password": body.password})
+    except Exception as exc:
+        log.exception("password_reset_update_failed", user_id=user.id)
+        raise HTTPException(
+            400,
+            "We could not set that password. If this keeps happening, email "
+            "info@saidolabs.com and we will sort it out.",
+        ) from exc
+
+    try:
+        admin.auth.admin.sign_out(body.access_token, "global")
+    except Exception:
+        # Not fatal — the password is already changed, which is the thing the
+        # caller asked for. Loud, because a reset that failed to evict the old
+        # sessions is exactly the case somebody needs to be able to find later.
+        log.warning("password_reset_revoke_failed", user_id=user.id, exc_info=True)
+
+    log.info("password_reset_completed", user_id=user.id)
+    return {"message": "Your password is set. Sign in with it now."}
 
 
 @router.post("/logout")

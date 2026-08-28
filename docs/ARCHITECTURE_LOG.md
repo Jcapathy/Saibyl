@@ -8,6 +8,42 @@ running delta record.
 
 ---
 
+## 2026-08-27 — Account recovery exists
+
+`POST /auth/forgot-password` and `POST /auth/reset-password` in
+`api/auth.py`, and `pages/ForgotPasswordPage.tsx` / `pages/ResetPasswordPage.tsx`
+on `/forgot-password` and `/reset-password`.
+
+**The shape that changed.** There was no recovery path. Not a broken one —
+none: no route, no email, no token. `LoginPage` offered "Forgot password?" as a
+`mailto:info@saidolabs.com`, Settings → Account said password changes were
+handled by email, and both were accurate descriptions of a product where being
+locked out meant waiting on somebody reading a mailbox. Found on 2026-08-27,
+alongside the signup 409 that was telling people the same thing.
+
+No new dependency: GoTrue already mints and mails recovery tokens. What was
+missing was asking it to, pointing the link at our own page rather than
+Supabase's default, and having a page at the other end.
+
+**Three decisions worth inheriting**, all in `DECISIONS_LOG.md` in full:
+
+- The reply to a reset request never varies with whether the address has an
+  account — including when GoTrue itself is down. A route that answers
+  differently for real addresses is an account-existence oracle.
+- The account acted on is named by the **verified token** and by nothing else.
+  `ResetPasswordRequest` carries the token and the new password, and a test
+  asserts those are the only two fields it will ever carry.
+- A completed reset revokes every other session for that user. Somebody
+  resetting a password usually believes somebody else has it.
+
+**One thing outside the repo.** `redirect_to` is only honoured for URLs on the
+Supabase project's Redirect URL allow-list; `https://saibyl.com/reset-password`
+has to be on it or GoTrue silently falls back to SITE_URL. Noted in
+`INFRA_LOG.md`. The Render side needs nothing — the existing `/*` rewrite
+already serves both routes.
+
+---
+
 ## 2026-08-25 — The website check gets a counted half
 
 `services/website/measured.py`, wired into `run_critic_gauntlet` as a seventh

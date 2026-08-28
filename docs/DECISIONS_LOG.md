@@ -8,6 +8,49 @@ choices.
 
 ---
 
+## 2026-08-27 — Four decisions inside password recovery
+
+Taken while building `/auth/forgot-password` and `/auth/reset-password`. None of
+them is visible from the outside, and all four are the kind that is expensive to
+retrofit.
+
+**1. The reset request answers identically whether or not the address has an
+account.** The alternative — "no account for that address" — is friendlier and
+is a free account-existence oracle: anyone could feed it a list and read back
+which addresses are registered. The cost is real and accepted: a founder who
+mistypes their own address is told the mail is on its way. The confirmation
+screen prints the address back so the typo is readable.
+
+The neutrality extends to failure. If GoTrue is down the caller still gets the
+same sentence and the reason goes to the log, because a 500 that only fires for
+addresses that exist leaks exactly what the neutral message is hiding.
+
+**2. The account is named by the verified token, never by the request body.**
+`auth.get_user(jwt)` is a round trip to GoTrue that fails on a forged, expired
+or already-spent token, and its answer is what selects the row to update.
+`ResetPasswordRequest` carries two fields, and a test asserts it will only ever
+carry those two: a `user_id` on the wire would let anyone holding any valid
+recovery token reset anybody's password.
+
+**3. A completed reset revokes every other session** —
+`sign_out(token, "global")`. Somebody resetting a password is frequently doing
+it because they think somebody else has it. Changing the password while the
+attacker's refresh token stays live achieves nothing. A failure here is logged
+loudly but is not fatal: the password is already changed, and failing the
+request would strand the caller with a password they cannot be sure of.
+
+**4. The recovery token is stripped from the URL on mount.** It arrives in the
+fragment, which is never sent to a server — but it is written to browser
+history and rides along on anything copied out of the address bar, and it is a
+live credential until spent. `history.replaceState` runs before anything else on
+`ResetPasswordPage`; the token lives in component state from then on.
+
+**Still handled by a person: account deletion.** Settings now says only that,
+having said "password and account deletion" as one sentence for as long as both
+were true.
+
+---
+
 ## 2026-08-25 — No subscription tiers. Founders top up as they go
 
 Founder decision, taken while the journey rework was in progress and directly

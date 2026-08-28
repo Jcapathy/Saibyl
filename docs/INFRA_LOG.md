@@ -11,6 +11,32 @@ to GitHub `master`. **Render's own GitHub integration watches the branch and
 deploys it** — that is the whole mechanism and it is what it is meant to be.
 Nothing here calls Render, holds a Render credential, or needs one.
 
+## 2026-08-27 — Password recovery needs one Supabase console setting
+
+**Console action, not a code change, and the flow is silently wrong without
+it.** `POST /auth/forgot-password` asks GoTrue to send the recovery mail with
+`redirect_to = {FRONTEND_URL}/reset-password`. GoTrue honours `redirect_to`
+**only for URLs on the project's Redirect URL allow-list** — anything else is
+dropped without an error and the link falls back to SITE_URL. So the mail
+arrives, the link works, and it lands somewhere that cannot finish the reset.
+
+Required in Supabase → Authentication → URL Configuration for
+`txmvwuekkiedgxwovorp`:
+
+```
+https://saibyl.com/reset-password
+```
+
+`FRONTEND_URL` is already `https://saibyl.com` in `render.yaml`, set there for
+Stripe's return path, so nothing on Render changes. The SPA routes need nothing
+either: the existing `/*` rewrite already serves `/forgot-password` and
+`/reset-password`.
+
+**How to tell it is wrong rather than assuming it is right:** request a reset
+and read the link in the mail. It should carry
+`redirect_to=https%3A%2F%2Fsaibyl.com%2Freset-password`. If it points anywhere
+else, the allow-list entry is missing — a green deploy proves nothing here.
+
 ## 2026-08-25 — `npm run build` now prerenders the public pages, and Render routes them
 
 **Two coupled changes, and neither works alone.**

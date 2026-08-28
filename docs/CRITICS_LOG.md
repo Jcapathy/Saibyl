@@ -11,6 +11,43 @@ your check could only have passed for the reason you think it did.*
 
 ---
 
+## 2026-08-27 — A missing capability can hide behind copy that sounds decided
+
+**The defect.** Saibyl had no password recovery of any kind. The founder found
+it the ordinary way — he could not get into his own account.
+
+**Why nobody found it earlier, and this is the transferable part.** Every
+surface that touched it read as a decision rather than as a gap:
+
+- `LoginPage` had a comment explaining that the `mailto:` was deliberate, and
+  it was a genuine improvement on the handler-less button before it.
+- Settings said *"Both are handled by email rather than in the app… because
+  neither is a button we would trust ourselves to build once and never look at
+  again"* — a stated rationale, in the product's own voice.
+- The signup 409 told people to email `info@saidolabs.com` for a reset.
+
+Three places agreeing, each written confidently, none of them wrong about what
+the product did. **Confident copy describing an absence is indistinguishable
+from confident copy describing a choice**, and a reviewer reading any one of
+those files finds a reason and moves on. There is no test that fails, because
+there is nothing to test.
+
+**The lesson.** Grep for capabilities the way we grep for claims. The question
+that would have caught this is not "is any of this wrong?" — none of it was —
+but *"what can a user not do, and does anything in the repo admit it?"* A
+`mailto:` in a product surface is a capability gap wearing a sentence. So is
+"handled by email", "contact us to", and "write to us and we will action it".
+Each one is worth a moment's check that the human loop it names is deliberate
+and still acceptable, rather than the residue of something never built.
+
+**Related, same day:** the fix's own risk is of the same family. `redirect_to`
+is dropped silently by GoTrue when the URL is not allow-listed, so the reset
+mail sends, the link works, and it lands on the wrong page — a flow that is
+broken in exactly the way a green deploy cannot show. Verified by reading the
+link in the mail, not by the build. See `INFRA_LOG.md`.
+
+---
+
 ## 2026-08-26 — The website check reports a point where it has a band
 
 An accidental duplicate run gave us test-retest data on the gauntlet: five
