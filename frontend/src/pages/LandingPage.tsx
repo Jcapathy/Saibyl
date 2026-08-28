@@ -95,12 +95,26 @@ export default function LandingPage() {
               <div className="hero-copy reveal">
                 <span className="eyebrow">Buyer intelligence <span className="mono">·</span> Early access</span>
                 <h1 id="hero-heading">Test your startup on a <span className="serif">synthetic market.</span></h1>
-                <p className="hero-text">Saibyl builds a room of <b>AI buyers from your own material</b>: your deck, your site, or just five answers — pitches them, and hands you every objection with the exact sentences behind it. Rehearse the launch. Fix what fails. <b>Then go.</b></p>
+                {/* "every objection" -> "every objection the room raised".
+                    The check: "The claim 'every objection' is uncheckable and
+                    absolute. The sample run itself shows only 6 of 26… If a
+                    paying user finds a missed objection" — and they will, since
+                    no room is every buyer alive. Scoped to what a run actually
+                    returns, the sentence is both smaller and true, and the
+                    sample run's own 26 is the receipt for it. */}
+                <p className="hero-text">Saibyl builds a room of <b>AI buyers from your own material</b>: your deck, your site, or just five answers — pitches them, and hands you every objection the room raised, with the exact sentences behind it. Rehearse the launch. Fix what fails. <b>Then go.</b></p>
                 <div className="hero-actions">
                   <Link className="button primary" to="/signup">Start your first run <span className="arrow">→</span></Link>
                   <a className="button secondary" href="#rehearsal">See a full run <span className="arrow">↓</span></a>
                 </div>
-                <div className="hero-footnote">One full run free <span className="foot-dot">·</span> No card <span className="foot-dot">·</span> Your files never train models</div>
+                {/* The privacy claim links to the policy that backs it.
+                    The check's wording: "'Your files never train models' is a
+                    strong privacy claim but has no backing — no link to a
+                    privacy policy". The policy existed the whole time, 300
+                    lines below in the footer, which is no use to a reader
+                    deciding whether to upload an investor deck. A claim and
+                    its receipt belong in the same sentence. */}
+                <div className="hero-footnote">One full run free <span className="foot-dot">·</span> No card <span className="foot-dot">·</span> <Link className="foot-link" to="/privacy">Your files never train models</Link></div>
               </div>
 
               <div className="room-stage reveal delay-1" aria-label="A Saibyl room: AI buyers around your pitch, objections streaming in">
