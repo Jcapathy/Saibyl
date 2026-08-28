@@ -11,6 +11,44 @@ to GitHub `master`. **Render's own GitHub integration watches the branch and
 deploys it** — that is the whole mechanism and it is what it is meant to be.
 Nothing here calls Render, holds a Render credential, or needs one.
 
+## 2026-08-27 — Security advisors taken from 19 to 4
+
+Migration `pin_function_search_path_and_revoke_trigger_execute` on
+`txmvwuekkiedgxwovorp`, plus one console toggle by the founder.
+
+**What was done.**
+
+- **Leaked Password Protection enabled** (founder, console). New passwords are
+  now checked against HaveIBeenPwned. This matters most to the reset flow
+  shipped the same day: before it, the 8-character floor in
+  `api/auth.py` was the only thing between a reset and `password123`.
+- **`search_path` pinned to `public, pg_temp` on all twelve flagged
+  functions.** Clears lint 0011 everywhere.
+- **`EXECUTE` on `handle_new_user()` revoked** from `PUBLIC`, `anon` and
+  `authenticated`. It is a trigger function on `auth.users`
+  (`on_auth_user_created`), returns `trigger`, and so could never actually be
+  invoked through `/rest/v1/rpc` — the grant was noise, and is gone.
+
+**What was deliberately NOT done, and must stay not-done.**
+
+`REVOKE EXECUTE ON public.user_organization_ids()` **would take the product
+down.** Thirty-six RLS policies call it — every `*_org_isolation` policy in the
+schema — and a policy that calls a function requires the *querying* role to hold
+EXECUTE. Revoking it from `authenticated` breaks tenant reads on every table at
+once. The function is already safe: its body filters on `auth.uid()`, so `anon`
+gets an empty array and a signed-in caller gets only their own organization ids.
+
+Its two advisor warnings stay open on purpose. **They are not a to-do.**
+
+The two `extension_in_public` warnings (`vector`, `pg_trgm`) also stay: moving
+them risks every reference in the schema for no security gain.
+
+**Verification.** Not "the migration applied" — that proves nothing about
+whether the functions still work. All ten callable functions were invoked with
+ids matching zero rows, which exercises table resolution without touching data;
+none raised `relation does not exist`, and a follow-up count confirmed no row
+was modified. Advisor re-run: 19 → 4.
+
 ## 2026-08-27 — Password recovery needs one Supabase console setting
 
 **Console action, not a code change, and the flow is silently wrong without

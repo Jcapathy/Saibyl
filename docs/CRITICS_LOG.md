@@ -11,6 +11,55 @@ your check could only have passed for the reason you think it did.*
 
 ---
 
+## 2026-08-27 — The vendor's own remediation would have broken production
+
+**The near-miss.** Supabase's security advisor raised twelve
+`function_search_path_mutable` warnings, and its linked remediation says to set
+`search_path = ''` and fully qualify every reference. Applied as written, that
+would have broken **nine of the twelve functions**, because their bodies
+reference `organizations`, `credit_topups`, `llm_usage`, `gtm_discovery_runs`
+and `simulation_events` with no schema. An empty `search_path` resolves none of
+those.
+
+The three that would have failed first: `grant_credits` (every signup),
+`deduct_credits` (every run) and `apply_credit_topup` (every Stripe payment).
+It would not have failed at migration time. `ALTER FUNCTION … SET search_path`
+does not re-parse the body, so the migration reports success and the function
+raises `relation "organizations" does not exist` on its next call — in
+production, on the paths that take money and create accounts.
+
+A second item in the same batch was worse. `REVOKE EXECUTE ON
+user_organization_ids()` reads like obvious hygiene and would have broken
+**thirty-six RLS policies at once** — a policy that calls a function requires
+the querying role to hold EXECUTE, so revoking it from `authenticated` ends
+tenant reads on every table in the schema. Both were caught by reading the
+function bodies and `pg_policies` before writing any DDL.
+
+**The lesson, and it is not "advisors are wrong".** The advisor was right that
+the setting was missing. What it could not know is what the bodies contain or
+what depends on the grant. **A remediation is generic; a codebase is not.**
+Before applying any linter's suggested fix to production, read the thing being
+fixed and read what depends on it. Here that meant twelve
+`pg_get_functiondef` calls and one `pg_policies` query — perhaps five minutes,
+against an outage on signup and billing.
+
+The safe form was `search_path = public, pg_temp`: it satisfies the lint, pins
+the path against the session-level manipulation the lint is actually about, puts
+`pg_temp` last so temp relations cannot shadow, and cannot change any name that
+resolves today.
+
+**On verifying it.** "The migration applied" proves nothing here — that is the
+exact check that would have passed while the product was broken. Every callable
+function was invoked with ids matching zero rows, which forces table resolution
+without touching data. That is the check that could only pass for the right
+reason.
+
+**Related:** the two warnings left open on `user_organization_ids` are a
+decision, recorded in `INFRA_LOG.md`. A future session reading a non-zero
+advisor count should not "finish the job".
+
+---
+
 ## 2026-08-27 — A missing capability can hide behind copy that sounds decided
 
 **The defect.** Saibyl had no password recovery of any kind. The founder found
