@@ -11,6 +11,52 @@ to GitHub `master`. **Render's own GitHub integration watches the branch and
 deploys it** — that is the whole mechanism and it is what it is meant to be.
 Nothing here calls Render, holds a Render credential, or needs one.
 
+## 2026-08-28 — The follow-up cron, and what it needs before it can send
+
+Migration `followup_sends_idempotency` (repo: `045_followup_sends.sql`), a new
+`saibyl-followups` cron service in `render.yaml`, and Saibyl's first
+mail-sending code (`services/email/sender.py`, Resend over `httpx` — no SDK,
+since the send endpoint is one POST and a dependency added for one call is a
+dependency to patch forever).
+
+**Daily at 15:00 UTC, not fortnightly.** The due check is a window (7 days at
+the two-week ask, 14 at the four-week), so a day lost to a deploy or an outage
+is caught the next morning. An exact fortnightly schedule would skip that
+founder permanently and nobody would ever know.
+
+**It runs the same Docker image as the API**, not Render's native Python
+runtime. `uv sync` on a different base would build a second, subtly different
+environment, and a mail job that only fails in production at 15:00 unattended is
+the worst place to find a dependency skew. The Dockerfile already copies
+`scripts/` and puts `.venv/bin` on PATH, so nothing about the image changed.
+
+**Verified before shipping** by running the entrypoint against production with
+`--dry-run`: `1 due, 0 sent`. That exercises the window query, the owner-email
+lookup and the entrypoint without sending anything.
+
+### What it needs from a human before a single email goes out
+
+A **Blueprint sync in Render** — pushing `render.yaml` to master does not create
+a cron service by itself — and then, on the `saibyl-followups` service:
+
+| Var | Note |
+|---|---|
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`, `DATABASE_URL` | **A cron service inherits nothing from the web service.** Every one must be set again here. |
+| `RESEND_API_KEY` | Already exists on the backend; needs copying to this service. |
+| `EMAIL_FROM` | e.g. `Saibyl <hello@saibyl.com>`. |
+| `EMAIL_REPLY_TO` | Where a founder's reply lands. The follow-up is a question, so somebody has to be able to answer it. |
+
+And the one that is not an environment variable: **a verified sending domain in
+Resend.** Until `saibyl.com` is verified there (DNS records Resend supplies),
+Resend accepts only `onboarding@resend.dev` and only to the account owner's own
+address — which looks exactly like working software until the first real
+founder. `sender.py` surfaces Resend's own rejection text verbatim for this
+reason, and the failure lands on the `followup_sends` row rather than in a log
+nobody reads.
+
+Until all of that is done the job runs green and sends nothing, by design:
+`email_is_configured()` is false, the report says so, and no rows are claimed.
+
 ## 2026-08-28 — `objection_outcomes`, and the number that is not on the site yet
 
 Migration `objection_outcomes_close_the_loop` on `txmvwuekkiedgxwovorp`,

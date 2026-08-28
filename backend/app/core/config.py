@@ -34,6 +34,16 @@ class Settings(BaseSettings):
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
     resend_api_key: str = ""
+    # The From: on anything Saibyl sends. Must be on a domain verified in
+    # Resend — until it is, Resend accepts only `onboarding@resend.dev`, and
+    # only to the account owner, which looks like working software until the
+    # first real founder. Empty means send nothing, by design: see
+    # `services/email/sender.email_is_configured`.
+    email_from: str = ""
+    # Where a founder's reply lands. Optional; without it a reply goes to
+    # `email_from`, which may be a no-reply address nobody reads — and the
+    # follow-up is a question, so somebody has to be able to answer.
+    email_reply_to: str = ""
     uspto_odp_api_key: str = ""
     uspto_tsdr_api_key: str = ""
     sentry_dsn: str = ""

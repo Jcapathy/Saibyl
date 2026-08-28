@@ -118,6 +118,61 @@ services:
           type: redis
           property: connectionString
 
+  # ── Follow-ups (the loop that answers the credibility critical) ──
+  #
+  # Asks founders, two and four weeks after a run, what buyers actually pushed
+  # back on. Their answers are the only thing that can ever support a public
+  # claim that synthetic objections predict real ones — see
+  # `services/engine/outcomes.py` and migration 044.
+  #
+  # **Daily, not fortnightly.** The due check is a window, so a day lost to a
+  # deploy or an outage is caught the next morning. Fortnightly would skip that
+  # founder permanently, and nobody would notice.
+  #
+  # Re-running is safe: `followup_sends` is unique on (simulation_id, stage) and
+  # the row is claimed before the send.
+  #
+  # **The same Docker image as the API, deliberately.** The native Python
+  # runtime with `uv sync` would build a second, subtly different environment —
+  # and a mail job that works locally and fails only in production, at 15:00,
+  # unattended, is the worst place to discover a dependency skew. The Dockerfile
+  # already copies `scripts/` and puts `.venv/bin` on PATH, so nothing about the
+  # image changes to support this.
+  - type: cron
+    name: saibyl-followups
+    runtime: docker
+    plan: starter
+    schedule: "0 15 * * *"          # 15:00 UTC — mid-morning US, late afternoon EU
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: python -m scripts.send_followups
+    envVars:
+      # The same four the API uses to reach Supabase, plus mail. A cron service
+      # does NOT inherit the web service's environment — every one of these has
+      # to be set on this service too, and a missing one is a job that runs
+      # green and sends nothing.
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      # The From: address. Must be on a domain verified in Resend — until it is,
+      # Resend will only accept `onboarding@resend.dev`, and only to the account
+      # owner's own address.
+      - key: EMAIL_FROM
+        sync: false
+      - key: EMAIL_REPLY_TO
+        sync: false
+      # The follow-up links back to the founder's report, so this must be the
+      # apex domain and not the Render subdomain.
+      - key: FRONTEND_URL
+        value: https://saibyl.com
+
   # ── Frontend (React SPA on Render Static) ───────────────────────
   - type: web
     name: saibyl-frontend
