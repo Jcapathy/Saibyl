@@ -44,6 +44,75 @@ FLASH_REPORT_PRICE_MAP = {
 # migration never did.
 
 
+def _mint_customer(admin, org_id: UUID, org: dict) -> str:
+    """Create a Stripe customer for this org and persist its id."""
+    customer = stripe.Customer.create(
+        metadata={"org_id": str(org_id), "org_name": org["name"]},
+    )
+    admin.table("organizations").update({
+        "stripe_customer_id": customer.id,
+    }).eq("id", str(org_id)).execute()
+    return customer.id
+
+
+def _is_missing_customer(exc: Exception) -> bool:
+    """Is this Stripe saying the customer we passed does not exist?
+
+    `param` is `"customer"` when Checkout rejects the id we handed it, but the
+    message is also matched because the same condition surfaces from more than
+    one endpoint and a silent miss here costs a sale.
+    """
+    if not isinstance(exc, stripe.error.InvalidRequestError):
+        return False
+    if getattr(exc, "code", None) != "resource_missing":
+        return False
+    return (
+        getattr(exc, "param", None) == "customer"
+        or "no such customer" in str(exc).lower()
+    )
+
+
+def _checkout_recovering_stale_customer(admin, org_id: UUID, org: dict, build):
+    """Open Checkout, and survive a `stripe_customer_id` Stripe has never heard of.
+
+    **This is a defect that reached production and cost a real payment attempt.**
+    On 2026-08-27 the founder's org held `cus_V9cLNGxXbbzvOo`, minted while the
+    backend was pointed at a sandbox account. When the keys moved to live, both
+    checkout paths kept handing that id to Stripe, because each only created a
+    customer `if not customer_id` — a stored id was assumed to be a valid one.
+    Stripe answered `resource_missing`, the request raised, and the founder saw
+    "network error" with no `credit_topups` row and nothing in the product to
+    explain it. There was no recovery path: every retry re-sent the same dead id.
+
+    A customer id is only meaningful for the Stripe account that issued it, and
+    the account can change under us — sandbox to live, a key rotation, a
+    restored backup. So a stored id is a *hint*, not a fact.
+
+    The check is a retry rather than a validating `Customer.retrieve` before
+    every checkout: validating would add a round trip to every purchase forever
+    to defend against something that happens approximately never. The retry
+    costs nothing on the happy path and only runs when Stripe has already told
+    us the id is dead.
+
+    Retried exactly once. If the freshly-minted customer is also rejected, the
+    problem is not a stale id and the error belongs to the caller.
+    """
+    customer_id = org.get("stripe_customer_id") or _mint_customer(admin, org_id, org)
+    try:
+        return build(customer_id)
+    except stripe.error.InvalidRequestError as exc:
+        if not _is_missing_customer(exc):
+            raise
+        logger.warning(
+            "stripe_customer_missing_reminting",
+            org_id=str(org_id),
+            stale_customer_id=customer_id,
+            detail="stored stripe_customer_id does not exist on the current "
+                   "Stripe account; minting a fresh one and retrying once",
+        )
+        return build(_mint_customer(admin, org_id, org))
+
+
 async def create_flash_report_checkout(org_id: UUID, report_type: str) -> str:
     """Create a Stripe Checkout session for a one-time Flash Report purchase."""
     price_id = FLASH_REPORT_PRICE_MAP.get(report_type)
@@ -53,23 +122,20 @@ async def create_flash_report_checkout(org_id: UUID, report_type: str) -> str:
     admin = get_supabase_admin()
     org = admin.table("organizations").select("*").eq("id", str(org_id)).single().execute().data
 
-    customer_id = org.get("stripe_customer_id")
-    if not customer_id:
-        customer = stripe.Customer.create(
-            metadata={"org_id": str(org_id), "org_name": org["name"]},
-        )
-        customer_id = customer.id
-        admin.table("organizations").update({
-            "stripe_customer_id": customer_id,
-        }).eq("id", str(org_id)).execute()
-
-    session = stripe.checkout.Session.create(
-        customer=customer_id,
-        mode="payment",
-        line_items=[{"price": price_id, "quantity": 1}],
-        success_url=f"{settings.frontend_url}/settings?flash_report={report_type}&success=true",
-        cancel_url=f"{settings.frontend_url}/settings?canceled=true",
-        metadata={"org_id": str(org_id), "report_type": report_type},
+    session = _checkout_recovering_stale_customer(
+        admin,
+        org_id,
+        org,
+        lambda customer_id: stripe.checkout.Session.create(
+            customer=customer_id,
+            mode="payment",
+            line_items=[{"price": price_id, "quantity": 1}],
+            success_url=(
+                f"{settings.frontend_url}/settings?flash_report={report_type}&success=true"
+            ),
+            cancel_url=f"{settings.frontend_url}/settings?canceled=true",
+            metadata={"org_id": str(org_id), "report_type": report_type},
+        ),
     )
     return session.url
 
@@ -101,47 +167,46 @@ async def create_topup_checkout(
         "id", str(org_id)
     ).single().execute().data
 
-    customer_id = org.get("stripe_customer_id")
-    if not customer_id:
-        customer = stripe.Customer.create(
-            metadata={"org_id": str(org_id), "org_name": org["name"]},
-        )
-        customer_id = customer.id
-        admin.table("organizations").update({
-            "stripe_customer_id": customer_id,
-        }).eq("id", str(org_id)).execute()
-
-    session = stripe.checkout.Session.create(
-        customer=customer_id,
-        mode="payment",
-        line_items=[{
-            "quantity": 1,
-            "price_data": {
-                "currency": "usd",
-                "unit_amount": quote.amount_cents,
-                "product_data": {
-                    "name": f"{quote.credits:,} Saibyl credits",
-                    "description": (
-                        "Credits do not expire and are used as you run. "
-                        "One-off - this does not start a subscription."
-                    ),
+    # A stored `stripe_customer_id` is a hint, not a fact - it is only valid for
+    # the Stripe account that issued it. See
+    # `_checkout_recovering_stale_customer`: this is the exact call that failed
+    # in production when the keys moved from a sandbox to the live account.
+    session = _checkout_recovering_stale_customer(
+        admin,
+        org_id,
+        org,
+        lambda customer_id: stripe.checkout.Session.create(
+            customer=customer_id,
+            mode="payment",
+            line_items=[{
+                "quantity": 1,
+                "price_data": {
+                    "currency": "usd",
+                    "unit_amount": quote.amount_cents,
+                    "product_data": {
+                        "name": f"{quote.credits:,} Saibyl credits",
+                        "description": (
+                            "Credits do not expire and are used as you run. "
+                            "One-off - this does not start a subscription."
+                        ),
+                    },
                 },
+            }],
+            success_url=(
+                f"{settings.frontend_url}/app/settings/billing"
+                f"?topup=success&credits={quote.credits}"
+            ),
+            cancel_url=f"{settings.frontend_url}/app/settings/billing?topup=canceled",
+            metadata={
+                "org_id": str(org_id),
+                # The discriminator the webhook branches on. Without it a top-up
+                # falls through to the subscription branch, which would rewrite
+                # the org's plan and null its subscription id - the exact defect
+                # the Flash Report branch was added to fix.
+                "kind": "credit_topup",
+                "credits": str(quote.credits),
             },
-        }],
-        success_url=(
-            f"{settings.frontend_url}/app/settings/billing"
-            f"?topup=success&credits={quote.credits}"
         ),
-        cancel_url=f"{settings.frontend_url}/app/settings/billing?topup=canceled",
-        metadata={
-            "org_id": str(org_id),
-            # The discriminator the webhook branches on. Without it a top-up
-            # falls through to the subscription branch, which would rewrite the
-            # org's plan and null its subscription id - the exact defect the
-            # Flash Report branch was added to fix.
-            "kind": "credit_topup",
-            "credits": str(quote.credits),
-        },
     )
 
     admin.table("credit_topups").insert({

@@ -11,6 +11,41 @@ to GitHub `master`. **Render's own GitHub integration watches the branch and
 deploys it** — that is the whole mechanism and it is what it is meant to be.
 Nothing here calls Render, holds a Render credential, or needs one.
 
+## 2026-08-27 — Saibyl takes its first real payment
+
+**Live Stripe is on.** `saibyl-backend` now carries a live `STRIPE_SECRET_KEY`
+and the live `STRIPE_WEBHOOK_SECRET`, both from **Saido Labs LLC ·
+live** (`acct_1T6Yx0RShwt3K1Q6`) — a different account from the sandbox used to
+rehearse (`acct_1TLcl9IqFuuRAGd4`, "Saibyl · sandbox"). The three dead
+`STRIPE_PRICE_ID_*` vars were deleted from the dashboard at the same time.
+
+Live webhook endpoint: `checkout.session.completed` →
+`https://saibyl-backend.onrender.com/api/billing/webhook`. Account preflight
+before going live: `charges_enabled`, `payouts_enabled` and `details_submitted`
+all true, USD, bank account attached.
+
+**Rehearsed in the sandbox first, deliberately.** `credit_topups` had never held
+a single row, so the payment path was not "working in test, needs promoting" —
+it had never once run end to end. A sandbox purchase on `4242…` proved the whole
+chain before a real card touched it. That rehearsal is also what planted the
+stale-customer bug below, and finding it with a test card rather than a
+customer's is the entire argument for doing it that way.
+
+**Verified, both times, by the same three facts** — not by a green deploy:
+the `credit_topups` row reaching `status = 'paid'` with `credited_at` stamped,
+the `stripe_payment_intent` recorded so the charge is traceable, and the org's
+`credits_balance` moving by exactly the quoted amount. Live run: `cs_live_…`,
+$10 → 2,000 credits, balance 99,250 → 101,250.
+
+**One manual repair, and its follow-up.** Two orgs held `stripe_customer_id`
+values minted against the sandbox account; both were nulled so the next checkout
+mints a live customer. That is no longer a manual repair — see the
+`_checkout_recovering_stale_customer` fix and `CRITICS_LOG.md`.
+
+**Still open:** the sandbox webhook endpoint `we_1U9J0mIqFuuRAGd4WYknzXQp` and
+its signing secret should be rotated or deleted; the secret was printed into a
+session transcript. It is sandbox-only and has no power over real money.
+
 ## 2026-08-27 — Security advisors taken from 19 to 4
 
 Migration `pin_function_search_path_and_revoke_trigger_execute` on

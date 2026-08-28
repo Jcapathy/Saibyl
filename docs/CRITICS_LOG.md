@@ -11,6 +11,53 @@ your check could only have passed for the reason you think it did.*
 
 ---
 
+## 2026-08-27 — A stored id is a hint, not a fact
+
+**The defect.** Saibyl took its first real payment today. The attempt before it
+failed, and the founder saw "network error".
+
+His org held `stripe_customer_id = cus_V9cLNGxXbbzvOo`, minted minutes earlier
+while the backend pointed at a Stripe *sandbox* for the end-to-end rehearsal.
+When the keys moved to the live account, both checkout paths kept sending that
+id, because each created a customer only `if not customer_id`. Stripe answered
+`resource_missing`; the request raised; the browser reported a transport error.
+Every retry re-sent the same dead id, so there was no way out from inside the
+product. Nulling the column by hand was the only fix — **and a paying customer
+cannot do that.**
+
+**How it was located, which is the reusable part.** No `credit_topups` row
+existed for the attempt. That insert is the last statement in
+`create_topup_checkout`, so its absence placed the failure upstream of it, in
+the Stripe calls — not in the webhook, not in the deploy, not in CORS, all of
+which "network error" equally suggests. Health was 200 and the route answered
+401 unauthenticated, which ruled out the deploy in one command. **Order of
+writes is diagnostic information**: because the row is written last on purpose,
+its presence or absence bisects the function.
+
+**The lesson.** An identifier issued by an external system is only valid for the
+account, mode and environment that issued it, and any of those can change under
+you — sandbox to live, a key rotation, a restored backup, a second Stripe
+account. Code that reads `if not stored_id: create()` has quietly assumed that a
+stored id is a *valid* id. It is a hint. The recovery belongs at the point of
+use: catch the vendor's own "no such thing" error, discard the hint, re-mint,
+retry once.
+
+Note what was NOT done: validating the customer with a `Customer.retrieve`
+before every checkout. That adds a round trip to every purchase forever to
+defend against something that happens almost never, and the retry costs nothing
+on the happy path.
+
+**Both paths had it.** `create_flash_report_checkout` carried the identical
+`if not customer_id`. Grepping for the shape rather than fixing the one that
+broke is what turned one fix into two.
+
+**The test had to be shown to fail.** With `_is_missing_customer` stubbed to
+return `False`, the top-up raises — so the nine new tests in
+`test_stripe_stale_customer.py` are guarding the fix and not passing for some
+unrelated reason. A regression test never seen red is a guess.
+
+---
+
 ## 2026-08-27 — The vendor's own remediation would have broken production
 
 **The near-miss.** Supabase's security advisor raised twelve
