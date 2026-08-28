@@ -1,0 +1,220 @@
+"""The standard must not be satisfiable by deleting things.
+
+**This is the defect the module was written to close.** On 2026-08-27 the
+founder ran the revision loop on saibyl.com. `measured` went 35 -> 73 while
+`design` — a model actually looking at the page — fell 95 -> 72. Net +5, so the
+loop declared a win and returned a plainer page. His description: "there's not
+really much to it."
+
+The cause is that every rule in `measured.py` is a variety penalty — too many
+radii, too many colours, too many shadows. Penalties are satisfied by removal,
+so the rubric's maximum sits at the empty page.
+
+`test_a_stripped_page_scores_badly` is the regression guard for exactly that,
+and it is the reason `TasteRule.kind` exists at all.
+"""
+from __future__ import annotations
+
+from types import SimpleNamespace
+
+from app.services.website.taste import (
+    TASTE_RULES,
+    check_taste,
+    taste_prompt_section,
+    taste_score,
+)
+
+
+def _capture(census: dict) -> SimpleNamespace:
+    return SimpleNamespace(style_census=census)
+
+
+def _healthy_census(**overrides) -> dict:
+    census = {
+        "font_families": {"Manrope": 40, "Playfair Display": 6},
+        "text_colors": {"#14294a": 30, "#60718e": 20},
+        "background_colors": {"#ffffff": 25, "#f8fbff": 10},
+        "border_colors": {"#dbe6f5": 8},
+        "labels": {"total": 3, "above_heading": 2},
+        "structure": {
+            "headings": {"h1": 1, "h2": 6},
+            "buttons": 4,
+            "links": 22,
+            "images": 3,
+            "sections": 8,
+        },
+        "actions": [
+            {"label": "Start your first run", "where": "/signup"},
+            {"label": "Start your first run", "where": "/signup"},
+        ],
+    }
+    census.update(overrides)
+    return census
+
+
+def _verdict(verdicts, rule_id):
+    return next(v for v in verdicts if v.rule.id == rule_id)
+
+
+# ── the regression that matters ──────────────────────────────────────────────
+
+def test_a_stripped_page_scores_badly():
+    """The wireframe case. `measured` would give this a near-perfect score.
+
+    No images, no buttons, no headings, one font, two colours — a page with
+    every variety penalty satisfied because there is nothing left to vary.
+    """
+    bare = {
+        "font_families": {"Helvetica": 20},
+        "text_colors": {"#111111": 20},
+        "background_colors": {"#ffffff": 20},
+        "border_colors": {},
+        "labels": {"total": 0, "above_heading": 0},
+        "structure": {
+            "headings": {"h1": 0, "h2": 0},
+            "buttons": 0,
+            "links": 0,
+            "images": 0,
+            "sections": 2,
+        },
+        "actions": [],
+    }
+    verdicts = check_taste(_capture(bare))
+    score = taste_score(verdicts)
+
+    assert score is not None
+    assert score < 50, (
+        f"a page stripped to nothing scored {score}; deletion is still a "
+        "winning move and the revision loop will find it again"
+    )
+
+    for rule_id in ("requires_an_image", "requires_one_h1", "requires_an_action"):
+        assert not _verdict(verdicts, rule_id).passed, f"{rule_id} passed on a bare page"
+
+
+def test_requirements_exist_at_all():
+    """A rubric of violations alone has its maximum at the empty page."""
+    kinds = {rule.kind for rule in TASTE_RULES}
+    assert "requirement" in kinds
+    assert sum(1 for r in TASTE_RULES if r.kind == "requirement") >= 3
+
+
+def test_a_healthy_page_scores_well():
+    verdicts = check_taste(_capture(_healthy_census()))
+    score = taste_score(verdicts)
+    assert score is not None and score >= 90, f"a sound page scored {score}"
+
+
+# ── individual rules ─────────────────────────────────────────────────────────
+
+def test_the_banned_display_faces_are_caught():
+    census = _healthy_census(font_families={"Fraunces": 30, "Inter": 10})
+    verdict = _verdict(check_taste(_capture(census)), "no_banned_display_face")
+    assert not verdict.passed
+    assert "fraunces" in (verdict.quote or "").lower()
+
+
+def test_three_slop_palette_values_trip_it_and_one_does_not():
+    """One warm hex is a coincidence; the palette is the tell."""
+    one = _healthy_census(background_colors={"#f5f1ea": 20, "#ffffff": 5})
+    assert _verdict(check_taste(_capture(one)), "not_the_slop_palette").passed
+
+    palette = _healthy_census(
+        background_colors={"#f5f1ea": 20},
+        text_colors={"#1a1714": 18},
+        border_colors={"#b08947": 6},
+    )
+    verdict = _verdict(check_taste(_capture(palette)), "not_the_slop_palette")
+    assert not verdict.passed
+
+
+def test_an_eyebrow_over_every_section_is_a_rhythm_not_a_signal():
+    """The founder's own page: 9 labels across 10 sections."""
+    census = _healthy_census(
+        labels={"total": 9, "above_heading": 9},
+        structure={
+            "headings": {"h1": 1, "h2": 9},
+            "buttons": 4, "links": 20, "images": 2, "sections": 10,
+        },
+    )
+    verdict = _verdict(check_taste(_capture(census)), "eyebrow_restraint")
+    assert not verdict.passed
+    assert "9" in (verdict.quote or "")
+
+
+def test_a_few_eyebrows_on_a_long_page_are_fine():
+    census = _healthy_census(
+        labels={"total": 3, "above_heading": 3},
+        structure={
+            "headings": {"h1": 1, "h2": 9},
+            "buttons": 4, "links": 20, "images": 2, "sections": 10,
+        },
+    )
+    assert _verdict(check_taste(_capture(census)), "eyebrow_restraint").passed
+
+
+def test_one_destination_wearing_several_labels_is_caught():
+    census = _healthy_census(actions=[
+        {"label": "Start your first run", "where": "/signup"},
+        {"label": "Try it free", "where": "/signup"},
+        {"label": "Get started", "where": "/signup"},
+    ])
+    verdict = _verdict(check_taste(_capture(census)), "one_destination_one_label")
+    assert not verdict.passed
+    assert "/" in (verdict.quote or "")
+
+
+def test_two_labels_for_two_destinations_is_not_a_finding():
+    census = _healthy_census(actions=[
+        {"label": "Start your first run", "where": "/signup"},
+        {"label": "See a full run", "where": "#rehearsal"},
+    ])
+    assert _verdict(check_taste(_capture(census)), "one_destination_one_label").passed
+
+
+# ── abstention, not false comfort ────────────────────────────────────────────
+
+def test_a_page_that_defeats_the_census_returns_no_verdicts():
+    assert check_taste(_capture({})) == []
+    assert check_taste(SimpleNamespace(style_census=None)) == []
+
+
+def test_an_unmeasurable_page_scores_none_rather_than_perfect():
+    """A 100 meaning "we could not look" is the same bug as a 0 meaning it."""
+    assert taste_score(check_taste(_capture({}))) is None
+
+
+def test_a_rule_that_cannot_be_decided_abstains_rather_than_passing():
+    """No `images` key at all: the rule must not report a clean pass."""
+    census = _healthy_census(structure={
+        "headings": {"h1": 1}, "buttons": 2, "links": 5, "sections": 4,
+    })
+    verdict = _verdict(check_taste(_capture(census)), "requires_an_image")
+    assert verdict.quote is None
+
+
+# ── the two renderings stay married ──────────────────────────────────────────
+
+def test_every_rule_carries_both_a_check_and_a_sentence():
+    """One row, two outputs. The prose and the predicate cannot drift."""
+    for rule in TASTE_RULES:
+        assert callable(rule.predicate), rule.id
+        assert rule.why.strip() and rule.fix.strip(), rule.id
+        assert rule.severity in {"critical", "major", "minor"}, rule.id
+        assert rule.kind in {"requirement", "violation"}, rule.id
+
+
+def test_the_prompt_section_is_rendered_from_the_same_rules():
+    section = taste_prompt_section()
+    for rule in TASTE_RULES:
+        assert rule.fix[:40] in section, f"{rule.id} missing from the prompt"
+    assert "not against any other site" in section
+    assert "Do not reward a page for being empty" in section
+
+
+def test_the_standard_never_names_another_site_as_the_yardstick():
+    """The founder's objection: a founder wants their page made better, not
+    ranked against somebody else's."""
+    section = taste_prompt_section().lower()
+    for competitor in ("linear", "stripe.com", "vercel", "benchmark against"):
+        assert competitor not in section
