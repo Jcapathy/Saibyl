@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Check, FileText, Globe, Loader2 } from 'lucide-react';
 
 import api, { unwrapList } from '@/lib/api';
@@ -85,6 +86,15 @@ export default function AudienceStagePage() {
   const [checks, setChecks] = useState<SiteCheckListItem[]>([]);
   const [activeCheck, setActiveCheck] = useState<SiteCheck | null>(null);
   const [showSite, setShowSite] = useState(false);
+  /* `?check=<id>` opens that check directly.
+
+     The Work index lists every artifact a founder has made, and a website check
+     has no page of its own — it renders here, inside the audience stage. Without
+     this the index could only drop somebody on the stage page and leave them to
+     find the row again, which is the "a list you cannot act on" failure the
+     index was built to end. */
+  const [searchParams] = useSearchParams();
+  const requestedCheck = searchParams.get('check');
   const fileInput = useRef<HTMLInputElement>(null);
 
   const load = useCallback(() => {
@@ -155,10 +165,28 @@ export default function AudienceStagePage() {
     return () => clearInterval(timer);
   }, [activeCheck, load, refresh]);
 
+  // Arriving from the Work index with `?check=<id>` opens that one.
+  //
+  // Runs before the resume effect below and wins, because a founder who
+  // clicked a specific check wants that check — not whichever one happens to
+  // be newest. Guarded on `activeCheck?.id` rather than on `activeCheck`
+  // being null so a link followed while another check is open still switches.
+  useEffect(() => {
+    if (!requestedCheck || activeCheck?.id === requestedCheck) return;
+    api
+      .get<SiteCheck>(`/website/check/${requestedCheck}`)
+      .then(({ data }) => setActiveCheck(data))
+      .catch(() => {
+        // A stale or foreign id costs the deep link, not the page: the list
+        // below still renders and the resume effect still picks the newest.
+      });
+  }, [requestedCheck, activeCheck?.id]);
+
   // A founder who left mid-check and came back resumes where the worker is:
   // the newest check still underway starts polling again, and the newest
   // finished one shows what it found without another click.
   useEffect(() => {
+    if (requestedCheck) return;
     if (activeCheck !== null || checks.length === 0) return;
     const candidate = checks.find(
       (c) => isCheckUnderway(c.status) || c.status === 'complete',
@@ -171,7 +199,7 @@ export default function AudienceStagePage() {
         // The list row still shows its status, and opening it stays a click
         // away — this prefetch failing quietly costs a click, not an answer.
       });
-  }, [checks, activeCheck]);
+  }, [checks, activeCheck, requestedCheck]);
 
   /* The site path lands here still queued — nothing has been read yet. The
      row is seeded so the list shows it at once, and the poll above carries it
@@ -518,15 +546,29 @@ export default function AudienceStagePage() {
                           {Math.round(score)}/100
                         </span>
                       )}
-                      {status === 'complete' && activeCheck?.id !== row.id && (
-                        <button
-                          type="button"
-                          onClick={() => openCheck(row.id)}
-                          className="text-saibyl-blue hover:underline"
-                        >
-                          See what we found
-                        </button>
-                      )}
+                      {/* The row the founder is already reading says so; it
+                          does not go blank.
+
+                          It used to render nothing here when `activeCheck` was
+                          this row, because the full report is open further down
+                          the page. The founder who found this had just paid for
+                          a check, looked at a list where every OTHER row
+                          carried a link, and reasonably concluded his had
+                          failed. A control that vanishes reads as a defect, not
+                          as "you are already there" — the report being a screen
+                          below is invisible from up here. */}
+                      {status === 'complete' &&
+                        (activeCheck?.id === row.id ? (
+                          <span className="text-saibyl-muted">Open below ↓</span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => openCheck(row.id)}
+                            className="text-saibyl-blue hover:underline"
+                          >
+                            See what we found
+                          </button>
+                        ))}
                     </li>
                   );
                 })}

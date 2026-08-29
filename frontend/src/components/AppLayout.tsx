@@ -68,6 +68,13 @@ const coreNav: NavItem[] = [
      sat at the bottom of "Everything else" where nobody looking for help would
      think to open it. */
   { path: '/app/guide', label: 'How this works', Icon: Search },
+  /* Third: everything the founder has already made.
+     Until 2026-08-29 there was no such list. Each module stored its own
+     output and the Reports section read only `reports`, which simulation
+     runs write — so a founder with four website checks and a page rewrite
+     saw an empty page and had to remember which stage produced what.
+     Sits above the journey because it is about what is behind you. */
+  { path: '/app/work', label: 'Your work', Icon: FileText },
 
   /* ── The journey ── */
   { path: '/app/validate', label: 'Validate', Mark: STAGE_MARKS.validate },

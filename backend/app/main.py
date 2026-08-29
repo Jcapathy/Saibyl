@@ -35,6 +35,7 @@ from app.api import (
     variants,
     website,
     website_room,
+    work,
     ws,
 )
 from app.core.config import settings
@@ -191,6 +192,9 @@ def create_app() -> FastAPI:
     app.include_router(clearance.router, prefix="/api/clearance")
     app.include_router(website.router, prefix="/api/website")
     app.include_router(website_room.router, prefix="/api/website-room")
+    # One chronology across every artifact a founder has made. Read-only over
+    # the module tables — see `api/work.py` for why the gallery is excluded.
+    app.include_router(work.router, prefix="/api/work")
     app.include_router(answer_pack.router, prefix="/api/answer-pack")
     # The rest of the GTM module, and capital access. Each is an ordinary paid
     # artifact: refuse before charging, charge at create, one worker.

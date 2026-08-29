@@ -25,6 +25,7 @@ import GrowPage from '@/pages/GrowPage';
 import LaunchPage from '@/pages/LaunchPage';
 import PositionPage from '@/pages/PositionPage';
 import ValidatePage from '@/pages/ValidatePage';
+import WorkPage from '@/pages/WorkPage';
 import LoginPage from '@/pages/LoginPage';
 import NewSimulationPage from '@/pages/NewSimulationPage';
 import PackLibraryPage from '@/pages/PackLibraryPage';
@@ -143,6 +144,8 @@ function AnimatedRoutes() {
           <Route path="sales" element={<Absorbed by="/app/launch" />} />
           <Route path="marketing" element={<Absorbed by="/app/launch" />} />
 
+          {/* One chronology across every artifact. See WorkPage. */}
+          <Route path="work" element={<PageTransition><WorkPage /></PageTransition>} />
           <Route path="guide" element={<PageTransition><GuidePage /></PageTransition>} />
           <Route path="projects" element={<PageTransition><ProjectsPage /></PageTransition>} />
           <Route path="projects/:id" element={<PageTransition><ProjectDetailPage /></PageTransition>} />
