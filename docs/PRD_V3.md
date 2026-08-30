@@ -129,6 +129,41 @@ plus an overall gauntlet score. Findings land in `simulation_analysis` with
 evidence pointers like every other number in the product — **no rendered value
 without an artifact field** (the V2 Phase 1+ integrity gate applies).
 
+### 4b¹. Being found — the second audience (added 2026-08-30, founder-directed)
+
+**This section exists because its absence was not noticed for ten days.** The
+five critics above judge the page a **person** gets. The founder's intent for
+this product has always had a second half, stated on 2026-08-30 in these terms:
+make the site *"AEO/SEO/GEO enhanced so ChatGPT, Claude or other LLM platforms
+can read the site in an efficient manner so the site ranks higher in search and
+or recommendation results"*. Nothing in §4b covered it, so nothing built it,
+and every session that followed this document faithfully built half a product.
+
+A ninth dimension, keyed `found` and shown as **"being found"**, judges what an
+answering crawler receives. Counted, not judged: no model call, no cost,
+reproducible across runs, same contract as `measured` and `standard`.
+
+- The evidence is the **pre-script document**, read from the navigation
+  response the capture already holds — that is what GPTBot, ClaudeBot,
+  PerplexityBot and Google-Extended receive, none of which run JavaScript.
+- It answers, in this order because the order is the argument: is the crawler
+  allowed to read the page at all; do the page's own words exist before
+  JavaScript runs; does the page state what it is in a machine-readable form;
+  does it have a description; does it declare its own address; do its images
+  carry alt text; is a plain-text summary served.
+- **No thresholds.** Counts and structural yes/no answers only.
+
+**The two halves genuinely conflict, and naming the conflict is the product.**
+The techniques that make a page beautiful are the ones that make it illegible
+to a crawler. Measured across five real sites on the day it shipped:
+linear.app and anthropic.com score **100** on the visual standard and **82**
+and **75** here; stripe.com is the reverse, **73** and **100**. A founder needs
+to be told which of those two problems they have.
+
+**Vocabulary.** The dimension is never called AEO, SEO or GEO in anything a
+founder reads, and a test enforces it. A founder has a website, not a
+discipline.
+
 ### 4b². Design intelligence augmentation (added 2026-08-16, founder-directed)
 
 Distilled from Jack Roberts' evaluation playbook and the styles.refero.design

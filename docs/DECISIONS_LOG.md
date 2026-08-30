@@ -8,6 +8,82 @@ choices.
 
 ---
 
+## 2026-08-30 — The check judges two audiences, and the report stops leading with a score
+
+**The founder's challenge, in his words:** the taste work was meant to *"combat
+AI slop produced websites in an effort to make them visually appealing to
+humans"* **and simultaneously** to make a site *"AEO/SEO/GEO enhanced so
+ChatGPT, Claude or other LLM platforms can read the site in an efficient manner
+so the site ranks higher in search and or recommendation results"* — and he
+suspected the product had *"delved from the original intent to a very
+mechanical scoring mechanism"*.
+
+**Audited before acting, and he was right, with one correction worth keeping.**
+
+- **The second half was never built.** Not drift — absence. A grep of the whole
+  website service for structured data, robots, crawlers, alt text or any of the
+  three acronyms returned nothing. **PRD_V3 §4 never scoped it**: five critics
+  were specified and machine readability was not among them. `docs/SEO_AEO.md`
+  is real and good and is about **saibyl.com's own** ranking, not a customer
+  capability. The capture collected only `description` and `og:*`, so the raw
+  material was not even gathered.
+- **The correction: the product is not mechanical throughout.** Six of the
+  dimensions are model judgments and every finding carries a `why` and a `fix`
+  in prose. `taste.py` exists *because* mechanical gaming was caught once
+  already. What is mechanical is the **aggregation** — a flat mean, which is
+  what the revision loop ranks on, and which the founder met first in the
+  report.
+- **A third drift found on the way.** PRD_V3 specifies critic five as
+  *"Accessibility & mobile"*. It shipped as `mobile`. Contrast and tap targets
+  survive inside the prompt; accessibility as a named concern did not — and
+  earlier the same day the rubric was found **penalising WCAG skip links** as a
+  design defect. The alt-text finding in the new dimension is the first thing
+  in the product to name accessibility again.
+
+**Decision 1: machine readability is a ninth dimension inside the same check,
+not a separate product.** The founder chose this over a separately-priced check
+and over a free pre-flight. The reason it is worth more inside: the two goals
+genuinely pull against each other, and the conflict is the insight. Measured
+across five real sites the same day —
+
+| page | standard (visual) | found (machine) |
+|---|---|---|
+| linear.app | **100** | 82 |
+| anthropic.com | **100** | 75 |
+| stripe.com | 73 | **100** |
+| vercel.com | 82 | 100 |
+| saibyl.com | 93 | 93 |
+
+linear.app is a benchmark design site with **zero** structured data;
+vercel.com renders **866 characters** of text behind a rich visual page. A
+check that scores both on one page, and says which kind of problem the founder
+has, is one nobody else is selling.
+
+**Decision 2: the report leads with a ranked change list; the score follows.**
+Not removed — a founder needs the number to see a revision move — but a mean
+across nine dimensions is a summary of work already done, and it was the first
+thing on the page. The list is every finding, worst first, showing the `fix`.
+
+**Decision 3: the dimension is called "being found", and no finding may make a
+founder learn an acronym.** Not "AEO" and not "SEO": the outcome a founder
+wants is to be found and quoted, not to have optimised something. A test
+asserts that no string in the dimension says `aeo`, `seo`, `geo`, `schema.org`,
+or the banned word for the address tag.
+
+**Deliberate non-changes, recorded so they read as decisions.**
+
+- **The revision loop still ranks on the mean.** Changing what it ships is a
+  larger piece of work with its own before/after evidence, and the founder
+  chose the report change over it for now. The known failure mode stands: a
+  rise in one dimension can still mask a fall in another.
+- **`llms.txt` is scored, at minor, and its finding says in its own text that
+  it is an emerging convention rather than a standard.** No crawler is
+  documented as requiring one. It is listed because it is cheap and because
+  the pages a founder is compared against increasingly carry one — stripe.com,
+  linear.app and vercel.com all serve a real one; saibyl.com returns 404.
+
+---
+
 ## 2026-08-30 — The measured rubric counts elevations, and three things it deliberately still counts
 
 Founder instruction: *"Fix the measured rubric so the design system isn't

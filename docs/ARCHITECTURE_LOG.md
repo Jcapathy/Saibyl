@@ -8,6 +8,64 @@ running delta record.
 
 ---
 
+## 2026-08-30 — A ninth dimension, and the report stops leading with a number
+
+Founder-directed, and the largest shape change since the check shipped. Two
+things moved: the gauntlet gained a reader that judges a **machine's** view of
+the page, and the founder-facing report now opens with a change list instead of
+a score.
+
+### `machine.py` and `found.py` — the ninth dimension
+
+`services/website/machine.py` reads the evidence; `services/website/found.py`
+judges it and returns a `CriticDimension` keyed `found`. The split is the same
+one `capture.py`'s style census and `measured.py` already make, and here it is
+also load-bearing for imports: `capture` calls the reader at module scope and
+`critics` imports `capture`, so a reader that imported the finding models would
+close a cycle. Evidence has no opinions; opinions import freely.
+
+**The evidence is free.** The pre-script document — what an answering crawler
+receives, since GPTBot and ClaudeBot do not run JavaScript — is read from the
+navigation response `page.goto` already returns. No second request, no extra
+load on the founder's site, and no chance of being served something different
+than the page we rendered. `robots.txt` and `llms.txt` are fetched through the
+browser's own context, optional and short-budgeted; a fetch that fails can
+never fail a capture.
+
+**No thresholds anywhere in it.** Every signal is a count reported as evidence
+or a structural yes/no. The one question that would ordinarily want a threshold
+— *is enough of this page visible without JavaScript* — is answered by asking
+whether the page's own headline appears in the HTML the crawler receives. A
+ratio would have needed a number nobody measured.
+
+**`robots.txt` is parsed by group**, because a `Disallow` binds only to the
+agents named above it. Validated against real files: nytimes.com and reddit.com
+block all eight answering crawlers; the five tech sites block none.
+
+**The `llms.txt` probe checks more than the status code.** A single-page app
+with a catch-all rewrite answers 200 for every path, so status alone reported
+the file as present on every SPA on the web. It must also not be served as
+HTML.
+
+### The report leads with what to change
+
+`components/website/SiteCritique.tsx` opens with a ranked change list —
+`rankedChanges` in `types.ts`, sorted by severity with a stable sort so a
+dimension's own ordering survives inside one severity. The overall score moved
+one block down, unchanged, because it is still how a revision is seen to move.
+
+`rankedChanges` lives in `types.ts` rather than beside the component that
+renders it for a build reason worth keeping: `npm run build` runs `tsc -b`, and
+a test importing a `.tsx` fails that pass with *"--jsx is not set"* while
+`vitest` goes green. Found by the gate, exactly as the gate's warning in
+`CLAUDE.md` says it would be.
+
+`measured`, `standard` and `found` were all added to `DIMENSION_WORDS`. None of
+the three had ever been named there, so each fell through to the fallback and a
+founder read "Measured" and "Standard" as headings.
+
+---
+
 ## 2026-08-30 — `measured` learns that a shadow is four devices
 
 `services/website/measured.py`. No census change and no new dependency — the

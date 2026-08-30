@@ -120,6 +120,22 @@ const DIMENSION_WORDS: Record<string, { name: string; help: string }> = {
     name: 'The look',
     help: 'Type, color, spacing — measured in numbers, not judged by feel.',
   },
+  // The three counted dimensions. Until 2026-08-30 none of them was named
+  // here, so each fell through to the fallback and rendered as its own bare
+  // key — a founder read "Measured" and "Standard" as headings and had to
+  // work out what they meant.
+  measured: {
+    name: 'Consistency',
+    help: 'Whether the page uses one system — or whatever each piece shipped with.',
+  },
+  standard: {
+    name: 'Craft',
+    help: 'The things a good page does, held to one standard rather than to a rival.',
+  },
+  found: {
+    name: 'Being found',
+    help: 'What a model reads when someone asks it to recommend a tool like yours.',
+  },
 };
 
 /** Spellings the backend could plausibly use for the same six. */
@@ -154,6 +170,57 @@ export function dimensionWords(key: string): { name: string; help: string } {
     name: readable.charAt(0).toUpperCase() + readable.slice(1),
     help: '',
   };
+}
+
+/* ------------------------------------------------------------------ */
+/*  The change list                                                    */
+/* ------------------------------------------------------------------ */
+
+const SEVERITY_RANK: Record<string, number> = { critical: 0, major: 1, minor: 2 };
+
+export type RankedChange = {
+  finding: SiteFinding;
+  dimensionKey: string;
+  dimensionName: string;
+};
+
+/**
+ * Every finding across every dimension, worst first.
+ *
+ * **This is the list the report opens with, and that ordering is the point.**
+ * Until 2026-08-30 the report led with the overall score — a mean across nine
+ * dimensions — and the founder's reading of that was that the product had
+ * become "a very mechanical scoring mechanism that ignores the original
+ * intent". A mean is a summary of work already done: it tells a founder how
+ * they did, never what to do. The score is still rendered, one block lower,
+ * because it is how a revision is seen to move.
+ *
+ * Sorted by severity alone, then left in the order the dimensions arrived.
+ * `sort` is stable in every engine this ships to, so two findings of equal
+ * severity keep the backend's ordering — which matters because at least one
+ * dimension orders its own findings as an argument rather than a list: "being
+ * found" puts crawler access first, since nothing else on that card is worth
+ * doing until a machine is allowed to read the page at all.
+ *
+ * **It lives here rather than beside the component that renders it** because
+ * `npm run build` runs `tsc -b`, and a test importing a `.tsx` fails that pass
+ * with `--jsx is not set` while `vitest` goes green. This file is the one the
+ * tests can reach, and the function is pure data anyway.
+ */
+export function rankedChanges(dimensions: SiteDimension[]): RankedChange[] {
+  return dimensions
+    .flatMap((dimension) =>
+      dimension.findings.map((finding) => ({
+        finding,
+        dimensionKey: dimension.key,
+        dimensionName: dimensionWords(dimension.key).name,
+      })),
+    )
+    .sort(
+      (a, b) =>
+        (SEVERITY_RANK[a.finding.severity] ?? 3) -
+        (SEVERITY_RANK[b.finding.severity] ?? 3),
+    );
 }
 
 /**

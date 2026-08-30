@@ -4,6 +4,8 @@ import {
   dimensionWords,
   isDesignDimension,
   maturityLevel,
+  rankedChanges,
+  type RankedChange,
   type SiteCheck,
   type SiteDimension,
   type SiteFinding,
@@ -12,12 +14,19 @@ import {
 /**
  * A finished site check, rendered from the row and nothing else.
  *
- * The overall score leads, the takeaway sentence sits beside it — that
- * sentence is the whole product in miniature: what a stranger actually took
- * away from the page, which is rarely what the founder meant. Six cards
- * follow, one per way of looking at the page, each with what to fix and what
- * to keep. Every finding carries the page's own words as evidence, so nothing
- * here asks to be taken on faith.
+ * **A ranked change list leads, and the score follows it as evidence.** That
+ * order was reversed on 2026-08-30. The score had led since the check shipped,
+ * and the founder's reading of the result was that the product had become "a
+ * very mechanical scoring mechanism that ignores the original intent" — the
+ * intent being to make a page better, which a mean across nine dimensions
+ * never asks anyone to do. The number is still here, unchanged and one block
+ * lower, because it is how a founder sees a revision move.
+ *
+ * The takeaway sentence sits with the score — that sentence is the whole
+ * product in miniature: what a stranger actually took away from the page,
+ * which is rarely what the founder meant. Cards follow, one per way of looking
+ * at the page, each with what to fix and what to keep. Every finding carries
+ * the page's own words as evidence, so nothing here asks to be taken on faith.
  *
  * The design card is the newest of the six and the only one whose evidence is
  * a measurement rather than a sentence off the page — "your value, theirs" —
@@ -34,6 +43,42 @@ const SEVERITY_ORDER: Record<string, number> = { critical: 0, major: 1, minor: 2
 
 /** Findings shown before the rest fold away. */
 const VISIBLE_FINDINGS = 3;
+
+/**
+ * Changes shown in the opening list before the rest fold away.
+ *
+ * A founder who has just paid for a check needs somewhere to start, not a
+ * backlog. Five is enough to be a morning's work and few enough to read
+ * standing up; the remainder are one click away and every one of them is
+ * still on its own dimension card below.
+ */
+const VISIBLE_CHANGES = 5;
+
+/**
+ * One row of the opening list: what to change, and where it came from.
+ *
+ * The **fix** is the line set in the reading colour, because it is the only
+ * sentence here that asks the founder to do something. The finding's own
+ * evidence stays on the dimension card below rather than being repeated —
+ * this list is for deciding what to pick up, not for arguing the case.
+ */
+function Change({ change, index }: { change: RankedChange; index: number }) {
+  const { finding, dimensionName } = change;
+  return (
+    <li className="flex gap-3">
+      <span className="mt-0.5 shrink-0 w-5 text-[12px] font-medium text-saibyl-muted/60 tabular-nums">
+        {index + 1}
+      </span>
+      <div className="min-w-0">
+        <p className="text-[13.5px] text-saibyl-ink leading-relaxed">{finding.fix}</p>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+          <SeverityChip severity={finding.severity} />
+          <span className="text-[11px] text-saibyl-muted/70">{dimensionName}</span>
+        </div>
+      </div>
+    </li>
+  );
+}
 
 function bannerTone(score: number): string {
   if (score >= 75) return 'border-saibyl-positive/30 bg-saibyl-positive/[0.07]';
@@ -270,8 +315,54 @@ export default function SiteCritique({
       )
     : critique.dimensions;
 
+  const changes = rankedChanges(critique.dimensions);
+  const leadChanges = changes.slice(0, VISIBLE_CHANGES);
+  const restChanges = changes.slice(VISIBLE_CHANGES);
+
   return (
     <div className="space-y-4">
+      {/* ── What to change ──
+          Leads the report. A founder who has just handed over an address
+          wants the next thing to do, and a mean across nine dimensions is not
+          that. The score follows as evidence. */}
+      {changes.length > 0 && (
+        <div className="rounded-2xl border border-saibyl-border-light bg-white p-6 shadow-[0_10px_24px_rgba(55,90,145,0.05)]">
+          <p className="text-[11px] font-medium text-saibyl-silver uppercase tracking-wider">
+            What to change
+          </p>
+          <p className="text-[12px] text-saibyl-muted mt-1 leading-relaxed">
+            {changes.length === 1
+              ? 'One thing came out of this check, worst first.'
+              : `${changes.length} things came out of this check, worst first.`}
+          </p>
+          <ol className="mt-4 space-y-3.5">
+            {leadChanges.map((change, i) => (
+              <Change
+                key={`${change.dimensionKey}-${i}`}
+                change={change}
+                index={i}
+              />
+            ))}
+          </ol>
+          {restChanges.length > 0 && (
+            <details className="mt-3">
+              <summary className="cursor-pointer text-[12px] text-saibyl-blue hover:underline select-none">
+                Show the other {restChanges.length}
+              </summary>
+              <ol className="mt-3 space-y-3.5">
+                {restChanges.map((change, i) => (
+                  <Change
+                    key={`${change.dimensionKey}-rest-${i}`}
+                    change={change}
+                    index={i + VISIBLE_CHANGES}
+                  />
+                ))}
+              </ol>
+            </details>
+          )}
+        </div>
+      )}
+
       {/* ── The score and the takeaway ── */}
       <div className={`rounded-2xl border p-6 ${bannerTone(overall)}`}>
         <div className="flex flex-wrap items-baseline gap-2">
@@ -318,7 +409,7 @@ export default function SiteCritique({
         )}
       </div>
 
-      {/* ── The six ways of looking at it ── */}
+      {/* ── Every way of looking at it, one card each ── */}
       {/* Two columns once there is room, one on a phone. `items-start` keeps a
           short card from being stretched to its neighbour's height. */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">

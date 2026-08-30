@@ -11,6 +11,57 @@ your check could only have passed for the reason you think it did.*
 
 ---
 
+## 2026-08-30 — Half the intent never reached the PRD, and nothing noticed for ten days
+
+**The failure class: an intent that lives in one person's head is not a
+requirement, and a codebase cannot drift from something it never had.**
+
+The founder's stated goal for the website check has always had two halves —
+make the page better for a **human**, and make it legible to the **machines**
+buyers now ask. The first half is six vision critics and two counted rubrics.
+The second half did not exist. Not partially, not badly: a grep of the whole
+website service for structured data, crawler directives, alt text or any of the
+relevant acronyms returned zero hits, and the capture collected only
+`description` and `og:*`, so the raw material was never gathered either.
+
+**It was absent from `PRD_V3.md` too.** §4b specifies five critics by name and
+machine readability is not among them. So every session that built faithfully
+to the PRD built half the product, correctly, and no review caught it — because
+every review was also reading the PRD.
+
+**What made it findable at all was the founder saying the goal out loud.** He
+described the outcome he wanted and asked whether we had drifted from it. The
+answer was that we had not drifted; we had never started. **A drift can be
+caught by comparing code to a document. An absence of this kind can only be
+caught by comparing a document to somebody's intent** — which means the
+question *"what did you think this was for?"* is a real audit instrument and
+should be asked at phase boundaries, not only when something feels wrong.
+
+**A second, smaller instance of the same class, found in the same pass.**
+PRD_V3 names critic five *"Accessibility & mobile — responsiveness, contrast,
+tap targets"*. The implementation is keyed `mobile` and labelled "mobile
+experience". Contrast and tap targets survived inside the prompt; the word
+accessibility did not survive into anything with a name, and hours earlier the
+rubric had been caught **penalising WCAG skip links** as a design defect. A
+concern with no name in the code is a concern nothing defends.
+
+**The check on the fix, and the reason it is not self-congratulation.** The new
+dimension was validated against five real sites, and it disagrees with the
+visual dimension on four of them — linear.app and anthropic.com score 100 on
+`standard` and 82 and 75 on `found`; stripe.com is the reverse at 73 and 100.
+**A new dimension that agreed with the existing ones would have been measuring
+something already measured.** The disagreement is the evidence that it reads a
+different audience.
+
+**And the gate caught the thing the tests did not.** `vitest` passed 149 green
+while `tsc -b` failed: a test importing a `.tsx` file breaks the
+project-references pass with *"--jsx is not set"*. This is the exact failure
+`CLAUDE.md` warns about in bold, and it was found by running `npm run build`
+rather than trusting the suite. The fix moved the function under test into a
+`.ts` file, which it should have been in anyway.
+
+---
+
 ## 2026-08-30 — A limit applied to the wrong unit, and the reason it survived so long
 
 **The defect.** `SHADOW_LIMIT = 4` was compared against the number of distinct
