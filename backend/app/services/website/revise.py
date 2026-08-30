@@ -494,6 +494,49 @@ def _scores_of(critique: dict) -> dict:
     return scores
 
 
+#: The largest fall in one dimension that can still be called noise.
+#:
+#: **Measured, not chosen.** On 2026-08-28 the same page was scored across a
+#: model change *and* an effort change: every vision dimension moved **4-20
+#: points** while `measured` and `standard` returned identical numbers three
+#: runs running. 20 is the largest drift ever recorded here with nothing on the
+#: page to cause it, so a fall bigger than 20 is the page getting worse rather
+#: than a reviewer changing its mind. For the counted dimensions the bar is
+#: conservative — their measured drift is zero — but never wrong.
+#:
+#: **The case it exists for.** On 2026-08-27 a revision took `measured` from 35
+#: to 73 by deleting things, while `design` — a model actually looking at the
+#: page — fell from 95 to 72. Net **+5**, so the loop declared a win and handed
+#: back a page the founder described as having "not really much to it". That
+#: -23 clears this bar; nothing measured as noise ever has.
+DIMENSION_REGRESSION_LIMIT = 20
+
+
+def _regressions(scores: dict, baseline: dict) -> list[tuple[str, int]]:
+    """Dimensions that fell further than noise, against the founder's own page.
+
+    Compared to the **original**, never to the previous round. A round that
+    quietly gave up a dimension in round one would otherwise set the bar it is
+    later judged against, and the loss would never be seen again.
+
+    A dimension absent from either side is skipped rather than treated as zero:
+    `measured`, `standard` and `found` each return None when there was nothing
+    to judge, and reading that absence as a fall to zero would block every
+    revision of a page that defeats measurement.
+    """
+    fallen: list[tuple[str, int]] = []
+    for key, before in baseline.items():
+        if key == "overall":
+            continue
+        after = scores.get(key)
+        if after is None or not isinstance(before, int):
+            continue
+        drop = before - int(after)
+        if drop > DIMENSION_REGRESSION_LIMIT:
+            fallen.append((key, drop))
+    return sorted(fallen, key=lambda pair: -pair[1])
+
+
 class _Round(BaseModel):
     """One completed round, kept whole so the best one can be returned."""
 
@@ -502,6 +545,11 @@ class _Round(BaseModel):
     render: WebsiteCapture
     verdict: CritiqueResult
     claims: list[UnsupportedClaim] = []
+
+    #: Dimensions this round gave up against the founder's own page, worst
+    #: first, counted only where the fall is bigger than anything measured as
+    #: noise. See `DIMENSION_REGRESSION_LIMIT`.
+    regressions: list[tuple[str, int]] = []
 
     @property
     def forged_badges(self) -> int:
@@ -512,22 +560,44 @@ class _Round(BaseModel):
 def _is_better(candidate: _Round, incumbent: _Round | None) -> bool:
     """Whether a round should replace the best one so far.
 
-    **Fewest invented certifications first, and only then the score.** The
-    gauntlet cannot see the founder's real page, so it scores a page that
-    claims SOC 2 exactly as it scores one that holds it — on the live fintech
-    run the fabricating round was scored *up*, credibility unmoved at 82.
-    Ranking on score alone therefore means knowingly shipping the fabricating
-    page whenever it lands two points higher, and "it scored better" is not an
-    answer a founder can give a regulator.
+    Three tiers, and **the score is the last of them**. Each of the two above
+    it is a specific harm that a higher mean is not allowed to buy.
+
+    **1. Fewest invented certifications.** The gauntlet cannot see the
+    founder's real page, so it scores a page that claims SOC 2 exactly as it
+    scores one that holds it — on the live fintech run the fabricating round
+    was scored *up*, credibility unmoved at 82. Ranking on score alone means
+    knowingly shipping the fabricating page whenever it lands two points
+    higher, and "it scored better" is not an answer a founder can give a
+    regulator.
 
     Only certifications are disqualifying. A figure or a customer count is
     reported to the founder but does not override the score: those are noisier
     to detect, and far cheaper to be wrong about in either direction.
+
+    **2. Fewest dimensions given up.** Added 2026-08-30. The overall is a mean,
+    and a mean lets a large gain in one dimension pay for a large loss in
+    another — which is not a hypothetical: on 2026-08-27 `measured` rose 35 to
+    73 by deletion while `design` fell 95 to 72, the mean rose 5, and the loop
+    shipped a page the founder called "not really much to it". With nine
+    dimensions each one is about a ninth of the mean, so the trade got cheaper,
+    not dearer. A round that holds every dimension now beats one that scores
+    higher by abandoning one.
+
+    **3. Then the score.** Among rounds that fabricate nothing and abandon
+    nothing, higher is better, exactly as before.
+
+    Round one is always taken — `incumbent is None` — so the loop always has a
+    result to stand behind. A first round that regresses badly is still
+    reported with its regression recorded; the guard is what stops a later,
+    higher-scoring round from taking the prize by giving something up.
     """
     if incumbent is None:
         return True
     if candidate.forged_badges != incumbent.forged_badges:
         return candidate.forged_badges < incumbent.forged_badges
+    if len(candidate.regressions) != len(incumbent.regressions):
+        return len(candidate.regressions) < len(incumbent.regressions)
     return candidate.verdict.overall_score > incumbent.verdict.overall_score
 
 
@@ -566,6 +636,10 @@ async def generate_revision(
     current_critique = critique
     previous_html: str | None = None
     evidence = capture.screenshot_desktop
+    # The founder's own page, and the only baseline a round is measured
+    # against. Computed once, outside the loop, so round three is judged
+    # against the page the founder brought rather than against round two.
+    baseline_scores = _scores_of(critique)
 
     with usage_context("website_revision", organization_id=organization_id):
         for round_no in range(1, max_rounds + 1):
@@ -632,8 +706,26 @@ async def generate_revision(
                     dimension_scores={d.key: d.score for d in verdict.dimensions},
                 )
             )
+            given_up = _regressions(
+                {d.key: d.score for d in verdict.dimensions}, baseline_scores
+            )
+            if given_up:
+                # Logged whether or not this round wins, because a round that
+                # scored higher and was passed over is the one a later session
+                # would otherwise "fix" by removing the guard.
+                logger.info(
+                    "website_revision_dimension_given_up",
+                    round=round_no,
+                    overall=verdict.overall_score,
+                    given_up=[f"{key} -{drop}" for key, drop in given_up],
+                )
             candidate = _Round(
-                number=round_no, html=html, render=render, verdict=verdict, claims=claims
+                number=round_no,
+                html=html,
+                render=render,
+                verdict=verdict,
+                claims=claims,
+                regressions=given_up,
             )
             if _is_better(candidate, best):
                 best = candidate

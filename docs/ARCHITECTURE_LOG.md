@@ -8,6 +8,31 @@ running delta record.
 
 ---
 
+## 2026-08-30 (later) — The revision loop gains a third ranking tier
+
+`services/website/revise.py`. No new module; a rule added to a decision that
+already existed.
+
+`_is_better` ranked on invented certifications, then the overall score. The
+middle tier is new: **fewest dimensions given up against the founder's own
+page**, where "given up" means a fall greater than `DIMENSION_REGRESSION_LIMIT`
+(20, the largest drift ever measured on an unchanged page — see
+`DECISIONS_LOG`). `_regressions` computes it; `_Round` carries it; the loop
+computes the baseline once, outside the round loop, from `_scores_of(critique)`.
+
+**The shape was already in the file.** The forged-certification tier is the
+same idea — a specific harm that a higher mean is not allowed to buy — so this
+is a second instance of an established pattern rather than a new concept.
+Nothing else in the loop changed: round one is still always taken, the
+best-so-far guards on generation, render and judge failures are untouched, and
+every round's scores are still recorded regardless of which one wins.
+
+A round that gave a dimension up is logged whether or not it wins, because a
+round that scored higher and was passed over is exactly what a later session
+would otherwise "fix" by removing the guard.
+
+---
+
 ## 2026-08-30 — A ninth dimension, and the report stops leading with a number
 
 Founder-directed, and the largest shape change since the check shipped. Two

@@ -8,6 +8,66 @@ choices.
 
 ---
 
+## 2026-08-30 (later) — The mean stops being able to buy a regression, and saibyl.com serves an llms.txt
+
+The two items left open by the morning's work, both closed.
+
+**1. The revision loop no longer lets a higher mean pay for a dimension it
+gave up.** `_is_better` had two tiers — fewest invented certifications, then
+the overall score. It now has three, with the score still last:
+
+1. Fewest invented certifications *(unchanged)*
+2. **Fewest dimensions given up against the founder's own page** *(new)*
+3. Then the overall score
+
+**The threshold is measured, not chosen.** `DIMENSION_REGRESSION_LIMIT = 20`,
+because on 2026-08-28 the same page scored across a model change *and* an
+effort change moved every vision dimension **4–20 points** while `measured` and
+`standard` returned identical numbers three runs running. 20 is the largest
+drift ever recorded here with nothing on the page to cause it. The case it
+exists for — `design` 95 → 72 on 2026-08-27, a **−23** — clears it; nothing
+measured as noise ever has.
+
+Three details worth keeping:
+
+- **The baseline is the founder's original page, never the previous round.** A
+  round that quietly gave up a dimension in round one would otherwise set the
+  bar it is later judged against, and the loss would never be seen again.
+- **A dimension absent from either side is skipped, not read as a fall to
+  zero.** `measured`, `standard` and `found` each return None when there was
+  nothing to judge, and treating that as −100 would block every revision of a
+  page that defeats measurement.
+- **Round one is still always taken.** The guard stops a later, higher-scoring
+  round from winning by giving something up; it never leaves the founder with
+  no revision. A first round that regresses is reported with the regression
+  logged.
+
+**What this does not do:** it counts regressions rather than weighing them, so
+a round giving up one dimension by 21 ranks equal with one giving up a
+different dimension by 60. Deliberate — no measurement supports a weighting,
+and the count alone closes the failure on record.
+
+**2. `frontend/public/llms.txt` now exists.** saibyl.com returned 404 for it
+while stripe.com, linear.app and vercel.com each serve a real one (65KB, 10KB,
+3.5KB). It is written from the site's own words — the description tag and the
+structured data already in `index.html` — so the two cannot drift into
+describing different products, and it states what Saibyl does **not** do
+alongside what it does.
+
+Its weight is unchanged from this morning's decision: **minor**, and its
+finding still says in its own text that this is an emerging convention rather
+than a standard. Adding one to our own site is not evidence that it works; it
+is cheap, it cannot hurt, and it removes the only gap the new dimension found
+on saibyl.com.
+
+**Also corrected:** `sitemap.xml` carried a note saying the domain still served
+a GoDaddy "Launching Soon" page and that its URLs were aspirational. True when
+written, false now — verified by capture, the domain returns the app's own
+title, 11,859 characters of crawlable text and its structured data. A stale
+note in a file is a fact the next session inherits.
+
+---
+
 ## 2026-08-30 — The check judges two audiences, and the report stops leading with a score
 
 **The founder's challenge, in his words:** the taste work was meant to *"combat

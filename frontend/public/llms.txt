@@ -1,0 +1,48 @@
+# Saibyl
+
+> Saibyl builds a room of AI buyers from a founder's own material, puts the
+> pitch in front of them, and reports every objection with the exact sentences
+> behind it — before launch. One full evaluation is free, and no card is
+> required for it.
+
+Saibyl is a product of Saido Labs LLC.
+
+A founder uploads a deck, or answers five short questions, and Saibyl assembles
+a room of buyers from that material rather than from a template. The room reads
+the pitch and reacts. What comes back is every objection, ranked by how much of
+the room carried it, with the sentence each buyer actually said attached to it.
+It is a rehearsal, not a survey.
+
+## What it answers
+
+- **Will buyers object to this, and to what?** Objections are ranked by reach,
+  intensity and how widely they spread across different kinds of buyer, so the
+  one that costs deals ranks above the one that is merely loudest. Every number
+  traces back to a quote.
+- **Is the idea already taken?** A clearance check searches registered
+  trademarks, granted patents and pending applications, and reports what stands
+  closest with the filing attached.
+- **Why doesn't my website convert?** A website check reads a real page and
+  returns what to change, with the page's own words as evidence. It judges the
+  page a person sees and, separately, what a crawler or an assistant can read
+  from it.
+
+## What it does not do
+
+- It does not survey real people, and it does not claim to. The room is built
+  from the founder's own material and reasons from it; the product's own
+  reports say so wherever a number appears.
+- It does not report a score without the evidence under it. Every finding
+  carries the sentence, the measurement or the filing it came from.
+
+## Pages
+
+- [Saibyl](https://saibyl.com/): what it is, how a run works, and the free
+  first evaluation.
+- [Privacy](https://saibyl.com/privacy): what is stored, what is not, and the
+  standing promise that nothing a customer uploads is visible to another.
+- [Terms](https://saibyl.com/terms): the terms of use.
+
+## Contact
+
+Saido Labs LLC — info@saidolabs.com

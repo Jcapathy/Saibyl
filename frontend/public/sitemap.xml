@@ -2,18 +2,17 @@
 <!--
   Saibyl — Saido Labs LLC
 
-  Only the four genuinely public routes. /login and /signup are deliberately
-  absent: they are in robots.txt as Disallow, and a sitemap that lists pages
-  a crawler is told not to fetch is a contradiction the crawler resolves by
-  trusting neither file.
+  The three genuinely public routes — the same three the build prerenders.
+  /login and /signup are deliberately absent: they are in robots.txt as
+  Disallow, and a sitemap that lists pages a crawler is told not to fetch is a
+  contradiction the crawler resolves by trusting neither file.
 
-  These URLs are correct only once saibyl.com resolves to the app. It
-  currently serves a GoDaddy "Launching Soon" page, which is also what
-  index.html's canonical and og:url point at — so today every search and
-  social signal this product emits aims at a placeholder. Pointing the domain
-  at the Render frontend is the single highest-value action for both search
-  and answer-engine visibility, and it makes this file true rather than
-  aspirational.
+  Resolved 2026-08-30: saibyl.com now serves the app, verified by capture —
+  the page returns its own title, 11,859 characters of crawlable text, and its
+  structured data. The note that used to sit here said the domain still served
+  a GoDaddy "Launching Soon" page and that these URLs were aspirational. Both
+  were true when written and neither is now, so the note is gone rather than
+  left to be inherited as a fact.
 -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
