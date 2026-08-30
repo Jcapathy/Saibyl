@@ -505,6 +505,27 @@ def taste_dimension(capture: object) -> CriticDimension | None:
         if v.passed and v.rule.kind == "requirement"
     ][:4]
 
+    # Motion done properly is the one violation worth crediting when it passes.
+    #
+    # Every other rule here is satisfied by *not* doing something wrong, and
+    # "you did not use the slop palette" is not praise. Motion is different: a
+    # page that animates **and** collapses under the reader's preference has
+    # done a second piece of work that most animated pages skip entirely, and
+    # it is invisible in a report that only ever mentions motion to complain
+    # about it. Named only when the page actually moves — a still page has
+    # earned nothing here, and saying otherwise would be the encouraging
+    # sentence this block exists to avoid.
+    motion = getattr(capture, "motion", None)
+    if isinstance(motion, dict) and motion.get("respects_reduced_motion") is True:
+        moving = (_int(motion.get("animated_elements")) or 0) + (
+            _int(motion.get("transitioned_elements")) or 0
+        )
+        if moving:
+            strengths.append(
+                f"motion: {moving} elements move, and all of them stop when a "
+                "reader asks for less motion"
+            )
+
     logger.info(
         "taste_dimension",
         score=score,

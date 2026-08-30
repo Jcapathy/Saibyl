@@ -221,7 +221,36 @@ HARD REQUIREMENTS — the page is rejected if any of these fails:
 - Responsive: below 660px wide the layout reads as a single column.
 - Semantic HTML: <header>, <main>, <section>, <footer>, real heading levels,
   real <a> and <button> elements — not styled <div>s doing their jobs.
+- If anything on the page moves, the page MUST carry
+  @media (prefers-reduced-motion: reduce) collapsing every animation and
+  transition to 0.01ms — the duration rather than `none`, so anything waiting
+  on an animation still fires. A page that keeps moving through that setting
+  is rejected.
+{motion_rule}
 {vocabulary_rule}"""
+
+#: Where motion earns its place on a rewritten page.
+#:
+#: **The rewrite was told nothing about motion until 2026-08-30**, which was
+#: survivable only because nothing measured it. Now that `standard` fails a
+#: page that ignores the reader's preference, a silent prompt would let this
+#: loop produce pages our own check marks down.
+#:
+#: Three layers and no more, because the failure mode of "add motion" is a page
+#: where everything moves and nothing means anything. The vocabulary is the
+#: one the artboards use — a slow float, a marquee, a slow counter-rotation, a
+#: live blink — so a rewritten page reads as coming from the same studio rather
+#: than from whatever animation library was fashionable.
+MOTION_RULE = """\
+- Motion, if the page uses any, is exactly three kinds and no more:
+  (a) an entrance reveal as a section scrolls in — opacity and a short rise,
+      once, never on a loop;
+  (b) a hover lift on anything touchable — translateY(-2px) over ~220ms;
+  (c) at most ONE continuous ambient movement in the hero — a slow float, a
+      marquee, a slow counter-rotation or a live pulse, at a duration long
+      enough to read as ambient rather than busy.
+  Nothing else animates. The page's meaning lives in the layout, never in the
+  movement: a reader with motion turned off must lose nothing but the motion."""
 
 #: The rendered-text spelling of the house banned-word list (the reviewers'
 #: rule bans them from findings; this bans them from the page itself).
@@ -366,7 +395,11 @@ def _generation_prompt(
                 reference_census=_reference_census_text(reference),
             )
         )
-    sections.append(_HARD_REQUIREMENTS.format(vocabulary_rule=RENDERED_VOCABULARY_RULE))
+    sections.append(
+        _HARD_REQUIREMENTS.format(
+            motion_rule=MOTION_RULE, vocabulary_rule=RENDERED_VOCABULARY_RULE
+        )
+    )
     sections.append(_ANSWER_FORMAT)
     return "\n\n".join(sections)
 

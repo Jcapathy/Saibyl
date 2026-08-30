@@ -339,6 +339,49 @@ def test_a_still_page_is_not_told_to_animate():
     assert verdict.passed
 
 
+def test_motion_done_properly_is_named_as_a_strength():
+    """The one violation worth crediting when it passes.
+
+    Every other rule here is satisfied by not doing something wrong, and "you
+    did not use the slop palette" is not praise. A page that animates *and*
+    collapses under the reader's preference has done a second piece of work
+    most animated pages skip, and it was invisible in a report that only ever
+    mentioned motion to complain about it.
+    """
+    dimension = taste_dimension(
+        _with_motion(
+            animated_elements=9, transitioned_elements=66, respects_reduced_motion=True
+        )
+    )
+
+    assert dimension is not None
+    credit = [s for s in dimension.strengths if s.startswith("motion:")]
+    assert credit, "a page that animates and stops when asked was given no credit"
+    assert "75 elements move" in credit[0]
+
+
+def test_a_still_page_is_not_congratulated_for_motion_it_does_not_have():
+    """Stillness earns nothing here. Saying otherwise would be the encouraging
+    sentence the strengths block exists to avoid."""
+    dimension = taste_dimension(
+        _with_motion(
+            animated_elements=0, transitioned_elements=0, respects_reduced_motion=None
+        )
+    )
+
+    assert not [s for s in dimension.strengths if s.startswith("motion:")]
+
+
+def test_a_page_that_ignores_the_preference_is_not_credited_either():
+    dimension = taste_dimension(
+        _with_motion(
+            animated_elements=9, transitioned_elements=66, respects_reduced_motion=False
+        )
+    )
+
+    assert not [s for s in dimension.strengths if s.startswith("motion:")]
+
+
 def test_a_capture_with_no_motion_reading_abstains():
     """An older stored capture, or a runtime that could not emulate the
     preference. Neither is the founder's page ignoring anybody."""

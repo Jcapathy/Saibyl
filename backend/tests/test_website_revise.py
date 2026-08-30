@@ -54,6 +54,7 @@ from app.services.website.revise import (
     compose_fix_prompts,
     generate_revision,
 )
+from app.services.website.taste import TASTE_RULES
 
 # ---------------------------------------------------------------------------
 # capture_html: a browserless Playwright stand-in (the capture tests' idiom,
@@ -294,6 +295,35 @@ async def test_the_one_permitted_google_font_is_the_one_thing_that_gets_through(
         denied = _FakeInterceptedRoute(url)
         await handler(denied)
         assert denied.aborted and not denied.continued, url
+
+
+def test_the_rewrite_is_told_the_motion_rule_its_own_check_now_enforces():
+    """The trap this closes: `standard` gained a rule on 2026-08-30 that fails
+    a page which keeps moving after the reader asked for less, and the
+    generation prompt said **nothing** about motion — zero mentions. A silent
+    prompt would have let this loop produce pages our own check marks down.
+
+    Pinned on both sides, the same way the remote-fonts contract is: whatever
+    the rubric enforces, the prompt must state.
+    """
+    requirements = revise._HARD_REQUIREMENTS
+    assert "prefers-reduced-motion" in requirements
+    assert "0.01ms" in requirements, (
+        "the duration, not `none` — anything waiting on an animation must still fire"
+    )
+    # And the rule the rubric applies exists to be satisfied by that block.
+    assert any(
+        rule.id == "motion_stops_when_asked" for rule in TASTE_RULES
+    ), "the prompt promises a rule the rubric no longer checks"
+
+
+def test_the_motion_vocabulary_is_bounded_rather_than_an_invitation():
+    """"Add motion" produces a page where everything moves and nothing means
+    anything. Three named kinds, and at most one of them continuous."""
+    rule = revise.MOTION_RULE
+    assert "exactly three kinds" in rule
+    assert "at most ONE continuous" in rule
+    assert "lives in the layout" in rule
 
 
 def test_the_generation_prompt_and_the_render_agree_on_remote_fonts():
