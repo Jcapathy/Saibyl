@@ -1,7 +1,11 @@
 # PUBLIC INTERFACE
 # ─────────────────────────────────────────────────────────
-# read_machine_signals(raw_html, rendered_text, robots_txt, llms_txt_found)
+# read_machine_signals(raw_html, rendered_headline, rendered_text, ...)
 # AI_CRAWLERS
+#
+# The judgment over these signals is `found.py`, kept separate so this module
+# imports nothing from `critics` — `capture` calls it at module scope, and
+# `critics` imports `capture`.
 # ─────────────────────────────────────────────────────────
 """What a machine sees when it reads this page, as opposed to what a person does.
 
@@ -240,3 +244,4 @@ def read_machine_signals(
     # defect, and a False meaning it is the same bug wearing a different type.
     signals["has_llms_txt"] = llms_txt_found
     return signals
+

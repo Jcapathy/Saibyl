@@ -983,9 +983,30 @@ async def run_critic_gauntlet(
     if standard is not None:
         dimensions.append(standard)
 
+    # The ninth, added 2026-08-30, and the only one that judges a reader other
+    # than a person.
+    #
+    # **Every dimension above this line reads the page a human gets** — six
+    # from a screenshot, two from the CSS. A founder's buyers increasingly ask
+    # a model instead, and a model reads the HTML the server sent. Measured
+    # that day: linear.app scores 100 on `standard` and ships zero structured
+    # data. The two are not the same question and a page can be excellent at
+    # one while invisible to the other.
+    #
+    # Same contract as the other two counted dimensions: no model call, no
+    # six-or-nothing rule, and None rather than 100 when there is nothing to
+    # judge — a pasted-HTML review has no server response and no address to
+    # resolve robots.txt against.
+    from app.services.website.found import machine_dimension
+
+    found = machine_dimension(capture)
+    if found is not None:
+        dimensions.append(found)
+
     # **Scores from before this date are not comparable with scores after it.**
-    # The overall is a mean across dimensions and there are now up to eight, so
-    # a stored 77 from a six- or seven-dimension run is a different quantity.
+    # The overall is a mean across dimensions and there are now up to nine, so
+    # a stored 77 from a six-, seven- or eight-dimension run is a different
+    # quantity.
     # Deltas within one revision run are unaffected: before and after are both
     # measured the same way, and the delta is what `revise` reads.
     #
