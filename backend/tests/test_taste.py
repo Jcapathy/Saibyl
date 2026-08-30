@@ -283,6 +283,26 @@ def test_a_page_illustrated_without_img_elements_still_shows_the_product():
     assert verdict.passed, "a page drawn in SVG was told it had no imagery"
 
 
+def test_a_labelled_placeholder_does_not_count_as_imagery():
+    """A box that says it is standing in for a picture is not a picture.
+
+    The revision loop is *told* to draw one — "draw a CSS or inline-SVG
+    placeholder and label it visibly as a placeholder" — so counting them let
+    the loop clear this requirement with a labelled rectangle. Measured
+    2026-08-30 through a real capture: a page whose only graphic read
+    "[PLACEHOLDER: product screenshot]" scored **100**, and **73** with the box
+    deleted. 27 points for a gesture, which is the deletion-gaming defect
+    wearing the opposite costume.
+
+    The exclusion happens in the census, so `visual_media` never counts it and
+    both rubrics see the same thing.
+    """
+    census = _healthy_census()
+    census["structure"] = {**census["structure"], "images": 0, "visual_media": 0}
+    verdict = _verdict(check_taste(_capture(census)), "requires_an_image")
+    assert not verdict.passed
+
+
 def test_a_page_with_no_visible_imagery_at_all_still_fails():
     """The guard on the fix: news.ycombinator.com used to *pass* this rule on a
     single 18x18 logo, because one `<img>` element was the whole test."""

@@ -297,6 +297,24 @@ _STYLE_CENSUS_JS = ("""() => {
   const MEDIA_MIN_PX = """ + str(_CENSUS_MEDIA_MIN_PX) + """;
   const SKIP = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'META', 'LINK', 'HEAD', 'TITLE', 'BR', 'HR']);
   const tally = (map, key) => { if (key) map[key] = (map[key] || 0) + 1; };
+  // A box that says it is standing in for a picture is not a picture.
+  //
+  // The revision loop is *told* to draw one where an image belongs — "draw a
+  // CSS or inline-SVG placeholder and label it visibly as a placeholder" — so
+  // without this the loop clears the imagery requirement by drawing a labelled
+  // rectangle. Measured 2026-08-30: a page whose only graphic was a box
+  // reading "[PLACEHOLDER: product screenshot]" scored 100 on `standard`, and
+  // 73 with the box deleted. A 27-point gain for a gesture is the
+  // deletion-gaming defect wearing the opposite costume.
+  //
+  // Self-declaration is the whole signal, and it is a fair one: our own
+  // rewrites must label these, and a founder's hand-built page that says
+  // "placeholder" on a live graphic is telling the truth about it too.
+  const _declaresItselfAPlaceholder = (el) => {
+    const label = (el.getAttribute && (el.getAttribute('aria-label') || el.getAttribute('alt'))) || '';
+    const text = (el.textContent || '').slice(0, 300);
+    return /placeholder|\\[owner:/i.test(label + ' ' + text);
+  };
   const out = {
     sampled: 0,
     font_families: {}, font_weights: {}, font_sizes: {},
@@ -372,7 +390,7 @@ _STYLE_CENSUS_JS = ("""() => {
     // tag in the authored lower case, so a bare === 'SVG' silently never fires.
     // Only the <svg> root matches — its <path>/<g> children report their own
     // tags — so one graphic is counted once.
-    if (Math.min(rect.width, rect.height) >= MEDIA_MIN_PX) {
+    if (Math.min(rect.width, rect.height) >= MEDIA_MIN_PX && !_declaresItselfAPlaceholder(el)) {
       const mediaTag = el.tagName.toUpperCase();
       const bgImage = cs.backgroundImage;
       // A gradient is also a backgroundImage and is not imagery, so the url()

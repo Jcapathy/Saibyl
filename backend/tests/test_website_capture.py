@@ -728,6 +728,20 @@ def test_the_destination_key_keeps_the_host_and_the_anchor_but_not_the_query():
     )
 
 
+def test_the_census_script_refuses_to_count_a_self_declared_placeholder():
+    """Also pinned by reading the source, for the same reason: the census runs
+    inside the page and no test can execute it.
+
+    The revision loop is instructed to draw a labelled placeholder where an
+    image belongs, so counting one as imagery let a rewrite satisfy the
+    requirement with a rectangle. Measured through a real capture on
+    2026-08-30: 100 with the labelled box, 73 without it.
+    """
+    js = capture_mod._STYLE_CENSUS_JS
+    assert "_declaresItselfAPlaceholder" in js
+    assert "placeholder" in js.lower()
+
+
 async def test_the_census_is_wired_into_the_desktop_pass_and_normalized(monkeypatch):
     monkeypatch.setattr(
         security.socket, "getaddrinfo", _resolving({"acme.example": _PUBLIC_IP})
