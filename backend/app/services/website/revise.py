@@ -71,6 +71,12 @@ from app.services.website.claims import (
 )
 from app.services.website.critics import CritiqueResult, run_critic_gauntlet
 from app.services.website.verticals import brief_section, classify_vertical
+from app.services.website.visuals import (
+    VISUAL_CATALOGUE,
+    Palette,
+    palette_from_brief,
+    render_visuals,
+)
 
 logger = structlog.get_logger()
 
@@ -400,6 +406,11 @@ def _generation_prompt(
             motion_rule=MOTION_RULE, vocabulary_rule=RENDERED_VOCABULARY_RULE
         )
     )
+    # The graphics kit. Sits after the hard requirements because it is the one
+    # section that *adds* something rather than bounding it — and the bound it
+    # obeys is the one above: markers draw SVG, so a page still ships no
+    # external image and no raster.
+    sections.append(VISUAL_CATALOGUE)
     sections.append(_ANSWER_FORMAT)
     return "\n\n".join(sections)
 
@@ -440,8 +451,24 @@ def _fabrication(claims: list[UnsupportedClaim]) -> tuple[int, int]:
     return forged, len(claims)
 
 
+def _drawn(raw: str | None, palette: Palette) -> str | None:
+    """Parse the answer, then draw any graphics it asked for.
+
+    **Order is load-bearing: draw before the claims scan, never after.** A
+    marker's payload carries numbers, and until it is drawn those numbers sit
+    inside an HTML comment where `unsupported_claims` has no reason to look.
+    Substituting first puts them in `<text>` elements like any other figure on
+    the page, so a fabricated number in a chart is caught by exactly the check
+    that catches a fabricated number in a sentence.
+    """
+    if raw is None:
+        return None
+    html, _ = render_visuals(raw, palette=palette)
+    return html
+
+
 async def _generate_html(
-    prompt: str, evidence: bytes, page_text: str
+    prompt: str, evidence: bytes, page_text: str, palette: Palette
 ) -> tuple[str, list[UnsupportedClaim]]:
     """One vision call producing the page, plus what it claimed without basis.
 
@@ -469,7 +496,7 @@ async def _generate_html(
     """
     try:
         raw = await llm_vision(prompt, [evidence], max_tokens=_GENERATION_MAX_TOKENS)
-        html = _parse_document(raw)
+        html = _drawn(_parse_document(raw), palette)
         claims = unsupported_claims(page_text, html) if html is not None else []
 
         complaint = _HTML_COMPLAINT if html is None else (
@@ -479,7 +506,7 @@ async def _generate_html(
             raw = await llm_vision(
                 prompt + "\n\n" + complaint, [evidence], max_tokens=_GENERATION_MAX_TOKENS
             )
-            retried = _parse_document(raw)
+            retried = _drawn(_parse_document(raw), palette)
             # An unreadable retry leaves the first document standing when there
             # was one — losing a whole page to fix a percentage is a worse
             # trade than reporting the percentage.
@@ -673,6 +700,10 @@ async def generate_revision(
     # against. Computed once, outside the loop, so round three is judged
     # against the page the founder brought rather than against round two.
     baseline_scores = _scores_of(critique)
+    # The founder's own colours, read from their design brief. The kit fixes
+    # proportion, radius, depth and motion; it never fixes the palette, or
+    # every rewrite would arrive wearing ours.
+    palette = palette_from_brief(dna)
 
     with usage_context("website_revision", organization_id=organization_id):
         for round_no in range(1, max_rounds + 1):
@@ -696,7 +727,9 @@ async def generate_revision(
             # refunded. It is also the likeliest of the three to fire, being
             # two model calls where the judge is one pipeline.
             try:
-                html, claims = await _generate_html(prompt, evidence, capture.dom_text)
+                html, claims = await _generate_html(
+                    prompt, evidence, capture.dom_text, palette
+                )
             except Exception as exc:
                 if best is None:
                     # Round one: `_generate_html` already raised the

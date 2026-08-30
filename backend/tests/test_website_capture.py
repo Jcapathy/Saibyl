@@ -728,6 +728,24 @@ def test_the_destination_key_keeps_the_host_and_the_anchor_but_not_the_query():
     )
 
 
+def test_a_gradient_button_counts_as_an_action():
+    """Pinned by reading the source, like the rest of the census script.
+
+    `backgroundColor` is transparent on a gradient button — the paint lives in
+    `background-image` — so an anchor styled the way most design systems style
+    their primary action was invisible to the action check. Saibyl's own design
+    law specifies exactly that button: a 135deg gradient, "never a flat fill".
+
+    Found 2026-08-30 when a page built by the graphics kit, carrying two
+    gradient CTAs, was told it had "no button, and no action with a
+    destination, anywhere on the page" — and it then revealed a real finding on
+    saibyl.com, where three different labels reach /signup and only one of them
+    had ever been counted.
+    """
+    js = capture_mod._STYLE_CENSUS_JS
+    assert "indexOf('gradient')" in js
+
+
 def test_motion_normalizes_and_reports_whether_the_preference_is_honoured():
     """`_motion` is the Python half, so it is testable without a browser."""
     normal = {"animated": 9, "transitioned": 66, "names": {"drift": 4, "pulse": 5}}

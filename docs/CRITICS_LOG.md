@@ -62,6 +62,42 @@ rather than trusting the suite. The fix moved the function under test into a
 
 ---
 
+## 2026-08-30 (later) — Three times in one day, the census could not see the design system it enforces
+
+**The pattern, stated once because it recurred three times before it was
+named:** this census was built by describing markup in the plainest terms —
+an image is `<img>`, a shadow is a `box-shadow` string, a button has a
+background colour. Every one of those descriptions is true of a *simple* page
+and false of a *designed* one, and a designed page is the thing the product
+exists to reward.
+
+| what the census asked | what it therefore could not see | found by |
+|---|---|---|
+| `<img>` elements | a page illustrated entirely in inline SVG (anthropic.com: 0 and 16) | calibrating `standard` |
+| distinct `box-shadow` strings | an elevation scale, once insets, rings and glows are separated (linear.app: 8 and 3) | reading which rules fired |
+| `backgroundColor` on an anchor | **a gradient button** — the primary action every modern design system specifies | building the graphics kit |
+
+The third is the sharpest, because `CLAUDE.md` mandates that exact button —
+*"linear-gradient(135deg,#286cf0,#5268e9) … never a flat fill"* — and the check
+could not see it. A page built to Saibyl's own design law was told it had *"no
+button, and no action with a destination, anywhere on the page"*. `standard`
+**49 → 100** once fixed.
+
+**The transferable rule: a census written against plain markup will misread
+every page that has a design system, and always in the same direction — it
+punishes craft.** When adding a rule, ask what the *good* version of this looks
+like in CSS, not what the simple version looks like in HTML.
+
+**And the fix paid for itself immediately, which is the part worth keeping.**
+Seeing gradient buttons revealed a true finding on saibyl.com that had been
+invisible since the check shipped: three different labels reach `/signup` —
+*"Start your first run"*, *"Start at your stage"*, *"Run yours"* — of which only
+one had ever been counted. The page went **93 → 75**, and that is the rubric
+becoming more correct rather than harsher. Five other control pages did not
+move at all, which is what says the change was surgical.
+
+---
+
 ## 2026-08-30 — A limit applied to the wrong unit, and the reason it survived so long
 
 **The defect.** `SHADOW_LIMIT = 4` was compared against the number of distinct

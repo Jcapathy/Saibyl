@@ -8,6 +8,63 @@ running delta record.
 
 ---
 
+## 2026-08-30 (later still) — The rewrite can draw, and the census can see a gradient button
+
+`services/website/visuals.py` is new: a graphics kit the revision loop draws
+with. Founder-directed, after the question *"how can we create images, moving
+images, motion etc within the system"* — answered as **draw with code, never
+with pixels**.
+
+**Why code and not a generated picture.** A raster hero raises the visual score
+and lowers `found`, because a crawler receives an opaque blob where the
+argument was; an SVG chart raises both, since its labels are text. And
+`taste.py` exists to detect pages that look generated — a Saibyl that generated
+imagery would be scoring its own output with a rubric built to catch it.
+
+**The split is the one used everywhere else here: the model chooses, the code
+draws.** The prompt carries a catalogue; the model writes
+`<!--saibyl:bar_chart {…}-->` with the founder's own content; `render_visuals`
+substitutes finished SVG. Four primitives — `bar_chart`, `step_diagram`,
+`stat_band`, `device_frame`. Hand-drawn SVG was the alternative and it is a
+quality lottery.
+
+Three properties are load-bearing:
+
+- **The craft is ours, the palette is theirs.** `palette_from_brief` reads the
+  founder's own colours off their design brief; the kit fixes proportion,
+  radius, depth and motion only. A kit that painted every rewrite one blue
+  would be the single template this product exists to name — so an unreadable
+  brief falls back to neutral slate, never to Saibyl's.
+- **A graphic with nothing in it draws nothing.** Every primitive returns ""
+  on a thin payload, so the imagery requirement cannot be bought with an empty
+  frame. That lesson was one day old.
+- **Drawing happens before the claims scan, not after.** A marker's payload
+  carries numbers, and until it is drawn they sit inside an HTML comment where
+  `unsupported_claims` has no reason to look. Substituted first, a fabricated
+  figure in a chart is caught by exactly the check that catches one in a
+  sentence.
+
+A marker that cannot be drawn — bad JSON, unknown name, empty payload — is left
+in place and renders as a comment. Invisible, harmless, and still in the source
+for the next round.
+
+### The census can now see a gradient button
+
+`capture.py`'s action check tested `backgroundColor`, and a gradient paints
+`background-image` while leaving the colour transparent. An anchor styled the
+way most design systems style their primary action was therefore not an action
+at all — and Saibyl's own design law specifies exactly that button, a 135deg
+gradient, *"never a flat fill"*.
+
+Found when a page built by the kit, carrying two gradient CTAs, was told it had
+*"no button, and no action with a destination, anywhere on the page"*:
+`standard` **49 → 100** once fixed. It then revealed a true finding on
+saibyl.com that had been invisible: three labels reach `/signup` — *"Start your
+first run"*, *"Start at your stage"*, *"Run yours"* — and only one had ever been
+counted. **93 → 75**, correctly. The other five control pages are unmoved.
+
+---
+
 ## 2026-08-30 (later) — The revision loop gains a third ranking tier
 
 `services/website/revise.py`. No new module; a rule added to a decision that

@@ -480,7 +480,19 @@ _STYLE_CENSUS_JS = ("""() => {
     // only when it carries a background or a border of its own.
     if (out.actions.length < ACTION_CAP) {
       const tag = el.tagName;
+      // A gradient counts as paint, and leaving it out was a real defect.
+      //
+      // `bg` is `backgroundColor`; a gradient sets `background-image` and
+      // leaves the colour transparent, so a button painted the way most design
+      // systems paint their primary action was invisible here — no background,
+      // no border, therefore "not an action". Saibyl's own design law
+      // specifies exactly that button: a 135deg gradient, "never a flat fill".
+      // Found 2026-08-30 when a page built by the graphics kit, carrying two
+      // gradient CTAs, was told it had "no button, and no action with a
+      // destination, anywhere on the page".
+      const bgImg = cs.backgroundImage;
       const painted = (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent')
+        || (bgImg && bgImg !== 'none' && bgImg.indexOf('gradient') !== -1)
         || (cs.borderTopStyle !== 'none' && cs.borderTopWidth !== '0px');
       const isAction = tag === 'BUTTON'
         || el.getAttribute('role') === 'button'
