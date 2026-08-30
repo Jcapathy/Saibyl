@@ -350,6 +350,18 @@ const NOT_CLICKABLE: Record<string, string> = {
   // `<Absorbed>` redirect to the stage that took it over, so nothing links to
   // them on purpose — being unlinked is the point, not an oversight. That they
   // still lead somewhere sensible is asserted below, by their own test.
+  // The founder's console, added 2026-08-30. Unlinked on purpose, and this is
+  // the one entry here whose absence from the nav is a SECURITY property rather
+  // than a routing convenience.
+  //
+  // `require_platform_admin` refuses with a 404 rather than a 403 precisely so
+  // a probe cannot confirm the surface exists — `api/admin.py` says so in its
+  // own words. A sidebar entry would announce it to every customer, which is
+  // exactly who the 404 hides it from, and hand each of them a link that fails.
+  //
+  // So it is reached by typing `/app/admin`. If a link to it ever appears, that
+  // is the bug, not this line.
+  '/app/admin': 'the founder console; unlinked so the 404 gate is not announced',
   '/app/ip-check': 'absorbed by Validate; kept as a redirect for old links',
   '/app/website': 'absorbed by Position; kept as a redirect for old links',
   '/app/sales': 'absorbed by Launch; kept as a redirect for old links',

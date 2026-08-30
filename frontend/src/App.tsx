@@ -26,6 +26,7 @@ import LaunchPage from '@/pages/LaunchPage';
 import PositionPage from '@/pages/PositionPage';
 import ValidatePage from '@/pages/ValidatePage';
 import WorkPage from '@/pages/WorkPage';
+import AdminPage from '@/pages/AdminPage';
 import LoginPage from '@/pages/LoginPage';
 import NewSimulationPage from '@/pages/NewSimulationPage';
 import PackLibraryPage from '@/pages/PackLibraryPage';
@@ -146,6 +147,12 @@ function AnimatedRoutes() {
 
           {/* One chronology across every artifact. See WorkPage. */}
           <Route path="work" element={<PageTransition><WorkPage /></PageTransition>} />
+          {/* The founder's console. Deliberately absent from the navigation:
+              `require_platform_admin` refuses with a 404 rather than a 403 so a
+              probe cannot confirm the surface exists, and a sidebar entry would
+              announce it to exactly the people that hides it from. Reached by
+              typing the path. */}
+          <Route path="admin" element={<PageTransition><AdminPage /></PageTransition>} />
           <Route path="guide" element={<PageTransition><GuidePage /></PageTransition>} />
           <Route path="projects" element={<PageTransition><ProjectsPage /></PageTransition>} />
           <Route path="projects/:id" element={<PageTransition><ProjectDetailPage /></PageTransition>} />
