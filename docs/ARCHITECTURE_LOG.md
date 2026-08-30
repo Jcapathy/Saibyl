@@ -8,6 +8,45 @@ running delta record.
 
 ---
 
+## 2026-08-30 — The census grows a field for imagery, and its destination key stops colliding
+
+`services/website/capture.py`, with both readers — `taste.py` and `measured.py`
+— following it. No new module and no moved boundary; this is a change to what
+the census *means*, which is the layer both rubrics argue from.
+
+**`structure.visual_media` is new.** `structure.images` counts `<img>` elements
+and continues to. The rules that ask *"does this page show anything"* now read
+`visual_media`, which counts visible imagery however the page draws it —
+`<img>`, inline `<svg>`, `<video>`, `<canvas>`, or a CSS `url()` background — at
+or above `_CENSUS_MEDIA_MIN_PX` (64, measured; see `DECISIONS_LOG`). The count
+is accumulated inside the existing element walk, which already holds the rect
+and the computed style for every sampled node, so it adds no layout work to the
+most expensive step in a capture.
+
+**Why a second field rather than a wider `images`.** Both rubrics asked a
+question narrower than their own rule, and the shortest fix would have been to
+widen `images` in place. That would have left a field named `images` meaning
+something other than `<img>` — the same class of defect one layer down. The
+count keeps its name; the judgment gets its own field.
+
+**The absence of the field is load-bearing.** A stored census taken before this
+change has no `visual_media` key, and both readers treat that absence — not a
+zero — as the signal to fall back to the `<img>` tally. This matches the
+convention `sections` and the `labels` block already established: a normalized
+census reports 0 for something it measured as none, and omits what it never
+measured at all.
+
+**`actions[].where` is no longer just the path.** It is now
+`origin + pathname + fragment`, origin omitted when same-origin, query still
+dropped. It is the grouping key behind *"one destination wearing several
+labels"*, so everything it discarded made unrelated links look like one door —
+seven origins and two skip links collapsed into `/` on a single real page. The
+census script is the one part of the module a test cannot execute, so the
+contract is pinned by reading the source for `u.origin`, `u.hash` and the
+continued **absence** of `u.search`.
+
+---
+
 ## 2026-08-28 — The website check gets a standard, and stops using other people's sites as the bar
 
 `services/website/taste.py`, wired into `run_critic_gauntlet` as an eighth

@@ -8,6 +8,50 @@ choices.
 
 ---
 
+## 2026-08-30 — What the destination key keeps, and where the icon/image line sits
+
+Two decisions taken while calibrating `standard` against six real pages. Both
+are recorded because each looks, from the code alone, like it could go the
+other way — and one of them reverses a choice that was made on purpose.
+
+**1. The destination key keeps the host and the fragment, and still drops the
+query.** `where` — the key behind *"one destination wearing several labels"* —
+was `URL.pathname`, and the comment beside it gave a real reason: *"A full URL
+can carry a token or an email in its query, and the census rides inside
+prompts."* That reason was verified, not assumed: `critics._census_text` does
+`json.dumps(census)` of the whole dict into the design reviewer's prompt, and
+`measured.py` renders `where` verbatim into founder-facing copy
+(*"…all go to {where}"*). **So the query stays dropped.**
+
+The host and the fragment carry no such risk and their loss was a defect: seven
+origins on anthropic.com collapsed into one bucket keyed `/`, taking two WCAG
+skip links with them. The key is now `origin + pathname + fragment`, with the
+origin omitted when it matches the page's own — same-origin links stay bare
+paths, which is both what a founder reads in the finding and the shape stored
+censuses already carry.
+
+One narrower guard: a fragment containing `=` is dropped like a query. A real
+anchor is `#pricing` or `#main`; one carrying key=value pairs is an OAuth
+implicit-flow payload, and falls under the same rule.
+
+**2. `_CENSUS_MEDIA_MIN_PX = 64`, and the number is measured.** The new
+`structure.visual_media` field counts visible imagery — `<img>`, inline `<svg>`,
+`<video>`, `<canvas>`, a CSS `url()` background — at or above a minimum rendered
+dimension. 64px is the lowest threshold at which all five designed pages in the
+sample score ≥ 1 while news.ycombinator.com scores 0. Below it the count fills
+with iconography: stripe.com ships **174 visible `<svg>` and exactly 2 of them
+are 64px or larger**. The full table sits beside the constant.
+
+**`images` was deliberately not repurposed.** It still means the literal `<img>`
+tally. A field named `images` that quietly meant "imagery of any kind" is the
+same defect one layer down — a name asserting something nobody checked — so the
+judgment got its own field and the count kept its own meaning. The absence of
+`visual_media` is what tells both rubrics a census predates 2026-08-30, and both
+fall back to `images` for those rows: a stored capture cannot be re-measured,
+and the narrower count is the evidence those rows were already scored under.
+
+---
+
 ## 2026-08-28 — Three pricing and cost decisions, two of them "leave it"
 
 Founder decisions, taken against measured numbers rather than estimates. Two of

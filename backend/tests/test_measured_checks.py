@@ -371,3 +371,48 @@ def test_the_same_capture_measured_twice_gives_the_same_answer():
     second = measure_page(capture)
 
     assert first.model_dump() == second.model_dump()
+
+
+# ── imagery is not the <img> tally (2026-08-30) ──────────────────────────────
+#
+# This module carried the same check as `taste.py`, reading the same census
+# field and emitting the same quote — two sources of truth for one value, which
+# is the failure class the sweep in HANDOFF §2a names. Fixing the census fixes
+# both; these pin that this half actually reads the fixed field.
+
+
+def test_a_page_drawn_in_svg_is_not_told_it_has_no_imagery():
+    """anthropic.com ships zero `<img>` and sixteen visible inline SVGs."""
+    census = {
+        "structure": {"headings": {"h1": 1}, "images": 0, "visual_media": 4},
+        "font_families": {"Manrope": 20},
+    }
+    dimension = measure_page(_capture(text="Some copy.", census=census))
+
+    assert dimension is not None
+    assert not any(f.quote.startswith("img elements") for f in dimension.findings)
+    assert not any("images, graphics or video" in f.quote for f in dimension.findings)
+
+
+def test_a_page_with_no_visible_imagery_is_still_told_so():
+    census = {
+        "structure": {"headings": {"h1": 1}, "images": 3, "visual_media": 0},
+        "font_families": {"Manrope": 20},
+    }
+    dimension = measure_page(_capture(text="Some copy.", census=census))
+
+    finding = next(f for f in dimension.findings if "graphics or video" in f.quote)
+    assert finding.quote == "visible images, graphics or video on the page: 0"
+    assert finding.severity == "major"
+
+
+def test_a_census_stored_before_visual_media_falls_back_to_the_img_count():
+    """No `visual_media` key is how a capture taken before 2026-08-30 reads."""
+    census = {
+        "structure": {"headings": {"h1": 1}, "images": 0},
+        "font_families": {"Manrope": 20},
+    }
+    dimension = measure_page(_capture(text="Some copy.", census=census))
+
+    finding = next(f for f in dimension.findings if f.quote.startswith("img elements"))
+    assert finding.quote == "img elements on the page: 0"

@@ -701,6 +701,31 @@ def test_the_census_script_carries_its_marker_and_the_sample_cap():
     """The constant exists, is fake-able by its marker, and embeds the cap."""
     assert "getComputedStyle" in capture_mod._STYLE_CENSUS_JS
     assert str(capture_mod._CENSUS_MAX_ELEMENTS) in capture_mod._STYLE_CENSUS_JS
+    assert str(capture_mod._CENSUS_MEDIA_MIN_PX) in capture_mod._STYLE_CENSUS_JS
+
+
+def test_the_destination_key_keeps_the_host_and_the_anchor_but_not_the_query():
+    """The census script is the one part of this module a test cannot execute —
+    it runs inside the page — so its contract is pinned by reading the source.
+
+    All three clauses are load-bearing and each was learned the hard way:
+
+    - `u.origin` — without it every link to a domain *root* shares the key "/".
+      Measured 2026-08-30: anthropic.com collapsed seven origins into one
+      bucket and was told to rename actions that were never the same door.
+    - `u.hash` — without it every in-page anchor shares its page's key, which
+      charged that same page 18 points for having WCAG skip links.
+    - **no `u.search`** — this one is deliberate and must stay dropped. A query
+      can carry a token or an email, and `_census_text` renders this dict into
+      a reviewer prompt verbatim.
+    """
+    js = capture_mod._STYLE_CENSUS_JS
+    assert "u.origin" in js
+    assert "u.hash" in js
+    assert "u.search" not in js, (
+        "the query string is back in the destination key, and it is rendered "
+        "into a reviewer prompt verbatim"
+    )
 
 
 async def test_the_census_is_wired_into_the_desktop_pass_and_normalized(monkeypatch):
@@ -747,6 +772,11 @@ async def test_the_census_is_wired_into_the_desktop_pass_and_normalized(monkeypa
         # careful to treat an absent `labels` block, not a zero here, as the
         # signal that this capture predates the check.
         "sections": 0,
+        # Added 2026-08-30, and normalizing to 0 here means the same as above:
+        # this raw census never reported the key. A *stored* census predating
+        # the field has no key at all, which is the signal `taste` and
+        # `measured` both read to fall back to the `<img>` count.
+        "visual_media": 0,
     }
 
     # The two blocks the counted dimension reads. A raw census without them

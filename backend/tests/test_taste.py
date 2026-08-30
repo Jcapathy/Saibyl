@@ -260,3 +260,92 @@ def test_the_standard_never_names_another_site_as_the_yardstick():
     section = taste_prompt_section().lower()
     for competitor in ("linear", "stripe.com", "vercel", "benchmark against"):
         assert competitor not in section
+
+
+# ── the count, not the weight, was the defect (2026-08-30) ───────────────────
+#
+# `standard` was calibrated against six real pages. It was not too lenient, as
+# the launch-readiness handoff supposed — it was reading two census fields that
+# answered narrower questions than the rules asked, and reporting the gap as
+# the founder's fault. Both are regression-guarded below.
+
+
+def test_a_page_illustrated_without_img_elements_still_shows_the_product():
+    """anthropic.com: zero `<img>`, sixteen visible inline SVGs.
+
+    It was failing a *requirement* — the heaviest non-critical penalty in the
+    rubric at 18 x 1.5 — and being told to "show the product doing its job".
+    Re-measured through this code path, the page scores 100.
+    """
+    census = _healthy_census()
+    census["structure"] = {**census["structure"], "images": 0, "visual_media": 4}
+    verdict = _verdict(check_taste(_capture(census)), "requires_an_image")
+    assert verdict.passed, "a page drawn in SVG was told it had no imagery"
+
+
+def test_a_page_with_no_visible_imagery_at_all_still_fails():
+    """The guard on the fix: news.ycombinator.com used to *pass* this rule on a
+    single 18x18 logo, because one `<img>` element was the whole test."""
+    census = _healthy_census()
+    census["structure"] = {**census["structure"], "images": 1, "visual_media": 0}
+    verdict = _verdict(check_taste(_capture(census)), "requires_an_image")
+    assert not verdict.passed
+    assert verdict.quote == "visible images, graphics or video on the page: 0"
+
+
+def test_a_census_stored_before_visual_media_falls_back_to_the_img_count():
+    """A stored capture cannot be re-measured, so the narrower count is the only
+    evidence there is — and it is what those rows were already scored under."""
+    census = _healthy_census()
+    census["structure"] = {**census["structure"], "images": 2}
+    census["structure"].pop("visual_media", None)
+    assert _verdict(check_taste(_capture(census)), "requires_an_image").passed
+
+    census["structure"] = {**census["structure"], "images": 0}
+    stale = _verdict(check_taste(_capture(census)), "requires_an_image")
+    assert not stale.passed
+    assert stale.quote == "img elements on the page: 0"
+
+
+def test_different_hosts_are_different_destinations():
+    """The `where` key kept only the path, so every link to a domain root
+    collapsed into one bucket. anthropic.com collapsed seven origins — status.,
+    trust., platform., support., academy., www. — and was told to rename
+    actions that had nothing to do with each other."""
+    census = _healthy_census(
+        actions=[
+            {"label": "Status", "where": "https://status.example.com/"},
+            {"label": "Support center", "where": "https://support.example.com/"},
+            {"label": "Security and compliance", "where": "https://trust.example.com/"},
+        ]
+    )
+    verdict = _verdict(check_taste(_capture(census)), "one_destination_one_label")
+    assert verdict.passed, "three separate services were read as one destination"
+
+
+def test_in_page_anchors_are_different_destinations():
+    """Skip links are the sharp case: "Skip to main content" and "Skip to
+    footer" are a WCAG requirement, and the rule was charging 18 points for
+    them because `#main` and `#footer` both reduced to `/`."""
+    census = _healthy_census(
+        actions=[
+            {"label": "Skip to main content", "where": "/#main"},
+            {"label": "Skip to footer", "where": "/#footer"},
+        ]
+    )
+    verdict = _verdict(check_taste(_capture(census)), "one_destination_one_label")
+    assert verdict.passed, "accessibility skip links were scored as a defect"
+
+
+def test_one_destination_wearing_two_labels_is_still_caught():
+    """The true positive the fix must not throw away. vercel.com carries
+    "Get a Demo" and "Talk to sales" to the same path, and still fails."""
+    census = _healthy_census(
+        actions=[
+            {"label": "Get a Demo", "where": "/contact/sales"},
+            {"label": "Talk to sales", "where": "/contact/sales"},
+        ]
+    )
+    verdict = _verdict(check_taste(_capture(census)), "one_destination_one_label")
+    assert not verdict.passed
+    assert "Get a Demo" in (verdict.quote or "")

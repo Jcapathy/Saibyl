@@ -531,13 +531,23 @@ def measure_page(capture: object) -> CriticDimension | None:
     if shadows:
         findings.append(shadows)
 
-    images = structure.get("images")
-    if census and isinstance(images, int) and images == 0:
+    # `visual_media` counts every visible graphic — inline SVG, canvas, video, a
+    # CSS background — not just <img>, which is a narrower question than this
+    # finding asks. anthropic.com ships zero <img> and sixteen visible SVGs and
+    # was being told its page had no imagery. `images` is the fallback for a
+    # census stored before 2026-08-30, which has no `visual_media` key.
+    media = structure.get("visual_media")
+    if not isinstance(media, int):
+        media = structure.get("images")
+        quote = "img elements on the page: 0"
+    else:
+        quote = "visible images, graphics or video on the page: 0"
+    if census and isinstance(media, int) and media == 0:
         findings.append(
             CriticFinding(
                 severity="major",
                 region="page",
-                quote="img elements on the page: 0",
+                quote=quote,
                 why=(
                     "Some of the best pages on the web are purely typographic, "
                     "so this can be deliberate. It is worth being sure it was, "

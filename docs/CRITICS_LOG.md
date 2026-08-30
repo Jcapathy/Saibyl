@@ -11,6 +11,70 @@ your check could only have passed for the reason you think it did.*
 
 ---
 
+## 2026-08-30 — The rubric was not lenient. It was measuring the wrong thing, and the score hid it
+
+**The handoff asked the wrong question, and it was a reasonable question.**
+`HANDOFF_LAUNCH_READINESS.md` §2.3 recorded that `standard` returned **93** on
+saibyl.com across three runs and concluded *"the weights are lenient"*, with
+the suggested remedy being to tune them against more real pages. Tuning the
+weights would have been work spent on the wrong knob.
+
+Calibrated against six real pages — saibyl.com, stripe.com, linear.app,
+vercel.com, anthropic.com, news.ycombinator.com — the spread was not narrow at
+all: **93, 73, 100, 82, 55, 22**. The ordering was the problem. anthropic.com
+scored **55** and stripe.com **73** while the founder's own page scored 93.
+
+Reading which rules fired, rather than the scores, found two defects — both in
+the *census*, neither in the rubric:
+
+1. **`requires_an_image` counted `<img>` elements only.** anthropic.com ships
+   **zero `<img>` and sixteen visible inline SVGs**. It was failing a
+   *requirement* — `18 × 1.5 = 27` points, the heaviest non-critical penalty in
+   the rubric — and being told, in the founder-facing fix line, to *"show the
+   product doing its job"*. Meanwhile news.ycombinator.com, which is genuinely
+   all text, **passed** the same rule on a single 18×18 logo. The rule was
+   inverted on the two pages that tested it.
+
+2. **`one_destination_one_label` grouped by `URL.pathname`.** That discards the
+   host *and* the fragment. On anthropic.com, **seven distinct origins**
+   (`status.`, `trust.`, `platform.`, `support.`, `academy.`, `www.`) collapsed
+   into one bucket keyed `/`, and the page's two WCAG **skip links** —
+   `#main` and `#footer` — landed in it too. The page was charged 18 points and
+   told to rename actions that had never been the same door.
+
+**The transferable lesson: a score is a summary, and a summary of a wrong
+measurement looks exactly like a summary of a right one.** Three runs returning
+93 was read as evidence the rubric was stable and merely generous. It was
+stable because arithmetic is stable. Nothing about the repetition spoke to
+whether the inputs meant what their names said. **Read which rules fired, on
+pages whose answer you already know, before you touch a weight.** The
+diagnostic that worked was a verdict matrix across six pages — six rows, seven
+columns — and the two defects were visible in it immediately.
+
+**Two known failure classes, both already in HANDOFF §2a, both re-produced.**
+*A string used as a key, unnormalised* — the same shape as the adapter defect
+that lost 193 of 193 reply links, with a browser rather than a model as the
+source. And *two sources of truth for one value*: `measured.py` carried the
+same image check with the same false quote, so both halves of the report were
+wrong in the same way, from the same field.
+
+**Choosing the fix by measurement rather than by taste.** The icon/image
+boundary is `_CENSUS_MEDIA_MIN_PX = 64`, and 64 is not a preference — it is the
+lowest threshold at which every designed page in the sample scores ≥ 1 and
+news.ycombinator.com scores 0. The table it came from sits beside the constant,
+because §2a is explicit that a constant without a measured value in its comment
+is a guess.
+
+**What the fix is checked against.** The four pages with no false finding —
+saibyl.com 93, stripe.com 73, linear.app 100, vercel.com 82 — are **unchanged**
+after it. Only the two that were being scored wrongly moved: anthropic.com
+**55 → 100**, news.ycombinator.com **22 → 0** (it now fails the imagery rule it
+had been passing on a logo). vercel.com's *"Get a Demo" / "Talk to sales"* —
+one genuine destination wearing two labels — still fails, so the fix did not
+buy its false-negative reduction by discarding true positives.
+
+---
+
 ## 2026-08-30 — I overwrote a working module because I did not read it first
 
 **The mistake.** Asked to build an admin console, I wrote a new

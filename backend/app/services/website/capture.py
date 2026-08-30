@@ -217,12 +217,34 @@ _CENSUS_TOP_SIZES = 15  # font-size histogram entries kept
 _CENSUS_TOP_SHADOWS = 10  # box-shadow values kept
 _CENSUS_TOP_COMMON = 10  # families, weights, line-heights, letter-spacings, radii
 
+#: The smallest rendered dimension at which a visual element counts as imagery
+#: rather than an icon, for `structure.visual_media`.
+#:
+#: **Measured, not chosen.** On 2026-08-30 the visible media on six real pages
+#: was bucketed by minimum rendered dimension:
+#:
+#: | page | img | svg | other | >= 64px |
+#: |---|---|---|---|---|
+#: | anthropic.com | 0 | 16 | — | **1** |
+#: | saibyl.com | 1 | 0 | — | **1** |
+#: | stripe.com | 24 | 174 | 2 canvas | **23** |
+#: | linear.app | 34 | 191 | 10 css-bg | **14** |
+#: | vercel.com | 5 | 23 | 1 canvas | **6** |
+#: | news.ycombinator.com | 1 | 0 | 30 css-bg | **0** |
+#:
+#: 64 is the lowest threshold at which every designed page scores at least one
+#: and news.ycombinator.com — which genuinely is all text — scores none. Below
+#: it the count fills with iconography: stripe.com ships 174 visible `<svg>`
+#: and exactly 2 of them are 64px or larger.
+_CENSUS_MEDIA_MIN_PX = 64
+
 # Marker string for tests (the `getComputedStyle` call), same pattern as the
 # meta/dom scripts above. Skips invisible elements, tallies computed styles,
 # and counts structure document-wide; the sample cap keeps one pathological
 # page from turning the census into a page crawl.
 _STYLE_CENSUS_JS = ("""() => {
   const CAP = """ + str(_CENSUS_MAX_ELEMENTS) + """;
+  const MEDIA_MIN_PX = """ + str(_CENSUS_MEDIA_MIN_PX) + """;
   const SKIP = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'META', 'LINK', 'HEAD', 'TITLE', 'BR', 'HR']);
   const tally = (map, key) => { if (key) map[key] = (map[key] || 0) + 1; };
   const out = {
@@ -246,6 +268,15 @@ _STYLE_CENSUS_JS = ("""() => {
       links: document.querySelectorAll('a[href]').length,
       images: document.querySelectorAll('img').length,
       sections: document.querySelectorAll('section, [role="region"]').length,
+      // Imagery the reader can actually see, however the page draws it.
+      // `images` above is the literal <img> count and stays that way, because a
+      // field named `images` that quietly meant something else is the defect
+      // this pair was split to avoid. A page can be fully illustrated with
+      // inline SVG, a canvas, a video or a CSS background and still ship zero
+      // <img> elements — anthropic.com does exactly that — so a rule that asks
+      // "does this page show anything" must read this one. Filled by the walk
+      // below, which already holds the rect and the computed style.
+      visual_media: 0,
     },
     // Small, wide-tracked, upper-case text: the signature of a section label.
     // `above_heading` is the subset sitting immediately before a heading, which
@@ -283,8 +314,25 @@ _STYLE_CENSUS_JS = ("""() => {
                  cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft];
     for (const v of box) { if (v && v !== '0px' && v !== 'auto') tally(out.spacing, v); }
 
-    // Both of the following reuse `cs` and the rect already read above, so they
-    // add no layout work to the most expensive step in a capture.
+    // All three of the following reuse `cs` and the rect already read above, so
+    // they add no layout work to the most expensive step in a capture.
+
+    // Visible imagery, at or above the measured icon/image boundary. `tagName`
+    // is upper-cased first: SVG elements are foreign elements and report their
+    // tag in the authored lower case, so a bare === 'SVG' silently never fires.
+    // Only the <svg> root matches — its <path>/<g> children report their own
+    // tags — so one graphic is counted once.
+    if (Math.min(rect.width, rect.height) >= MEDIA_MIN_PX) {
+      const mediaTag = el.tagName.toUpperCase();
+      const bgImage = cs.backgroundImage;
+      // A gradient is also a backgroundImage and is not imagery, so the url()
+      // test is what separates a picture from a painted panel.
+      const painted = bgImage && bgImage !== 'none' && bgImage.indexOf('url(') !== -1;
+      if (mediaTag === 'IMG' || mediaTag === 'SVG' || mediaTag === 'VIDEO'
+          || mediaTag === 'CANVAS' || painted) {
+        out.structure.visual_media += 1;
+      }
+    }
 
     // A section label: small, tracked wide, upper-case, short, and a leaf so a
     // wrapper cannot be counted as its own label.
@@ -317,9 +365,32 @@ _STYLE_CENSUS_JS = ("""() => {
         if (label && label.length <= 60) {
           let where = null;
           if (tag === 'A') {
-            // Path only. A full URL can carry a token or an email in its query,
-            // and the census rides inside prompts.
-            try { where = new URL(el.getAttribute('href'), location.href).pathname; }
+            // The query is dropped, and that part is deliberate: a full URL can
+            // carry a token or an email, and `_census_text` renders this whole
+            // dict into a reviewer prompt verbatim.
+            //
+            // The host and the fragment are kept, and dropping them was a bug.
+            // `where` is the grouping key behind "one destination wearing
+            // several labels", so anything it discards makes unrelated links
+            // look like the same door. On path alone, anthropic.com collapsed
+            // seven origins — status., trust., platform., support., academy.,
+            // www. — into a single bucket keyed "/", and its two WCAG skip
+            // links landed there too, so the page was told to rename actions
+            // that already had nothing to do with each other.
+            //
+            // Same-origin links stay bare paths, both because that is what a
+            // founder reads in the finding and because it is the shape the
+            // stored censuses already carry.
+            try {
+              const u = new URL(el.getAttribute('href'), location.href);
+              // A fragment is an anchor name — "#pricing", "#main". One
+              // carrying key=value pairs is an OAuth implicit-flow payload
+              // rather than a place on the page, and falls under the same
+              // rule as the query.
+              const frag = u.hash.indexOf('=') === -1 ? u.hash : '';
+              const host = u.origin === location.origin ? '' : u.origin;
+              where = host + u.pathname + frag;
+            }
             catch (e) { where = null; }
           }
           out.actions.push({ label: label, where: where });
@@ -1118,7 +1189,7 @@ def _structure(raw: object) -> dict:
             else {}
         )
     }
-    for key in ("buttons", "links", "images", "sections"):
+    for key in ("buttons", "links", "images", "sections", "visual_media"):
         out[key] = _as_count(raw.get(key))
     return out
 

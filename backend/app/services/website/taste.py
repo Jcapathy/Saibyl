@@ -179,12 +179,30 @@ def _eyebrow_restraint(census: dict) -> str | None:
 
 
 def _page_shows_the_product(census: dict) -> str | None:
-    images = _int(_structure(census).get("images"))
-    if images is None:
+    """Does the page show anything at all, or is it purely typographic?
+
+    Reads `visual_media` — every visible graphic at or above the measured
+    icon/image boundary — rather than the `<img>` tally, which answers a
+    narrower question than the rule asks. Measured on 2026-08-30: anthropic.com
+    ships **no `<img>` element and sixteen visible inline SVGs**, and was told
+    by this rule to "show the product doing its job" while news.ycombinator.com
+    passed on a single 18x18 logo. The count, not the weight, was the defect.
+
+    Falls back to `images` when `visual_media` is absent, which is how a census
+    stored before 2026-08-30 reads. That is the narrower question again, but on
+    a capture that cannot be re-measured it is the only evidence there is, and
+    it is the behaviour those rows were already scored under.
+    """
+    structure = _structure(census)
+    media = _int(structure.get("visual_media"))
+    if media is None:
+        images = _int(structure.get("images"))
+        if images is None:
+            return None
+        return None if images > 0 else "img elements on the page: 0"
+    if media > 0:
         return None
-    if images > 0:
-        return None
-    return "img elements on the page: 0"
+    return "visible images, graphics or video on the page: 0"
 
 
 def _one_first_level_heading(census: dict) -> str | None:
