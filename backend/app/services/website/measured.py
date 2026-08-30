@@ -104,10 +104,17 @@ FONT_FAMILY_LIMIT = 3
 # state colour or two covers a real system. More than that is drift.
 TEXT_COLOR_LIMIT = 6
 
-# Distinct box-shadows.
+# Distinct **elevations** — not distinct box-shadow strings.
 #
 # Shadow encodes how far off the page a surface sits, and elevation has levels.
 # Four levels is already a lot of depth for a marketing page.
+#
+# The count this is compared against is device-aware: inset highlights, focus
+# rings and glows are excluded, and fully transparent placeholder layers are
+# dropped. See `_shadow_device`. Before that split this limit was applied to
+# every distinct computed shadow string, which reported **linear.app** — three
+# elevations, three insets, two rings — as having more depth than it had things
+# to put on it.
 SHADOW_LIMIT = 4
 
 # How many sections may carry a small upper-case label above their heading,
@@ -177,6 +184,123 @@ def _distinct(
 
 def _at_least(count: int, capped: bool) -> str:
     return f"at least {count}" if capped else str(count)
+
+
+# ── Shadows are four different devices, and only one of them is elevation ────
+#
+# `SHADOW_LIMIT`'s reasoning is entirely about elevation: *"shadow encodes how
+# far off the page a surface sits, and elevation has levels"*. But a CSS
+# `box-shadow` is a comma-separated list of layers, and a layer can be any of:
+#
+#   · an **elevation** — an outer shadow with offset or blur. The thing the
+#     limit is about.
+#   · an **inset highlight** — `inset 0 1px rgba(255,255,255,.4)`. A lit top
+#     edge. A surface treatment, not a height.
+#   · a **ring** — `0 0 0 6px rgba(...)`. Zero blur, spread only. A focus or
+#     state indicator, and often the only way to draw a hairline border that
+#     does not affect layout.
+#   · a **glow** — `0 0 15px rgb(...)`. No offset. Light coming off a thing.
+#
+# Counting all four against a four-level elevation scale is a category error,
+# and it was misreporting well-built pages. Measured 2026-08-30: **linear.app**
+# carries 8 distinct shadow values and exactly **3 elevations** — a clean
+# three-step scale plus three insets and two rings — and was being told it had
+# more depth than it had things to put on it.
+#
+# This is the same move the radius check already makes when it ignores `50%`
+# and `999px`: a circle and a pill are not rungs on a px scale, and neither an
+# inset highlight nor a focus ring is a rung on an elevation scale.
+
+#: A length in a shadow layer. Chromium always serialises these in px.
+_SHADOW_LEN = re.compile(r"(-?[\d.]+)px")
+
+#: The alpha of an `rgba()`, which is how Chromium serialises a transparent
+#: colour. Used only to decide whether a layer paints anything.
+_SHADOW_ALPHA = re.compile(r"rgba\(\s*[\d.]+\s*,\s*[\d.]+\s*,\s*[\d.]+\s*,\s*([\d.]+)\s*\)")
+
+
+def _shadow_layers(value: str) -> list[str]:
+    """Split a shadow value on the commas *between* layers.
+
+    Not `value.split(",")`: every layer carries an `rgba(r, g, b, a)` whose own
+    commas would tear it into four pieces.
+    """
+    layers: list[str] = []
+    depth = 0
+    current = ""
+    for char in value:
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+        if char == "," and depth == 0:
+            layers.append(current.strip())
+            current = ""
+        else:
+            current += char
+    if current.strip():
+        layers.append(current.strip())
+    return [layer for layer in layers if layer]
+
+
+def _shadow_geometry(layer: str) -> tuple[float, float, float, float]:
+    """`(x, y, blur, spread)`. Omitted trailing lengths are zero, per the spec."""
+    numbers = [float(n) for n in _SHADOW_LEN.findall(layer)]
+    padded = (numbers + [0.0, 0.0, 0.0, 0.0])[:4]
+    return padded[0], padded[1], padded[2], padded[3]
+
+
+def _shadow_layer_paints_nothing(layer: str) -> bool:
+    """A fully transparent layer, or one with no size at all.
+
+    **This is not a hypothetical.** Tailwind emits its shadow and ring
+    custom properties as four zeroed placeholder layers —
+    `rgba(0, 0, 0, 0) 0px 0px 0px 0px` — on every element carrying a shadow
+    utility, whether or not the utility is set. Measured 2026-08-30:
+    **vercel.com**'s four shadow values are 5- and 6-layer tokens that reduce
+    to one or two visible layers each. Counting the placeholders makes every
+    Tailwind page look like it has more depth than it draws.
+    """
+    alpha = _SHADOW_ALPHA.search(layer)
+    if alpha and float(alpha.group(1)) == 0:
+        return True
+    x, y, blur, spread = _shadow_geometry(layer)
+    return x == 0 and y == 0 and blur == 0 and spread == 0
+
+
+def _shadow_layer_device(layer: str) -> str:
+    if "inset" in layer.lower():
+        return "inset"
+    x, y, blur, spread = _shadow_geometry(layer)
+    if x == 0 and y == 0 and blur == 0 and spread != 0:
+        return "ring"
+    if x == 0 and y == 0 and blur > 0:
+        return "glow"
+    return "elevation"
+
+
+def _shadow_device(value: str) -> str | None:
+    """What one whole shadow *token* is doing, or None when it paints nothing.
+
+    The token is the unit, not the layer. A five-layer smooth shadow is one
+    design decision expressed five times — linear.app ships exactly that — and
+    counting its layers would punish the most careful technique on the page.
+    A token counts as elevation when anything in it lifts the surface; the
+    inset highlight riding along on the same token is part of that one
+    elevation, not a second device.
+    """
+    layers = [
+        layer for layer in _shadow_layers(value) if not _shadow_layer_paints_nothing(layer)
+    ]
+    if not layers:
+        return None
+    devices = {_shadow_layer_device(layer) for layer in layers}
+    if "elevation" in devices:
+        return "elevation"
+    for device in ("glow", "ring", "inset"):
+        if device in devices:
+            return device
+    return None
 
 
 def _family_rows(census: dict) -> list[dict]:
@@ -409,6 +533,50 @@ def _sprawl_finding(
     )
 
 
+def _elevation_finding(rows: list[dict]) -> CriticFinding | None:
+    """Too many elevation levels — counted as elevations, not as shadow strings.
+
+    The non-elevation devices are named in the quote rather than silently
+    dropped. A founder who can see ten shadows in their own CSS and reads a
+    finding about four would reasonably conclude the check cannot count.
+    """
+    _, capped, values = _distinct(rows, ignore={"none"})
+    by_device: dict[str, list[str]] = {}
+    for value in values:
+        device = _shadow_device(value)
+        if device is not None:
+            by_device.setdefault(device, []).append(value)
+
+    elevations = by_device.get("elevation", [])
+    if len(elevations) <= SHADOW_LIMIT:
+        return None
+
+    others = [
+        f"{len(by_device[device])} {noun}"
+        for device, noun in (("inset", "inset highlights"), ("ring", "rings"), ("glow", "glows"))
+        if by_device.get(device)
+    ]
+    aside = f" ({', '.join(others)} counted separately, and not as depth.)" if others else ""
+    shown = ", ".join(elevations[:6])
+    return CriticFinding(
+        severity="major" if len(elevations) > SHADOW_LIMIT * 2 else "minor",
+        region="components",
+        quote=(
+            f"{_at_least(len(elevations), capped)} distinct elevations in use: "
+            f"{shown}. A system would use about {SHADOW_LIMIT}.{aside}"
+        ),
+        why=(
+            "Shadow is how a surface says how far off the page it sits, so this "
+            "many is claiming more levels of depth than the page has things to "
+            "put on them."
+        ),
+        fix=(
+            "Define two or three elevations and use them. Tint each shadow "
+            "toward the background rather than pure black."
+        ),
+    )
+
+
 def measure_page(capture: object) -> CriticDimension | None:
     """Count what can be counted on a captured page, or None if nothing could be.
 
@@ -512,22 +680,7 @@ def measure_page(capture: object) -> CriticDimension | None:
     if colors:
         findings.append(colors)
 
-    shadows = _sprawl_finding(
-        _rows(census, "shape", "box_shadow"),
-        limit=SHADOW_LIMIT,
-        region="components",
-        noun="shadows",
-        ignore={"none"},
-        why=(
-            "Shadow is how a surface says how far off the page it sits, so this "
-            "many is claiming more levels of depth than the page has things to "
-            "put on them."
-        ),
-        fix=(
-            "Define two or three elevations and use them. Tint each shadow "
-            "toward the background rather than pure black."
-        ),
-    )
+    shadows = _elevation_finding(_rows(census, "shape", "box_shadow"))
     if shadows:
         findings.append(shadows)
 

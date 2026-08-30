@@ -11,6 +11,58 @@ your check could only have passed for the reason you think it did.*
 
 ---
 
+## 2026-08-30 — A limit applied to the wrong unit, and the reason it survived so long
+
+**The defect.** `SHADOW_LIMIT = 4` was compared against the number of distinct
+computed `box-shadow` *strings* on a page. Its own comment says what it is
+about: *"shadow encodes how far off the page a surface sits, and elevation has
+levels."* Elevation. But a CSS `box-shadow` is a comma-separated list of
+layers, and a layer can be any of four devices — an **elevation**, an **inset
+highlight**, a **ring**, or a **glow**. Only the first is a height.
+
+Measured across five real pages:
+
+| page | distinct shadow strings | elevations | inset | ring | glow |
+|---|---|---|---|---|---|
+| linear.app | 8 | **3** | 3 | 2 | 0 |
+| vercel.com | 4 | **0** | 1 | 3 | 0 |
+| saibyl.com | 10 | **8** | 0 | 1 | 1 |
+| stripe.com | 3 | 3 | 0 | 0 | 0 |
+
+**linear.app is the proof this was not special-pleading for our own page.** It
+carries a clean three-step elevation scale, three inset hairlines and two focus
+rings, and the check told it that it was *"claiming more levels of depth than
+the page has things to put on them."*
+
+**A second defect underneath the first: layers that paint nothing were counted.**
+Tailwind emits its shadow and ring custom properties as four zeroed
+placeholders — `rgba(0, 0, 0, 0) 0px 0px 0px 0px` — on every element carrying
+a shadow utility. vercel.com's four shadow values are 5- and 6-layer tokens
+that reduce to **one or two** visible layers each. Every Tailwind page was
+being inflated by shadows that render nothing at all.
+
+**Why it survived.** Because the number it produced was never obviously wrong.
+"10 distinct shadows" on a page with 10 distinct shadow strings is a true
+sentence; it is just not an answer to the question the limit was asking. **A
+count is only meaningful with its unit attached, and the unit lived in a
+comment while the code counted whatever was cheapest to count.** The same
+module had already learned this once — the radius check ignores `50%` and
+`999px` because *"a circle and a pill are not rungs on a px scale"* — and the
+lesson was not carried across to the check directly below it.
+
+**The transferable rule: when a limit and its rationale disagree about the
+unit, the rationale is the specification.** Do not adjust the limit to fit what
+the code counts; make the code count what the limit is about.
+
+**What the fix is checked against.** The three pages with no false finding are
+unchanged — stripe.com 78, vercel.com 90, anthropic.com 95. linear.app's
+shadow finding clears entirely, **85 → 90**. And saibyl.com **still fails**,
+at 8 elevations against a system that specifies four, dropping only from major
+to minor: **66 → 73**. A fix that made our own page's finding disappear would
+have been the revision loop gaming `measured` all over again, one layer up.
+
+---
+
 ## 2026-08-30 — The rubric was not lenient. It was measuring the wrong thing, and the score hid it
 
 **The handoff asked the wrong question, and it was a reasonable question.**

@@ -8,6 +8,57 @@ choices.
 
 ---
 
+## 2026-08-30 — The measured rubric counts elevations, and three things it deliberately still counts
+
+Founder instruction: *"Fix the measured rubric so the design system isn't
+penalized."* Acted on, and the honest result is narrower than the instruction —
+which is recorded here so a later session does not read the remaining findings
+as an unfinished job.
+
+**What was actually broken, and is fixed.** `SHADOW_LIMIT` is about elevation
+levels and was being compared against distinct computed shadow *strings*, so
+the design system's inset highlights, state rings and accent glows were each
+counted as a level of depth. It also counted Tailwind's transparent
+placeholder layers, which paint nothing. Both fixed; reasoning and the measured
+table in `CRITICS_LOG` and beside `SHADOW_LIMIT`.
+
+**Three findings on saibyl.com that are TRUE, and were left alone.**
+
+1. **Elevations: 8, against a limit of 4.** `CLAUDE.md` specifies outer shadow
+   *"at four different intensities"*. The landing page ships eight. The
+   finding survives the fix and it should — this is the page drifting from its
+   own system, and it is a CSS job, not a rubric job.
+2. **Text colours: 36 that actually paint text**, against a limit of 6.
+   Measured, because the obvious suspicion was that the census counts `color`
+   on elements with no text: it does, and the effect is **two colours** on
+   saibyl (38 → 36). Not material. For scale, stripe.com renders 12 and
+   linear.app 6. Five near-identical slate blues — `#60718e`, `#52667f`,
+   `#576f94`, `#71829d`, `#48628c` — are real drift.
+3. **Radii: 5, against a limit of 4.** Four of the five (`12/18/28/36`) are
+   exactly the documented scale — chips, cards, stage, pitch. The fifth is a
+   stray `2px`. The finding is marginal and correct.
+
+**Two measured non-changes, so they read as decisions rather than oversights.**
+
+- **Counting `color` on textless elements** is left in. It is the same family
+  as the transparent shadow layers and would be principled to fix, but it
+  moves saibyl 38 → 36, stripe 13 → 12, linear 8 → 6. Only linear crosses a
+  threshold on it, and the fix would need a census change with a blast radius
+  across `design_dna` and the reviewer prompts. Not worth it for two colours.
+- **Near-duplicate collapsing** — treating `rgb(226,228,230)` and
+  `rgb(226,228,231)` as one colour — is not implemented. It is the better
+  version of the colour check and would clear linear.app's last marginal
+  finding. It needs a measured perceptual threshold, and no threshold was
+  measured, so none was invented.
+
+**The standing constraint on this rubric.** `taste.py` exists because the
+revision loop once gamed `measured` by deleting things. Any future change here
+is checked the same way this one was: against pages whose answer is already
+known, confirming the pages that were right stay unmoved, and confirming our
+own page's true findings survive.
+
+---
+
 ## 2026-08-30 — What the destination key keeps, and where the icon/image line sits
 
 Two decisions taken while calibrating `standard` against six real pages. Both

@@ -291,6 +291,120 @@ def test_shadows_ignore_none_which_is_most_elements_on_any_page():
     assert not any("shadows" in f.quote for f in dimension.findings)
 
 
+# ── A box-shadow is four devices, and only one is elevation (2026-08-30) ─────
+#
+# The limit's own reasoning is about elevation levels. It was being applied to
+# every distinct computed shadow string, so an inset highlight, a focus ring
+# and a glow each counted as a level of depth. Measured that day: linear.app
+# carries 8 distinct shadow values and exactly 3 elevations, and was told it
+# had more depth than it had things to put on it.
+
+
+def _elevation_quote(dimension) -> str | None:
+    return next((f.quote for f in dimension.findings if "elevation" in f.quote), None)
+
+
+def test_inset_highlights_are_not_levels_of_elevation():
+    """The design system pairs an inset highlight with every outer shadow. A lit
+    top edge is a surface treatment; it does not sit the card higher."""
+    values = [
+        "rgba(0,0,0,.06) 0px 2px 4px 0px",
+        "rgba(255,255,255,.35) 0px 1px 0px 0px inset",
+        "rgba(255,255,255,.38) 0px 1px 0px 0px inset",
+        "rgba(255,255,255,.40) 0px 1px 0px 0px inset",
+        "rgba(255,255,255,.42) 0px 1px 1px 0px inset",
+        "rgba(255,255,255,.44) 0px 1px 1px 0px inset",
+    ]
+    dimension = measure_page(_capture(census={"shape": {"box_shadow": _rows(*values)}}))
+
+    assert _elevation_quote(dimension) is None, "five inset highlights read as depth"
+
+
+def test_rings_and_glows_are_not_levels_of_elevation():
+    """A focus ring is zero-blur spread; a glow has no offset. Neither is height."""
+    values = [
+        "rgba(0,0,0,.06) 0px 2px 4px 0px",
+        "rgba(150,121,239,.12) 0px 0px 0px 6px",
+        "rgba(45,168,113,.02) 0px 0px 0px 4px",
+        "rgb(150,121,239) 0px 0px 15px 0px",
+        "rgb(53,199,213) 0px 0px 12px 0px",
+        "rgba(0,0,0,.2) 0px 0px 0px 1px",
+    ]
+    dimension = measure_page(_capture(census={"shape": {"box_shadow": _rows(*values)}}))
+
+    assert _elevation_quote(dimension) is None
+
+
+def test_transparent_placeholder_layers_paint_nothing_and_are_dropped():
+    """Tailwind emits four zeroed ring/shadow placeholders on every element
+    carrying a shadow utility. vercel.com's four shadow values are 5- and
+    6-layer tokens that reduce to one or two visible layers each."""
+    zeroes = "rgba(0, 0, 0, 0) 0px 0px 0px 0px, " * 4
+    values = [
+        zeroes + "rgb(235, 235, 235) 0px 0px 0px 1px",
+        zeroes + "rgb(255, 255, 255) 0px 0px 0px 2px",
+        zeroes + "rgba(0, 0, 0, 0.08) 0px 0px 0px 1px",
+        zeroes + "rgb(250, 250, 250) 0px 0px 0px 1px",
+        zeroes + "rgb(235, 235, 235) 0px 0px 0px 1px inset",
+    ]
+    dimension = measure_page(_capture(census={"shape": {"box_shadow": _rows(*values)}}))
+
+    assert _elevation_quote(dimension) is None, "zeroed placeholders counted as depth"
+
+
+def test_a_multi_layer_shadow_is_one_elevation_not_five():
+    """linear.app builds a smooth shadow from five stacked layers. That is one
+    design decision, and counting its layers would punish the most careful
+    technique on the page."""
+    smooth = (
+        "rgba(0,0,0,0) 0px 8px 2px 0px, rgba(0,0,0,0.01) 0px 5px 2px 0px, "
+        "rgba(0,0,0,0.04) 0px 3px 2px 0px, rgba(0,0,0,0.07) 0px 1px 1px 0px, "
+        "rgba(0,0,0,0.08) 0px 0px 1px 0px"
+    )
+    values = [smooth, "rgba(0,0,0,.25) 0px 2px 32px 0px"]
+    dimension = measure_page(_capture(census={"shape": {"box_shadow": _rows(*values)}}))
+
+    assert _elevation_quote(dimension) is None
+
+
+def test_genuinely_too_many_elevations_still_fails():
+    """The regression guard. Making the rubric device-aware must not make it
+    lenient — saibyl.com itself still fails this check at 8 elevations."""
+    values = [f"rgba(0,0,0,.1) 0px {n}px {n * 2}px 0px" for n in range(1, 9)]
+    dimension = measure_page(_capture(census={"shape": {"box_shadow": _rows(*values)}}))
+
+    quote = _elevation_quote(dimension)
+    assert quote is not None
+    assert "8 distinct elevations" in quote
+
+
+def test_the_other_devices_are_named_rather_than_silently_dropped():
+    """A founder who can count ten shadows in their own CSS and reads a finding
+    about four would reasonably conclude the check cannot count."""
+    values = [f"rgba(0,0,0,.1) 0px {n}px {n * 2}px 0px" for n in range(1, 9)]
+    values += [
+        "rgba(255,255,255,.4) 0px 1px 0px 0px inset",
+        "rgba(150,121,239,.12) 0px 0px 0px 6px",
+    ]
+    dimension = measure_page(_capture(census={"shape": {"box_shadow": _rows(*values)}}))
+
+    quote = _elevation_quote(dimension)
+    assert quote is not None
+    assert "1 inset highlights" in quote
+    assert "1 rings" in quote
+    assert "not as depth" in quote
+
+
+def test_layer_splitting_survives_the_commas_inside_rgba():
+    """`value.split(",")` would tear `rgba(r, g, b, a)` into four pieces and
+    every geometry read after that would be nonsense."""
+    from app.services.website.measured import _shadow_device, _shadow_layers
+
+    value = "rgba(255, 255, 255, 0.4) 0px 1px 0px 0px inset, rgba(75, 98, 221, 0.28) 0px 5px 14px 0px"
+    assert len(_shadow_layers(value)) == 2
+    assert _shadow_device(value) == "elevation"
+
+
 # ── Images ───────────────────────────────────────────────────────────────────
 
 def test_a_page_with_no_images_is_raised_without_being_called_wrong():

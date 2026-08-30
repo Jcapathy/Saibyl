@@ -8,6 +8,32 @@ running delta record.
 
 ---
 
+## 2026-08-30 — `measured` learns that a shadow is four devices
+
+`services/website/measured.py`. No census change and no new dependency — the
+raw `box_shadow` tally is unchanged, and everything here is a new reading of it.
+
+`_shadow_layers`, `_shadow_geometry`, `_shadow_layer_paints_nothing`,
+`_shadow_layer_device` and `_shadow_device` split a computed `box-shadow` into
+its layers and classify the whole token as an **elevation**, an **inset**, a
+**ring**, a **glow**, or nothing at all. `_elevation_finding` replaces the
+generic `_sprawl_finding` call for shadows and compares `SHADOW_LIMIT` against
+elevations only, naming the other devices in the quote rather than dropping
+them silently.
+
+**The unit is the token, not the layer.** A five-layer smooth shadow is one
+design decision expressed five times — linear.app ships exactly that — and
+counting layers would punish the most careful technique on the page. A token
+counts as an elevation when any visible layer in it lifts the surface, so an
+inset highlight riding along on the same token is part of that one elevation
+rather than a second device.
+
+**Layer splitting cannot be `value.split(",")`.** Every layer carries an
+`rgba(r, g, b, a)` whose own commas would tear it into four pieces, after which
+every geometry read is nonsense. The split tracks parenthesis depth.
+
+---
+
 ## 2026-08-30 — The census grows a field for imagery, and its destination key stops colliding
 
 `services/website/capture.py`, with both readers — `taste.py` and `measured.py`
