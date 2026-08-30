@@ -98,12 +98,41 @@ are exactly the people who have contributed nothing to the pool. Enabling it
 needs `/privacy` to say so first; today it promises *"nothing you upload is
 visible to other customers"*. Suggested wording is in `DECISIONS_LOG.md`.
 
-### 2.3 Calibrate `taste.py`'s weights
+### 2.3 Calibrate `taste.py`'s weights — **done 2026-08-30, and the premise was wrong**
 
-`standard` returned **93** on saibyl.com across three runs. Against a stripped
-page scoring **0** the ordering is right, but 93 on a page carrying seven
-credibility findings suggests the weights are lenient. Worth tuning against two
-or three more real pages before trusting it.
+This item read: *"93 on a page carrying seven credibility findings suggests the
+weights are lenient. Worth tuning against two or three more real pages."* The
+tuning was done, against six pages, and **no weight was changed.** The weights
+were not the problem — two census fields were answering narrower questions than
+their rules asked, and the score was hiding it. `49763d5`.
+
+The spread was never narrow: **93, 73, 100, 82, 55, 22** for saibyl.com,
+stripe.com, linear.app, vercel.com, anthropic.com, news.ycombinator.com. The
+*ordering* was the tell — anthropic.com at 55 and stripe.com at 73, both below
+the founder's own page. Two defects, both in the census, neither in the rubric:
+
+- `requires_an_image` counted `<img>` only. anthropic.com ships **zero `<img>`
+  and sixteen visible inline SVGs** and was failing a requirement worth 27
+  points; news.ycombinator.com **passed** on a single 18×18 logo.
+- `one_destination_one_label` grouped by `URL.pathname`, which drops host and
+  fragment. Seven origins plus two WCAG skip links collapsed into one bucket.
+
+Fixed at the census, so `measured.py` — which carried the same check and the
+same false quote — is fixed with it. After: anthropic **55 → 100**, HN
+**22 → 0** (it now correctly fails the imagery rule), and **the four pages with
+no false finding are unchanged**. vercel.com's genuine *"Get a Demo" / "Talk to
+sales"* still fails, so no true positive was traded away.
+
+Full reasoning in `CRITICS_LOG.md`; the two judgement calls — what the
+destination key keeps, and why `images` was not repurposed — in
+`DECISIONS_LOG.md`.
+
+**If you want to go further here, the open question is coverage, not weights.**
+Seven rules is a small rubric, and linear.app and anthropic.com now both sit at
+a clean 100. That is correct as far as the rules go, but it means the standard
+currently has nothing to say about either page. New rules should be added the
+same way the 64px threshold was: measured against pages whose answer you
+already know, and checked to see that the pages which were right stay unmoved.
 
 ### 2.4 The orphan-shaped things
 
