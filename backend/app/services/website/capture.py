@@ -206,6 +206,64 @@ _META_TAGS_JS = """() => {
   return out;
 }"""
 
+#: What moves on the page, and whether it stops when the reader asks.
+#:
+#: **Motion was entirely invisible to this product until 2026-08-30.** Nothing
+#: in the census recorded it, no reviewer asked about it, and the two
+#: screenshots are still images — so a vision model could not see it either.
+#: Saibyl's own design law makes motion mandatory and says collapsing it under
+#: `prefers-reduced-motion: reduce` "is not optional", and none of that had
+#: ever been checked on a founder's page.
+#:
+#: Counted rather than judged: a running animation and a non-zero transition
+#: are facts about computed style, not opinions.
+#:
+#: Marker: `animationName` — the browserless test doubles key on it.
+_MOTION_JS = """() => {
+  const SKIP = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'META', 'LINK', 'HEAD', 'TITLE']);
+  const out = { animated: 0, transitioned: 0, names: {} };
+  // A duration shorter than one frame cannot be seen as movement.
+  //
+  // **Not a judgment call — a property of displays.** At 60Hz a frame is
+  // 16.7ms, so an animation shorter than that renders as a jump between two
+  // states with nothing in between. The universal reduced-motion recipe sets
+  // `animation-duration: .01ms !important` rather than `none`, precisely so
+  // `animationend` still fires and scripts waiting on it do not hang. Reading
+  // any duration above zero as motion therefore reports every page that
+  // correctly honours the preference as ignoring it — measured 2026-08-30 on
+  // saibyl.com, whose own reduced-motion block is exactly that recipe.
+  const FRAME_S = 1 / 60;
+  const seconds = (v) => {
+    return (v || '').split(',').some((part) => {
+      const n = parseFloat(part);
+      if (!Number.isFinite(n)) return false;
+      const secs = /ms\\s*$/.test(part.trim()) ? n / 1000 : n;
+      return secs >= FRAME_S;
+    });
+  };
+  let n = 0;
+  const elements = document.body ? document.body.querySelectorAll('*') : [];
+  for (const el of elements) {
+    if (n >= 800) break;
+    if (SKIP.has(el.tagName)) continue;
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) continue;
+    const cs = getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+    n += 1;
+    const name = cs.animationName;
+    if (name && name !== 'none' && seconds(cs.animationDuration)) {
+      out.animated += 1;
+      for (const one of name.split(',')) {
+        const key = one.trim();
+        if (key && key !== 'none') out.names[key] = (out.names[key] || 0) + 1;
+      }
+    }
+    if (seconds(cs.transitionDuration)) out.transitioned += 1;
+  }
+  return out;
+}"""
+
 #: The page's own first heading, as a person sees it. One line, read from the
 #: rendered DOM, so it can be compared against the HTML a crawler receives.
 #: Marker: `querySelector` — the browserless test doubles key on it.
@@ -519,6 +577,11 @@ class WebsiteCapture(BaseModel):
     #: on a pasted-HTML capture, which has no server response, no address to
     #: resolve a sidecar file against, and therefore nothing honest to say.
     machine: dict = Field(default_factory=dict)
+    #: What moves, and whether it stops under `prefers-reduced-motion` — see
+    #: `_motion`. Empty when the reading could not be taken; a still page
+    #: reports zeroes with `respects_reduced_motion: None`, because it has no
+    #: motion to honour rather than a preference it ignored.
+    motion: dict = Field(default_factory=dict)
 
 
 def _import_playwright() -> Any:
@@ -1022,6 +1085,47 @@ async def _render(
             _screenshot(page, viewport), timeout_s, "a screenshot", url
         )
 
+        # Motion, and only after the screenshot.
+        #
+        # The second reading emulates `prefers-reduced-motion: reduce`, which
+        # re-evaluates the page's media queries in place — no reload, no second
+        # navigation, and nothing the founder's server sees. Doing it before
+        # the screenshot would photograph the reduced page and quietly change
+        # what six vision reviewers judge.
+        #
+        # **The comparison is the whole test, and it needs no threshold.** A
+        # page that honours the preference moves less under it; a page that
+        # ignores the preference is bit-for-bit identical. "Did anything
+        # change at all" is a structural question, and the alternative — some
+        # percentage of animations that ought to stop — would have been a
+        # number nobody measured.
+        if not mobile:
+            normal = await _optional(page.evaluate(_MOTION_JS), timeout_s, "motion")
+            reduced = None
+            if normal:
+                # Optional in the strict sense this module means it: a runtime
+                # that cannot emulate the preference costs the *comparison*,
+                # never the capture. `_motion` then reports the motion it did
+                # see with `respects_reduced_motion: None`, which the rule
+                # abstains on rather than reading as a failure.
+                try:
+                    await page.emulate_media(reduced_motion="reduce")
+                    reduced = await _optional(
+                        page.evaluate(_MOTION_JS), timeout_s, "motion_reduced"
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    logger.info(
+                        "website_capture_reduced_motion_skipped",
+                        error=f"{type(exc).__name__}: {exc}",
+                    )
+                finally:
+                    # Restore, so nothing downstream inherits the emulation.
+                    try:
+                        await page.emulate_media(reduced_motion="no-preference")
+                    except Exception:  # noqa: BLE001
+                        pass
+            result["motion"] = _motion(normal, reduced)
+
         # **Read last, not first — where the bytes came from, not where the
         # navigation first settled.** Snapshotted before the reads, a
         # `final_url` names a page the evidence did not come from, and the
@@ -1117,6 +1221,7 @@ def _assemble(*, url: str, final_url: str, desktop: dict, mobile: dict) -> Websi
         # receives runs to hundreds of kilobytes on a real page, and every
         # question worth asking of it is answered by a bounded dict — the same
         # bargain `style_census` makes with the computed styles.
+        motion=desktop.get("motion") or {},
         machine=read_machine_signals(
             raw_html=str(desktop.get("raw_html") or ""),
             rendered_headline=str(desktop.get("rendered_headline") or ""),
@@ -1319,6 +1424,46 @@ def _structure(raw: object) -> dict:
 # How many action labels the census keeps. Matches `ACTION_CAP` in the script;
 # a page with more actions than this has a different problem.
 _CENSUS_ACTION_CAP = 40
+
+
+#: Animation names kept as evidence. Enough to quote, bounded like every other
+#: census list.
+_CENSUS_TOP_ANIMATIONS = 8
+
+
+def _motion(normal: object, reduced: object) -> dict:
+    """What moves, and whether it stops when the reader asks it to.
+
+    `respects_reduced_motion` is `None` — not `False` — when the second reading
+    could not be taken, or when there was no motion to reduce in the first
+    place. A still page has not failed to honour the preference; it has nothing
+    to honour, and reporting that as a defect would tell every deliberately
+    static page to fix something it does not have. The rule that reads this
+    abstains on `None`, exactly as the taste rules abstain on an unreadable
+    census.
+    """
+    if not isinstance(normal, dict):
+        return {}
+    animated = _as_count(normal.get("animated"))
+    transitioned = _as_count(normal.get("transitioned"))
+    moving = animated + transitioned
+
+    respects: bool | None = None
+    if moving and isinstance(reduced, dict):
+        still_moving = _as_count(reduced.get("animated")) + _as_count(
+            reduced.get("transitioned")
+        )
+        # Any reduction at all counts. The preference asks for less motion, not
+        # for none — a colour fade is not what it is about — so a page that
+        # gives up nothing is the one ignoring it.
+        respects = still_moving < moving
+
+    return {
+        "animated_elements": animated,
+        "transitioned_elements": transitioned,
+        "animations": _top(normal.get("names"), _CENSUS_TOP_ANIMATIONS),
+        "respects_reduced_motion": respects,
+    }
 
 
 def _labels(raw: object) -> dict:

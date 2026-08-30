@@ -283,6 +283,74 @@ def test_a_page_illustrated_without_img_elements_still_shows_the_product():
     assert verdict.passed, "a page drawn in SVG was told it had no imagery"
 
 
+# ── motion, and the reader who asked for less of it (2026-08-30) ────────────
+#
+# Motion was invisible to this product until this date: the census recorded
+# none, no reviewer asked, and both screenshots are still images. Saibyl's own
+# design law calls collapsing animation under `prefers-reduced-motion` "not
+# optional" and had never checked it on anyone else's page.
+
+
+def _with_motion(**motion) -> SimpleNamespace:
+    return SimpleNamespace(style_census=_healthy_census(), motion=motion)
+
+
+def test_a_page_that_keeps_moving_through_the_preference_is_told_so():
+    verdict = _verdict(
+        check_taste(
+            _with_motion(
+                animated_elements=9, transitioned_elements=66, respects_reduced_motion=False
+            )
+        ),
+        "motion_stops_when_asked",
+    )
+
+    assert not verdict.passed
+    assert "75 elements still move" in (verdict.quote or "")
+
+
+def test_a_page_that_collapses_its_motion_passes():
+    verdict = _verdict(
+        check_taste(
+            _with_motion(
+                animated_elements=9, transitioned_elements=66, respects_reduced_motion=True
+            )
+        ),
+        "motion_stops_when_asked",
+    )
+
+    assert verdict.passed
+
+
+def test_a_still_page_is_not_told_to_animate():
+    """Stillness is a choice, not a defect. `respects_reduced_motion` is None
+    when there was no motion to reduce, and this rule is "if you animate,
+    honour the request to stop" — never "you should animate", which would be a
+    preference invented here."""
+    verdict = _verdict(
+        check_taste(
+            _with_motion(
+                animated_elements=0, transitioned_elements=0, respects_reduced_motion=None
+            )
+        ),
+        "motion_stops_when_asked",
+    )
+
+    assert verdict.passed
+
+
+def test_a_capture_with_no_motion_reading_abstains():
+    """An older stored capture, or a runtime that could not emulate the
+    preference. Neither is the founder's page ignoring anybody."""
+    assert _verdict(
+        check_taste(SimpleNamespace(style_census=_healthy_census(), motion={})),
+        "motion_stops_when_asked",
+    ).passed
+    assert _verdict(
+        check_taste(_capture(_healthy_census())), "motion_stops_when_asked"
+    ).passed
+
+
 def test_a_labelled_placeholder_does_not_count_as_imagery():
     """A box that says it is standing in for a picture is not a picture.
 

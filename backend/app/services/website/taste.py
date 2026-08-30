@@ -205,6 +205,34 @@ def _page_shows_the_product(census: dict) -> str | None:
     return "visible images, graphics or video on the page: 0"
 
 
+def _motion_stops_when_asked(census: dict) -> str | None:
+    """A page that moves must stop when the reader has asked for less motion.
+
+    Reads `capture.motion`, not the style census — this is the one rule whose
+    evidence comes from a second reading of the page under an emulated
+    preference rather than from the computed styles of a single pass.
+
+    **Abstains on a still page.** `respects_reduced_motion` is None when there
+    was no motion to reduce, and stillness is a choice rather than a defect:
+    plenty of excellent pages do not move. This rule is not "you should
+    animate", which would be a preference invented here; it is "if you animate,
+    honour the request to stop", which is the reader's setting and not ours.
+    """
+    motion = (census or {}).get("motion")
+    if not isinstance(motion, dict):
+        return None
+    respects = motion.get("respects_reduced_motion")
+    if respects is not False:
+        return None
+    moving = _int(motion.get("animated_elements")) or 0
+    moving += _int(motion.get("transitioned_elements")) or 0
+    return (
+        f"{moving} elements still move with reduced motion requested"
+        if moving
+        else "the page ignores the reduced-motion setting"
+    )
+
+
 def _one_first_level_heading(census: dict) -> str | None:
     h1 = _int(_headings(census).get("h1"))
     if h1 is None:
@@ -339,6 +367,25 @@ TASTE_RULES: tuple[TasteRule, ...] = (
         ),
     ),
     TasteRule(
+        id="motion_stops_when_asked",
+        kind="violation",
+        region="motion",
+        severity="major",
+        predicate=_motion_stops_when_asked,
+        why=(
+            "Some readers get motion sickness from movement they did not ask "
+            "for, and set their system to say so. A page that keeps animating "
+            "through that setting is not being lively at it; it is the one "
+            "page that would not listen."
+        ),
+        fix=(
+            "Wrap the animations in @media (prefers-reduced-motion: reduce) "
+            "and collapse them there — no transform, no loop, and a duration "
+            "of 0.01ms so anything mid-flight lands rather than jumps. Keep "
+            "the page's meaning in the layout, never in the movement."
+        ),
+    ),
+    TasteRule(
         id="one_destination_one_label",
         kind="violation",
         region="actions",
@@ -372,6 +419,12 @@ def check_taste(capture: object) -> list[TasteVerdict]:
     if not isinstance(census, dict) or not census:
         logger.info("taste_no_census", detail="census empty; no verdicts returned")
         return []
+
+    # Motion arrives on the capture rather than in the style census, because it
+    # is a *second* reading of the page under an emulated preference rather
+    # than a computed style from the first pass. Folded in here so a rule still
+    # takes one dict and stays testable with a plain literal.
+    census = {**census, "motion": getattr(capture, "motion", None) or {}}
 
     verdicts: list[TasteVerdict] = []
     for rule in TASTE_RULES:

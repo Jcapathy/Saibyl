@@ -728,6 +728,49 @@ def test_the_destination_key_keeps_the_host_and_the_anchor_but_not_the_query():
     )
 
 
+def test_motion_normalizes_and_reports_whether_the_preference_is_honoured():
+    """`_motion` is the Python half, so it is testable without a browser."""
+    normal = {"animated": 9, "transitioned": 66, "names": {"drift": 4, "pulse": 5}}
+
+    ignored = capture_mod._motion(normal, {"animated": 9, "transitioned": 66})
+    honoured = capture_mod._motion(normal, {"animated": 0, "transitioned": 0})
+
+    assert ignored["respects_reduced_motion"] is False
+    assert honoured["respects_reduced_motion"] is True
+    assert honoured["animated_elements"] == 9
+    assert honoured["transitioned_elements"] == 66
+    assert honoured["animations"][0]["value"] in {"drift", "pulse"}
+
+
+def test_a_still_page_reports_none_rather_than_a_failure_to_honour():
+    """It has no motion to honour. False would tell every deliberately static
+    page to fix something it does not have."""
+    still = capture_mod._motion({"animated": 0, "transitioned": 0}, None)
+
+    assert still["respects_reduced_motion"] is None
+
+
+def test_motion_without_the_second_reading_abstains():
+    """A runtime that cannot emulate the preference costs the comparison, never
+    the capture."""
+    unread = capture_mod._motion({"animated": 4, "transitioned": 2}, None)
+
+    assert unread["animated_elements"] == 4
+    assert unread["respects_reduced_motion"] is None
+
+
+def test_the_motion_script_ignores_durations_shorter_than_one_frame():
+    """The universal reduced-motion recipe sets `animation-duration: .01ms`
+    rather than `none`, so `animationend` still fires. Counting any duration
+    above zero as motion reported saibyl.com — whose block is exactly that
+    recipe — as ignoring the preference it honours. A frame at 60Hz is the
+    line, and it is a property of displays rather than a judgment.
+    """
+    js = capture_mod._MOTION_JS
+    assert "animationName" in js
+    assert "1 / 60" in js
+
+
 def test_the_census_script_refuses_to_count_a_self_declared_placeholder():
     """Also pinned by reading the source, for the same reason: the census runs
     inside the page and no test can execute it.
