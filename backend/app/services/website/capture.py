@@ -52,12 +52,13 @@ import math
 import os
 import re
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 import structlog
 from pydantic import BaseModel, Field
 
 from app.core.security import validate_external_url
+from app.services.website.machine import read_machine_signals
 
 logger = structlog.get_logger()
 
@@ -204,6 +205,55 @@ _META_TAGS_JS = """() => {
   }
   return out;
 }"""
+
+#: The page's own first heading, as a person sees it. One line, read from the
+#: rendered DOM, so it can be compared against the HTML a crawler receives.
+#: Marker: `querySelector` — the browserless test doubles key on it.
+_HEADLINE_JS = """() => {
+  const h = document.querySelector('h1');
+  if (!h) return '';
+  return ((h.innerText || h.textContent || '').trim()).slice(0, 200);
+}"""
+
+#: `robots.txt` and `llms.txt` are small files at fixed paths. A short budget:
+#: they are worth having and never worth waiting on, and a site that does not
+#: serve them is the common case rather than a failure.
+_SIDECAR_TIMEOUT_S = 8
+
+#: Past this, the file is not a `robots.txt` any reader should be arguing from.
+#: Google stops parsing at 500 KiB; this is well under that and well over any
+#: real file.
+_ROBOTS_MAX_CHARS = 100_000
+
+
+async def _fetch_text(context: Any, url: str, path: str) -> str:
+    """One small sidecar file, through the browser's own network stack."""
+    target = urljoin(url, path)
+    response = await context.request.get(target, timeout=_SIDECAR_TIMEOUT_S * 1000)
+    if response.status != 200:
+        return ""
+    body = await response.text()
+    return (body or "")[:_ROBOTS_MAX_CHARS]
+
+
+async def _probe_exists(context: Any, url: str, path: str) -> bool:
+    """Whether a sidecar file is actually served.
+
+    Status alone is not enough. A single-page app with a catch-all rewrite
+    answers 200 for every path with its own HTML shell, so `llms.txt` would
+    read as present on every SPA on the web. A real one is served as text and
+    is not an HTML document.
+    """
+    target = urljoin(url, path)
+    response = await context.request.get(target, timeout=_SIDECAR_TIMEOUT_S * 1000)
+    if response.status != 200:
+        return False
+    content_type = (response.headers or {}).get("content-type", "").casefold()
+    if "html" in content_type:
+        return False
+    body = (await response.text() or "").lstrip()
+    return bool(body) and not body[:200].casefold().startswith(("<!doctype", "<html"))
+
 
 # The style census samples computed styles across the page so a later reviewer
 # argues from measured numbers, not vibes. The JS side only tallies raw values
@@ -446,6 +496,11 @@ class WebsiteCapture(BaseModel):
     # Measured computed styles (see `_normalize_census` for the shape). Empty
     # when the census could not run — never a reason the capture itself fails.
     style_census: dict = Field(default_factory=dict)
+    #: What a machine reading this page can get from it, as opposed to a person
+    #: looking at it — see `machine.read_machine_signals` for the shape. Empty
+    #: on a pasted-HTML capture, which has no server response, no address to
+    #: resolve a sidecar file against, and therefore nothing honest to say.
+    machine: dict = Field(default_factory=dict)
 
 
 def _import_playwright() -> Any:
@@ -815,6 +870,11 @@ async def _render(
     # each with their `goto` long since returned. This covers the Playwright
     # actions; `_step` below covers the evaluates, which ignore it.
     context.set_default_timeout(timeout_s * 1000)
+    # The pre-script document, filled in by the navigation below. Stays empty
+    # for a pasted-HTML capture, which never made a request and so has no
+    # server response to read — the machine-readability signals are absent for
+    # those rather than guessed at.
+    raw_html = ""
     try:
         page = await context.new_page()
         if html is not None:
@@ -835,15 +895,26 @@ async def _render(
             # waits for the network to go quiet — but only briefly, and its
             # expiry is not an error. A page whose trackers never go idle is
             # normal, and shooting it as it stands is the right answer.
-            await page.goto(
+            response = await page.goto(
                 url, timeout=timeout_s * 1000, wait_until="domcontentloaded"
             )
+            # The document as the server sent it, before a single script ran.
+            #
+            # This is what an answering crawler receives — GPTBot and
+            # ClaudeBot do not execute JavaScript — and it is free here: the
+            # bytes are already in the navigation response, so reading them
+            # costs no second request and no extra load on the founder's site.
+            # Fetching the URL again with an HTTP client would have been a
+            # different request, possibly served differently, and twice the
+            # traffic for a page we were already holding.
+            if response is not None:
+                raw_html = await _optional(response.text(), timeout_s, "raw_html") or ""
             try:
                 await page.wait_for_load_state("networkidle", timeout=_SETTLE_MS)
             except Exception:  # noqa: BLE001 - never going idle is not a failure
                 logger.info("website_capture_settle_skipped", url=url)
 
-        result: dict[str, Any] = {}
+        result: dict[str, Any] = {"raw_html": raw_html}
         if not mobile:
             # **The evidence first, the extras after.** Text and tags are
             # viewport-independent; extracting once keeps the mobile pass to
@@ -889,6 +960,28 @@ async def _render(
                     url,
                 )
             result["dom_text"] = text
+
+            # One line, not the whole rendered document. The machine-readability
+            # reader compares the headline a person sees against the HTML a
+            # crawler receives, and `page.content()` would move hundreds of
+            # kilobytes to answer a question about one heading.
+            result["rendered_headline"] = await _optional(
+                page.evaluate(_HEADLINE_JS), timeout_s, "rendered_headline"
+            ) or ""
+
+            # `robots.txt` decides whether any of the rest matters: a site that
+            # disallows the answering crawlers cannot be cited however well it
+            # is written. Fetched through the browser's own context so it uses
+            # the same network stack, cookies and proxy as the navigation, and
+            # optional in the strict sense — a site with no robots.txt is
+            # normal, and a fetch that fails must never fail a capture.
+            if url:
+                result["robots_txt"] = await _optional(
+                    _fetch_text(context, url, "/robots.txt"), _SIDECAR_TIMEOUT_S, "robots_txt"
+                ) or ""
+                result["llms_txt_found"] = await _optional(
+                    _probe_exists(context, url, "/llms.txt"), _SIDECAR_TIMEOUT_S, "llms_txt"
+                )
 
             # Best-effort by contract — this module's own docstring says a page
             # that defeats the census still captures, because the screenshots
@@ -1002,6 +1095,17 @@ def _assemble(*, url: str, final_url: str, desktop: dict, mobile: dict) -> Websi
         screenshot_desktop=desktop["screenshot"],
         screenshot_mobile=mobile["screenshot"],
         style_census=desktop.get("style_census") or {},
+        # Derived here and the raw HTML dropped. The document a crawler
+        # receives runs to hundreds of kilobytes on a real page, and every
+        # question worth asking of it is answered by a bounded dict — the same
+        # bargain `style_census` makes with the computed styles.
+        machine=read_machine_signals(
+            raw_html=str(desktop.get("raw_html") or ""),
+            rendered_headline=str(desktop.get("rendered_headline") or ""),
+            rendered_text=dom_text,
+            robots_txt=str(desktop.get("robots_txt") or ""),
+            llms_txt_found=desktop.get("llms_txt_found"),
+        ),
     )
 
 
