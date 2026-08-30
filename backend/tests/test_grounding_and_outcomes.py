@@ -35,6 +35,7 @@ from app.services.engine.outcomes import (
     accuracy_for,
     record_outcome,
 )
+from app.services.platforms.base_adapter import BasePlatformAdapter
 
 ORG = "org-asking"
 OTHER = "org-somebody-else"
@@ -236,3 +237,70 @@ def test_asking_without_an_answer_records_no_answered_at(monkeypatch):
     row, _ = state.upserts[0]
     assert row["occurred"] is None
     assert "answered_at" not in row, "an unanswered prediction must not look answered"
+
+
+# ── the wiring: grounding must actually reach a room ─────────────────────────
+
+
+class _Adapter(BasePlatformAdapter):
+    """A minimal adapter, to exercise the shared seam rather than a real one."""
+
+    platform_id = "test"
+
+    # The five abstract members exist only so the class can be instantiated;
+    # this test is about `topic_block`, which is concrete on the base.
+    async def initialize(self, config, agents):  # pragma: no cover - unused
+        ...
+
+    async def run_round(self, *_a, **_k):  # pragma: no cover - unused
+        ...
+
+    async def post(self, *_a, **_k):  # pragma: no cover - unused
+        ...
+
+    async def comment(self, *_a, **_k):  # pragma: no cover - unused
+        ...
+
+    async def react(self, *_a, **_k):  # pragma: no cover - unused
+        ...
+
+    async def get_feed(self, *_a, **_k):  # pragma: no cover - unused
+        ...
+
+    async def get_state_snapshot(self, *_a, **_k):  # pragma: no cover - unused
+        ...
+
+
+def test_the_adapter_carries_grounding_to_every_platform():
+    """One seam, not twelve.
+
+    `set_topic` / `topic_block` are the shared path every adapter already calls
+    — the base adapter's own docstring says adding a hook to twelve
+    `initialize` implementations is "twelve chances to miss one". Grounding
+    rides it for the same reason the subject brief and the pre-positioned
+    assets do.
+    """
+    adapter = _Adapter()
+    adapter.set_topic({
+        "prediction_goal": "Will founders pay for this?",
+        "subject_brief": "Saibyl runs a room of AI buyers.",
+        "grounding": (
+            "WHAT THIS CATEGORY HAS OBJECTED TO BEFORE\n\n"
+            "- Too expensive (raised in 4 of your own runs)"
+        ),
+    })
+    block = adapter.topic_block()
+
+    assert "Too expensive" in block, "grounding never reached the agents"
+    # After the subject, not before it: background, never the question.
+    assert block.index("THE SUBJECT") < block.index("OBJECTED TO BEFORE")
+
+
+def test_a_first_run_is_exactly_the_room_it_was_before():
+    """No history is the normal case, not an error."""
+    adapter = _Adapter()
+    adapter.set_topic({"prediction_goal": "Q", "subject_brief": "S"})
+    without = adapter.topic_block()
+
+    adapter.set_topic({"prediction_goal": "Q", "subject_brief": "S", "grounding": ""})
+    assert adapter.topic_block() == without

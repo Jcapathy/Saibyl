@@ -131,6 +131,11 @@ class BasePlatformAdapter(ABC):
     # loop's re-simulation. Empty on every ordinary run.
     _pre_positioned: str = ""
 
+    # What buyers raised in this team's OWN earlier runs, as things to check.
+    # Empty on a first run, which is the normal case and not an error — see
+    # `services/engine/grounding.py`.
+    _grounding: str = ""
+
     def _init_history(self) -> None:
         self._agent_history = {}
 
@@ -148,6 +153,9 @@ class BasePlatformAdapter(ABC):
         self._topic = config.get("prediction_goal", "") or ""
         self._subject_brief = config.get("subject_brief", "") or ""
         self._pre_positioned = config.get("pre_positioned", "") or ""
+        # Grounding rides the same path for the same reason the two above do:
+        # there is no per-adapter hook and there must not be one.
+        self._grounding = config.get("grounding", "") or ""
 
     def topic_block(self, feed_is_empty: bool = False) -> str:
         """What every action prompt must carry: the subject, and its framing.
@@ -209,6 +217,16 @@ class BasePlatformAdapter(ABC):
         # happened to include it.
         if self._pre_positioned:
             block += self._pre_positioned
+
+        # What this team's earlier rooms raised. Placed AFTER the subject and
+        # the framing so it reads as background rather than as the question —
+        # and phrased by `grounding_prompt_section` as things to check, never
+        # conclusions to repeat. A room told "buyers object to X" objects to X
+        # and the run becomes a mirror of its own prompt, which is the
+        # correlated-hallucination failure the whole product is judged on.
+        if self._grounding:
+            block += self._grounding.rstrip() + "\n\n"
+
         if feed_is_empty:
             block += (
                 "The feed is empty — you are among the first to react. Do not "

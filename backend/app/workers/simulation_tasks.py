@@ -960,6 +960,37 @@ async def run_simulation(simulation_id: str):
     )
     run_assets = load_run_assets(simulation_id)
     pre_positioned = asset_prompt_block(run_assets)
+
+    # What this team's OWN earlier rooms kept raising, as things to check.
+    #
+    # `GroundingScope.OWN` — their history and nobody else's, so this needs no
+    # privacy-policy change: `/privacy` promises nothing a founder uploads is
+    # visible to other customers, and this reads only their own rows. The
+    # shared scope exists in `grounding.py` and stays off until that promise is
+    # updated to describe it.
+    #
+    # Empty on a first run, which is the normal case: a founder with no history
+    # gets exactly the room they got before this existed.
+    grounding_block = ""
+    try:
+        from app.services.engine.grounding import (
+            grounded_objections,
+            grounding_prompt_section,
+        )
+
+        grounded = grounded_objections(None, organization_id=str(org_id))
+        grounding_block = grounding_prompt_section(grounded)
+        if grounded:
+            logger.info(
+                "room_grounded",
+                simulation_id=simulation_id,
+                objections=len(grounded),
+                scope="own",
+            )
+    except Exception:
+        # Grounding is an enrichment. A run that cannot read the history is the
+        # run they would have had yesterday, not a failed run.
+        logger.warning("room_grounding_failed", simulation_id=simulation_id, exc_info=True)
     if run_assets:
         logger.info(
             "resimulation_assets_pre_positioned",
@@ -1019,6 +1050,10 @@ async def run_simulation(simulation_id: str):
                         "subject_brief": subject_brief,
                         "simulation_id": simulation_id,
                         "pre_positioned": pre_positioned,
+                        # Identical in every arena, like the subject brief:
+                        # grounding that varied by arena would make the variant
+                        # comparison measure two changes at once.
+                        "grounding": grounding_block,
                     },
                     agents=[dict(a, variant=arena.variant_key) for a in platform_agents],
                 )
