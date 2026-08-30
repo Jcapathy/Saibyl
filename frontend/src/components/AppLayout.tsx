@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
+  Download,
   FileText,
   LayoutDashboard,
   FolderOpen,
@@ -91,8 +92,19 @@ const coreNav: NavItem[] = [
      to it keeps working — while the label joins the journey. */
   { path: '/app/capital', label: 'Raise', Mark: STAGE_MARKS.raise },
 
-  /* After the journey, because it holds what the journey produced. */
-  { path: '/app/dashboard', label: 'Your reports', Icon: FileText },
+  /* After the journey, because it holds what the journey produced.
+     Retitled "Export" on 2026-08-30 and demoted from index to tool.
+
+     It was "Your reports", and it read only the `reports` table — which
+     simulation runs write. A founder whose recent work was four website checks
+     and a page rewrite opened it, saw entries from three weeks earlier, and
+     concluded new reports had stopped appearing. The data was fine; the page
+     was answering a narrower question than its label promised.
+
+     `Your work` above is the index now. This keeps its real job, which nothing
+     else does: it is the only caller of `/api/exports`, the PDF/deck/JSON path
+     — repaired on 2026-08-05 and unreachable from anywhere else. */
+  { path: '/app/dashboard', label: 'Export', Icon: Download },
 ];
 
 /**

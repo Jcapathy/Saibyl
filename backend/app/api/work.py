@@ -94,6 +94,11 @@ def _revision(row: dict) -> tuple[str, str]:
     )
 
 
+def _report(row: dict) -> tuple[str, str]:
+    title = row.get("title") or "Run report"
+    return title, f"/app/simulations/{row['simulation_id']}/report"
+
+
 def _clearance(row: dict) -> tuple[str, str]:
     tier = (row.get("tier") or "").title() or "Clearance"
     return f"{tier} clearance search", "/app/validate"
@@ -110,6 +115,22 @@ SOURCES: tuple[SourceSpec, ...] = (
         label="Run",
         columns="id, project_id, name, status, created_at, completed_at",
         render=_run,
+    ),
+    # Added 2026-08-30, and the reason is the whole point of this module.
+    #
+    # `reports` was its own surface — `/app/dashboard`, labelled "Your reports"
+    # — reading only this table, which simulation runs write. So a founder whose
+    # recent work was four website checks and a page rewrite opened it and found
+    # entries from three weeks earlier, concluded new reports had stopped
+    # appearing, and was right that something was wrong: not the data, the
+    # question the page was answering. Two indexes with overlapping contents is
+    # the confusion this list exists to end.
+    SourceSpec(
+        table="reports",
+        kind="report",
+        label="Run report",
+        columns="id, simulation_id, title, status, created_at, completed_at",
+        render=_report,
     ),
     SourceSpec(
         table="website_snapshots",
