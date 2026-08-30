@@ -11,6 +11,41 @@ your check could only have passed for the reason you think it did.*
 
 ---
 
+## 2026-08-30 — I overwrote a working module because I did not read it first
+
+**The mistake.** Asked to build an admin console, I wrote a new
+`app/api/admin.py` with the Write tool. The file already existed — a
+platform-owner surface over the design gallery, 153 lines — and the write
+destroyed it. It was recovered whole from `git show HEAD:` seconds later, so
+nothing was lost, but only because the work was committed.
+
+The tool result said **"has been updated successfully"**, not "created". That
+word was the only signal, and it arrived after the damage.
+
+**Two things made it avoidable, and both were already written down.** The
+founder's standing note says *always read before write, inquire before
+overwrite* — a previous session erased brand files the same way. And the import
+block in `main.py` already read `admin,` three lines above where I was working.
+I had grepped for `is_admin` and `require_admin` and found nothing, concluded
+"no admin concept exists", and never grepped for the obvious noun.
+
+**The lesson is narrower than "be careful".** `grep` for a *capability* is not
+`ls` for a *file*. I searched for the mechanism I expected (a role check) and
+took its absence as proof the feature was absent. The cheap check I skipped —
+does a file with this name already exist — would have taken one command.
+**Before Write on any path you have not read this session, list it.**
+
+**What the mistake was worth.** The existing module gates on
+`ADMIN_ORGANIZATION_ID` and refuses with **404 rather than 403**, so a probe
+cannot confirm the surface exists. I had invented an email allow-list returning
+403. Theirs is better and is the established pattern, so mine was reverted and
+the new endpoints were appended to the existing router using
+`require_platform_admin`. Two admin gates would have been two things to keep in
+step and two ways to be wrong — which is the drift this codebase names as its
+most common failure.
+
+---
+
 ## 2026-08-28 — A rubric of penalties has its maximum at the empty page
 
 **The defect.** The founder ran the revision loop on his own landing page. It
