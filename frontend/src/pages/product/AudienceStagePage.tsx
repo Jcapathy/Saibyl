@@ -47,6 +47,13 @@ import {
  * answers and the founder deserves to be told which one the search used.
  */
 
+/** The open report's anchor, so the row that is already open can link to it.
+ *
+ *  One id rather than one per check: exactly one report is open at a time —
+ *  it renders from `activeCheck` — so a per-check id would name three targets
+ *  of which two never exist. */
+const SITE_REPORT_ID = 'site-report';
+
 /** Whose material this is. The answer is a permission, so nothing pre-selects
  *  `competitor` — that value is what lets a simulated skeptic say a rival's
  *  name out loud, and a permission that arrives pre-ticked is one nobody gave. */
@@ -546,20 +553,34 @@ export default function AudienceStagePage() {
                           {Math.round(score)}/100
                         </span>
                       )}
-                      {/* The row the founder is already reading says so; it
-                          does not go blank.
+                      {/* The row the founder is already reading gets a control
+                          that goes somewhere, not a label.
 
-                          It used to render nothing here when `activeCheck` was
-                          this row, because the full report is open further down
-                          the page. The founder who found this had just paid for
-                          a check, looked at a list where every OTHER row
-                          carried a link, and reasonably concluded his had
-                          failed. A control that vanishes reads as a defect, not
-                          as "you are already there" — the report being a screen
-                          below is invisible from up here. */}
+                          Twice now this cell has been misread. First it
+                          rendered nothing when `activeCheck` was this row — a
+                          founder who had just paid looked at a list where every
+                          OTHER row carried a link and concluded his had failed.
+                          That was fixed with the words "Open below ↓", and on
+                          2026-08-31 the same founder ran a check on one site,
+                          found its row wearing grey text, clicked the nearest
+                          blue thing — which belonged to a different row — and
+                          got a different site's report.
+
+                          Grey passive text in a column of blue links does not
+                          read as "you are already there"; it reads as the
+                          absence of a control, and the eye goes to the nearest
+                          real one. So this is now a link to the report itself.
+                          A real <a href> rather than a scroll handler: it
+                          works from the keyboard, it survives a JS hiccup, and
+                          `scroll-mt` keeps the heading clear of the top edge. */}
                       {status === 'complete' &&
                         (activeCheck?.id === row.id ? (
-                          <span className="text-saibyl-muted">Open below ↓</span>
+                          <a
+                            href={`#${SITE_REPORT_ID}`}
+                            className="text-saibyl-blue hover:underline"
+                          >
+                            Open below ↓
+                          </a>
                         ) : (
                           <button
                             type="button"
@@ -582,7 +603,11 @@ export default function AudienceStagePage() {
               )}
 
               {activeCheck?.status === 'complete' && (
-                <details open>
+                /* The anchor the row above points at. `scroll-mt-6` keeps the
+                   summary line — which names the address, and is how a founder
+                   confirms *which* check they are reading — clear of the top
+                   edge rather than flush against it. */
+                <details open id={SITE_REPORT_ID} className="scroll-mt-6">
                   <summary className="cursor-pointer text-[12.5px] text-saibyl-blue hover:underline select-none">
                     What we found on {activeCheck.url}
                   </summary>
