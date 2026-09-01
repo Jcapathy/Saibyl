@@ -22,6 +22,7 @@ import re
 import zipfile
 from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import Literal
 from urllib.parse import urlsplit
 
 import structlog
@@ -123,6 +124,19 @@ class CreateWebsiteCheckBody(BaseModel):
     url: str = Field(min_length=1, max_length=MAX_URL_LENGTH)
     # A site the founder admires; the critics judge their page against it.
     reference_url: str | None = Field(None, max_length=MAX_URL_LENGTH)
+    #: Whose site this is, which decides what the captured page is allowed to
+    #: ground once it becomes material.
+    #:
+    #: **Defaulted to `own` rather than required**, so an older client — or a
+    #: bare API call — gets exactly the behaviour it had before this field
+    #: existed. Making it required would have turned a silent mis-filing into a
+    #: 422 for anyone who had not updated, which is a worse trade than a
+    #: default that matches the previous meaning.
+    #:
+    #: `documents.py` is explicit that this distinction is a permission and
+    #: must be recorded at capture: a competitor may be named in a simulation
+    #: only from material recorded as `competitor`.
+    ownership: Literal["own", "competitor", "market"] = "own"
 
 
 class CreatePageRevisionBody(BaseModel):
@@ -213,7 +227,7 @@ async def create_website_check(
     ).data[0]
 
     spawn(
-        run_website_check(row["id"], auth["org_id"]), "website_check",
+        run_website_check(row["id"], auth["org_id"], body.ownership), "website_check",
         on_failure=_mark_website_check_failed(row["id"], "website_check"),
     )
     row.pop("critique", None)

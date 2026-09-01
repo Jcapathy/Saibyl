@@ -493,7 +493,11 @@ export default function AudienceStagePage() {
           }`}
         >
           {showSite ? (
-            <SiteCheckForm productId={product.id} onStarted={checkStarted} />
+            <SiteCheckForm
+              productId={product.id}
+              productName={product.name}
+              onStarted={checkStarted}
+            />
           ) : checks.length === 0 && activeCheck === null ? (
             <p className="text-[12.5px] text-saibyl-muted">
               Something built already? We&rsquo;ll read the page like a buyer

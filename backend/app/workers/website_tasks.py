@@ -23,6 +23,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from io import BytesIO
 from typing import Any
+from urllib.parse import urlsplit
 
 import structlog
 from fastapi import UploadFile
@@ -69,9 +70,45 @@ SCREENSHOT_BUCKET = "project-media"
 # the row out of these states owns the outcome, and the loser writes nothing.
 _LIVE_STATUSES = ("queued", "capturing", "judging")
 
+#: What a checked page counts as, by whose site it is.
+#:
+#: **`website_url` means "the founder's own live page", and it was applied to
+#: every check regardless.** `subject_brief` reads that kind as the founder's
+#: own published words — deliberately, and with good reasoning (PRD_V3 §4c: the
+#: audience must react to the page itself) — and `gather_material` buckets any
+#: kind it does not recognise as `own`. Both are correct for the case the form
+#: was written for: a founder with one product, checking their own site.
+#:
+#: A founder with six products who also checks other people's sites breaks that
+#: assumption silently. Measured 2026-08-31 on the Saido Labs account: seven
+#: checked pages had been ingested as the checking product's own material,
+#: including parryai.io inside "The Launch House" and three copies of another
+#: product's site inside a Saibyl verification product. The audience step would
+#: have read every one of them as that product's own description.
+#:
+#: So the founder is asked, and the answer is recorded here at capture — which
+#: is where `documents.py` says this distinction has to be recorded, because
+#: naming a competitor in a simulation is a permission rather than a label.
+_KIND_BY_OWNERSHIP = {
+    # Unchanged for the case that was always right, so a founder checking their
+    # own page gets exactly the behaviour they had before.
+    "own": "website_url",
+    "competitor": "competitor",
+    "market": "market",
+}
+DEFAULT_OWNERSHIP = "own"
 
-async def run_website_check(snapshot_id: str, organization_id: str) -> None:
-    """Execute a queued website check end to end and persist what it found."""
+
+async def run_website_check(
+    snapshot_id: str, organization_id: str, ownership: str = DEFAULT_OWNERSHIP
+) -> None:
+    """Execute a queued website check end to end and persist what it found.
+
+    `ownership` is whose site this is — see `_KIND_BY_OWNERSHIP`. It rides as
+    an argument rather than a column because the worker runs in-process for
+    the life of one request; the durable record of the answer is the kind on
+    the document it creates.
+    """
     admin = get_supabase_admin()
     try:
         rows = (
@@ -210,7 +247,10 @@ async def run_website_check(snapshot_id: str, organization_id: str) -> None:
         )
 
         document_id = await _store_page_document(
-            snapshot, organization_id=organization_id, capture=capture
+            snapshot,
+            organization_id=organization_id,
+            capture=capture,
+            ownership=ownership,
         )
 
         if not _advance(admin, snapshot_id, "judging", {
@@ -232,26 +272,47 @@ async def run_website_check(snapshot_id: str, organization_id: str) -> None:
         _record_failure(snapshot_id, GENERIC_FAILURE_MESSAGE)
 
 
+
+
+def _document_name(capture: Any) -> str:
+    """The file named after the site it came from.
+
+    Every checked page was called `website.md`, so a product carrying three
+    checks carried three identically-named files and no way to tell them apart
+    in a list. The host is what a founder would call it.
+    """
+    raw = str(getattr(capture, "final_url", "") or getattr(capture, "url", "") or "")
+    host = urlsplit(raw).netloc or "website"
+    return f"{host.removeprefix('www.')}.md"
+
+
 async def _store_page_document(
-    snapshot: dict[str, Any], *, organization_id: str, capture: Any
+    snapshot: dict[str, Any],
+    *,
+    organization_id: str,
+    capture: Any,
+    ownership: str = DEFAULT_OWNERSHIP,
 ) -> str:
     """Store the captured page as a small markdown document; return its id.
 
     Through `documents.store_upload` — the same path every real file takes — so
     extraction, the subject brief and audience synthesis all consume the page
-    without a second intake path. The idea brief set this pattern (PRD_V3 §3);
-    the kind here is 'website_url', which records that the text was fetched
-    from the founder's live page rather than uploaded.
+    without a second intake path. The idea brief set this pattern (PRD_V3 §3).
+
+    `ownership` decides the kind, and therefore what the page is allowed to
+    ground — see `_KIND_BY_OWNERSHIP`.
     """
     from app.api.documents import store_upload
 
     content = _compose_page_markdown(capture).encode("utf-8")
-    upload = UploadFile(file=BytesIO(content), size=len(content), filename="website.md")
+    upload = UploadFile(
+        file=BytesIO(content), size=len(content), filename=_document_name(capture)
+    )
     doc = await store_upload(
         project_id=snapshot["project_id"],
         org_id=organization_id,
         file=upload,
-        material_kind="website_url",
+        material_kind=_KIND_BY_OWNERSHIP.get(ownership, "website_url"),
         source_url=capture.final_url or capture.url,
     )
     return doc["id"]

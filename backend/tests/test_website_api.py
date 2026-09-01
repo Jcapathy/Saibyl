@@ -568,8 +568,14 @@ async def test_the_worker_captures_judges_stores_and_completes(monkeypatch):
     # The page joined the founder's material through the real intake path.
     assert len(stored) == 1
     doc = stored[0]
+    # `website_url` is the kind for a founder's *own* page, and `own` is the
+    # default ownership — so this check, which says nothing about whose site it
+    # is, behaves exactly as it did before ownership existed.
     assert doc.material_kind == "website_url"
-    assert doc.filename == "website.md"
+    # Named after the site, not `website.md`. Every checked page carried that
+    # one name, so a product with three checks carried three identically-named
+    # files and no way to tell them apart in a list.
+    assert doc.filename == "acme.example.md"
     assert doc.project_id == PROJECT
     assert doc.org_id == ORG
     assert doc.source_url == calls.page.final_url
@@ -728,3 +734,77 @@ async def test_the_worker_never_runs_another_orgs_row(monkeypatch):
     assert row["document_id"] is None
     assert calls.capture is None, "another org's page was fetched"
     assert not stored
+
+
+# ── whose site is this? (2026-08-31) ────────────────────────────────────────
+#
+# `website_url` means "the founder's own live page" — `subject_brief` reads it
+# as their own published words and `gather_material` buckets any unrecognised
+# kind as `own`. Both are right for a founder with one product checking their
+# own site, and silently wrong for one who checks anybody else's.
+#
+# Measured on the Saido Labs account that day: seven checked pages had been
+# ingested as the checking product's own material, including parryai.io inside
+# "The Launch House". The audience step would have read each as that product's
+# own description.
+
+
+async def test_a_competitors_page_is_filed_as_competitor_material(monkeypatch):
+    """The permission `documents.py` insists is recorded at capture.
+
+    A competitor may be named in a simulation only from material recorded as
+    `competitor`, so the answer has to reach the document — not a log line.
+    """
+    _install(monkeypatch, {"website_snapshots": [_queued_snapshot()]})
+    _install_services(monkeypatch)
+    stored = _capture_store_upload(monkeypatch)
+
+    await website_tasks.run_website_check(SNAP, ORG, "competitor")
+
+    assert stored[0].material_kind == "competitor"
+
+
+async def test_a_market_page_is_filed_as_market_material(monkeypatch):
+    _install(monkeypatch, {"website_snapshots": [_queued_snapshot()]})
+    _install_services(monkeypatch)
+    stored = _capture_store_upload(monkeypatch)
+
+    await website_tasks.run_website_check(SNAP, ORG, "market")
+
+    assert stored[0].material_kind == "market"
+
+
+async def test_an_unspecified_ownership_behaves_exactly_as_before(monkeypatch):
+    """The default is the old behaviour, so an older client or a bare API call
+    keeps the meaning it had before the field existed."""
+    _install(monkeypatch, {"website_snapshots": [_queued_snapshot()]})
+    _install_services(monkeypatch)
+    stored = _capture_store_upload(monkeypatch)
+
+    await website_tasks.run_website_check(SNAP, ORG)
+
+    assert stored[0].material_kind == "website_url"
+
+
+async def test_an_unknown_ownership_falls_back_to_the_founders_own(monkeypatch):
+    """Never to `competitor`. An unrecognised value must not silently hand out
+    the permission that lets a simulation name a rival."""
+    _install(monkeypatch, {"website_snapshots": [_queued_snapshot()]})
+    _install_services(monkeypatch)
+    stored = _capture_store_upload(monkeypatch)
+
+    await website_tasks.run_website_check(SNAP, ORG, "something-else")
+
+    assert stored[0].material_kind == "website_url"
+
+
+def test_the_document_is_named_after_the_site():
+    """Three checks in one product used to mean three files called
+    `website.md`, indistinguishable in a list."""
+    from types import SimpleNamespace
+
+    name = website_tasks._document_name(
+        SimpleNamespace(final_url="https://www.parryai.io/pricing", url="")
+    )
+
+    assert name == "parryai.io.md"

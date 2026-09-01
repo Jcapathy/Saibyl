@@ -20,6 +20,16 @@ export type SiteCheckStatus =
 
 export type SiteCheckUnderwayStatus = 'queued' | 'capturing' | 'judging';
 
+/**
+ * Whose site a check is of.
+ *
+ * Not cosmetic: it decides what the captured page is allowed to ground once it
+ * becomes material. `own` files it as this product's own words; `competitor`
+ * is the permission that lets a simulated buyer name that company; `market` is
+ * read and scored but never spoken in the founder's voice.
+ */
+export type Ownership = 'own' | 'competitor' | 'market';
+
 export type SiteFindingSeverity = 'critical' | 'major' | 'minor';
 
 /** One thing a critic saw on the page, with the evidence and the way out. */

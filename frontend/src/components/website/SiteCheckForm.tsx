@@ -8,7 +8,7 @@ import { getErrorMessage } from '@/lib/errors';
 import { Guarded } from '@/components/stages/StagePrimitives';
 import PriceTag from '@/components/billing/PriceTag';
 import { usePrices } from '@/lib/prices';
-import type { SiteCheck } from './types';
+import type { Ownership, SiteCheck } from './types';
 
 /**
  * The way in for a founder who has already built something.
@@ -45,17 +45,56 @@ import type { SiteCheck } from './types';
 const inputBase =
   'w-full rounded-xl bg-white border border-saibyl-border-light px-3 py-2.5 text-[13.5px] text-saibyl-ink placeholder:text-saibyl-muted/70 focus:outline-none focus:border-saibyl-blue focus:ring-2 focus:ring-saibyl-blue/20';
 
+/**
+ * Whose site is being checked, and what that permits.
+ *
+ * **The form assumed the answer was always "mine".** Every checked page was
+ * ingested as the checking product's own material, because `website_url` means
+ * "the founder's own live page" downstream and nothing ever asked. Measured on
+ * 2026-08-31: seven pages filed that way on one account, including a different
+ * company's site inside a product it had nothing to do with, which the
+ * audience step would then read as that product's own description.
+ *
+ * The three kinds are the ones the upload form already uses, deliberately — a
+ * founder should meet one vocabulary for "whose material is this", not two.
+ * And `competitor` is a permission rather than a label: it is what allows a
+ * simulated buyer to name that company out loud, which is why nothing
+ * pre-selects it.
+ */
+const OWNERSHIP: { value: Ownership; label: string; help: string }[] = [
+  {
+    value: 'own',
+    label: 'Mine',
+    help: 'This product’s own site. Its words become this product’s material.',
+  },
+  {
+    value: 'competitor',
+    label: 'A competitor’s',
+    help: 'Kept as competitor material, which is what lets a buyer name them.',
+  },
+  {
+    value: 'market',
+    label: 'Someone else’s',
+    help: 'Read and scored, but never treated as this product’s own words.',
+  },
+];
+
 export default function SiteCheckForm({
   productId,
+  productName,
   onStarted,
 }: {
   productId: string;
+  /** Named on the button, because "Check my site" says nothing about which of
+   *  six products the result is about to be filed under. */
+  productName?: string;
   /** The freshly queued check. The caller polls it the rest of the way. */
   onStarted: (check: SiteCheck) => void;
 }) {
   const prices = usePrices();
   const [address, setAddress] = useState('');
   const [reference, setReference] = useState('');
+  const [ownership, setOwnership] = useState<Ownership>('own');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<{ message: string; billing: boolean } | null>(
     null,
@@ -83,9 +122,15 @@ export default function SiteCheckForm({
       /^https?:\/\//i.test(value) ? value : `https://${value}`;
     const url = withScheme(trimmed);
 
-    const body: { project_id: string; url: string; reference_url?: string } = {
+    const body: {
+      project_id: string;
+      url: string;
+      ownership: Ownership;
+      reference_url?: string;
+    } = {
       project_id: productId,
       url,
+      ownership,
     };
     const admired = reference.trim();
     if (admired) body.reference_url = withScheme(admired);
@@ -139,6 +184,48 @@ export default function SiteCheckForm({
         placeholder="yoursite.com"
         className={inputBase}
       />
+
+      {/* Whose site it is, asked rather than assumed.
+
+          The form was written for a founder with one product and said "Check
+          my site"; the answer was taken as "mine" every time, and the page's
+          words went into that product's own material. A founder with six
+          products who also checks other people's pages had no way to say so,
+          and no way to see it had happened.
+
+          Radios rather than a select: three options that each need a sentence
+          of explanation are a choice to read, not a list to scan. Nothing
+          pre-selects `competitor` — that value is the permission that lets a
+          simulated buyer name a real company, and a permission that arrives
+          pre-ticked is one nobody gave. */}
+      <fieldset className="mt-4">
+        <legend className="text-[13px] font-medium text-saibyl-ink">
+          Whose site is this?
+        </legend>
+        <div className="mt-2 space-y-1.5">
+          {OWNERSHIP.map((choice) => (
+            <label
+              key={choice.value}
+              className="flex items-start gap-2.5 cursor-pointer"
+            >
+              <input
+                type="radio"
+                name="site-check-ownership"
+                value={choice.value}
+                checked={ownership === choice.value}
+                onChange={() => setOwnership(choice.value)}
+                className="mt-0.5 accent-saibyl-blue"
+              />
+              <span className="min-w-0">
+                <span className="text-[13px] text-saibyl-ink">{choice.label}</span>
+                <span className="block text-[11.5px] text-saibyl-muted leading-relaxed">
+                  {choice.help}
+                </span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
 
       {/* The second field used to read "A site you admire (optional)" over
           "We'll measure yours against theirs — type, color, spacing, the exact
@@ -206,7 +293,7 @@ export default function SiteCheckForm({
           <PriceTag entry={prices?.website_check} />
         </div>
         <Guarded
-          label="Check my site"
+          label={productName ? `Check this site for ${productName}` : 'Check this site'}
           onClick={submit}
           busy={submitting}
           busyLabel="Reading your site…"
