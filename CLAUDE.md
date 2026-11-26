@@ -1,222 +1,71 @@
-# Saibyl — read this before you write code
+# Saibyl
 
-Saibyl is a Saido Labs LLC product. No personal name ever appears on it.
+Saibyl, by Saido Labs LLC, is a synthetic-market SaaS: an AI-builder founder pastes an idea or a site, a swarm of synthetic buyers reacts, and the product returns specific objections and paste-ready fixes (V3 direction; the V1 "oracle" positioning is dead). Good means the "wow standard": brutal specificity, voices that feel real, paste-ready fixes, proof of the delta.
 
----
+This file extends the global CLAUDE.md. It holds only facts specific to this project.
 
-## 1. Any UI or frontend work reads `design/` first
+## Stack & commands
 
-**Before writing a line of frontend code — a new page, a new panel, a restyle,
-a chart — open `design/` and read it.** Start with `design/README.md`, then the
-four artboards. They are self-contained HTML: open them in a browser.
+- Stack: FastAPI (Python >=3.12, uv, ruff, pytest) + React 19 / TypeScript / Vite 8 / Tailwind 3 + Supabase (Postgres, Auth, Storage) + Anthropic via LiteLLM (vision calls use the Anthropic SDK directly) + Playwright/chromium + Stripe (live since 2026-08-28) + Redis. Deploys to Render (`render.yaml`, Docker for the backend). Repo: github.com/Jcapathy/Saibyl.
+- Install: `cd backend && uv sync --dev`; `cd frontend && npm ci`
+- Run: `cd backend && uv run uvicorn app.main:app --reload`; `cd frontend && npm run dev`
+- Test: `cd backend && uv run pytest -q`; `cd frontend && npx vitest run`
+- Lint: `cd backend && uv run ruff check app tests scripts`; `cd frontend && npx eslint src --quiet`
+- Before "done", run, from `frontend/`: `npm run build` (`tsc -b && vite build`, plus prerender; what Render runs), `npx eslint src --quiet`, `npx vitest run`. From `backend/`: `pytest` and `ruff check app tests scripts` (the original gate states `ruff check app tests`). Gate the frontend with `npm run build`, never `tsc --noEmit` alone (see Overrides). Last recorded counts (docs/HANDOFF_LAUNCH_READINESS.md §6, 2026-08-30): 2,112 backend, 143 frontend.
+- Migrations: `backend/scripts/migrations/NNN_*.sql` (latest 046), applied with `backend/scripts/migrations/apply.py`.
+- Windows/OneDrive: the repo `.venv` fights uv with file locks. Use `UV_PROJECT_ENVIRONMENT=C:\Users\jcapa\.venvs\saibyl-v3` (has playwright + chromium).
+- Deploy verification: use a discriminator only the new build can produce, in both directions where possible (new string present and old string absent). A green health check proves nothing about the route you shipped.
+- Release flow: work on branch `v3-prd` (worktree `.claude/worktrees/v3-prd`), fast-forward to `master`; `master` is what Render deploys. As of 2026-08-17 the session permission layer declined master pushes, so the founder may need to run `git push origin v3-prd:master`.
 
-### The artboards are the spec. The annotations are a change list.
+## Layout & off-limits
 
-**Read the four `.dc.html` files, not just `canvas.json`.** This distinction is
-the whole of this section, and getting it wrong has already cost two rounds of
-work.
+- `backend/app/` (api, core, models, services, workers), `backend/tests/`, `backend/scripts/` (migrations, seed, live-run scripts, `send_followups.py`), `backend/data/persona_packs/`.
+- `frontend/src/` (pages, `components/design/` shared primitives, `test/ia.test.ts`, `test/design_primitives.test.ts`); `shared/` is empty.
+- `design/`: README.md, four self-contained artboards (`Main`, `Answers`, `Next`, `Report` `.dc.html`) and `canvas.json`. See Frontend work.
+- `docs/`: HANDOFF.md (read first; §2/§2a hold the standing rules and failure classes), HANDOFF_LAUNCH_READINESS.md (newest handoff, 2026-08-27 to 30), HANDOFF_APP_RESTYLE.md, HANDOFF_POLISH.md, PRD_V3.md (supersedes PRD_V2), ARCHITECTURE_V2.md, DECISIONS_LOG.md, DECISIONS_V2.md, DESIGN_GUIDE.md, the five living logs (ARCHITECTURE_LOG, INFRA_LOG, DECISIONS_LOG, CRITICS_LOG, SKILLS_LOG), PRICING_GUIDE, V1_AUDIT, AUTONOMOUS_BUILD.
+- The five living logs, all in `docs/`: `ARCHITECTURE_LOG.md` (architecture changes), `INFRA_LOG.md` (infrastructure and deploy steps), `DECISIONS_LOG.md` (product and build rulings), `CRITICS_LOG.md` (critic passes and lessons), `SKILLS_LOG.md` (skills work).
+- Parent folder `C:\Users\jcapa\OneDrive\Personal\Saido Labs LLC\Saibyl\` (outside the repo; context only, don't modify):
+  - `05_PRD\saibyl-prd\` (README, specs\, phases\, INFRA_LOG.md: the original PRD), `05_PRD\saibyl-prd-v2\`, `05_PRD\saibyl-prd-v3\`, `05_PRD\Saibyl-V3-Vision.html`
+  - `LOOP_STATE.md` (an unfilled template, last updated 2026-06-13)
+  - `QA_Report_Saibyl_2026-03-29.md`, `QA_Retest_Report_SAI33_2026-03-29.md`, `SECURITY_AUDIT_SAI29.md`
+  - `Saibyl Management\` (pitch decks, monetization playbook, `Saibyl Redesign\` prototypes, LinkedIn, CA GOP); `wiki\` (index, decisions, learnings); Branding, Launch strategy and other non-code folders
+- Leave alone: `.env*`; `Saibyl Admin Login.docx` in the parent folder (credential, don't open); `.claude/settings*.json`; `frontend/dist/`; `.venv/`; `node_modules/`; `.claude/worktrees/` (agent worktrees and `v3-prd`).
 
-`canvas.json`'s `annotations` array says *"The four changes, applied
-everywhere"* — **changes**, meaning the delta between the artboards and what
-shipped on 2026-08-20. It is not the specification. The artboards are, and they
-carry far more than four rules: eight distinct gradients, layered depth with
-inset highlights, radii scaled per element from 11px to 36px, colour that
-carries state, hover lift on anything touchable, and continuous motion
-alongside entrance motion.
+## Domain rules
 
-An earlier version of this file called the annotations "the design law". Every
-page built under that sentence came out with washes, shadows, a dotted eyebrow
-and a serif phrase applied to flat white cards — and the founder's word for the
-result, on 2026-08-23, was **"sterile."** He was right, and the sentence was
-wrong. If you only apply the four rules below, you will reproduce that.
+### Product and build
+- Read `docs/HANDOFF.md` and the PRD before building, because past sessions built against the design and wasted days.
+- Grep before you claim, query before you assert. Unverified statements written into docs, comments or migration comments become facts the next session inherits.
+- Never run Celery (banned across all projects; use `asyncio.create_task`). Never use Zep Cloud or CAMEL-AI OASIS, and never target the Chinese academic market.
+- No personal name on the product, Saido Labs LLC only. No fabricated customers or stats. Never cite a V1 report figure as measured (V1 sentiment was formulaic).
+- A migration that adds a constraint goes: merge, deploy, verify live, then constrain.
+- The cost model is closed: don't re-tune token profiles (reopen only on `margin_floor_breached`, a changed unit of work, or a prompt edit moving a stage by more than half).
+- Production-first: deploy to Render, don't fight local Docker/Windows/OneDrive.
+- Batch fixes and trace the full flow (frontend, POST body, API, DB, UI) before pushing. Be surgical with tokens.
+- A check that can pass for the wrong reason is worse than no check. Visual claims are verified by reading a rendered screenshot, not by a green build.
+- Frontend pitfalls: `VITE_*` vars are build-time only; Supabase JWTs expire after 1h (refresh or redirect on 401, never swallow it); `redirect_slashes=False`, so `/api/x/` and `/api/x` differ; map platform IDs to display names.
+- Update whichever of the five living logs a change touches in the same batch (ARCHITECTURE_LOG, INFRA_LOG, DECISIONS_LOG, CRITICS_LOG, SKILLS_LOG). `05_PRD\saibyl-prd\INFRA_LOG.md` is outside the repo; write it anyway.
+- Three things that look like bugs and are not (founder decisions, docs/HANDOFF_LAUNCH_READINESS.md §0): the trust card's team-information critical stays open and there is no About page; runs realise 80% margin and modules 96% on purpose; `/app/admin` is absent from navigation and answers 404, so a link to it is the bug.
+- Rulings history: `docs/DECISIONS_LOG.md` (V3 era, newest first); `docs/DECISIONS_V2.md` (V2 era, still authoritative for those choices).
 
-This section exists at all because the folder was ignored outright once: three
-days after the canvas was approved, a session built two brand-new app pages
-without ever opening it, because nothing in the repo pointed at it. The founder
-found the drift himself. **You are the reason this file exists.**
+### Founder UI rules (enforced by `frontend/src/test/ia.test.ts`)
+- Never render these 12 words: ICP, variant, A/B, adversarial, cohort, arena, lens, archetype, canonical, valence, simulation, project (plurals, case-insensitive). A founder has a product and a workspace.
+- No `disabled` attributes on the rail: a control either runs and states what its answer will be missing, or is blocked with the button that unblocks it and the reason beside it.
+- Every `EmptyState` carries an action (the prop is required). A dead end is a defect.
 
-### The four changes, quoted from the canvas annotation
+### Frontend work: read `design/` first
+Any UI or frontend work follows the design rules below (the artboards, their vocabulary, motion and page frame).
 
-The floor, not the ceiling — what was missing that day:
+@docs/DESIGN_RULES.md
 
-> The four changes, applied everywhere:
->
-> 1. Radial washes on the ground (the app is flat #f8fbff today)
-> 2. Soft blue shadows on cards that carry meaning — hairlines stay on dense lists
-> 3. The dotted eyebrow on every mono label
-> 4. One Playfair italic phrase per major heading
+## Overrides of global
 
-### The vocabulary the artboards carry beyond those four
+- Overrides global "Forced verification" (`npx tsc --noEmit`): gate the frontend with `npm run build` (= `tsc -b && vite build`), because Render runs it and project-references mode rejects what `--noEmit` accepts (five `tsc -b` errors once hid behind a clean report while Render served a stale bundle). Backend gate is pytest + ruff. CI (`.github/workflows/test.yml`) now runs the same.
+- Overrides global "Phased execution" (wait for approval between phases): run continuously within a phase, stop at phase boundaries (full gate, push, report, wait). `docs/HANDOFF_APP_RESTYLE.md` pre-authorizes autonomous execution, merge to master and deploy for the restyle only.
+- Overrides the commit-attribution default: no `Co-Authored-By`, no "Generated with", no robot emoji, no Claude or Anthropic attribution in commits, PRs, code comments or output, ever. Commit with `--author="Saido Labs LLC <info@saidolabs.com>"`; the committer stays the user's own identity.
+- Overrides global "Decision log" default (`docs/decisions.md`): rulings live in `docs/DECISIONS_LOG.md`, one of the five living logs (every decision that shapes the product or build: who, what, why; newest first; founder directive 2026-08-16).
+- Billing descriptor is `SAIDO LABS LLC`.
 
-Read off the artboards themselves. These are what stop a page reading as a
-wireframe wearing a wash:
+## Current state
 
-- **Gradients are structural, not decorative.** The primary action is
-  `linear-gradient(135deg,#286cf0,#5268e9)` with a coloured glow
-  (`0 8px 18px rgba(40,108,240,.22)`), never a flat fill. Accents are
-  `(135deg,#35c7d5,#2f8fef)` and `(135deg,#8b73ee,#6a4fe0)`. A card that
-  matters has a ground of its own — the room is
-  `linear-gradient(180deg,#edf5ff 0%,#f8fbff 87%)`, not white.
-- **Depth is layered.** Outer shadow *plus* an inset highlight
-  (`inset 0 1px rgba(255,255,255,.35..42)`), at four different intensities
-  depending on how much the element matters.
-- **Colour carries state.** A missing input is a violet block —
-  `rgba(139,115,238,.07)` on `rgba(139,115,238,.30)`, heading `#6a4fe0` — not
-  grey text. Live things pulse cyan `#35c7d5` behind a ring. Accent dots glow
-  (`0 0 15px`).
-- **Anything touchable lifts**: `transform: translateY(-2px)` over 220ms.
-- **Radii scale with the element**: 11–14px chips, 16–20px cards, 28px on a
-  full-width stage, 36px on the pitch itself.
-- **Some things sit off-axis.** The buyer chips and the console are rotated a
-  degree or two. Nothing in a real room is aligned to a grid.
-
-### Motion is part of the design, not a garnish
-
-> MOTION: reload an artboard to replay it. The rail deals its five steps, then
-> the open stage arrives. Every artboard collapses its animation under
-> prefers-reduced-motion, exactly as the landing page does.
-
-Reuse the landing page's own keyframes, durations and easing. A second motion
-vocabulary reads as a second product. `prefers-reduced-motion: reduce`
-collapsing every animation is not optional.
-
-### Density does not change
-
-> Density is deliberately unchanged. Same type sizes, same 13px body, same row
-> rhythm — warmth comes from ground, depth and one accent phrase, not from
-> spacing things further apart. An app that reads like a marketing page is the
-> opposite failure.
-
-**Superseded for the page frame, later the same day. Read this before you
-"restore" anything.**
-
-The canvas closes with *"An app that reads like a marketing page is the opposite
-failure."* The founder read the swept app against the public site and reversed
-that, in these words: the app was **"very sterile, mechanical, and looks
-AI-generated"**, and the instruction was to *"treat each clickable page like a
-landing page that has the same feel as the primary landing page. Hero section,
-large type font, then scroll for information. As a user is scrolling, various
-cards, text, information, or graphics will fade in."*
-
-So a page opens like the landing page: `Longform` → `Hero` → `Chapter`, with
-`Reveal` on anything that should arrive on scroll. **`How this works`
-(`GuidePage.tsx`) is the built example — copy its shape.**
-
-What did **not** change is everything inside a chapter. A card, a row, a table
-and a list are exactly as dense as they were, and the canvas's constraint still
-governs them. The frame grew; the work did not. `design_primitives.test.ts` §6
-enumerates every selector in `design.css` allowed to set a size or a padding —
-adding a card to that list is a failure, not a fix.
-
-**On "one gradient action per screen":** that rule was written for a page you
-see all of at once, and a longform page is not one. The landing page carries
-nine call-to-action buttons — one pair in the hero and the same ask again at the
-close — because a reader who has scrolled a thousand pixels should not have to
-scroll back. So: **one primary per viewport, and the same ask may be repeated at
-the foot of the page.** Two different gradient actions competing in one chapter
-is still the failure the rule is about.
-
-Every hero and chapter value is **copied from `pages/landing.css`**, and §7
-asserts it value-for-value. Do not invent a hero size; if the landing page
-changes, that test tells you what to update. The scroll reveal is one shared
-implementation — `components/design/useReveal` — which `LandingPage` also calls,
-so the public site and the app cannot drift.
-
-**The earlier exception, granted the same day: `PageHeader`.**
-He read the five live stage pages and could not comfortably read them on his
-own monitor — the accent phrase was 15px serif italic sitting *above* a 13px
-paragraph, on a block whose whole job is to teach a stage to somebody who has
-just arrived on it. His instruction: expand the block with explanatory copy,
-and put the tagline underneath it, larger.
-
-So the header block is a front door, not a dense surface. The lead is
-14/15px and the phrase is 20/23/26px responsive, and the explanation reads
-*before* the phrase it earns. **Do not "restore" these to 13px.** Everywhere
-else — rows, cards, lists, every record — the constraint above is unchanged
-and still binding. `design_primitives.test.ts` §6 pins both halves: the
-header's sizes and order, and that nothing outside it sizes type at all.
-
-### New pages use the shared design primitives
-
-Every new page composes **`frontend/src/components/design/`** — the shared
-primitives that carry the four rules. Do not hand-roll a washed ground, a
-dotted eyebrow, a soft-shadow card or a serif-italic heading in page code; that
-is how the system forks into dialects. If a primitive you need is missing, add
-it there rather than inline.
-
-`frontend/src/test/ia.test.ts` asserts this. Pages not yet converted are named
-in an allow-list inside it that **may only ever shrink** — converting a page
-means deleting its line from that list in the same change.
-
-### Where the system came from
-
-`frontend/src/pages/landing.css` is the origin: the approved light system was
-built there first, and its values are the source of truth. `docs/DESIGN_GUIDE.md`
-is the written-out version (tokens, type, motion table, export rules, and the
-pre-ship checklist). When any of them disagree with `landing.css`, `landing.css`
-wins and the other is stale — fix it.
-
----
-
-## 2. Standing founder rules
-
-These come from the founder directly and persist across sessions. Full text and
-the reasoning behind each: `docs/HANDOFF.md` §2 and §2a.
-
-- **No Claude or Anthropic attribution, anywhere.** Not in commits, not in PR
-  bodies, not in code comments, not in any output. No `Co-Authored-By`, no
-  "Generated with", no 🤖. Authorship is
-  `--author="Saido Labs LLC <info@saidolabs.com>"`; the committer stays the
-  user's own git identity.
-
-- **The twelve banned words never render.** `ICP`, `variant`, `A/B`,
-  `adversarial`, `cohort`, `arena`, `lens`, `archetype`, `canonical`,
-  `valence`, `simulation`, `project` — plurals and case-insensitive. A founder
-  has a *product* and a *workspace*; a consultant has projects, and the noun
-  decides who the page thinks it is talking to. Enforced by
-  `frontend/src/test/ia.test.ts`.
-
-- **No `disabled` attributes on the rail.** A control either runs and states
-  what its answer will be missing, or it is blocked with the button that
-  unblocks it, and the reason beside it. There is no third rendering, so there
-  is no grey button.
-
-- **Every `EmptyState` carries an action.** The prop is required and the type
-  refuses a screen without one. A dead end is a defect.
-
-- **Update the five living logs in the same batch as the change they describe** —
-  `docs/ARCHITECTURE_LOG.md`, `docs/INFRA_LOG.md`, `docs/DECISIONS_LOG.md`,
-  `docs/CRITICS_LOG.md`, `docs/SKILLS_LOG.md`. Whichever ones a change touches,
-  updated with it, not afterwards.
-
-- **Grep before you claim, query before you assert.** A statement about this
-  codebase that has not been checked is a guess, and writing it into a doc or a
-  comment turns a guess into a fact the next session inherits.
-
-- **Nothing is deleted without first grepping** for direct calls, type
-  references, string literals, dynamic imports, re-exports and tests.
-
----
-
-## 3. Verification gate
-
-Frontend, from `frontend/`:
-
-```
-npm run build          # tsc -b && vite build — what Render runs
-npx eslint src --quiet
-npx vitest run
-```
-
-> ⚠️ Gate the frontend with `npm run build`, **never `tsc --noEmit` alone.**
-> They are not the same check. Render runs `tsc -b && vite build`, and project-
-> references build mode rejects things `--noEmit` accepts. A deploy once
-> exposed five pre-existing `tsc -b` errors the documented gate had been
-> stepping over, while Render served a stale bundle and every session reported
-> a clean frontend.
-
-Backend, from `backend/`: `pytest` and `ruff check app tests`.
-
-**A check that can pass for the wrong reason is worse than no check.** Deploy
-verification uses a discriminator only the new build can produce. Visual claims
-are verified by reading a rendered screenshot, not by a green build.
+@.claude/STATE.md
